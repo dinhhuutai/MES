@@ -1,0 +1,9 @@
+{
+  "short_name": "THLA MES",
+  "name": "THLA MES - Manufacturing Execution System",
+  "icons": [],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#0058be",
+  "background_color": "#f8f9fb"
+}

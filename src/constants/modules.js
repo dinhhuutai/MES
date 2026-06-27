@@ -1,0 +1,112 @@
+// Cấu trúc 9 module + menu con. `perm` = quyền tối thiểu để thấy/ vào.
+// P0 hardcode khớp seed bảng `module`; P6 sẽ nạp động từ API /modules.
+export const MODULES = [
+  {
+    ma: 'DON_HANG',
+    ten: 'Đơn hàng',
+    icon: 'package',
+    base: '/don-hang',
+    perm: 'ORDER_VIEW',
+    mau: 'bg-blue-50 text-blue-600',
+    children: [
+      { ten: 'Danh sách phần in', route: '/don-hang/phan-in', perm: 'ORDER_VIEW' },
+      { ten: 'Tính lợi nhuận', route: '/don-hang/loi-nhuan', perm: 'PROFIT_MANAGE' },
+    ],
+  },
+  {
+    ma: 'KY_THUAT',
+    ten: 'Chuẩn bị kỹ thuật',
+    icon: 'wrench',
+    base: '/ky-thuat',
+    perm: 'READY_VIEW',
+    mau: 'bg-amber-50 text-amber-600',
+    children: [{ ten: 'Xác nhận READY', route: '/ky-thuat/ready', perm: 'READY_VIEW' }],
+  },
+  {
+    ma: 'KE_HOACH',
+    ten: 'Kế hoạch',
+    icon: 'calendar-days',
+    base: '/ke-hoach',
+    perm: 'RELEASE1',
+    mau: 'bg-violet-50 text-violet-600',
+    children: [
+      { ten: 'Release 1', route: '/ke-hoach/release-1', perm: 'RELEASE1' },
+      { ten: 'Release 2', route: '/ke-hoach/release-2', perm: 'RELEASE2' },
+    ],
+  },
+  {
+    ma: 'SAN_XUAT',
+    ten: 'Sản xuất',
+    icon: 'factory',
+    base: '/san-xuat',
+    perm: 'PROD_MONITOR',
+    mau: 'bg-emerald-50 text-emerald-600',
+    children: [
+      { ten: 'Xác nhận chạy', route: '/san-xuat/xac-nhan-chay', perm: 'PROD_RUN' },
+      { ten: 'Theo dõi chuyền', route: '/san-xuat/theo-doi-chuyen', perm: 'PROD_MONITOR' },
+      { ten: 'Quét chờ khô', route: '/san-xuat/cho-kho', perm: 'DRYING' },
+      { ten: 'Tình trạng xe phơi', route: '/san-xuat/xe-phoi', perm: 'XEPHOI' },
+      { ten: 'KCS', route: '/san-xuat/kcs', perm: 'KCS' },
+      { ten: 'Sửa', route: '/san-xuat/sua', perm: 'SUA' },
+    ],
+  },
+  {
+    ma: 'CHAT_LUONG',
+    ten: 'Chất lượng',
+    icon: 'shield-check',
+    base: '/chat-luong',
+    perm: 'TESTRUN_QA',
+    mau: 'bg-teal-50 text-teal-600',
+    children: [
+      { ten: 'Test Run', route: '/chat-luong/test-run', perm: 'TESTRUN_QA' },
+      { ten: 'OQC', route: '/chat-luong/oqc', perm: 'OQC' },
+    ],
+  },
+  {
+    ma: 'GIAO_HANG',
+    ten: 'Giao hàng',
+    icon: 'truck',
+    base: '/giao-hang',
+    perm: 'DELIVERY_VIEW',
+    mau: 'bg-orange-50 text-orange-600',
+    children: [{ ten: 'Phiếu giao', route: '/giao-hang', perm: 'DELIVERY_VIEW' }],
+  },
+  {
+    ma: 'DASHBOARD',
+    ten: 'Dashboard',
+    icon: 'layout-dashboard',
+    base: '/dashboard',
+    mau: 'bg-sky-50 text-sky-600',
+    children: [{ ten: 'Tổng quan', route: '/dashboard' }],
+  },
+  {
+    ma: 'BAO_CAO',
+    ten: 'Báo cáo',
+    icon: 'file-bar-chart',
+    base: '/bao-cao',
+    mau: 'bg-indigo-50 text-indigo-600',
+    children: [{ ten: 'Danh sách báo cáo', route: '/bao-cao' }],
+  },
+  {
+    ma: 'HE_THONG',
+    ten: 'Hệ thống',
+    icon: 'settings',
+    base: '/he-thong',
+    perm: 'USER_VIEW',
+    mau: 'bg-slate-100 text-slate-600',
+    children: [
+      { ten: 'Người dùng', route: '/he-thong/nguoi-dung', perm: 'USER_VIEW' },
+      { ten: 'Vai trò', route: '/he-thong/vai-tro', perm: 'ROLE_VIEW' },
+      { ten: 'Permission', route: '/he-thong/permission', perm: 'PERM_VIEW' },
+      { ten: 'Module', route: '/he-thong/module', perm: 'MODULE_VIEW' },
+      { ten: 'Workflow version', route: '/he-thong/workflow-version', perm: 'WORKFLOW_VIEW' },
+      { ten: 'Trạm & Checkpoint', route: '/he-thong/tram-checkpoint', perm: 'WORKFLOW_VIEW' },
+      { ten: 'Điều kiện chuyển trạm', route: '/he-thong/dieu-kien', perm: 'WORKFLOW_VIEW' },
+      { ten: 'Owner trạm/checkpoint', route: '/he-thong/owner', perm: 'WORKFLOW_VIEW' },
+      { ten: 'Trạng thái', route: '/he-thong/trang-thai', perm: 'STATUS_VIEW' },
+    ],
+  },
+];
+
+export const findModuleByPath = (pathname) =>
+  MODULES.find((m) => pathname === m.base || pathname.startsWith(m.base + '/')) || null;

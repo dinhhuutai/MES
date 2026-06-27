@@ -1,0 +1,94 @@
+import { Routes, Route, Navigate } from 'react-router-dom';
+import ProtectedRoute from './routes/ProtectedRoute';
+import RequirePermission from './routes/RequirePermission';
+import PortalLayout from './components/layout/PortalLayout';
+import ModuleLayout from './components/layout/ModuleLayout';
+import LoginPage from './features/auth/pages/LoginPage';
+import HomePortal from './features/home/pages/HomePortal';
+import PlaceholderPage from './features/common/PlaceholderPage';
+import UsersPage from './features/system/pages/UsersPage';
+import RolesPage from './features/system/pages/RolesPage';
+import PermissionsPage from './features/system/pages/PermissionsPage';
+import ModulesPage from './features/system/pages/ModulesPage';
+import WorkflowVersionPage from './features/system/pages/WorkflowVersionPage';
+import TramCheckpointPage from './features/system/pages/TramCheckpointPage';
+import DieuKienPage from './features/system/pages/DieuKienPage';
+import OwnerPage from './features/system/pages/OwnerPage';
+import TrangThaiPage from './features/system/pages/TrangThaiPage';
+import PhanInListPage from './features/orders/pages/PhanInListPage';
+import LoiNhuanPage from './features/orders/pages/LoiNhuanPage';
+import ReadyPage from './features/technical-ready/pages/ReadyPage';
+import Release1Page from './features/planning/pages/Release1Page';
+import Release2Page from './features/planning/pages/Release2Page';
+import TestRunPage from './features/planning/pages/TestRunPage';
+import XacNhanChayPage from './features/production/pages/XacNhanChayPage';
+import TheoDoiChuyenPage from './features/production/pages/TheoDoiChuyenPage';
+import ChoKhoPage from './features/production/pages/ChoKhoPage';
+import XePhoiPage from './features/production/pages/XePhoiPage';
+import KcsPage from './features/quality/pages/KcsPage';
+import SuaPage from './features/quality/pages/SuaPage';
+import OqcPage from './features/quality/pages/OqcPage';
+import GiaoHangPage from './features/delivery/pages/GiaoHangPage';
+import DashboardPage from './features/dashboard/pages/DashboardPage';
+import BaoCaoPage from './features/reports/pages/BaoCaoPage';
+import { MODULES } from './constants/modules';
+
+// Màn hình đã hiện thực. Route khác dùng PlaceholderPage.
+const PAGES = {
+  '/don-hang/phan-in': <PhanInListPage />,
+  '/don-hang/loi-nhuan': <LoiNhuanPage />,
+  '/ky-thuat/ready': <ReadyPage />,
+  '/ke-hoach/release-1': <Release1Page />,
+  '/ke-hoach/release-2': <Release2Page />,
+  '/chat-luong/test-run': <TestRunPage />,
+  '/san-xuat/xac-nhan-chay': <XacNhanChayPage />,
+  '/san-xuat/theo-doi-chuyen': <TheoDoiChuyenPage />,
+  '/san-xuat/cho-kho': <ChoKhoPage />,
+  '/san-xuat/xe-phoi': <XePhoiPage />,
+  '/san-xuat/kcs': <KcsPage />,
+  '/san-xuat/sua': <SuaPage />,
+  '/chat-luong/oqc': <OqcPage />,
+  '/giao-hang': <GiaoHangPage />,
+  '/dashboard': <DashboardPage />,
+  '/bao-cao': <BaoCaoPage />,
+  '/he-thong/nguoi-dung': <UsersPage />,
+  '/he-thong/vai-tro': <RolesPage />,
+  '/he-thong/permission': <PermissionsPage />,
+  '/he-thong/module': <ModulesPage />,
+  '/he-thong/workflow-version': <WorkflowVersionPage />,
+  '/he-thong/tram-checkpoint': <TramCheckpointPage />,
+  '/he-thong/dieu-kien': <DieuKienPage />,
+  '/he-thong/owner': <OwnerPage />,
+  '/he-thong/trang-thai': <TrangThaiPage />,
+};
+
+const moduleRoutes = MODULES.flatMap((m) =>
+  (m.children || []).map((c) => {
+    const element = PAGES[c.route] || <PlaceholderPage title={c.ten} phase={`Module ${m.ten}`} />;
+    return (
+      <Route
+        key={c.route}
+        path={c.route}
+        element={c.perm ? <RequirePermission anyOf={[c.perm]}>{element}</RequirePermission> : element}
+      />
+    );
+  })
+);
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/login" element={<LoginPage />} />
+
+      <Route element={<ProtectedRoute />}>
+        <Route element={<PortalLayout />}>
+          <Route index path="/" element={<HomePortal />} />
+        </Route>
+
+        <Route element={<ModuleLayout />}>{moduleRoutes}</Route>
+      </Route>
+
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
