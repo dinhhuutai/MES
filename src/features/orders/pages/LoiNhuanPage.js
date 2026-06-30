@@ -6,10 +6,11 @@ import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
 import Toast from '../../../components/common/Toast';
+import HistoryPanel from '../../../components/common/HistoryPanel';
 import { Field, Input } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import { listPhanIn, setLoiNhuan } from '../../../services/orderService';
+import { listPhanIn, setLoiNhuan, profitHistory } from '../../../services/orderService';
 import { fmtNum } from '../../../utils/format';
 
 export default function LoiNhuanPage() {
@@ -26,6 +27,7 @@ export default function LoiNhuanPage() {
   const [editing, setEditing] = useState(null);
   const [value, setValue] = useState('');
   const [saving, setSaving] = useState(false);
+  const [histOpen, setHistOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -70,6 +72,8 @@ export default function LoiNhuanPage() {
     { key: 'ma_don_hang', header: 'Đơn hàng' },
     { key: 'ma_hang', header: 'Mã hàng' },
     { key: 'mau_vai', header: 'Màu vải' },
+    { key: 'kich_vai', header: 'Kích vải' },
+    { key: 'kich_phim', header: 'Kích phim' },
     { key: 'so_luong_don_hang', header: 'SL đơn', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong_don_hang) },
     { key: 'actions', header: '', className: 'text-right', render: (r) =>
       canManage && <Button className="px-3 py-1.5" onClick={() => openInput(r)}>Nhập lợi nhuận</Button> },
@@ -79,7 +83,8 @@ export default function LoiNhuanPage() {
     <div>
       <Toolbar title="Tính lợi nhuận" subtitle="Phần in chưa nhập lợi nhuận"
         search={search} onSearch={(v) => { setSearch(v); setPage(1); }}
-        searchPlaceholder="Tìm code phần, khách...">
+        searchPlaceholder="Tìm code phần, mã hàng, màu/kích vải, kích phim...">
+        <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="warning">{meta.total} chưa có</Badge>
       </Toolbar>
 
@@ -107,6 +112,9 @@ export default function LoiNhuanPage() {
             onChange={(e) => setValue(e.target.value)} placeholder="Nhập số tiền lợi nhuận" />
         </Field>
       </Modal>
+
+      <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}
+        title="Lịch sử lợi nhuận" fetcher={profitHistory} />
 
       <Toast toast={toast} />
     </div>

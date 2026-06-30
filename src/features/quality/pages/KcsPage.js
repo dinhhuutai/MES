@@ -5,10 +5,11 @@ import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
 import Toast from '../../../components/common/Toast';
+import HistoryPanel from '../../../components/common/HistoryPanel';
 import { Field, Input } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import { listKcsCandidates, recordKcs } from '../../../services/qualityService';
+import { listKcsCandidates, recordKcs, kcsHistory } from '../../../services/qualityService';
 import { fmtNum } from '../../../utils/format';
 
 const empty = { soLuongDat: '', soLuongThieu: '', soLuongDu: '', soLuongMau: '', soLuongHu: '', soLuongSua: '' };
@@ -24,6 +25,7 @@ export default function KcsPage() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
+  const [histOpen, setHistOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -78,6 +80,7 @@ export default function KcsPage() {
     <div>
       <Toolbar title="KCS — Kiểm tra chất lượng" subtitle="Kiểm theo tem (tem đã khô)"
         search={search} onSearch={setSearch} searchPlaceholder="Quét/nhập mã tem...">
+        <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="warning">{rows.length} tem chờ kiểm</Badge>
       </Toolbar>
 
@@ -110,6 +113,9 @@ export default function KcsPage() {
           Hư &gt; 0 và quyết định sửa &gt; 0 → tem chuyển <b>Sửa</b>; còn lại → <b>OQC</b>.
         </p>
       </Modal>
+
+      <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}
+        title="Lịch sử KCS" fetcher={kcsHistory} />
 
       <Toast toast={toast} />
     </div>

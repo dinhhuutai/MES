@@ -6,6 +6,8 @@ export const startProduction = (lenhId) => client.post(`/production/${lenhId}/st
 export const getRun = (lenhId) => client.get(`/production/run/${lenhId}`);
 export const printTem = (phieuId, soLuong) => client.post(`/production/phieu/${phieuId}/tem`, { soLuong });
 export const finishRun = (phieuId) => client.post(`/production/phieu/${phieuId}/finish`);
+export const stopLine = (phieuId, lyDo) => client.post(`/production/phieu/${phieuId}/ngung`, { lyDo });
+export const resumeLine = (phieuId) => client.post(`/production/phieu/${phieuId}/hoat-dong-lai`);
 
 // Theo dõi chuyền
 export const getMonitor = () => client.get('/production/monitor');

@@ -10,12 +10,13 @@ import Toast from '../../../components/common/Toast';
 import { Field, Input, Select } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
+import { avatarFor } from '../../../utils/brand';
 import {
-  listUsers, createUser, updateUser, setUserActive, resetUserPassword,
+  listUsers, getUser, createUser, updateUser, setUserActive, resetUserPassword,
 } from '../../../services/userService';
 import { listPhongBan, listRoleOptions } from '../../../services/systemService';
 
-const emptyForm = { tenDangNhap: '', matKhau: '', hoTen: '', email: '', soDienThoai: '', chucVu: '', phongBanId: '', roleIds: [] };
+const emptyForm = { tenDangNhap: '', matKhau: '', hoTen: '', email: '', soDienThoai: '', chucVu: '', gioiTinh: '', phongBanId: '', roleIds: [] };
 
 export default function UsersPage() {
   const { can } = usePermissions();
@@ -69,14 +70,21 @@ export default function UsersPage() {
     setModalOpen(true);
   };
 
-  const openEdit = (u) => {
+  const openEdit = async (u) => {
     setEditing(u);
     setForm({
       tenDangNhap: u.ten_dang_nhap, matKhau: '', hoTen: u.ho_ten || '', email: u.email || '',
-      soDienThoai: u.so_dien_thoai || '', chucVu: u.chuc_vu || '', phongBanId: u.phong_ban_id || '',
-      roleIds: [],
+      soDienThoai: u.so_dien_thoai || '', chucVu: u.chuc_vu || '', gioiTinh: u.gioi_tinh || '',
+      phongBanId: u.phong_ban_id || '', roleIds: [],
     });
     setModalOpen(true);
+    // Nạp sẵn vai trò hiện tại để khi lưu không xóa nhầm role.
+    try {
+      const res = await getUser(u.id);
+      setForm((f) => ({ ...f, roleIds: res.data.role_ids || [] }));
+    } catch (e) {
+      show('Không tải được vai trò hiện tại của người dùng', 'error');
+    }
   };
 
   const toggleRole = (id) =>
@@ -130,9 +138,12 @@ export default function UsersPage() {
   const columns = [
     { key: 'ma_user', header: 'Mã', className: 'font-medium text-ink' },
     { key: 'ho_ten', header: 'Họ tên', render: (r) => (
-      <div>
-        <div className="font-medium text-ink">{r.ho_ten}</div>
-        <div className="text-xs text-ink-soft">@{r.ten_dang_nhap}</div>
+      <div className="flex items-center gap-3">
+        <img src={avatarFor(r)} alt="" className="h-8 w-8 shrink-0 rounded-full object-cover ring-1 ring-line" />
+        <div>
+          <div className="font-medium text-ink">{r.ho_ten}</div>
+          <div className="text-xs text-ink-soft">@{r.ten_dang_nhap}</div>
+        </div>
       </div>
     ) },
     { key: 'ten_phong_ban', header: 'Phòng ban', render: (r) => r.ten_phong_ban || '—' },
@@ -201,6 +212,13 @@ export default function UsersPage() {
           </Field>
           <Field label="Chức vụ">
             <Input value={form.chucVu} onChange={(e) => setForm({ ...form, chucVu: e.target.value })} />
+          </Field>
+          <Field label="Giới tính" hint="Quyết định avatar mặc định">
+            <Select value={form.gioiTinh} onChange={(e) => setForm({ ...form, gioiTinh: e.target.value })}>
+              <option value="">— Chưa xác định —</option>
+              <option value="NAM">Nam</option>
+              <option value="NU">Nữ</option>
+            </Select>
           </Field>
           <Field label="Phòng ban">
             <Select value={form.phongBanId} onChange={(e) => setForm({ ...form, phongBanId: e.target.value })}>

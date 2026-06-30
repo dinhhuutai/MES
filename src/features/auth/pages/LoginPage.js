@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import Button from '../../../components/common/Button';
+import Icon from '../../../components/common/Icon';
+import { LOGO_SRC } from '../../../utils/brand';
 import { loginThunk, selectAuth, selectIsAuthenticated, clearError } from '../../../store/authSlice';
 
 export default function LoginPage() {
@@ -13,6 +15,7 @@ export default function LoginPage() {
 
   const [tenDangNhap, setTenDangNhap] = useState('');
   const [matKhau, setMatKhau] = useState('');
+  const [showPass, setShowPass] = useState(false);
 
   const from = location.state?.from || '/';
 
@@ -31,9 +34,7 @@ export default function LoginPage() {
     <div className="flex min-h-full items-center justify-center bg-background px-4">
       <div className="w-full max-w-md">
         <div className="mb-6 flex flex-col items-center">
-          <div className="mb-3 flex h-14 w-14 items-center justify-center rounded-card bg-primary text-2xl font-extrabold text-white">
-            T
-          </div>
+          <img src={LOGO_SRC} alt="THLA" className="mb-3 h-16 w-16 object-contain" />
           <h1 className="text-2xl font-bold text-ink">THLA MES</h1>
           <p className="text-sm text-ink-soft">Hệ thống điều hành sản xuất</p>
         </div>
@@ -57,13 +58,23 @@ export default function LoginPage() {
           />
 
           <label className="mb-1.5 block text-sm font-medium text-ink">Mật khẩu</label>
-          <input
-            type="password"
-            className="mb-6 h-12 w-full rounded-input border border-line px-4 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
-            value={matKhau}
-            onChange={(e) => setMatKhau(e.target.value)}
-            placeholder="••••••••"
-          />
+          <div className="relative mb-6">
+            <input
+              type={showPass ? 'text' : 'password'}
+              className="h-12 w-full rounded-input border border-line pl-4 pr-12 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
+              value={matKhau}
+              onChange={(e) => setMatKhau(e.target.value)}
+              placeholder="••••••••"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPass((v) => !v)}
+              aria-label={showPass ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+              className="absolute right-1 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-control text-ink-soft hover:bg-surface-muted hover:text-ink"
+            >
+              <Icon name={showPass ? 'eye-off' : 'eye'} size={18} />
+            </button>
+          </div>
 
           <Button
             type="submit"

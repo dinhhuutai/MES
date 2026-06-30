@@ -1,5 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-import { apiLogin, apiFetchMe } from '../services/authService';
+import {
+  apiLogin, apiFetchMe, apiUpdateProfile, apiUploadAvatar, apiResetAvatar,
+} from '../services/authService';
 
 export const loginThunk = createAsyncThunk(
   'auth/login',
@@ -21,6 +23,42 @@ export const fetchMeThunk = createAsyncThunk('auth/me', async (_, { rejectWithVa
     return rejectWithValue(e);
   }
 });
+
+export const updateProfileThunk = createAsyncThunk(
+  'auth/updateProfile',
+  async (payload, { rejectWithValue }) => {
+    try {
+      const env = await apiUpdateProfile(payload);
+      return env.data; // user (đã cập nhật)
+    } catch (e) {
+      return rejectWithValue(e);
+    }
+  }
+);
+
+export const uploadAvatarThunk = createAsyncThunk(
+  'auth/uploadAvatar',
+  async (file, { rejectWithValue }) => {
+    try {
+      const env = await apiUploadAvatar(file);
+      return env.data; // user (đã cập nhật avatar_url)
+    } catch (e) {
+      return rejectWithValue(e);
+    }
+  }
+);
+
+export const resetAvatarThunk = createAsyncThunk(
+  'auth/resetAvatar',
+  async (_, { rejectWithValue }) => {
+    try {
+      const env = await apiResetAvatar();
+      return env.data; // user (avatar_url = null)
+    } catch (e) {
+      return rejectWithValue(e);
+    }
+  }
+);
 
 const initialState = {
   token: null,
@@ -59,6 +97,15 @@ const authSlice = createSlice({
         state.error = action.payload?.message || 'Đăng nhập thất bại';
       })
       .addCase(fetchMeThunk.fulfilled, (state, action) => {
+        state.user = action.payload;
+      })
+      .addCase(updateProfileThunk.fulfilled, (state, action) => {
+        state.user = action.payload;
+      })
+      .addCase(uploadAvatarThunk.fulfilled, (state, action) => {
+        state.user = action.payload;
+      })
+      .addCase(resetAvatarThunk.fulfilled, (state, action) => {
         state.user = action.payload;
       })
       .addCase(fetchMeThunk.rejected, (state) => {

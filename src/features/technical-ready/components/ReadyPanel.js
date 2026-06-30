@@ -4,29 +4,32 @@ import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import Icon from '../../../components/common/Icon';
 import Toast from '../../../components/common/Toast';
-import { Field, Select } from '../../../components/common/controls';
+import { Select } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import {
-  getReadyDetail, saveReadyDraft, confirmReadyTech, confirmReadyQC,
-} from '../../../services/readyService';
+import { getReadyDetail, confirmReadyItem, confirmReadyItemsBatch } from '../../../services/readyService';
 
-const emptyForm = { khuon: '', film: '', muc: '', hskt: false };
+// 4 mục kỹ thuật + quyền tương ứng.
+const ITEMS = [
+  { ma: 'KHUON', label: 'Khuôn', perm: 'READY_KHUON', hasOptions: true },
+  { ma: 'FILM', label: 'Film', perm: 'READY_FILM', hasOptions: true },
+  { ma: 'MUC', label: 'Mực', perm: 'READY_MUC', hasOptions: true },
+  { ma: 'HSKT', label: 'Hồ sơ kỹ thuật (HSKT)', perm: 'READY_HSKT', hasOptions: false },
+];
+
+const fmt = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '');
 
 export default function ReadyPanel({ phanInId, onClose, onChanged }) {
   const { can } = usePermissions();
   const { toast, show } = useToast();
-  const canTech = can('READY_TECH');
-  const canQC = can('READY_QC');
 
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [form, setForm] = useState(emptyForm);
-  const [busy, setBusy] = useState(false);
+  const [sel, setSel] = useState({ KHUON: '', FILM: '', MUC: '' }); // option đang chọn (chưa xác nhận)
+  const [busy, setBusy] = useState(null); // ma đang submit
 
   const byMa = (detail?.checkpoints || []).reduce((acc, c) => ({ ...acc, [c.ma_checkpoint]: c }), {});
   const state = detail?.state || {};
-  const locked = !!state.kt_done; // sau khi xác nhận kỹ thuật thì khóa nhập
 
   const load = useCallback(async () => {
     if (!phanInId) return;
@@ -35,11 +38,10 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
       const res = await getReadyDetail(phanInId);
       setDetail(res.data);
       const m = res.data.checkpoints.reduce((acc, c) => ({ ...acc, [c.ma_checkpoint]: c }), {});
-      setForm({
-        khuon: m.KHUON?.gia_tri_text || '',
-        film: m.FILM?.gia_tri_text || '',
-        muc: m.MUC?.gia_tri_text || '',
-        hskt: m.HSKT?.trang_thai === 'DAT',
+      setSel({
+        KHUON: m.KHUON?.gia_tri_text || '',
+        FILM: m.FILM?.gia_tri_text || '',
+        MUC: m.MUC?.gia_tri_text || '',
       });
     } catch (e) {
       show(e.message || 'Lỗi tải', 'error');
@@ -50,56 +52,91 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
 
   useEffect(() => { load(); }, [load]);
 
-  const doSaveDraft = async () => {
-    setBusy(true);
+  const doConfirm = async (item) => {
+    setBusy(item.ma);
     try {
-      await saveReadyDraft(phanInId, form);
-      show('Đã lưu tạm');
-      await load();
-    } catch (e) {
-      show(e.message || 'Lưu thất bại', 'error');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const doConfirmTech = async () => {
-    setBusy(true);
-    try {
-      await saveReadyDraft(phanInId, form); // lưu trước khi xác nhận
-      await confirmReadyTech(phanInId);
-      show('Đã xác nhận kỹ thuật — chờ QC');
+      const value = item.hasOptions ? sel[item.ma] : undefined;
+      await confirmReadyItem(phanInId, item.ma, value);
+      show(`Đã xác nhận ${item.label}`);
       await load();
       onChanged?.();
     } catch (e) {
       show(e.message || 'Xác nhận thất bại', 'error');
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   };
 
-  const doConfirmQC = async () => {
-    setBusy(true);
+  // Mục đủ điều kiện xác nhận hàng loạt: có quyền + chưa done + (option đã chọn giá trị).
+  const eligible = state.qc_done ? [] : ITEMS.filter((it) => {
+    const done = state[`${it.ma.toLowerCase()}_done`];
+    if (done || !can(it.perm)) return false;
+    return it.hasOptions ? !!sel[it.ma] : true;
+  });
+
+  const doConfirmAll = async () => {
+    setBusy('__ALL__');
     try {
-      await confirmReadyQC(phanInId);
-      show('QC xác nhận — READY hoàn thành 🎉');
+      const items = eligible.map((it) => ({ ma: it.ma, value: it.hasOptions ? sel[it.ma] : undefined }));
+      await confirmReadyItemsBatch(phanInId, items);
+      show(`Đã xác nhận ${items.length} mục`);
       await load();
       onChanged?.();
     } catch (e) {
       show(e.message || 'Xác nhận thất bại', 'error');
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   };
 
-  const StatusLine = ({ label, done, waiting }) => (
-    <div className="flex items-center justify-between rounded-control border border-line px-3 py-2">
-      <span className="text-sm font-medium text-ink">{label}</span>
-      {done ? <Badge tone="success">Đã xác nhận</Badge>
-        : waiting ? <Badge tone="warning">Chờ xác nhận</Badge>
-        : <Badge tone="default">Chưa tới</Badge>}
-    </div>
-  );
+  const ItemSection = ({ item }) => {
+    const cp = byMa[item.ma];
+    const done = state[`${item.ma.toLowerCase()}_done`];
+    const editable = !done && !state.qc_done && can(item.perm);
+
+    return (
+      <div className="rounded-control border border-line p-3.5">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-sm font-semibold text-ink">{item.label}</span>
+          {done
+            ? <Badge tone="success">Đã xác nhận</Badge>
+            : <Badge tone="default">Chưa xác nhận</Badge>}
+        </div>
+
+        {done ? (
+          <div className="text-sm text-ink-soft">
+            {item.hasOptions && cp?.gia_tri_text ? <div className="text-ink">{cp.gia_tri_text}</div> : null}
+            {cp?.nguoi_xac_nhan_ten ? <div className="text-xs font-medium text-ink">{cp.nguoi_xac_nhan_ten}</div> : null}
+            {cp?.tg_xac_nhan ? <div className="text-xs">Lúc {fmt(cp.tg_xac_nhan)}</div> : null}
+          </div>
+        ) : editable ? (
+          <div className="space-y-2">
+            {item.hasOptions && (
+              <Select
+                value={sel[item.ma]}
+                onChange={(e) => setSel({ ...sel, [item.ma]: e.target.value })}
+              >
+                <option value="">— Chọn —</option>
+                {(cp?.options || []).map((o) => <option key={o} value={o}>{o}</option>)}
+              </Select>
+            )}
+            <Button
+              className="w-full"
+              loading={busy === item.ma}
+              disabled={item.hasOptions && !sel[item.ma]}
+              onClick={() => doConfirm(item)}
+            >
+              Xác nhận {item.label}
+            </Button>
+          </div>
+        ) : (
+          <div className="text-xs text-ink-soft">
+            {can(item.perm) ? 'Chưa thực hiện.' : 'Bạn không có quyền xác nhận mục này.'}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <SidePanel
@@ -107,76 +144,44 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
       onClose={onClose}
       title={detail?.phan_in ? `READY — ${detail.phan_in.ma_phan}` : 'Chuẩn bị kỹ thuật'}
       subtitle={detail?.phan_in ? `${detail.phan_in.ten_khach_hang} · ${detail.phan_in.mau_vai}` : ''}
-      footer={
-        !state.qc_done && (
-          <>
-            {!locked && canTech && (
-              <Button variant="ghost" onClick={doSaveDraft} loading={busy}>Lưu tạm</Button>
-            )}
-            {!locked && canTech && (
-              <Button onClick={doConfirmTech} loading={busy}
-                disabled={!form.khuon || !form.film || !form.muc || !form.hskt}>
-                Xác nhận kỹ thuật
-              </Button>
-            )}
-            {locked && canQC && (
-              <Button onClick={doConfirmQC} loading={busy}>QC xác nhận</Button>
-            )}
-          </>
-        )
-      }
     >
       {loading || !detail ? (
         <div className="py-10 text-center text-ink-soft">Đang tải...</div>
-      ) : state.qc_done ? (
-        <div className="flex flex-col items-center gap-3 py-12 text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-card bg-emerald-50 text-emerald-600">
-            <Icon name="shield-check" size={30} />
-          </div>
-          <div className="text-lg font-semibold text-ink">READY hoàn thành</div>
-          <div className="text-sm text-ink-soft">Phần in đã sẵn sàng để Release 1.</div>
-        </div>
       ) : (
-        <div className="space-y-5">
-          {locked && (
+        <div className="space-y-4">
+          {state.qc_done ? (
+            <div className="rounded-control border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+              READY hoàn thành — đã QC xác nhận, sẵn sàng Release 1.
+            </div>
+          ) : state.tech_done ? (
+            <div className="rounded-control border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-700">
+              Đã đủ 4 mục kỹ thuật — chờ QC xác nhận (Module Chất lượng).
+            </div>
+          ) : (
             <div className="rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-              Đã xác nhận kỹ thuật — dữ liệu đã khóa, chờ QC xác nhận.
+              Mỗi bộ phận xác nhận mục của mình. Đủ 4 mục sẽ chuyển sang chờ QC.
             </div>
           )}
 
-          <Field label="Khuôn" required>
-            <Select value={form.khuon} disabled={locked} onChange={(e) => setForm({ ...form, khuon: e.target.value })}>
-              <option value="">— Chọn —</option>
-              {(byMa.KHUON?.options || []).map((o) => <option key={o} value={o}>{o}</option>)}
-            </Select>
-          </Field>
-          <Field label="Film" required>
-            <Select value={form.film} disabled={locked} onChange={(e) => setForm({ ...form, film: e.target.value })}>
-              <option value="">— Chọn —</option>
-              {(byMa.FILM?.options || []).map((o) => <option key={o} value={o}>{o}</option>)}
-            </Select>
-          </Field>
-          <Field label="Mực" required>
-            <Select value={form.muc} disabled={locked} onChange={(e) => setForm({ ...form, muc: e.target.value })}>
-              <option value="">— Chọn —</option>
-              {(byMa.MUC?.options || []).map((o) => <option key={o} value={o}>{o}</option>)}
-            </Select>
-          </Field>
-          <Field label="Hồ sơ kỹ thuật (HSKT)" required>
-            <button type="button" disabled={locked}
-              onClick={() => setForm({ ...form, hskt: !form.hskt })}
-              className={`flex w-full items-center gap-2 rounded-input border px-3.5 py-2.5 text-sm transition disabled:opacity-60 ${
-                form.hskt ? 'border-primary bg-primary-wash text-primary' : 'border-line text-ink-soft'
-              }`}>
-              <Icon name={form.hskt ? 'shield-check' : 'circle'} size={18} />
-              {form.hskt ? 'Đã có HSKT' : 'Xác nhận đã có HSKT'}
-            </button>
-          </Field>
+          {eligible.length > 0 && (
+            <Button className="w-full" loading={busy === '__ALL__'} onClick={doConfirmAll}>
+              Xác nhận tất cả ({eligible.length} mục)
+            </Button>
+          )}
+
+          {ITEMS.map((item) => <ItemSection key={item.ma} item={item} />)}
 
           <div className="space-y-2 border-t border-line pt-4">
-            <h3 className="text-xs font-bold uppercase tracking-wide text-ink-soft">Tiến trình xác nhận</h3>
-            <StatusLine label="Kỹ thuật xác nhận" done={state.kt_done} waiting={!state.kt_done} />
-            <StatusLine label="QC xác nhận" done={state.qc_done} waiting={state.kt_done && !state.qc_done} />
+            <h3 className="text-xs font-bold uppercase tracking-wide text-ink-soft">Tiến trình</h3>
+            <div className="flex items-center justify-between rounded-control border border-line px-3 py-2">
+              <span className="text-sm font-medium text-ink">Kỹ thuật (4 mục)</span>
+              {state.tech_done
+                ? <Badge tone="success">Hoàn tất</Badge>
+                : <Badge tone="warning">{[state.khuon_done, state.film_done, state.muc_done, state.hskt_done].filter(Boolean).length}/4</Badge>}
+            </div>
+            <p className="flex items-center gap-1.5 text-xs text-ink-soft">
+              <Icon name="shield-check" size={14} /> QC thực hiện tại Module Chất lượng → QC chuẩn bị kỹ thuật.
+            </p>
           </div>
         </div>
       )}

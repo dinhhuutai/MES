@@ -24,7 +24,7 @@ export function Input(props) {
 
 export function Select({ children, ...props }) {
   return (
-    <select {...props} className={`${inputClass} bg-white ${props.className || ''}`}>
+    <select {...props} className={`${inputClass} bg-surface ${props.className || ''}`}>
       {children}
     </select>
   );

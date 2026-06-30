@@ -5,10 +5,11 @@ import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
 import Toast from '../../../components/common/Toast';
+import HistoryPanel from '../../../components/common/HistoryPanel';
 import { Field, Input } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import { listOqcCandidates, recordOqc } from '../../../services/qualityService';
+import { listOqcCandidates, recordOqc, oqcHistory } from '../../../services/qualityService';
 import { fmtNum } from '../../../utils/format';
 
 export default function OqcPage() {
@@ -22,6 +23,7 @@ export default function OqcPage() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ soLuongKiem: '', soLuongDat: '', soLuongLoi: '', ketQua: 'DAT' });
   const [saving, setSaving] = useState(false);
+  const [histOpen, setHistOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -73,6 +75,7 @@ export default function OqcPage() {
     <div>
       <Toolbar title="OQC — Kiểm cuối" subtitle="Kiểm cuối theo tem trước giao hàng"
         search={search} onSearch={setSearch} searchPlaceholder="Quét/nhập mã tem...">
+        <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="warning">{rows.length} tem chờ OQC</Badge>
       </Toolbar>
 
@@ -120,6 +123,9 @@ export default function OqcPage() {
         </Field>
         <p className="text-xs text-ink-soft">Đạt → sẵn sàng giao hàng; Không đạt → chuyển lại Sửa.</p>
       </Modal>
+
+      <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}
+        title="Lịch sử OQC" fetcher={oqcHistory} />
 
       <Toast toast={toast} />
     </div>

@@ -3,6 +3,26 @@
 @tailwind utilities;
 
 @layer base {
+  /* Token màu (RGB channels) — sáng mặc định, .dark đổi sang tối. */
+  :root {
+    --c-background: 248 249 251;
+    --c-surface: 255 255 255;
+    --c-surface-muted: 241 243 255;
+    --c-ink: 17 24 39;
+    --c-ink-soft: 107 114 128;
+    --c-line: 229 231 235;
+    --c-primary-wash: 239 244 255;
+  }
+  .dark {
+    --c-background: 15 18 30;
+    --c-surface: 24 28 42;
+    --c-surface-muted: 32 38 56;
+    --c-ink: 229 231 235;
+    --c-ink-soft: 148 163 184;
+    --c-line: 45 53 72;
+    --c-primary-wash: 23 35 60;
+    color-scheme: dark;
+  }
   html,
   body,
   #root {

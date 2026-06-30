@@ -83,7 +83,7 @@ export default function PhanInListPage() {
     <div>
       <Toolbar title="Danh sách phần in" subtitle="Thông tin phần in theo đơn hàng / đợt vải"
         search={search} onSearch={(v) => { setSearch(v); setPage(1); }}
-        searchPlaceholder="Tìm code phần, khách, đơn, màu..." />
+        searchPlaceholder="Tìm code phần, mã hàng, màu/kích vải, kích phim..." />
 
       <DataTable columns={columns} rows={rows} loading={loading} onRowClick={openDetail}
         emptyText="Chưa có phần in" />
@@ -126,7 +126,6 @@ export default function PhanInListPage() {
                     <div key={dv.id} className="rounded-control border border-line p-3 text-sm">
                       <div className="flex items-center justify-between">
                         <span className="font-medium text-ink">{dv.ma_dot_vai}</span>
-                        <Badge tone="default">{dv.trang_thai || '—'}</Badge>
                       </div>
                       <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-ink-soft">
                         <span>SL vải về: <b className="text-ink">{fmtNum(dv.so_luong_vai_ve)}</b></span>

@@ -10,9 +10,11 @@ import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import useNow, { fmtRemain } from '../../../hooks/useNow';
 import {
-  getXePhoi, listTemChoPhoi, addTemToXe,
+  getXePhoi, listTemChoPhoi, addTemToXe, adjustPhoi,
 } from '../../../services/productionService';
 import { fmtNum } from '../../../utils/format';
+
+const NEAR_MS = 5 * 60 * 1000; // ngưỡng "sắp xong" — nhấp nháy cảnh báo
 
 export default function XePhoiPage() {
   const { can } = usePermissions();
@@ -26,6 +28,8 @@ export default function XePhoiPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState({ temId: '', xeId: '', soLuongPhoi: '', phut: '60' });
   const [saving, setSaving] = useState(false);
+  const [adjust, setAdjust] = useState(null); // { tem_xe_id, ma_tem } đang chỉnh giờ
+  const [adjustMin, setAdjustMin] = useState('60');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -75,6 +79,21 @@ export default function XePhoiPage() {
     }
   };
 
+  const openAdjust = (t) => { setAdjust(t); setAdjustMin('60'); };
+  const doAdjust = async () => {
+    setSaving(true);
+    try {
+      await adjustPhoi(adjust.tem_xe_id, Number(adjustMin) || 0);
+      show(`Đã chỉnh thời gian phơi tem ${adjust.ma_tem}`);
+      setAdjust(null);
+      load();
+    } catch (e) {
+      show(e.message || 'Thất bại', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div>
       <Toolbar title="Tình trạng xe phơi" subtitle="Đưa tem vào xe, đếm ngược thời gian phơi (tự làm mới 15s)">
@@ -100,18 +119,29 @@ export default function XePhoiPage() {
                 {x.tems.map((t) => {
                   const ms = new Date(t.tg_kt_phoi).getTime() - now;
                   const done = ms <= 0;
+                  const soon = !done && ms <= NEAR_MS; // sắp xong → nhấp nháy cảnh báo
                   return (
                     <div key={t.tem_xe_id}
-                      className={`rounded-control border px-3 py-2 text-sm transition ${
-                        done ? 'animate-pulse border-rose-300 bg-rose-50' : 'border-line'
+                      className={`rounded-control border-2 px-3 py-2 text-sm transition ${
+                        done ? 'animate-blink-danger border-rose-400'
+                          : soon ? 'animate-blink-warning border-amber-400'
+                          : 'border-line'
                       }`}>
                       <div className="flex items-center justify-between">
-                        <span className="font-medium text-ink">{t.ma_tem}</span>
-                        <span className={`font-mono text-xs ${done ? 'font-bold text-rose-600' : 'text-amber-600'}`}>
+                        <span className="font-semibold text-ink">{t.ma_tem}</span>
+                        <span className={`font-mono text-xs font-bold ${
+                          done ? 'text-rose-800' : soon ? 'text-amber-800' : 'text-ink-soft'
+                        }`}>
                           {fmtRemain(ms)}
                         </span>
                       </div>
-                      <div className="text-xs text-ink-soft">{t.ma_lenh_san_xuat || ''} · SL {fmtNum(t.so_luong_phoi)}</div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-ink-soft">{t.ma_lenh_san_xuat || ''} · SL {fmtNum(t.so_luong_phoi)}</span>
+                        {canXe && (
+                          <button onClick={() => openAdjust(t)}
+                            className="text-xs font-medium text-primary hover:underline">Chỉnh giờ</button>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -169,6 +199,23 @@ export default function XePhoiPage() {
             </div>
           </>
         )}
+      </Modal>
+
+      <Modal
+        open={!!adjust}
+        onClose={() => setAdjust(null)}
+        title={adjust ? `Chỉnh giờ phơi — ${adjust.ma_tem}` : 'Chỉnh giờ phơi'}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setAdjust(null)}>Hủy</Button>
+            <Button onClick={doAdjust} loading={saving}>Cập nhật</Button>
+          </>
+        }
+      >
+        <Field label="Thời gian phơi còn lại (phút, tính từ bây giờ)" required>
+          <Input type="number" value={adjustMin} onChange={(e) => setAdjustMin(e.target.value)} placeholder="vd: 60" />
+        </Field>
+        <p className="text-xs text-ink-soft">Đếm ngược sẽ được đặt lại = bây giờ + số phút nhập.</p>
       </Modal>
 
       <Toast toast={toast} />

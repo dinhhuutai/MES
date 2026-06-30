@@ -20,7 +20,11 @@ export const MODULES = [
     base: '/ky-thuat',
     perm: 'READY_VIEW',
     mau: 'bg-amber-50 text-amber-600',
-    children: [{ ten: 'Xác nhận READY', route: '/ky-thuat/ready', perm: 'READY_VIEW' }],
+    children: [
+      { ten: 'Xác nhận READY', route: '/ky-thuat/ready', perm: 'READY_VIEW' },
+      { ten: 'Gom set', route: '/ky-thuat/gom-set', perm: 'READY_GOMSET' },
+      { ten: 'Test Run - CNSP', route: '/ky-thuat/test-run-cnsp', perm: 'TESTRUN_CNSP' },
+    ],
   },
   {
     ma: 'KE_HOACH',
@@ -32,6 +36,7 @@ export const MODULES = [
     children: [
       { ten: 'Release 1', route: '/ke-hoach/release-1', perm: 'RELEASE1' },
       { ten: 'Release 2', route: '/ke-hoach/release-2', perm: 'RELEASE2' },
+      { ten: 'Lập kế hoạch lại', route: '/ke-hoach/lap-lai', perm: 'RELEASE2' },
     ],
   },
   {
@@ -58,8 +63,11 @@ export const MODULES = [
     perm: 'TESTRUN_QA',
     mau: 'bg-teal-50 text-teal-600',
     children: [
-      { ten: 'Test Run', route: '/chat-luong/test-run', perm: 'TESTRUN_QA' },
+      { ten: 'QC chuẩn bị kỹ thuật', route: '/chat-luong/ready-qc', perm: 'READY_QC' },
+      { ten: 'Test Run - QA', route: '/chat-luong/test-run', perm: 'TESTRUN_QA' },
+      { ten: 'QC in line', route: '/chat-luong/qc-in-line', perm: 'QC_INLINE' },
       { ten: 'OQC', route: '/chat-luong/oqc', perm: 'OQC' },
+      { ten: 'Danh mục lỗi', route: '/chat-luong/danh-muc-loi', perm: 'LOI_MANAGE' },
     ],
   },
   {
@@ -104,6 +112,7 @@ export const MODULES = [
       { ten: 'Điều kiện chuyển trạm', route: '/he-thong/dieu-kien', perm: 'WORKFLOW_VIEW' },
       { ten: 'Owner trạm/checkpoint', route: '/he-thong/owner', perm: 'WORKFLOW_VIEW' },
       { ten: 'Trạng thái', route: '/he-thong/trang-thai', perm: 'STATUS_VIEW' },
+      { ten: 'Đồng bộ ERP', route: '/he-thong/erp-sync', perm: 'ERP_SYNC' },
     ],
   },
 ];

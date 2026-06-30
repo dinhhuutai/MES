@@ -3,18 +3,37 @@ import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
 import Pagination from '../../../components/common/Pagination';
 import Badge from '../../../components/common/Badge';
+import Button from '../../../components/common/Button';
+import Modal from '../../../components/common/Modal';
 import Toast from '../../../components/common/Toast';
+import HistoryPanel from '../../../components/common/HistoryPanel';
+import { Field, Select } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
-import { listReadyCandidates } from '../../../services/readyService';
+import usePermissions from '../../../hooks/usePermissions';
+import {
+  listReadyCandidates, getReadyConfig, confirmReadyBulk, readyHistory,
+} from '../../../services/readyService';
 import ReadyPanel from '../components/ReadyPanel';
 
 const STATUS = {
   CHUA: { tone: 'default', label: 'Chưa làm' },
   DANG: { tone: 'warning', label: 'Đang chuẩn bị' },
   CHO_QC: { tone: 'info', label: 'Chờ QC' },
+  DONE: { tone: 'success', label: 'Hoàn thành' },
 };
 
+const ITEMS = [
+  { ma: 'KHUON', label: 'Khuôn', perm: 'READY_KHUON', hasOptions: true },
+  { ma: 'FILM', label: 'Film', perm: 'READY_FILM', hasOptions: true },
+  { ma: 'MUC', label: 'Mực', perm: 'READY_MUC', hasOptions: true },
+  { ma: 'HSKT', label: 'HSKT', perm: 'READY_HSKT', hasOptions: false },
+];
+
+const DoneCell = (done) =>
+  done ? <Badge tone="success">✓</Badge> : <span className="text-ink-soft">–</span>;
+
 export default function ReadyPage() {
+  const { can } = usePermissions();
   const { toast, show } = useToast();
   const [rows, setRows] = useState([]);
   const [meta, setMeta] = useState({ page: 1, totalPages: 1, total: 0 });
@@ -23,12 +42,21 @@ export default function ReadyPage() {
   const [page, setPage] = useState(1);
   const [sel, setSel] = useState(null);
 
+  const [selected, setSelected] = useState(() => new Set());
+  const [optionsByMa, setOptionsByMa] = useState({});
+  const [bulk, setBulk] = useState(null); // { ma, value }
+  const [bulkSaving, setBulkSaving] = useState(false);
+  const [histOpen, setHistOpen] = useState(false);
+
+  const permItems = ITEMS.filter((it) => can(it.perm));
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const res = await listReadyCandidates({ search, page, limit: 20 });
       setRows(res.data.items);
       setMeta(res.data.meta);
+      setSelected(new Set());
     } catch (e) {
       show(e.message || 'Lỗi tải', 'error');
     } finally {
@@ -41,13 +69,61 @@ export default function ReadyPage() {
     return () => clearTimeout(t);
   }, [load]);
 
+  // Nạp options cho Khuôn/Film/Mực (1 lần) để bulk chọn giá trị.
+  useEffect(() => {
+    getReadyConfig().then((r) => {
+      const m = {};
+      (r.data.checkpoints || []).forEach((c) => { m[c.ma_checkpoint] = c.options || []; });
+      setOptionsByMa(m);
+    }).catch(() => {});
+  }, []);
+
+  const toggleOne = (id) => setSelected((s) => {
+    const next = new Set(s);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.id));
+  const toggleAll = () => setSelected(() => (allChecked ? new Set() : new Set(rows.map((r) => r.id))));
+
+  const openBulk = () => setBulk({ ma: permItems[0]?.ma || '', value: '' });
+  const bulkItem = ITEMS.find((it) => it.ma === bulk?.ma);
+
+  const doBulk = async () => {
+    setBulkSaving(true);
+    try {
+      const res = await confirmReadyBulk({ phanInIds: [...selected], ma: bulk.ma, value: bulk.value || undefined });
+      const { okCount, skippedCount } = res.data;
+      show(`Đã xác nhận ${okCount} phần in${skippedCount ? `, bỏ qua ${skippedCount}` : ''}`);
+      setBulk(null);
+      load();
+    } catch (e) {
+      show(e.message || 'Xác nhận thất bại', 'error');
+    } finally {
+      setBulkSaving(false);
+    }
+  };
+
   const columns = [
+    ...(permItems.length ? [{
+      key: 'sel', className: 'w-10',
+      header: <input type="checkbox" checked={allChecked} onChange={toggleAll} aria-label="Chọn tất cả" />,
+      render: (r) => (
+        <input type="checkbox" checked={selected.has(r.id)}
+          onClick={(e) => e.stopPropagation()} onChange={() => toggleOne(r.id)} aria-label="Chọn" />
+      ),
+    }] : []),
     { key: 'ma_phan', header: 'Code phần', render: (r) => <Badge tone="info">{r.ma_phan}</Badge> },
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink' },
     { key: 'ma_don_hang', header: 'Đơn hàng' },
     { key: 'ma_hang', header: 'Mã hàng' },
     { key: 'mau_vai', header: 'Màu vải' },
     { key: 'kich_vai', header: 'Kích vải' },
+    { key: 'kich_phim', header: 'Kích phim' },
+    { key: 'khuon_done', header: 'Khuôn', className: 'text-center', render: (r) => DoneCell(r.khuon_done) },
+    { key: 'film_done', header: 'Film', className: 'text-center', render: (r) => DoneCell(r.film_done) },
+    { key: 'muc_done', header: 'Mực', className: 'text-center', render: (r) => DoneCell(r.muc_done) },
+    { key: 'hskt_done', header: 'HSKT', className: 'text-center', render: (r) => DoneCell(r.hskt_done) },
     { key: 'trang_thai_ready', header: 'Trạng thái', render: (r) => {
       const s = STATUS[r.trang_thai_ready] || STATUS.CHUA;
       return <Badge tone={s.tone}>{s.label}</Badge>;
@@ -58,7 +134,11 @@ export default function ReadyPage() {
     <div>
       <Toolbar title="Chuẩn bị kỹ thuật — READY" subtitle="Xác nhận khuôn / film / mực / HSKT trước khi Release"
         search={search} onSearch={(v) => { setSearch(v); setPage(1); }}
-        searchPlaceholder="Tìm code phần, khách...">
+        searchPlaceholder="Tìm code phần, mã hàng, màu/kích vải, kích phim...">
+        {permItems.length > 0 && selected.size > 0 && (
+          <Button onClick={openBulk}>Xác nhận hàng loạt ({selected.size})</Button>
+        )}
+        <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="warning">{meta.total} chưa READY</Badge>
       </Toolbar>
 
@@ -67,12 +147,48 @@ export default function ReadyPage() {
       <Pagination page={meta.page} totalPages={meta.totalPages} total={meta.total} onPage={setPage} />
 
       {sel && (
-        <ReadyPanel
-          phanInId={sel}
-          onClose={() => setSel(null)}
-          onChanged={load}
-        />
+        <ReadyPanel phanInId={sel} onClose={() => setSel(null)} onChanged={load} />
       )}
+
+      <Modal
+        open={!!bulk}
+        onClose={() => setBulk(null)}
+        title={`Xác nhận hàng loạt — ${selected.size} phần in`}
+        size="sm"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setBulk(null)}>Hủy</Button>
+            <Button onClick={doBulk} loading={bulkSaving}
+              disabled={!bulk?.ma || (bulkItem?.hasOptions && !bulk?.value)}>
+              Xác nhận
+            </Button>
+          </>
+        }
+      >
+        <Field label="Mục cần xác nhận" required>
+          <Select value={bulk?.ma || ''} onChange={(e) => setBulk({ ma: e.target.value, value: '' })}>
+            {permItems.map((it) => <option key={it.ma} value={it.ma}>{it.label}</option>)}
+          </Select>
+        </Field>
+        {bulkItem?.hasOptions && (
+          <Field label="Giá trị" required>
+            <Select value={bulk?.value || ''} onChange={(e) => setBulk({ ...bulk, value: e.target.value })}>
+              <option value="">— Chọn —</option>
+              {(optionsByMa[bulk.ma] || []).map((o) => <option key={o} value={o}>{o}</option>)}
+            </Select>
+          </Field>
+        )}
+        <p className="text-xs text-ink-soft">
+          Áp cho {selected.size} phần in đã chọn. Phần in đã xác nhận mục này (hoặc đã QC) sẽ được bỏ qua.
+        </p>
+      </Modal>
+
+      <HistoryPanel
+        open={histOpen}
+        onClose={() => setHistOpen(false)}
+        title="Lịch sử xác nhận kỹ thuật"
+        fetcher={(date) => readyHistory(date, 'tech')}
+      />
 
       <Toast toast={toast} />
     </div>

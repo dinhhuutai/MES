@@ -15,9 +15,19 @@ import {
   Search,
   User,
   ChevronRight,
+  ChevronLeft,
   Bell,
+  Eye,
+  EyeOff,
+  X,
+  History,
   Circle,
   Loader2,
+  Play,
+  Pause,
+  Plus,
+  Sun,
+  Moon,
 } from 'lucide-react';
 
 // Map tên kebab → component Lucide.
@@ -38,8 +48,19 @@ const MAP = {
   search: Search,
   user: User,
   'chevron-right': ChevronRight,
+  'chevron-left': ChevronLeft,
   bell: Bell,
+  eye: Eye,
+  'eye-off': EyeOff,
+  x: X,
+  close: X,
+  history: History,
   loader: Loader2,
+  play: Play,
+  pause: Pause,
+  plus: Plus,
+  sun: Sun,
+  moon: Moon,
 };
 
 export default function Icon({ name, size = 20, className = '' }) {

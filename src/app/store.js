@@ -22,7 +22,7 @@ const rootReducer = combineReducers({
 const persistConfig = {
   key: 'thla-mes',
   storage,
-  whitelist: ['auth'], // chỉ lưu token + user
+  whitelist: ['auth', 'ui'], // lưu token + user, và tùy chọn giao diện (theme/sidebar)
 };
 
 const persistedReducer = persistReducer(persistConfig, rootReducer);
