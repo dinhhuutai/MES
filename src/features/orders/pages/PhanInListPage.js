@@ -1,13 +1,17 @@
 import { useEffect, useState, useCallback } from 'react';
 import Toolbar from '../../../components/common/Toolbar';
-import DataTable from '../../../components/common/DataTable';
 import Pagination from '../../../components/common/Pagination';
 import Badge from '../../../components/common/Badge';
 import SidePanel from '../../../components/common/SidePanel';
 import Toast from '../../../components/common/Toast';
+import Icon from '../../../components/common/Icon';
 import useToast from '../../../hooks/useToast';
-import { listPhanIn, getPhanIn } from '../../../services/orderService';
+import { listVaiVe, getPhanIn } from '../../../services/orderService';
 import { fmtNum, fmtDate, fmtCurrency } from '../../../utils/format';
+
+const LIMIT = 20;
+const TH = 'px-4 py-3 text-xs font-semibold uppercase tracking-wide text-ink-soft';
+const TD = 'px-4 py-3 align-top';
 
 function Row({ label, value }) {
   return (
@@ -32,7 +36,7 @@ export default function PhanInListPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await listPhanIn({ search, page, limit: 20 });
+      const res = await listVaiVe({ search, page, limit: LIMIT });
       setRows(res.data.items);
       setMeta(res.data.meta);
     } catch (e) {
@@ -47,11 +51,11 @@ export default function PhanInListPage() {
     return () => clearTimeout(t);
   }, [load]);
 
-  const openDetail = async (row) => {
+  const openDetail = async (phanInId) => {
     setLoadingDetail(true);
-    setDetail({ id: row.id });
+    setDetail({ id: phanInId });
     try {
-      const res = await getPhanIn(row.id);
+      const res = await getPhanIn(phanInId);
       setDetail(res.data);
     } catch (e) {
       show(e.message || 'Lỗi tải chi tiết', 'error');
@@ -61,32 +65,93 @@ export default function PhanInListPage() {
     }
   };
 
-  const columns = [
-    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'min-w-[140px]',
-      render: (r) => <span className="font-medium text-ink">{r.ten_khach_hang}</span> },
-    { key: 'ma_don_hang', header: 'Đơn hàng',
-      render: (r) => <div><div className="text-ink">{r.ma_don_hang}</div><div className="text-xs text-ink-soft">{r.so_po}</div></div> },
-    { key: 'ma_hang', header: 'Mã hàng' },
-    { key: 'ma_phan', header: 'Code phần', render: (r) => <Badge tone="info">{r.ma_phan}</Badge> },
-    { key: 'mau_vai', header: 'Màu vải' },
-    { key: 'kich_vai', header: 'Kích vải' },
-    { key: 'kich_phim', header: 'Kích phim' },
-    { key: 'so_luong_don_hang', header: 'SL đơn', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong_don_hang) },
-    { key: 'tong_vai_ve', header: 'SL vải về', className: 'text-right tabular-nums', render: (r) => fmtNum(r.tong_vai_ve) },
-    { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => fmtDate(r.han_giao_hang) },
-    { key: 'ngay_vai_ve', header: 'Ngày vải về', render: (r) => fmtDate(r.ngay_vai_ve) },
-    { key: 'loi_nhuan', header: 'Lợi nhuận', className: 'text-right',
-      render: (r) => r.loi_nhuan == null ? <Badge tone="warning">Chưa có</Badge> : <span className="font-medium text-emerald-600">{fmtCurrency(r.loi_nhuan)}</span> },
-  ];
+  const sttStart = (meta.page - 1) * LIMIT;
+  const COLS = 13;
 
   return (
     <div>
-      <Toolbar title="Danh sách phần in" subtitle="Thông tin phần in theo đơn hàng / đợt vải"
+      <Toolbar title="Danh sách phần in vải về" subtitle="Từ khách hàng → đơn hàng → mã hàng → phần in → đợt vải về"
         search={search} onSearch={(v) => { setSearch(v); setPage(1); }}
-        searchPlaceholder="Tìm code phần, mã hàng, màu/kích vải, kích phim..." />
+        searchPlaceholder="Tìm code phần, mã hàng, màu/kích vải, kích phim, mã đợt vải...">
+        <Badge tone="default">Tổng {meta.total}</Badge>
+      </Toolbar>
 
-      <DataTable columns={columns} rows={rows} loading={loading} onRowClick={openDetail}
-        emptyText="Chưa có phần in" />
+      <div className="card overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-line bg-surface-muted/60 text-left">
+                <th className={`${TH} w-12 text-right`}>STT</th>
+                <th className={TH}>Khách hàng</th>
+                <th className={TH}>Đơn hàng</th>
+                <th className={TH}>Mã hàng</th>
+                <th className={TH}>Code phần</th>
+                <th className={TH}>Màu vải</th>
+                <th className={TH}>Kích vải</th>
+                <th className={TH}>Kích phim</th>
+                <th className={`${TH} text-right`}>SL đơn hàng</th>
+                <th className={`${TH} text-right border-r border-line/60`}>Lợi nhuận</th>
+                <th className={`${TH} text-right`}>SL vải về</th>
+                <th className={TH}>Ngày vải về</th>
+                <th className={TH}>Hạn giao</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={COLS} className="px-4 py-12 text-center text-ink-soft">
+                  <Icon name="loader" size={22} className="mx-auto animate-spin" />
+                </td></tr>
+              ) : rows.length === 0 ? (
+                <tr><td colSpan={COLS} className="px-4 py-12 text-center text-ink-soft">Chưa có phần in / đợt vải về</td></tr>
+              ) : (
+                rows.map((g, gi) => {
+                  const dots = g.dot_vai && g.dot_vai.length ? g.dot_vai : [null];
+                  const n = dots.length;
+                  const stt = sttStart + gi + 1;
+                  return dots.map((dv, di) => (
+                    <tr
+                      key={`${g.phan_in_id}-${dv?.dot_vai_id || 'none'}`}
+                      onClick={() => openDetail(g.phan_in_id)}
+                      className={`cursor-pointer transition hover:bg-surface-muted/40 ${di === n - 1 ? 'border-b border-line/70' : ''}`}
+                    >
+                      {di === 0 && (
+                        <>
+                          <td rowSpan={n} className={`${TD} text-right tabular-nums text-ink-soft`}>{stt}</td>
+                          <td rowSpan={n} className={`${TD} font-medium text-ink`}>{g.ten_khach_hang}</td>
+                          <td rowSpan={n} className={TD}>
+                            <div className="text-ink">{g.ma_don_hang}</div>
+                            <div className="text-xs text-ink-soft">{g.so_po}</div>
+                          </td>
+                          <td rowSpan={n} className={TD}>{g.ma_hang}</td>
+                          <td rowSpan={n} className={TD}>
+                            <Badge tone="info">{g.ma_phan}</Badge>
+                            {g.so_dot > 1 && <div className="mt-1"><Badge tone="warning">{g.so_dot} đợt vải</Badge></div>}
+                          </td>
+                          <td rowSpan={n} className={TD}>{g.mau_vai || '—'}</td>
+                          <td rowSpan={n} className={TD}>{g.kich_vai || '—'}</td>
+                          <td rowSpan={n} className={TD}>{g.kich_phim || '—'}</td>
+                          <td rowSpan={n} className={`${TD} text-right tabular-nums`}>{fmtNum(g.so_luong_don_hang)}</td>
+                          <td rowSpan={n} className={`${TD} text-right border-r border-line/60`}>
+                            {g.loi_nhuan == null
+                              ? <Badge tone="warning">Chưa có</Badge>
+                              : <span className="font-medium text-emerald-600">{fmtCurrency(g.loi_nhuan)}</span>}
+                          </td>
+                        </>
+                      )}
+                      <td className={`${TD} text-right tabular-nums`}>
+                        {dv ? fmtNum(dv.so_luong_vai_ve) : <span className="text-xs italic text-ink-soft">Chưa có vải về</span>}
+                      </td>
+                      <td className={TD}>{dv ? fmtDate(dv.ngay_vai_ve) : '—'}</td>
+                      <td className={TD}>{dv ? fmtDate(dv.han_giao_hang) : '—'}</td>
+                    </tr>
+                  ));
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <Pagination page={meta.page} totalPages={meta.totalPages} total={meta.total} onPage={setPage} />
 
       <SidePanel

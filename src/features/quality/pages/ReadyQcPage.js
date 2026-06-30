@@ -143,7 +143,7 @@ export default function ReadyQcPage() {
         <Badge tone="warning">{meta.total} chờ QC</Badge>
       </Toolbar>
 
-      <DataTable columns={columns} rows={rows} loading={loading} onRowClick={(r) => open(r)}
+      <DataTable columns={columns} rows={rows} loading={loading} onRowClick={(r) => open(r)} sttStart={(meta.page - 1) * 20}
         emptyText="Không có phần in nào chờ QC" />
       <Pagination page={meta.page} totalPages={meta.totalPages} total={meta.total} onPage={setPage} />
 

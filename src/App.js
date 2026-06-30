@@ -20,6 +20,7 @@ import DieuKienPage from './features/system/pages/DieuKienPage';
 import OwnerPage from './features/system/pages/OwnerPage';
 import TrangThaiPage from './features/system/pages/TrangThaiPage';
 import ErpSyncPage from './features/system/pages/ErpSyncPage';
+import OnlineUsersPage from './features/system/pages/OnlineUsersPage';
 import PhanInListPage from './features/orders/pages/PhanInListPage';
 import LoiNhuanPage from './features/orders/pages/LoiNhuanPage';
 import ReadyPage from './features/technical-ready/pages/ReadyPage';
@@ -40,6 +41,7 @@ import OqcPage from './features/quality/pages/OqcPage';
 import QcInlinePage from './features/quality/pages/QcInlinePage';
 import LoaiLoiPage from './features/quality/pages/LoaiLoiPage';
 import GiaoHangPage from './features/delivery/pages/GiaoHangPage';
+import CongNoPage from './features/finance/pages/CongNoPage';
 import DashboardPage from './features/dashboard/pages/DashboardPage';
 import BaoCaoPage from './features/reports/pages/BaoCaoPage';
 import { MODULES } from './constants/modules';
@@ -66,6 +68,7 @@ const PAGES = {
   '/chat-luong/oqc': <OqcPage />,
   '/chat-luong/danh-muc-loi': <LoaiLoiPage />,
   '/giao-hang': <GiaoHangPage />,
+  '/tai-chinh/cong-no': <CongNoPage />,
   '/dashboard': <DashboardPage />,
   '/bao-cao': <BaoCaoPage />,
   '/he-thong/nguoi-dung': <UsersPage />,
@@ -78,6 +81,7 @@ const PAGES = {
   '/he-thong/owner': <OwnerPage />,
   '/he-thong/trang-thai': <TrangThaiPage />,
   '/he-thong/erp-sync': <ErpSyncPage />,
+  '/he-thong/online': <OnlineUsersPage />,
 };
 
 const moduleRoutes = MODULES.flatMap((m) =>

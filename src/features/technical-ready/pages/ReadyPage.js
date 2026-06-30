@@ -142,7 +142,7 @@ export default function ReadyPage() {
         <Badge tone="warning">{meta.total} chưa READY</Badge>
       </Toolbar>
 
-      <DataTable columns={columns} rows={rows} loading={loading} onRowClick={(r) => setSel(r.id)}
+      <DataTable columns={columns} rows={rows} loading={loading} onRowClick={(r) => setSel(r.id)} sttStart={(meta.page - 1) * 20}
         emptyText="Tất cả phần in đã READY 🎉" />
       <Pagination page={meta.page} totalPages={meta.totalPages} total={meta.total} onPage={setPage} />
 

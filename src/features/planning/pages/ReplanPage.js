@@ -157,7 +157,7 @@ export default function ReplanPage() {
         <Badge tone="info">{meta.total} lệnh</Badge>
       </Toolbar>
 
-      <DataTable columns={columns} rows={rows} loading={loading} onRowClick={openDetail}
+      <DataTable columns={columns} rows={rows} loading={loading} onRowClick={openDetail} sttStart={(meta.page - 1) * 50}
         emptyText="Không có lệnh nào để lập lại kế hoạch" />
       <Pagination page={meta.page} totalPages={meta.totalPages} total={meta.total} onPage={setPage} />
 

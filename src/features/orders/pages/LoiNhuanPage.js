@@ -67,10 +67,10 @@ export default function LoiNhuanPage() {
   };
 
   const columns = [
-    { key: 'ma_phan', header: 'Code phần', render: (r) => <Badge tone="info">{r.ma_phan}</Badge> },
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink' },
     { key: 'ma_don_hang', header: 'Đơn hàng' },
     { key: 'ma_hang', header: 'Mã hàng' },
+    { key: 'ma_phan', header: 'Code phần', render: (r) => <Badge tone="info">{r.ma_phan}</Badge> },
     { key: 'mau_vai', header: 'Màu vải' },
     { key: 'kich_vai', header: 'Kích vải' },
     { key: 'kich_phim', header: 'Kích phim' },
@@ -88,7 +88,7 @@ export default function LoiNhuanPage() {
         <Badge tone="warning">{meta.total} chưa có</Badge>
       </Toolbar>
 
-      <DataTable columns={columns} rows={rows} loading={loading}
+      <DataTable columns={columns} rows={rows} loading={loading} sttStart={(meta.page - 1) * 20}
         emptyText="Tất cả phần in đã có lợi nhuận 🎉" />
       <Pagination page={meta.page} totalPages={meta.totalPages} total={meta.total} onPage={setPage} />
 

@@ -9,7 +9,7 @@ export const MODULES = [
     perm: 'ORDER_VIEW',
     mau: 'bg-blue-50 text-blue-600',
     children: [
-      { ten: 'Danh sách phần in', route: '/don-hang/phan-in', perm: 'ORDER_VIEW' },
+      { ten: 'Danh sách phần in vải về', route: '/don-hang/phan-in', perm: 'ORDER_VIEW' },
       { ten: 'Tính lợi nhuận', route: '/don-hang/loi-nhuan', perm: 'PROFIT_MANAGE' },
     ],
   },
@@ -80,6 +80,17 @@ export const MODULES = [
     children: [{ ten: 'Phiếu giao', route: '/giao-hang', perm: 'DELIVERY_VIEW' }],
   },
   {
+    ma: 'TAI_CHINH',
+    ten: 'Tài chính',
+    icon: 'wallet',
+    base: '/tai-chinh',
+    perm: 'FINANCE_VIEW',
+    mau: 'bg-green-50 text-green-600',
+    children: [
+      { ten: 'Công nợ', route: '/tai-chinh/cong-no', perm: 'FINANCE_VIEW' },
+    ],
+  },
+  {
     ma: 'DASHBOARD',
     ten: 'Dashboard',
     icon: 'layout-dashboard',
@@ -113,6 +124,7 @@ export const MODULES = [
       { ten: 'Owner trạm/checkpoint', route: '/he-thong/owner', perm: 'WORKFLOW_VIEW' },
       { ten: 'Trạng thái', route: '/he-thong/trang-thai', perm: 'STATUS_VIEW' },
       { ten: 'Đồng bộ ERP', route: '/he-thong/erp-sync', perm: 'ERP_SYNC' },
+      { ten: 'Người dùng online', route: '/he-thong/online', perm: 'PRESENCE_VIEW' },
     ],
   },
 ];

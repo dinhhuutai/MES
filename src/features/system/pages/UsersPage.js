@@ -171,9 +171,11 @@ export default function UsersPage() {
       <Toolbar title="Quản lý người dùng" subtitle="Tài khoản, vai trò và phân quyền"
         search={search} onSearch={(v) => { setSearch(v); setPage(1); }} searchPlaceholder="Tìm tên, mã, tài khoản...">
         {canManage && <Button icon="user" onClick={openCreate}>Thêm người dùng</Button>}
+        <Badge tone="default">Tổng {meta.total}</Badge>
       </Toolbar>
 
-      <DataTable columns={columns} rows={rows} loading={loading} emptyText="Chưa có người dùng" />
+      <DataTable columns={columns} rows={rows} loading={loading} sttStart={(meta.page - 1) * 20}
+        emptyText="Chưa có người dùng" />
       <Pagination page={meta.page} totalPages={meta.totalPages} total={meta.total} onPage={setPage} />
 
       <Modal
