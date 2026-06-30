@@ -41,7 +41,7 @@ export default function ErpSyncPage() {
     try {
       const res = await syncPhieuNhanVai();
       const d = res.data;
-      show(`Đồng bộ xong: ${d.soMoi} mới · ${d.soCapNhat} cập nhật · ${d.soLoi} lỗi (tổng ${d.tong})`,
+      show(`Đồng bộ xong: ${d.soMoi} mới · ${d.soCapNhat} cập nhật · ${d.soBoQua || 0} bỏ qua · ${d.soLoi} lỗi (tổng ${d.tong})`,
         d.soLoi && d.tong === 0 ? 'error' : 'success');
       load();
     } catch (e) {

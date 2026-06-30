@@ -5,6 +5,8 @@ export const listProductionCandidates = (params) => client.get('/production/cand
 export const startProduction = (lenhId) => client.post(`/production/${lenhId}/start`);
 export const getRun = (lenhId) => client.get(`/production/run/${lenhId}`);
 export const printTem = (phieuId, soLuong) => client.post(`/production/phieu/${phieuId}/tem`, { soLuong });
+export const reprintTem = (temId, lyDo) => client.post(`/production/tem/${temId}/in-lai`, { lyDo });
+export const getTemLogs = (phieuId) => client.get(`/production/phieu/${phieuId}/tem-logs`);
 export const finishRun = (phieuId) => client.post(`/production/phieu/${phieuId}/finish`);
 export const stopLine = (phieuId, lyDo) => client.post(`/production/phieu/${phieuId}/ngung`, { lyDo });
 export const resumeLine = (phieuId) => client.post(`/production/phieu/${phieuId}/hoat-dong-lai`);
