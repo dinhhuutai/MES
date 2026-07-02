@@ -174,7 +174,7 @@ export default function Release1Page() {
     } finally { setSaving(false); }
   };
 
-  const colCount = 11;
+  const colCount = 12;
 
   return (
     <div>
@@ -193,6 +193,7 @@ export default function Release1Page() {
                 <th className={`${TH} w-10`}>
                   <SelectAllCheckbox checked={allChecked} indeterminate={!allChecked && someChecked} onChange={toggleAll} />
                 </th>
+                <th className={`${TH} w-12 text-right`}>STT</th>
                 <th className={TH}>Khách hàng</th>
                 <th className={TH}>Đơn hàng</th>
                 <th className={TH}>Mã hàng</th>
@@ -213,7 +214,7 @@ export default function Release1Page() {
               ) : (
                 <>
                   {/* Các SET — gộp nhóm như 1 khối, 1 checkbox hợp nhất */}
-                  {sets.map((s) => s.members.map((m, i) => {
+                  {sets.map((s, si) => s.members.map((m, i) => {
                     const first = i === 0;
                     const last = i === s.members.length - 1;
                     const on = selectedSets.has(s.id);
@@ -238,13 +239,16 @@ export default function Release1Page() {
                             </label>
                           </td>
                         )}
+                        {first && (
+                          <td rowSpan={s.members.length} className={`${TD} text-right tabular-nums text-ink-soft`}>{si + 1}</td>
+                        )}
                         <DataCells r={m} />
                       </tr>
                     );
                   }))}
 
                   {/* Đợt vải lẻ */}
-                  {rows.map((r) => (
+                  {rows.map((r, ri) => (
                     <tr key={r.dot_vai_id} onClick={() => openDetail(r)}
                       className="cursor-pointer border-b border-line/70 transition hover:bg-surface-muted/40">
                       <td className={TD}>
@@ -252,6 +256,7 @@ export default function Release1Page() {
                           onClick={(e) => e.stopPropagation()} onChange={() => toggle(r)}
                           className="h-4 w-4 rounded border-line text-primary focus:ring-primary" />
                       </td>
+                      <td className={`${TD} text-right tabular-nums text-ink-soft`}>{sets.length + ri + 1}</td>
                       <DataCells r={r} />
                     </tr>
                   ))}

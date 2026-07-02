@@ -9,6 +9,7 @@ import usePermissions from '../../../hooks/usePermissions';
 import useNow, { fmtRemain } from '../../../hooks/useNow';
 import { listDrying, confirmDry } from '../../../services/productionService';
 import { fmtNum } from '../../../utils/format';
+import { evalSla, slaRowClass } from '../../../utils/sla';
 
 export default function ChoKhoPage() {
   const { can } = usePermissions();
@@ -53,9 +54,14 @@ export default function ChoKhoPage() {
 
   const columns = [
     { key: 'ma_tem', header: 'Tem', render: (r) => <Badge tone="info">{r.ma_tem}</Badge> },
-    { key: 'ma_lenh_san_xuat', header: 'Lệnh SX' },
+    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
+    { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
+    { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
+    { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
+    { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
+    { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
     { key: 'ma_xe_phoi', header: 'Xe phơi' },
-    { key: 'so_luong', header: 'SL', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
+    { key: 'so_luong', header: 'SL pcs', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
     { key: 'remain', header: 'Còn lại', render: (r) => {
       const ms = new Date(r.tg_kt_phoi).getTime() - now;
       return ms <= 0
@@ -74,6 +80,7 @@ export default function ChoKhoPage() {
       </Toolbar>
 
       <DataTable columns={columns} rows={rows} loading={loading} rowKey="tem_id"
+        rowClassName={(r) => slaRowClass(evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status)}
         emptyText="Không có tem nào đang phơi" />
       <Toast toast={toast} />
     </div>

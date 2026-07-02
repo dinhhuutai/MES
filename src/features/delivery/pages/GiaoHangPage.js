@@ -6,6 +6,8 @@ import Button from '../../../components/common/Button';
 import Toast from '../../../components/common/Toast';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
+import useNow from '../../../hooks/useNow';
+import { evalSla, slaRowClass } from '../../../utils/sla';
 import {
   listTemSanSang, createGiaoHang, listGiaoHang,
 } from '../../../services/deliveryService';
@@ -15,6 +17,7 @@ import GiaoHangPanel from '../components/GiaoHangPanel';
 export default function GiaoHangPage() {
   const { can } = usePermissions();
   const { toast, show } = useToast();
+  const now = useNow(1000);
   const canManage = can('DELIVERY_MANAGE');
 
   const [tab, setTab] = useState('tao');
@@ -65,16 +68,18 @@ export default function GiaoHangPage() {
   };
 
   const temCols = [
-    { key: 'sel', header: '', className: 'w-10', render: (r) => (
+    { key: 'sel', header: '', className: 'w-10', selection: true, render: (r) => (
       <input type="checkbox" checked={!!selected[r.tem_id]} onChange={() => toggle(r)}
         className="h-4 w-4 rounded border-line text-primary focus:ring-primary" />
     ) },
     { key: 'ma_tem', header: 'Tem', render: (r) => <Badge tone="info">{r.ma_tem}</Badge> },
     { key: 'khach_list', header: 'Khách hàng', className: 'font-medium text-ink' },
     { key: 'don_list', header: 'Đơn hàng' },
-    { key: 'phan_list', header: 'Phần in' },
-    { key: 'ma_lenh_san_xuat', header: 'Lệnh SX' },
-    { key: 'so_luong', header: 'SL', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
+    { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
+    { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
+    { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
+    { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
+    { key: 'so_luong', header: 'SL pcs', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
   ];
 
   const histCols = [
@@ -103,7 +108,8 @@ export default function GiaoHangPage() {
 
       {tab === 'tao' ? (
         <>
-          <DataTable columns={temCols} rows={tems} loading={loading} rowKey="tem_id"
+          <DataTable columns={temCols} rows={tems} loading={loading} rowKey="tem_id" sttStart={0}
+            rowClassName={(r) => slaRowClass(evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status)}
             emptyText="Không có tem OQC đạt nào chờ giao" />
           {selectedList.length > 0 && (
             <div className="sticky bottom-4 mt-4 flex items-center justify-between rounded-card border border-line bg-surface px-5 py-3 shadow-card-hover">

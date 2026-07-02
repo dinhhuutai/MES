@@ -23,6 +23,7 @@ import {
   History,
   Users,
   Wallet,
+  Printer,
   Circle,
   Loader2,
   Play,
@@ -30,6 +31,10 @@ import {
   Plus,
   Sun,
   Moon,
+  Activity,
+  AlertTriangle,
+  Clock,
+  GitBranch,
 } from 'lucide-react';
 
 // Map tên kebab → component Lucide.
@@ -51,6 +56,7 @@ const MAP = {
   user: User,
   users: Users,
   wallet: Wallet,
+  printer: Printer,
   'chevron-right': ChevronRight,
   'chevron-left': ChevronLeft,
   bell: Bell,
@@ -65,6 +71,10 @@ const MAP = {
   plus: Plus,
   sun: Sun,
   moon: Moon,
+  activity: Activity,
+  'alert-triangle': AlertTriangle,
+  clock: Clock,
+  'git-branch': GitBranch,
 };
 
 export default function Icon({ name, size = 20, className = '' }) {

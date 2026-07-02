@@ -66,7 +66,7 @@ export default function PhanInListPage() {
   };
 
   const sttStart = (meta.page - 1) * LIMIT;
-  const COLS = 13;
+  const COLS = 11;
 
   return (
     <div>
@@ -85,12 +85,10 @@ export default function PhanInListPage() {
                 <th className={TH}>Khách hàng</th>
                 <th className={TH}>Đơn hàng</th>
                 <th className={TH}>Mã hàng</th>
-                <th className={TH}>Code phần</th>
                 <th className={TH}>Màu vải</th>
                 <th className={TH}>Kích vải</th>
                 <th className={TH}>Kích phim</th>
-                <th className={`${TH} text-right`}>SL đơn hàng</th>
-                <th className={`${TH} text-right border-r border-line/60`}>Lợi nhuận</th>
+                <th className={`${TH} text-right border-r border-line/60`}>SL đơn hàng</th>
                 <th className={`${TH} text-right`}>SL vải về</th>
                 <th className={TH}>Ngày vải về</th>
                 <th className={TH}>Hạn giao</th>
@@ -122,20 +120,14 @@ export default function PhanInListPage() {
                             <div className="text-ink">{g.ma_don_hang}</div>
                             <div className="text-xs text-ink-soft">{g.so_po}</div>
                           </td>
-                          <td rowSpan={n} className={TD}>{g.ma_hang}</td>
                           <td rowSpan={n} className={TD}>
-                            <Badge tone="info">{g.ma_phan}</Badge>
+                            <div className="text-ink">{g.ma_hang}</div>
                             {g.so_dot > 1 && <div className="mt-1"><Badge tone="warning">{g.so_dot} đợt vải</Badge></div>}
                           </td>
                           <td rowSpan={n} className={TD}>{g.mau_vai || '—'}</td>
                           <td rowSpan={n} className={TD}>{g.kich_vai || '—'}</td>
                           <td rowSpan={n} className={TD}>{g.kich_phim || '—'}</td>
-                          <td rowSpan={n} className={`${TD} text-right tabular-nums`}>{fmtNum(g.so_luong_don_hang)}</td>
-                          <td rowSpan={n} className={`${TD} text-right border-r border-line/60`}>
-                            {g.loi_nhuan == null
-                              ? <Badge tone="warning">Chưa có</Badge>
-                              : <span className="font-medium text-emerald-600">{fmtCurrency(g.loi_nhuan)}</span>}
-                          </td>
+                          <td rowSpan={n} className={`${TD} text-right tabular-nums border-r border-line/60`}>{fmtNum(g.so_luong_don_hang)}</td>
                         </>
                       )}
                       <td className={`${TD} text-right tabular-nums`}>

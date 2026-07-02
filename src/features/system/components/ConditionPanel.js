@@ -54,7 +54,7 @@ export default function ConditionPanel({ rule, onClose }) {
         <div className="py-10 text-center text-ink-soft">Đang tải...</div>
       ) : (
         <div className="space-y-2">
-          {rows.length === 0 && <p className="text-sm text-ink-soft">Chưa có điều kiện. Trạm này chuyển không ràng buộc.</p>}
+          {rows.length === 0 && <p className="text-sm text-ink-soft">Chưa có điều kiện. Checkpoint này chuyển không ràng buộc.</p>}
           {rows.map((c) => (
             <div key={c.id} className="rounded-control border border-line p-3 text-sm">
               <div className="flex items-center justify-between">

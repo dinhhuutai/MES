@@ -52,7 +52,7 @@ export default function DieuKienPage() {
     setSaving(true);
     try {
       if (editing) { await updateRule(editing.id, form); show('Đã cập nhật luật'); }
-      else { await createRule({ ...form, versionId }); show('Đã tạo luật chuyển trạm'); }
+      else { await createRule({ ...form, versionId }); show('Đã tạo luật chuyển checkpoint'); }
       setOpen(false); load();
     } catch (e) { show(e.message || 'Lưu thất bại', 'error'); }
     finally { setSaving(false); }
@@ -64,7 +64,7 @@ export default function DieuKienPage() {
   };
 
   const columns = [
-    { key: 'chuyen', header: 'Chuyển trạm', render: (r) => <span className="font-medium text-ink">{r.tu_tram || '?'} → {r.den_tram || '?'}</span> },
+    { key: 'chuyen', header: 'Chuyển checkpoint', render: (r) => <span className="font-medium text-ink">{r.tu_tram || '?'} → {r.den_tram || '?'}</span> },
     { key: 'cho_phep_override', header: 'Override', render: (r) => r.cho_phep_override ? <Badge tone="warning">Cho phép</Badge> : <Badge tone="default">Không</Badge> },
     { key: 'bat_buoc_dat_het_dk', header: 'Đạt hết ĐK', render: (r) => r.bat_buoc_dat_het_dk ? <Badge tone="info">Bắt buộc</Badge> : '—' },
     { key: 'so_dieu_kien', header: 'Điều kiện', render: (r) => <Badge tone="default">{r.so_dieu_kien}</Badge> },
@@ -80,7 +80,7 @@ export default function DieuKienPage() {
 
   return (
     <div>
-      <Toolbar title="Điều kiện chuyển trạm" subtitle="Luật chuyển trạm và điều kiện qua trạm">
+      <Toolbar title="Điều kiện chuyển checkpoint" subtitle="Luật chuyển checkpoint và điều kiện qua checkpoint">
         {canManage && <Button icon="settings" onClick={openCreate} disabled={!versionId}>Thêm luật</Button>}
       </Toolbar>
 
@@ -90,21 +90,21 @@ export default function DieuKienPage() {
         </Select>
       </div>
 
-      <DataTable columns={columns} rows={rows} loading={loading} emptyText="Chưa có luật chuyển trạm" />
+      <DataTable columns={columns} rows={rows} loading={loading} emptyText="Chưa có luật chuyển checkpoint" />
 
-      <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Sửa luật chuyển trạm' : 'Thêm luật chuyển trạm'}
+      <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Sửa luật chuyển checkpoint' : 'Thêm luật chuyển checkpoint'}
         footer={<>
           <Button variant="ghost" onClick={() => setOpen(false)}>Hủy</Button>
           <Button onClick={save} loading={saving} disabled={!form.tuTramId || !form.denTramId}>Lưu</Button>
         </>}>
         <div className="grid grid-cols-2 gap-x-4">
-          <Field label="Từ trạm" required>
+          <Field label="Từ checkpoint" required>
             <Select value={form.tuTramId} disabled={!!editing} onChange={(e) => setForm({ ...form, tuTramId: e.target.value })}>
               <option value="">— Chọn —</option>
               {trams.map((t) => <option key={t.id} value={t.id}>{t.ma_tram}</option>)}
             </Select>
           </Field>
-          <Field label="Đến trạm" required>
+          <Field label="Đến checkpoint" required>
             <Select value={form.denTramId} disabled={!!editing} onChange={(e) => setForm({ ...form, denTramId: e.target.value })}>
               <option value="">— Chọn —</option>
               {trams.map((t) => <option key={t.id} value={t.id}>{t.ma_tram}</option>)}

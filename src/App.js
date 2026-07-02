@@ -15,6 +15,7 @@ import RolesPage from './features/system/pages/RolesPage';
 import PermissionsPage from './features/system/pages/PermissionsPage';
 import ModulesPage from './features/system/pages/ModulesPage';
 import WorkflowVersionPage from './features/system/pages/WorkflowVersionPage';
+import ChuyenPage from './features/system/pages/ChuyenPage';
 import TramCheckpointPage from './features/system/pages/TramCheckpointPage';
 import DieuKienPage from './features/system/pages/DieuKienPage';
 import OwnerPage from './features/system/pages/OwnerPage';
@@ -22,7 +23,6 @@ import TrangThaiPage from './features/system/pages/TrangThaiPage';
 import ErpSyncPage from './features/system/pages/ErpSyncPage';
 import OnlineUsersPage from './features/system/pages/OnlineUsersPage';
 import PhanInListPage from './features/orders/pages/PhanInListPage';
-import LoiNhuanPage from './features/orders/pages/LoiNhuanPage';
 import ReadyPage from './features/technical-ready/pages/ReadyPage';
 import TestRunCnspPage from './features/technical-ready/pages/TestRunCnspPage';
 import GomSetPage from './features/technical-ready/pages/GomSetPage';
@@ -41,15 +41,14 @@ import OqcPage from './features/quality/pages/OqcPage';
 import QcInlinePage from './features/quality/pages/QcInlinePage';
 import LoaiLoiPage from './features/quality/pages/LoaiLoiPage';
 import GiaoHangPage from './features/delivery/pages/GiaoHangPage';
-import CongNoPage from './features/finance/pages/CongNoPage';
 import DashboardPage from './features/dashboard/pages/DashboardPage';
+import TinhTrangTramPage from './features/dashboard/pages/TinhTrangTramPage';
 import BaoCaoPage from './features/reports/pages/BaoCaoPage';
 import { MODULES } from './constants/modules';
 
 // Màn hình đã hiện thực. Route khác dùng PlaceholderPage.
 const PAGES = {
   '/don-hang/phan-in': <PhanInListPage />,
-  '/don-hang/loi-nhuan': <LoiNhuanPage />,
   '/ky-thuat/ready': <ReadyPage />,
   '/ky-thuat/gom-set': <GomSetPage />,
   '/ky-thuat/test-run-cnsp': <TestRunCnspPage />,
@@ -68,8 +67,8 @@ const PAGES = {
   '/chat-luong/oqc': <OqcPage />,
   '/chat-luong/danh-muc-loi': <LoaiLoiPage />,
   '/giao-hang': <GiaoHangPage />,
-  '/tai-chinh/cong-no': <CongNoPage />,
   '/dashboard': <DashboardPage />,
+  '/dashboard/tinh-trang-tram': <TinhTrangTramPage />,
   '/bao-cao': <BaoCaoPage />,
   '/he-thong/nguoi-dung': <UsersPage />,
   '/he-thong/vai-tro': <RolesPage />,
@@ -77,6 +76,7 @@ const PAGES = {
   '/he-thong/module': <ModulesPage />,
   '/he-thong/workflow-version': <WorkflowVersionPage />,
   '/he-thong/tram-checkpoint': <TramCheckpointPage />,
+  '/he-thong/chuyen': <ChuyenPage />,
   '/he-thong/dieu-kien': <DieuKienPage />,
   '/he-thong/owner': <OwnerPage />,
   '/he-thong/trang-thai': <TrangThaiPage />,

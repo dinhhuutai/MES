@@ -2,10 +2,12 @@ import client from './axiosClient';
 
 // Xác nhận chạy + in tem
 export const listProductionCandidates = (params) => client.get('/production/candidates', { params });
-export const startProduction = (lenhId) => client.post(`/production/${lenhId}/start`);
+export const startProduction = (lenhId, chuyenId) => client.post(`/production/${lenhId}/start`, { chuyenId });
+export const listChuyen = () => client.get('/catalog/chuyen');
 export const getRun = (lenhId) => client.get(`/production/run/${lenhId}`);
 export const printTem = (phieuId, soLuong) => client.post(`/production/phieu/${phieuId}/tem`, { soLuong });
 export const reprintTem = (temId, lyDo) => client.post(`/production/tem/${temId}/in-lai`, { lyDo });
+export const getTemLabel = (temId) => client.get(`/production/tem/${temId}/label`);
 export const getTemLogs = (phieuId) => client.get(`/production/phieu/${phieuId}/tem-logs`);
 export const finishRun = (phieuId) => client.post(`/production/phieu/${phieuId}/finish`);
 export const stopLine = (phieuId, lyDo) => client.post(`/production/phieu/${phieuId}/ngung`, { lyDo });

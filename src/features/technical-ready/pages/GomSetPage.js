@@ -29,13 +29,14 @@ function DotVaiCard({ row, dir, onMove }) {
       )}
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="font-semibold text-ink">{row.ma_phan}</span>
+          <span className="font-semibold text-ink">{row.ten_khach_hang || '—'}</span>
+          <span className="text-ink-soft">·</span>
+          <span className="font-medium text-ink">{row.ma_hang}</span>
           <span className="text-ink-soft">·</span>
           <span className="font-medium text-ink">{row.mau_vai || '—'}</span>
-          {row.qc_done ? <Badge tone="success">QC</Badge> : <Badge tone="warning">Chưa QC</Badge>}
         </div>
         <div className="truncate text-xs text-ink-soft">
-          {row.ma_hang} · {row.kich_vai || '—'}/{row.kich_phim || '—'} · {row.ma_dot_vai} · SL {fmtNum(row.so_luong_vai_ve)}
+          {row.ma_don_hang} · Kích {row.kich_vai || '—'}/{row.kich_phim || '—'} · SLĐH {fmtNum(row.so_luong_don_hang)} · SLNV {fmtNum(row.so_luong_vai_ve)}
         </div>
       </div>
       {dir === 'right' && (
@@ -173,8 +174,8 @@ export default function GomSetPage() {
             {/* Cột trái: phần in ở kỹ thuật */}
             <div className="card flex flex-col p-4" onDragOver={(e) => e.preventDefault()} onDrop={(e) => onDrop(e, 'left')}>
               <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-ink">Phần in ở kỹ thuật ({left.length})</h3>
-                <Badge tone="default">chưa release · chưa gom</Badge>
+                <h3 className="text-sm font-semibold text-ink">Đợt vải ở READY ({left.length})</h3>
+                <Badge tone="default">chưa xác nhận khuôn/phim</Badge>
               </div>
               <Input value={search} onChange={(e) => setSearch(e.target.value)} className="mb-3"
                 placeholder="Tìm code phần, màu, kích, mã hàng, đợt vải..." />

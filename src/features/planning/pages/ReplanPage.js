@@ -125,7 +125,7 @@ export default function ReplanPage() {
   };
 
   const columns = [
-    ...(canReplan ? [{ key: 'sel', className: 'w-10',
+    ...(canReplan ? [{ key: 'sel', className: 'w-10', selection: true,
       header: <input type="checkbox" checked={allChecked} onChange={toggleAll} aria-label="Chọn tất cả" />,
       render: (r) => (
         <input type="checkbox" checked={selected.has(r.id)}

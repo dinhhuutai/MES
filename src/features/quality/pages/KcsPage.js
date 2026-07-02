@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import Toolbar from '../../../components/common/Toolbar';
+import OwnerHint from '../../../components/common/OwnerHint';
 import DataTable from '../../../components/common/DataTable';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
@@ -11,6 +12,8 @@ import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import { listKcsCandidates, recordKcs, kcsHistory } from '../../../services/qualityService';
 import { fmtNum } from '../../../utils/format';
+import useNow from '../../../hooks/useNow';
+import { evalSla, slaRowClass } from '../../../utils/sla';
 
 const empty = { soLuongDat: '', soLuongThieu: '', soLuongDu: '', soLuongMau: '', soLuongHu: '', soLuongSua: '' };
 
@@ -18,6 +21,7 @@ export default function KcsPage() {
   const { can } = usePermissions();
   const { toast, show } = useToast();
   const canKcs = can('KCS');
+  const now = useNow(1000);
 
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -50,8 +54,15 @@ export default function KcsPage() {
     setSaving(true);
     try {
       const r = await recordKcs(editing.tem_id, form);
-      const map = { CHO_SUA: 'chuyển Sửa', CHO_OQC: 'chuyển OQC', LOAI: 'loại bỏ' };
-      show(`KCS ${editing.ma_tem} → ${map[r.data.next] || r.data.next}`);
+      const d = r.data;
+      let msg;
+      if (d.next === 'SPLIT') {
+        msg = `KCS ${editing.ma_tem}: Đạt ${fmtNum(d.so_luong_dat)} → OQC · Sửa ${fmtNum(d.so_luong_sua)} → Sửa (tách tem)`;
+      } else {
+        const map = { CHO_SUA: 'chuyển Sửa', CHO_OQC: 'chuyển OQC', LOAI: 'loại bỏ' };
+        msg = `KCS ${editing.ma_tem} → ${map[d.next] || d.next}`;
+      }
+      show(msg);
       setEditing(null);
       load();
     } catch (e) {
@@ -63,9 +74,13 @@ export default function KcsPage() {
 
   const columns = [
     { key: 'ma_tem', header: 'Tem', render: (r) => <Badge tone="info">{r.ma_tem}</Badge> },
-    { key: 'ma_lenh_san_xuat', header: 'Lệnh SX' },
-    { key: 'phan_list', header: 'Phần in' },
-    { key: 'so_luong', header: 'SL tem', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
+    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
+    { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
+    { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
+    { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
+    { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
+    { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
+    { key: 'so_luong', header: 'SL pcs', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
     { key: 'actions', header: '', className: 'text-right', render: (r) =>
       canKcs && <Button className="px-3 py-1.5" onClick={() => open(r)}>Kiểm KCS</Button> },
   ];
@@ -84,7 +99,10 @@ export default function KcsPage() {
         <Badge tone="warning">{rows.length} tem chờ kiểm</Badge>
       </Toolbar>
 
+      <OwnerHint tram="KIEM" className="mb-3" />
+
       <DataTable columns={columns} rows={rows} loading={loading} rowKey="tem_id"
+        rowClassName={(r) => slaRowClass(evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status)}
         emptyText="Không có tem nào chờ KCS" />
 
       <Modal
@@ -110,7 +128,7 @@ export default function KcsPage() {
           {N({ f: 'soLuongSua', label: 'Quyết định sửa (≤ hư)' })}
         </div>
         <p className="text-xs text-ink-soft">
-          Hư &gt; 0 và quyết định sửa &gt; 0 → tem chuyển <b>Sửa</b>; còn lại → <b>OQC</b>.
+          Có cả <b>đạt</b> và <b>sửa</b> → hệ thống <b>tách 2 tem</b>: phần đạt qua <b>OQC</b>, phần sửa qua <b>Sửa</b> (sửa xong lại qua OQC).
         </p>
       </Modal>
 

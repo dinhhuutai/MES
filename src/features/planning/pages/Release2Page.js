@@ -72,17 +72,18 @@ export default function Release2Page() {
   };
 
   const columns = [
-    ...(canApprove ? [{ key: 'sel', className: 'w-10',
+    ...(canApprove ? [{ key: 'sel', className: 'w-10', selection: true,
       header: <input type="checkbox" checked={allChecked} onChange={toggleAll} aria-label="Chọn tất cả" />,
       render: (r) => (
         <input type="checkbox" checked={selected.has(r.id)}
           onClick={(e) => e.stopPropagation()}
           onChange={() => toggleOne(r.id)} aria-label="Chọn lệnh" />
       ) }] : []),
-    { key: 'ma_lenh_san_xuat', header: 'Mã lệnh', render: (r) => <Badge tone="info">{r.ma_lenh_san_xuat}</Badge> },
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
-    { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
+    { key: 'ma_hang', header: 'Mã hàng', render: (r) => (
+      <div>{r.ma_hang || '—'}{r.so_dot_vai > 1 && <div className="mt-0.5"><Badge tone="warning">Gom set ({r.so_dot_vai} đợt)</Badge></div>}</div>
+    ) },
     { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
     { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
@@ -109,7 +110,7 @@ export default function Release2Page() {
         <Badge tone="info">{rows.length} chờ duyệt</Badge>
       </Toolbar>
 
-      <DataTable columns={columns} rows={rows} loading={loading}
+      <DataTable columns={columns} rows={rows} loading={loading} sttStart={0}
         emptyText="Không có lệnh nào chờ Release 2" />
 
       <ConfirmDialog

@@ -8,11 +8,12 @@ import Toast from '../../../components/common/Toast';
 import { Input, Textarea } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import { getRun, printTem, reprintTem, getTemLogs, finishRun, stopLine, resumeLine } from '../../../services/productionService';
+import { getRun, printTem, reprintTem, getTemLabel, getTemLogs, finishRun, stopLine, resumeLine } from '../../../services/productionService';
+import printTemLabel from '../utils/printTemLabel';
 import { fmtNum } from '../../../utils/format';
 
-const TEM_TONE = { IN: 'warning', DANG_PHOI: 'info', DA_KHO: 'success' };
-const TEM_LABEL = { IN: 'Chờ phơi', DANG_PHOI: 'Đang phơi', DA_KHO: 'Đã khô' };
+const TEM_TONE = { IN: 'warning', DANG_PHOI: 'info', DA_KHO: 'success', HUY: 'danger' };
+const TEM_LABEL = { IN: 'Chờ phơi', DANG_PHOI: 'Đang phơi', DA_KHO: 'Đã khô', HUY: 'Đã hủy' };
 const fmtDt = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '');
 
 export default function RunPanel({ lenhId, onClose, onChanged }) {
@@ -49,12 +50,20 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
 
   useEffect(() => { load(); }, [load]);
 
+  // Lấy dữ liệu nhãn tem rồi mở cửa sổ in (barcode Code128 = mã tem).
+  const printLabelFor = async (temId) => {
+    if (!temId) return;
+    try { const res = await getTemLabel(temId); printTemLabel(res.data); }
+    catch (e) { show('Không lấy được dữ liệu tem để in', 'error'); }
+  };
+
   const doPrint = async () => {
     setBusy(true);
     try {
-      await printTem(phieu.id, Number(soLuong));
+      const res = await printTem(phieu.id, Number(soLuong));
       show(`Đã in tem ${fmtNum(soLuong)} — tự đưa vào xe phơi, đang đếm ngược`);
       setSoLuong('');
+      await printLabelFor(res.data?.new_tem_id);
       await load();
       onChanged?.();
     } catch (e) {
@@ -102,9 +111,10 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
     if (!reprintReason.trim()) { show('Nhập lý do in lại', 'error'); return; }
     setBusy(true);
     try {
-      await reprintTem(reprint.id, reprintReason.trim());
-      show(`Đã in lại tem ${reprint.ma_tem}`);
+      const res = await reprintTem(reprint.id, reprintReason.trim());
+      show(`Đã hủy tem ${reprint.ma_tem} & in tem mới`);
       setReprint(null); setReprintReason('');
+      await printLabelFor(res.data?.new_tem_id);
       await load();
       onChanged?.();
     } catch (e) {
@@ -244,22 +254,29 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
             </div>
             {data.tems.length ? (
               <div className="space-y-1.5">
-                {data.tems.map((t) => (
-                  <div key={t.id} className="flex items-center justify-between gap-2 rounded-control border border-line px-3 py-2 text-sm">
-                    <span className="flex items-center gap-1.5 font-medium text-ink">
-                      {t.ma_tem}
-                      {t.so_lan_in > 1 && <Badge tone="warning">In {t.so_lan_in} lần</Badge>}
-                    </span>
-                    <span className="text-ink-soft">{fmtNum(t.so_luong)}</span>
-                    <div className="flex items-center gap-2">
-                      <Badge tone={TEM_TONE[t.trang_thai] || 'default'}>{TEM_LABEL[t.trang_thai] || t.trang_thai}</Badge>
-                      {canRun && (
-                        <button onClick={() => { setReprint(t); setReprintReason(''); }}
-                          className="text-xs font-medium text-primary hover:underline">In lại</button>
-                      )}
+                {data.tems.map((t) => {
+                  const huy = t.trang_thai === 'HUY';
+                  return (
+                    <div key={t.id}
+                      className={`flex items-center justify-between gap-2 rounded-control border px-3 py-2 text-sm ${huy ? 'border-line/60 bg-surface-muted/40 opacity-70' : 'border-line'}`}>
+                      <span className={`flex items-center gap-1.5 font-medium ${huy ? 'text-ink-soft line-through' : 'text-ink'}`}>
+                        {t.ma_tem}
+                      </span>
+                      <span className="text-ink-soft">{fmtNum(t.so_luong)}</span>
+                      <div className="flex items-center gap-2">
+                        <Badge tone={TEM_TONE[t.trang_thai] || 'default'}>{TEM_LABEL[t.trang_thai] || t.trang_thai}</Badge>
+                        {canRun && !huy && (
+                          <>
+                            <button onClick={() => printLabelFor(t.id)} title="In lại tờ tem (giữ mã)"
+                              className="text-ink-soft hover:text-primary"><Icon name="printer" size={15} /></button>
+                            <button onClick={() => { setReprint(t); setReprintReason(''); }}
+                              className="text-xs font-medium text-primary hover:underline">In lại</button>
+                          </>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <p className="text-sm text-ink-soft">Chưa in tem nào.</p>
@@ -276,6 +293,9 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
           </>
         }
       >
+        <div className="mb-2 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/30">
+          Sẽ <b>HỦY tem {reprint?.ma_tem}</b> (gỡ khỏi xe phơi) và tạo <b>tem mới</b> có mã/barcode mới để in lại.
+        </div>
         <Textarea rows={3} value={reprintReason} onChange={(e) => setReprintReason(e.target.value)}
           placeholder="Lý do in lại (vd: tem rách, in mờ, mất tem...)" />
       </Modal>

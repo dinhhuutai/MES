@@ -135,8 +135,14 @@ export default function XePhoiPage() {
                           {fmtRemain(ms)}
                         </span>
                       </div>
+                      <div className="mt-0.5 text-xs text-ink-soft">
+                        {[t.ten_khach_hang, t.ma_don_hang, t.ma_hang].filter(Boolean).join(' · ')}
+                      </div>
+                      <div className="text-xs text-ink-soft">
+                        {[t.mau_vai, t.kich_vai && `${t.kich_vai}/${t.kich_phim || ''}`].filter(Boolean).join(' · ')}
+                      </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-xs text-ink-soft">{t.ma_lenh_san_xuat || ''} · SL {fmtNum(t.so_luong_phoi)}</span>
+                        <span className="text-xs font-medium text-ink">SL {fmtNum(t.so_luong_phoi)} pcs</span>
                         {canXe && (
                           <button onClick={() => openAdjust(t)}
                             className="text-xs font-medium text-primary hover:underline">Chỉnh giờ</button>

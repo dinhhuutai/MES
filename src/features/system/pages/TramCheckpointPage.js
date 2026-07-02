@@ -54,8 +54,8 @@ export default function TramCheckpointPage() {
         thoiGianQuyDinhPhut: form.thoiGianQuyDinhPhut === '' ? null : Number(form.thoiGianQuyDinhPhut),
         canhBaoTruocPhut: form.canhBaoTruocPhut === '' ? null : Number(form.canhBaoTruocPhut),
       };
-      if (editing) { await updateTram(editing.id, body); show('Đã cập nhật trạm'); }
-      else { await createTram(body); show('Đã tạo trạm'); }
+      if (editing) { await updateTram(editing.id, body); show('Đã cập nhật checkpoint'); }
+      else { await createTram(body); show('Đã tạo checkpoint'); }
       setOpen(false); load();
     } catch (e) { show(e.message || 'Lưu thất bại', 'error'); }
     finally { setSaving(false); }
@@ -68,14 +68,14 @@ export default function TramCheckpointPage() {
 
   const columns = [
     { key: 'thu_tu', header: '#', className: 'w-10 text-ink-soft', render: (r) => r.thu_tu ?? '—' },
-    { key: 'ma_tram', header: 'Mã trạm', render: (r) => <Badge tone="info">{r.ma_tram}</Badge> },
-    { key: 'ten_tram', header: 'Tên trạm', className: 'font-medium text-ink' },
+    { key: 'ma_tram', header: 'Mã checkpoint', render: (r) => <Badge tone="info">{r.ma_tram}</Badge> },
+    { key: 'ten_tram', header: 'Tên checkpoint', className: 'font-medium text-ink' },
     { key: 'thoi_gian_quy_dinh_phut', header: 'SLA (phút)', render: (r) => r.thoi_gian_quy_dinh_phut ?? '—' },
-    { key: 'so_checkpoint', header: 'Checkpoint', render: (r) => <Badge tone="default">{r.so_checkpoint}</Badge> },
+    { key: 'so_checkpoint', header: 'Checklist', render: (r) => <Badge tone="default">{r.so_checkpoint}</Badge> },
     { key: 'dang_hoat_dong', header: 'Trạng thái', render: (r) => r.dang_hoat_dong ? <Badge tone="success">Bật</Badge> : <Badge tone="danger">Tắt</Badge> },
     { key: 'actions', header: '', className: 'text-right', render: (r) => (
       <div className="flex justify-end gap-1.5">
-        <Button variant="secondary" className="px-3 py-1.5" onClick={() => setCpTram(r)}>Checkpoint</Button>
+        <Button variant="secondary" className="px-3 py-1.5" onClick={() => setCpTram(r)}>Checklist</Button>
         {canManage && <Button variant="ghost" className="px-3 py-1.5" onClick={() => openEdit(r)}>Sửa</Button>}
         {canManage && <Button variant="ghost" className="px-3 py-1.5" onClick={() => toggle(r)}>{r.dang_hoat_dong ? 'Tắt' : 'Bật'}</Button>}
       </div>
@@ -84,8 +84,8 @@ export default function TramCheckpointPage() {
 
   return (
     <div>
-      <Toolbar title="Trạm & Checkpoint" subtitle="Cấu hình trạm và checkpoint theo phiên bản workflow">
-        {canManage && <Button icon="settings" onClick={openCreate} disabled={!versionId}>Thêm trạm</Button>}
+      <Toolbar title="Checkpoint & Checklist" subtitle="Cấu hình checkpoint (trạm) và checklist theo phiên bản workflow">
+        {canManage && <Button icon="settings" onClick={openCreate} disabled={!versionId}>Thêm checkpoint</Button>}
       </Toolbar>
 
       <div className="mb-4 max-w-xs">
@@ -94,22 +94,22 @@ export default function TramCheckpointPage() {
         </Select>
       </div>
 
-      <DataTable columns={columns} rows={rows} loading={loading} emptyText="Phiên bản chưa có trạm" />
+      <DataTable columns={columns} rows={rows} loading={loading} emptyText="Phiên bản chưa có checkpoint" />
 
-      <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Sửa trạm' : 'Thêm trạm'}
+      <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Sửa checkpoint' : 'Thêm checkpoint'}
         footer={<>
           <Button variant="ghost" onClick={() => setOpen(false)}>Hủy</Button>
           <Button onClick={save} loading={saving} disabled={!form.maTram || !form.tenTram}>Lưu</Button>
         </>}>
         <div className="grid grid-cols-2 gap-x-4">
-          <Field label="Mã trạm" required>
+          <Field label="Mã checkpoint" required>
             <Input value={form.maTram} disabled={!!editing} onChange={(e) => setForm({ ...form, maTram: e.target.value.toUpperCase() })} />
           </Field>
           <Field label="Thứ tự">
             <Input type="number" value={form.thuTu} onChange={(e) => setForm({ ...form, thuTu: e.target.value })} />
           </Field>
         </div>
-        <Field label="Tên trạm" required>
+        <Field label="Tên checkpoint" required>
           <Input value={form.tenTram} onChange={(e) => setForm({ ...form, tenTram: e.target.value })} />
         </Field>
         <div className="grid grid-cols-2 gap-x-4">

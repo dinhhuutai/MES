@@ -5,8 +5,11 @@ import Badge from '../../../components/common/Badge';
 import Icon from '../../../components/common/Icon';
 import Toast from '../../../components/common/Toast';
 import { Select } from '../../../components/common/controls';
+import OwnerHint from '../../../components/common/OwnerHint';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
+import useNow from '../../../hooks/useNow';
+import { evalSla, SLA_BADGE, fmtDur } from '../../../utils/sla';
 import { getReadyDetail, confirmReadyItem, confirmReadyItemsBatch } from '../../../services/readyService';
 
 // 4 mục kỹ thuật + quyền tương ứng.
@@ -22,6 +25,7 @@ const fmt = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '');
 export default function ReadyPanel({ phanInId, onClose, onChanged }) {
   const { can } = usePermissions();
   const { toast, show } = useToast();
+  const now = useNow(1000);
 
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -93,15 +97,25 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
     const cp = byMa[item.ma];
     const done = state[`${item.ma.toLowerCase()}_done`];
     const editable = !done && !state.qc_done && can(item.perm);
+    // SLA checklist: đếm từ thời điểm phần in vào trạm READY.
+    const sla = (!done && cp?.thoi_gian_quy_dinh_phut)
+      ? evalSla(detail?.ready_tg_vao, cp.thoi_gian_quy_dinh_phut, cp.canh_bao_truoc_phut, now)
+      : null;
 
     return (
       <div className="rounded-control border border-line p-3.5">
         <div className="mb-2 flex items-center justify-between">
           <span className="text-sm font-semibold text-ink">{item.label}</span>
-          {done
-            ? <Badge tone="success">Đã xác nhận</Badge>
-            : <Badge tone="default">Chưa xác nhận</Badge>}
+          <div className="flex items-center gap-1.5">
+            {sla && sla.status !== 'OK' && (
+              <Badge tone={SLA_BADGE[sla.status].tone}>{SLA_BADGE[sla.status].label} · {fmtDur(sla.phut)}/{fmtDur(cp.thoi_gian_quy_dinh_phut)}</Badge>
+            )}
+            {done
+              ? <Badge tone="success">Đã xác nhận</Badge>
+              : <Badge tone="default">Chưa xác nhận</Badge>}
+          </div>
         </div>
+        {!done && <OwnerHint checkpoint={item.ma} className="mb-2" />}
 
         {done ? (
           <div className="text-sm text-ink-soft">

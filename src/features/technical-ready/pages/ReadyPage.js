@@ -3,6 +3,7 @@ import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
 import Pagination from '../../../components/common/Pagination';
 import Badge from '../../../components/common/Badge';
+import Icon from '../../../components/common/Icon';
 import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
 import Toast from '../../../components/common/Toast';
@@ -10,6 +11,8 @@ import HistoryPanel from '../../../components/common/HistoryPanel';
 import { Field, Select } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
+import useNow from '../../../hooks/useNow';
+import { evalSla, slaRowClass } from '../../../utils/sla';
 import {
   listReadyCandidates, getReadyConfig, confirmReadyBulk, readyHistory,
 } from '../../../services/readyService';
@@ -35,6 +38,7 @@ const DoneCell = (done) =>
 export default function ReadyPage() {
   const { can } = usePermissions();
   const { toast, show } = useToast();
+  const now = useNow(1000);
   const [rows, setRows] = useState([]);
   const [meta, setMeta] = useState({ page: 1, totalPages: 1, total: 0 });
   const [loading, setLoading] = useState(true);
@@ -106,15 +110,19 @@ export default function ReadyPage() {
 
   const columns = [
     ...(permItems.length ? [{
-      key: 'sel', className: 'w-10',
+      key: 'sel', className: 'w-10', selection: true,
       header: <input type="checkbox" checked={allChecked} onChange={toggleAll} aria-label="Chọn tất cả" />,
       render: (r) => (
         <input type="checkbox" checked={selected.has(r.id)}
           onClick={(e) => e.stopPropagation()} onChange={() => toggleOne(r.id)} aria-label="Chọn" />
       ),
     }] : []),
-    { key: 'ma_phan', header: 'Code phần', render: (r) => <Badge tone="info">{r.ma_phan}</Badge> },
-    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink' },
+    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => (
+      <div>
+        <div>{r.ten_khach_hang}</div>
+        {r.gom_set_list && <Badge tone="info" className="mt-1"><Icon name="git-branch" size={12} className="mr-1" />Gom set {r.gom_set_list}</Badge>}
+      </div>
+    ) },
     { key: 'ma_don_hang', header: 'Đơn hàng' },
     { key: 'ma_hang', header: 'Mã hàng' },
     { key: 'mau_vai', header: 'Màu vải' },
@@ -143,6 +151,7 @@ export default function ReadyPage() {
       </Toolbar>
 
       <DataTable columns={columns} rows={rows} loading={loading} onRowClick={(r) => setSel(r.id)} sttStart={(meta.page - 1) * 20}
+        rowClassName={(r) => slaRowClass(evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status)}
         emptyText="Tất cả phần in đã READY 🎉" />
       <Pagination page={meta.page} totalPages={meta.totalPages} total={meta.total} onPage={setPage} />
 

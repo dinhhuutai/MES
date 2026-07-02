@@ -10,7 +10,6 @@ export const MODULES = [
     mau: 'bg-blue-50 text-blue-600',
     children: [
       { ten: 'Danh sách phần in vải về', route: '/don-hang/phan-in', perm: 'ORDER_VIEW' },
-      { ten: 'Tính lợi nhuận', route: '/don-hang/loi-nhuan', perm: 'PROFIT_MANAGE' },
     ],
   },
   {
@@ -80,23 +79,15 @@ export const MODULES = [
     children: [{ ten: 'Phiếu giao', route: '/giao-hang', perm: 'DELIVERY_VIEW' }],
   },
   {
-    ma: 'TAI_CHINH',
-    ten: 'Tài chính',
-    icon: 'wallet',
-    base: '/tai-chinh',
-    perm: 'FINANCE_VIEW',
-    mau: 'bg-green-50 text-green-600',
-    children: [
-      { ten: 'Công nợ', route: '/tai-chinh/cong-no', perm: 'FINANCE_VIEW' },
-    ],
-  },
-  {
     ma: 'DASHBOARD',
     ten: 'Dashboard',
     icon: 'layout-dashboard',
     base: '/dashboard',
     mau: 'bg-sky-50 text-sky-600',
-    children: [{ ten: 'Tổng quan', route: '/dashboard' }],
+    children: [
+      { ten: 'Tổng quan', route: '/dashboard' },
+      { ten: 'Tình trạng theo trạm', route: '/dashboard/tinh-trang-tram' },
+    ],
   },
   {
     ma: 'BAO_CAO',
@@ -119,9 +110,10 @@ export const MODULES = [
       { ten: 'Permission', route: '/he-thong/permission', perm: 'PERM_VIEW' },
       { ten: 'Module', route: '/he-thong/module', perm: 'MODULE_VIEW' },
       { ten: 'Workflow version', route: '/he-thong/workflow-version', perm: 'WORKFLOW_VIEW' },
-      { ten: 'Trạm & Checkpoint', route: '/he-thong/tram-checkpoint', perm: 'WORKFLOW_VIEW' },
-      { ten: 'Điều kiện chuyển trạm', route: '/he-thong/dieu-kien', perm: 'WORKFLOW_VIEW' },
-      { ten: 'Owner trạm/checkpoint', route: '/he-thong/owner', perm: 'WORKFLOW_VIEW' },
+      { ten: 'Chuyền sản xuất', route: '/he-thong/chuyen', perm: 'WORKFLOW_VIEW' },
+      { ten: 'Checkpoint & Checklist', route: '/he-thong/tram-checkpoint', perm: 'WORKFLOW_VIEW' },
+      { ten: 'Điều kiện chuyển checkpoint', route: '/he-thong/dieu-kien', perm: 'WORKFLOW_VIEW' },
+      { ten: 'Owner checkpoint/checklist', route: '/he-thong/owner', perm: 'WORKFLOW_VIEW' },
       { ten: 'Trạng thái', route: '/he-thong/trang-thai', perm: 'STATUS_VIEW' },
       { ten: 'Đồng bộ ERP', route: '/he-thong/erp-sync', perm: 'ERP_SYNC' },
       { ten: 'Người dùng online', route: '/he-thong/online', perm: 'PRESENCE_VIEW' },

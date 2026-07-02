@@ -67,7 +67,7 @@ export default function WorkflowVersionPage() {
     { key: 'ma_version', header: 'Mã', render: (r) => <Badge tone="info">{r.ma_version}</Badge> },
     { key: 'ten_version', header: 'Tên', className: 'font-medium text-ink' },
     { key: 'ngay_hieu_luc', header: 'Hiệu lực', render: (r) => fmtDate(r.ngay_hieu_luc) },
-    { key: 'so_tram', header: 'Số trạm', className: 'text-right', render: (r) => r.so_tram },
+    { key: 'so_tram', header: 'Số checkpoint', className: 'text-right', render: (r) => r.so_tram },
     { key: 'trang_thai', header: 'Trạng thái', render: (r) => r.trang_thai || '—' },
     { key: 'la_hien_hanh', header: 'Hiện hành', render: (r) => r.la_hien_hanh ? <Badge tone="success">Hiện hành</Badge> : <Badge tone="default">—</Badge> },
     { key: 'actions', header: '', className: 'text-right', render: (r) => canManage && (
