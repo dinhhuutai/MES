@@ -16,12 +16,12 @@ export default function Topbar() {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-header items-center justify-between border-b border-line bg-surface px-6">
+    <header className="sticky top-0 z-30 flex h-header items-center justify-between border-b border-line bg-surface px-4 sm:px-6">
       <Link to="/" className="flex items-center gap-3">
         <img src={LOGO_SRC} alt="THLA" className="h-9 w-9 object-contain" />
         <div className="leading-tight">
           <div className="text-base font-bold text-ink">THLA MES</div>
-          <div className="text-[11px] font-medium uppercase tracking-wider text-ink-soft">
+          <div className="hidden text-[11px] font-medium uppercase tracking-wider text-ink-soft sm:block">
             Manufacturing Execution
           </div>
         </div>

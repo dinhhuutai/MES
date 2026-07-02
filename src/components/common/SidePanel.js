@@ -8,7 +8,7 @@ export default function SidePanel({ open, onClose, title, subtitle, children, fo
       <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" aria-hidden="true" />
       <div className="fixed inset-y-0 right-0 flex max-w-full">
         <Dialog.Panel className={`flex w-screen ${width} flex-col bg-surface shadow-card-hover`}>
-          <div className="flex items-start justify-between border-b border-line px-6 py-4">
+          <div className="flex items-start justify-between border-b border-line px-4 py-4 sm:px-6">
             <div>
               <Dialog.Title className="text-base font-semibold text-ink">{title}</Dialog.Title>
               {subtitle && <p className="mt-0.5 text-sm text-ink-soft">{subtitle}</p>}
@@ -17,8 +17,8 @@ export default function SidePanel({ open, onClose, title, subtitle, children, fo
               <Icon name="x" size={20} />
             </button>
           </div>
-          <div className="flex-1 overflow-y-auto px-6 py-5">{children}</div>
-          {footer && <div className="flex justify-end gap-2 border-t border-line px-6 py-4">{footer}</div>}
+          <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">{children}</div>
+          {footer && <div className="flex flex-wrap justify-end gap-2 border-t border-line px-4 py-4 sm:px-6">{footer}</div>}
         </Dialog.Panel>
       </div>
     </Dialog>

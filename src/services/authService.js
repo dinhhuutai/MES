@@ -15,4 +15,7 @@ export const apiUploadAvatar = (file) => {
 
 export const apiResetAvatar = () => client.delete('/auth/me/avatar');
 
+export const apiChangePassword = (matKhauCu, matKhauMoi) =>
+  client.post('/auth/me/doi-mat-khau', { matKhauCu, matKhauMoi });
+
 export const apiLogout = () => client.post('/auth/logout');

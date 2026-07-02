@@ -20,6 +20,7 @@ import TramCheckpointPage from './features/system/pages/TramCheckpointPage';
 import DieuKienPage from './features/system/pages/DieuKienPage';
 import OwnerPage from './features/system/pages/OwnerPage';
 import TrangThaiPage from './features/system/pages/TrangThaiPage';
+import LichSuTrangThaiPage from './features/system/pages/LichSuTrangThaiPage';
 import ErpSyncPage from './features/system/pages/ErpSyncPage';
 import OnlineUsersPage from './features/system/pages/OnlineUsersPage';
 import PhanInListPage from './features/orders/pages/PhanInListPage';
@@ -43,7 +44,9 @@ import LoaiLoiPage from './features/quality/pages/LoaiLoiPage';
 import GiaoHangPage from './features/delivery/pages/GiaoHangPage';
 import DashboardPage from './features/dashboard/pages/DashboardPage';
 import TinhTrangTramPage from './features/dashboard/pages/TinhTrangTramPage';
-import BaoCaoPage from './features/reports/pages/BaoCaoPage';
+import MyReportsPage from './features/reports/pages/MyReportsPage';
+import ReportDesignerPage from './features/reports/pages/ReportDesignerPage';
+import ReportByDeptPage from './features/reports/pages/ReportByDeptPage';
 import { MODULES } from './constants/modules';
 
 // Màn hình đã hiện thực. Route khác dùng PlaceholderPage.
@@ -69,7 +72,8 @@ const PAGES = {
   '/giao-hang': <GiaoHangPage />,
   '/dashboard': <DashboardPage />,
   '/dashboard/tinh-trang-tram': <TinhTrangTramPage />,
-  '/bao-cao': <BaoCaoPage />,
+  '/bao-cao': <MyReportsPage />,
+  '/bao-cao/phong-ban': <ReportByDeptPage />,
   '/he-thong/nguoi-dung': <UsersPage />,
   '/he-thong/vai-tro': <RolesPage />,
   '/he-thong/permission': <PermissionsPage />,
@@ -80,6 +84,7 @@ const PAGES = {
   '/he-thong/dieu-kien': <DieuKienPage />,
   '/he-thong/owner': <OwnerPage />,
   '/he-thong/trang-thai': <TrangThaiPage />,
+  '/he-thong/lich-su-trang-thai': <LichSuTrangThaiPage />,
   '/he-thong/erp-sync': <ErpSyncPage />,
   '/he-thong/online': <OnlineUsersPage />,
 };
@@ -113,7 +118,12 @@ export default function App() {
           <Route path="/thong-tin-ca-nhan" element={<ProfilePage />} />
         </Route>
 
-        <Route element={<ModuleLayout />}>{moduleRoutes}</Route>
+        <Route element={<ModuleLayout />}>
+          {moduleRoutes}
+          {/* Route có tham số (không nằm trong menu) */}
+          <Route path="/bao-cao/thiet-ke/:id"
+            element={<RequirePermission anyOf={['BAOCAO_VIEW']}><ReportDesignerPage /></RequirePermission>} />
+        </Route>
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

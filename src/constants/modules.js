@@ -95,7 +95,10 @@ export const MODULES = [
     icon: 'file-bar-chart',
     base: '/bao-cao',
     mau: 'bg-indigo-50 text-indigo-600',
-    children: [{ ten: 'Danh sách báo cáo', route: '/bao-cao' }],
+    children: [
+      { ten: 'Báo cáo của tôi', route: '/bao-cao', perm: 'BAOCAO_VIEW' },
+      { ten: 'Báo cáo phòng ban', route: '/bao-cao/phong-ban', perm: 'BAOCAO_VIEW' },
+    ],
   },
   {
     ma: 'HE_THONG',
@@ -115,6 +118,7 @@ export const MODULES = [
       { ten: 'Điều kiện chuyển checkpoint', route: '/he-thong/dieu-kien', perm: 'WORKFLOW_VIEW' },
       { ten: 'Owner checkpoint/checklist', route: '/he-thong/owner', perm: 'WORKFLOW_VIEW' },
       { ten: 'Trạng thái', route: '/he-thong/trang-thai', perm: 'STATUS_VIEW' },
+      { ten: 'Lịch sử trạng thái', route: '/he-thong/lich-su-trang-thai', perm: 'READY_CANCEL' },
       { ten: 'Đồng bộ ERP', route: '/he-thong/erp-sync', perm: 'ERP_SYNC' },
       { ten: 'Người dùng online', route: '/he-thong/online', perm: 'PRESENCE_VIEW' },
     ],

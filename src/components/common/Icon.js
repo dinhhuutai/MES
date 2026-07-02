@@ -35,6 +35,7 @@ import {
   AlertTriangle,
   Clock,
   GitBranch,
+  Filter,
 } from 'lucide-react';
 
 // Map tên kebab → component Lucide.
@@ -75,6 +76,7 @@ const MAP = {
   'alert-triangle': AlertTriangle,
   clock: Clock,
   'git-branch': GitBranch,
+  filter: Filter,
 };
 
 export default function Icon({ name, size = 20, className = '' }) {

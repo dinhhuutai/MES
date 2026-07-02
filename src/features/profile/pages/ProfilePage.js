@@ -7,6 +7,7 @@ import Toast from '../../../components/common/Toast';
 import { Field, Input, Select } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import { avatarFor } from '../../../utils/brand';
+import { apiChangePassword } from '../../../services/authService';
 import {
   selectAuth, updateProfileThunk, uploadAvatarThunk, resetAvatarThunk,
 } from '../../../store/authSlice';
@@ -33,7 +34,26 @@ export default function ProfilePage() {
   });
   const [saving, setSaving] = useState(false);
 
+  const [pwd, setPwd] = useState({ cu: '', moi: '', xacNhan: '' });
+  const [pwdSaving, setPwdSaving] = useState(false);
+
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const setPw = (k) => (e) => setPwd((p) => ({ ...p, [k]: e.target.value }));
+
+  const changePassword = async () => {
+    if (pwd.moi.length < 6) { show('Mật khẩu mới tối thiểu 6 ký tự', 'error'); return; }
+    if (pwd.moi !== pwd.xacNhan) { show('Xác nhận mật khẩu không khớp', 'error'); return; }
+    setPwdSaving(true);
+    try {
+      await apiChangePassword(pwd.cu, pwd.moi);
+      show('Đã đổi mật khẩu');
+      setPwd({ cu: '', moi: '', xacNhan: '' });
+    } catch (e) {
+      show(e?.message || 'Đổi mật khẩu thất bại', 'error');
+    } finally {
+      setPwdSaving(false);
+    }
+  };
 
   const save = async () => {
     setSaving(true);
@@ -188,6 +208,26 @@ export default function ProfilePage() {
               Lưu thay đổi
             </Button>
           </div>
+        </div>
+      </div>
+
+      {/* Đổi mật khẩu */}
+      <div className="card mt-6 p-6">
+        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-ink-soft">Đổi mật khẩu</h2>
+        <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-3">
+          <Field label="Mật khẩu hiện tại" required>
+            <Input type="password" value={pwd.cu} onChange={setPw('cu')} autoComplete="current-password" />
+          </Field>
+          <Field label="Mật khẩu mới" required hint="Tối thiểu 6 ký tự">
+            <Input type="password" value={pwd.moi} onChange={setPw('moi')} autoComplete="new-password" />
+          </Field>
+          <Field label="Xác nhận mật khẩu mới" required>
+            <Input type="password" value={pwd.xacNhan} onChange={setPw('xacNhan')} autoComplete="new-password" />
+          </Field>
+        </div>
+        <div className="flex justify-end">
+          <Button onClick={changePassword} loading={pwdSaving}
+            disabled={!pwd.cu || !pwd.moi || !pwd.xacNhan}>Đổi mật khẩu</Button>
         </div>
       </div>
 

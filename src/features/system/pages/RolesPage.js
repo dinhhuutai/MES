@@ -4,13 +4,14 @@ import DataTable from '../../../components/common/DataTable';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
+import SidePanel from '../../../components/common/SidePanel';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import Toast from '../../../components/common/Toast';
 import { Field, Input, Textarea } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import {
-  listRoles, getRole, createRole, updateRole, setRoleActive,
+  listRoles, getRole, getRoleUsers, createRole, updateRole, setRoleActive,
 } from '../../../services/roleService';
 import { listPermissions } from '../../../services/permissionService';
 
@@ -29,6 +30,25 @@ export default function RolesPage() {
   const [form, setForm] = useState({ maRole: '', tenRole: '', moTa: '', permissionIds: [] });
   const [saving, setSaving] = useState(false);
   const [confirm, setConfirm] = useState(null);
+
+  // Panel danh sách người dùng của 1 vai trò.
+  const [usersPanel, setUsersPanel] = useState(null); // { role } | null
+  const [users, setUsers] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+
+  const openUsers = async (role) => {
+    setUsersPanel({ role });
+    setUsers([]);
+    setLoadingUsers(true);
+    try {
+      const res = await getRoleUsers(role.id);
+      setUsers(res.data);
+    } catch (e) {
+      show(e.message || 'Lỗi tải người dùng', 'error');
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -121,15 +141,17 @@ export default function RolesPage() {
     { key: 'ten_role', header: 'Tên vai trò', className: 'font-medium text-ink' },
     { key: 'mo_ta', header: 'Mô tả', render: (r) => r.mo_ta || '—' },
     { key: 'so_quyen', header: 'Số quyền', render: (r) => <Badge tone="info">{r.so_quyen}</Badge> },
-    { key: 'so_nguoi_dung', header: 'Người dùng', render: (r) => r.so_nguoi_dung },
+    { key: 'so_nguoi_dung', header: 'Người dùng', render: (r) => (
+      <Badge tone="default">{r.so_nguoi_dung} người</Badge>
+    ) },
     { key: 'dang_hoat_dong', header: 'Trạng thái', render: (r) =>
       r.dang_hoat_dong ? <Badge tone="success">Hoạt động</Badge> : <Badge tone="danger">Tắt</Badge> },
     { key: 'actions', header: '', className: 'text-right', render: (r) => canManage && (
       <div className="flex justify-end gap-1.5">
-        <Button variant="ghost" className="px-3 py-1.5" onClick={() => openEdit(r)}>Sửa</Button>
+        <Button variant="ghost" className="px-3 py-1.5" onClick={(e) => { e.stopPropagation(); openEdit(r); }}>Sửa</Button>
         {r.ma_role !== 'ADMIN' && (
           <Button variant={r.dang_hoat_dong ? 'danger' : 'secondary'} className="px-3 py-1.5"
-            onClick={() => setConfirm({ role: r, active: !r.dang_hoat_dong })}>
+            onClick={(e) => { e.stopPropagation(); setConfirm({ role: r, active: !r.dang_hoat_dong }); }}>
             {r.dang_hoat_dong ? 'Tắt' : 'Bật'}
           </Button>
         )}
@@ -144,7 +166,8 @@ export default function RolesPage() {
         {canManage && <Button icon="user" onClick={openCreate}>Thêm vai trò</Button>}
       </Toolbar>
 
-      <DataTable columns={columns} rows={rows} loading={loading} emptyText="Chưa có vai trò" />
+      <DataTable columns={columns} rows={rows} loading={loading} onRowClick={openUsers}
+        emptyText="Chưa có vai trò" />
 
       <Modal
         open={modalOpen}
@@ -194,6 +217,36 @@ export default function RolesPage() {
           </div>
         </div>
       </Modal>
+
+      <SidePanel
+        open={!!usersPanel}
+        onClose={() => setUsersPanel(null)}
+        title={usersPanel ? `Người dùng — ${usersPanel.role.ten_role}` : ''}
+        subtitle={usersPanel ? `${users.length} người dùng đang được gán vai trò này` : ''}
+        width="max-w-md"
+      >
+        {loadingUsers ? (
+          <div className="py-10 text-center text-ink-soft">Đang tải...</div>
+        ) : users.length === 0 ? (
+          <p className="py-6 text-center text-sm text-ink-soft">Chưa có người dùng nào được gán vai trò này.</p>
+        ) : (
+          <div className="space-y-2">
+            {users.map((u) => (
+              <div key={u.id} className="flex items-center justify-between rounded-control border border-line p-3">
+                <div className="min-w-0">
+                  <div className="font-medium text-ink">{u.ho_ten || u.ten_dang_nhap}</div>
+                  <div className="text-xs text-ink-soft">
+                    @{u.ten_dang_nhap}{u.ma_user ? ` · ${u.ma_user}` : ''}{u.ten_phong_ban ? ` · ${u.ten_phong_ban}` : ''}
+                  </div>
+                </div>
+                {u.dang_hoat_dong
+                  ? <Badge tone="success">Hoạt động</Badge>
+                  : <Badge tone="danger">Khóa</Badge>}
+              </div>
+            ))}
+          </div>
+        )}
+      </SidePanel>
 
       <ConfirmDialog
         open={!!confirm}

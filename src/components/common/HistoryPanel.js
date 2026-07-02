@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import SidePanel from './SidePanel';
 import DataTable from './DataTable';
 import Toast from './Toast';
@@ -14,11 +14,17 @@ export default function HistoryPanel({ open, onClose, title = 'Lịch sử', fet
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  // Giữ fetcher trong ref: prop này thường là arrow-function nội tuyến (đổi identity mỗi lần
+  // component cha re-render — vd cha dùng useNow(1000) chạy mỗi giây). Nếu đưa vào deps sẽ
+  // refetch mỗi giây → panel NHÁY. Chỉ nạp lại khi mở panel hoặc đổi ngày.
+  const fetcherRef = useRef(fetcher);
+  fetcherRef.current = fetcher;
+
   const load = useCallback(async () => {
-    if (!open || !fetcher) return;
+    if (!open || !fetcherRef.current) return;
     setLoading(true);
     try {
-      const res = await fetcher(date);
+      const res = await fetcherRef.current(date);
       setRows((res.data || []).map((r, i) => ({ ...r, _k: i })));
     } catch (e) {
       show(e.message || 'Lỗi tải lịch sử', 'error');
@@ -26,7 +32,7 @@ export default function HistoryPanel({ open, onClose, title = 'Lịch sử', fet
     } finally {
       setLoading(false);
     }
-  }, [open, fetcher, date, show]);
+  }, [open, date, show]);
 
   useEffect(() => { load(); }, [load]);
 

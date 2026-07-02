@@ -93,7 +93,9 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
     }
   };
 
-  const ItemSection = ({ item }) => {
+  // Render từng mục dạng HÀM (không phải component lồng nhau) để tránh remount mỗi giây
+  // khi `now` cập nhật (nếu là component lồng, Select sẽ bị đóng/nháy).
+  const renderItem = (item) => {
     const cp = byMa[item.ma];
     const done = state[`${item.ma.toLowerCase()}_done`];
     const editable = !done && !state.qc_done && can(item.perm);
@@ -103,7 +105,7 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
       : null;
 
     return (
-      <div className="rounded-control border border-line p-3.5">
+      <div key={item.ma} className="rounded-control border border-line p-3.5">
         <div className="mb-2 flex items-center justify-between">
           <span className="text-sm font-semibold text-ink">{item.label}</span>
           <div className="flex items-center gap-1.5">
@@ -183,7 +185,7 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
             </Button>
           )}
 
-          {ITEMS.map((item) => <ItemSection key={item.ma} item={item} />)}
+          {ITEMS.map((item) => renderItem(item))}
 
           <div className="space-y-2 border-t border-line pt-4">
             <h3 className="text-xs font-bold uppercase tracking-wide text-ink-soft">Tiến trình</h3>
