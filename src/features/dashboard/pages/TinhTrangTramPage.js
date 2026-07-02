@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Icon from '../../../components/common/Icon';
 import Badge from '../../../components/common/Badge';
+import SidePanel from '../../../components/common/SidePanel';
 import Toast from '../../../components/common/Toast';
 import useToast from '../../../hooks/useToast';
 import useNow from '../../../hooks/useNow';
@@ -14,14 +15,15 @@ import {
 const ROTATE_MS = 10000;
 const fmtTime = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '');
 
-function SummaryCard({ icon, label, value, tone }) {
+function SummaryCard({ icon, label, value, tone, onClick }) {
   return (
-    <div className="card p-4">
+    <div className={`card p-4 ${onClick ? 'cursor-pointer transition hover:shadow-card-hover' : ''}`}
+      onClick={onClick} role={onClick ? 'button' : undefined}>
       <div className={`mb-2 flex h-9 w-9 items-center justify-center rounded-control ${tone}`}>
         <Icon name={icon} size={18} />
       </div>
       <div className="text-3xl font-bold tabular-nums text-ink">{fmtNum(value)}</div>
-      <div className="text-sm text-ink-soft">{label}</div>
+      <div className="text-sm text-ink-soft">{label}{onClick ? ' →' : ''}</div>
     </div>
   );
 }
@@ -86,10 +88,39 @@ const TEM_TONE = {
   CHO_OQC: 'info', OQC_DAT: 'success', DA_GIAO: 'success', LOAI: 'danger', HUY: 'danger',
 };
 
-// 1 đợt vải: đường kẻ ngang các trạm + nhánh tem.
+// Nhóm tem — rẽ nhánh DÍNH vào node trạm ở trên (đường kẻ dọc nối lên).
+function TemGroup({ tems }) {
+  return (
+    <div className="flex flex-col items-center">
+      <div className="h-4 w-px bg-primary/40" />
+      <div className="rounded-control border border-dashed border-primary/40 bg-primary-wash/20 p-2">
+        <div className="mb-1.5 text-center text-[11px] font-semibold text-ink-soft">Tem ({tems.length})</div>
+        <div className="flex flex-wrap justify-center gap-2">
+          {tems.map((tem) => (
+            <div key={tem.tem_id} className="rounded-control border border-line bg-surface p-2.5">
+              <div className="mb-1.5 flex items-center gap-2">
+                <span className="font-mono text-xs font-semibold text-ink">{tem.ma_tem}</span>
+                <Badge tone={TEM_TONE[tem.trang_thai] || 'default'}>{tem.trang_thai}</Badge>
+                <span className="text-[11px] text-ink-soft">{fmtNum(tem.so_luong)} pcs</span>
+              </div>
+              <TemBranch tem={tem} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// 1 đợt vải: đường kẻ ngang các trạm; tem rẽ nhánh dính vào node trạm hiện tại.
 function DotVaiFlow({ dot, now }) {
   const cur = dot.current;
   const live = cur ? evalSla(cur.tg_vao, cur.sla_phut, cur.canh_bao_truoc_phut, now) : null;
+  const hasTimeline = dot.timeline && dot.timeline.length > 0;
+  // Node cuối được coi là "hiện tại" để dính nhánh tem (kể cả khi không khớp ton_tram).
+  const lastIdx = hasTimeline ? dot.timeline.length - 1 : -1;
+  const tems = dot.tems || [];
+
   return (
     <div className="rounded-card border border-line bg-surface-muted/40 p-4">
       <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -99,41 +130,27 @@ function DotVaiFlow({ dot, now }) {
         {!cur && <Badge tone="default">Chưa vào dòng chảy</Badge>}
       </div>
 
-      {/* Đường kẻ ngang các trạm đã qua */}
-      <div className="mb-3 flex items-start overflow-x-auto pb-2">
-        {(dot.timeline || []).map((t, i) => {
-          const isCur = cur && t.den_tram === cur.ma_tram && i === dot.timeline.length - 1;
+      <div className="flex items-start overflow-x-auto pb-2">
+        {hasTimeline ? dot.timeline.map((t, i) => {
+          const isLast = i === lastIdx;
+          const isCur = cur && t.den_tram === cur.ma_tram;
           return (
             <div key={i} className="flex items-start">
               {i > 0 && <Connector />}
-              <StageNode title={t.den_ten} when={t.tg_kt} nguoi={t.nguoi} phut={t.phut}
-                current={isCur} live={isCur ? live : null} />
+              <div className="flex flex-col items-center">
+                <StageNode title={t.den_ten} when={t.tg_kt} nguoi={t.nguoi} phut={t.phut}
+                  current={isCur} live={isCur ? live : null} />
+                {isLast && tems.length > 0 && <TemGroup tems={tems} />}
+              </div>
             </div>
           );
-        })}
-        {(!dot.timeline || dot.timeline.length === 0) && cur && (
-          <StageNode title={cur.ten_tram} when={cur.tg_vao} current live={live} />
+        }) : (
+          <div className="flex flex-col items-center">
+            <StageNode title={cur ? cur.ten_tram : 'Chưa vào trạm'} when={cur?.tg_vao} current={!!cur} live={live} />
+            {tems.length > 0 && <TemGroup tems={tems} />}
+          </div>
         )}
       </div>
-
-      {/* Nhánh tem */}
-      {dot.tems?.length > 0 && (
-        <div>
-          <div className="mb-1.5 text-xs font-semibold text-ink-soft">Tem ({dot.tems.length})</div>
-          <div className="flex flex-wrap gap-3">
-            {dot.tems.map((tem) => (
-              <div key={tem.tem_id} className="rounded-control border border-line bg-surface p-2.5">
-                <div className="mb-1.5 flex items-center gap-2">
-                  <span className="font-mono text-xs font-semibold text-ink">{tem.ma_tem}</span>
-                  <Badge tone={TEM_TONE[tem.trang_thai] || 'default'}>{tem.trang_thai}</Badge>
-                  <span className="text-[11px] text-ink-soft">{fmtNum(tem.so_luong)} pcs</span>
-                </div>
-                <TemBranch tem={tem} />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -147,6 +164,7 @@ export default function TinhTrangTramPage() {
   const [search, setSearch] = useState('');
   const [detail, setDetail] = useState(null);
   const [paused, setPaused] = useState(false);
+  const [nghenPanel, setNghenPanel] = useState(null); // null | 'NGHEN' | 'SAP_NGHEN'
 
   const loadList = useCallback(async () => {
     try {
@@ -179,6 +197,10 @@ export default function TinhTrangTramPage() {
 
   const go = (delta) => setIdx((i) => (list.length ? (i + delta + list.length) % list.length : 0));
 
+  // Bấm 1 phần in trong danh sách nghẽn → lọc tới nó (tạm dừng xoay).
+  const pickPhanIn = (item) => { setSearch(item.ma_phan); setPaused(true); setNghenPanel(null); };
+  const nghenItems = nghenPanel ? (summary?.danh_sach?.[nghenPanel] || []) : [];
+
   return (
     <div>
       <div className="mb-5 flex items-center justify-between">
@@ -192,8 +214,10 @@ export default function TinhTrangTramPage() {
       <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <SummaryCard icon="activity" label="Phần in đang chạy (chưa giao)" value={summary?.dang_chay_chua_giao || 0} tone="text-primary bg-primary-wash" />
         <SummaryCard icon="clock" label="Phần in sắp nghẽn" value={summary?.sap_nghen || 0}
+          onClick={() => setNghenPanel('SAP_NGHEN')}
           tone={(summary?.sap_nghen || 0) > 0 ? 'text-amber-600 bg-amber-50' : 'text-ink-soft bg-surface-muted'} />
         <SummaryCard icon="alert-triangle" label="Phần in nghẽn" value={summary?.nghen || 0}
+          onClick={() => setNghenPanel('NGHEN')}
           tone={(summary?.nghen || 0) > 0 ? 'text-rose-600 bg-rose-50' : 'text-ink-soft bg-surface-muted'} />
       </div>
 
@@ -242,6 +266,32 @@ export default function TinhTrangTramPage() {
           </div>
         </div>
       )}
+
+      <SidePanel open={!!nghenPanel} onClose={() => setNghenPanel(null)}
+        title={nghenPanel === 'NGHEN' ? 'Phần in đang nghẽn' : 'Phần in sắp nghẽn'}
+        subtitle={`${nghenItems.length} phần in`} width="max-w-md">
+        {nghenItems.length === 0 ? (
+          <p className="py-6 text-center text-sm text-ink-soft">Không có phần in nào.</p>
+        ) : (
+          <div className="space-y-2">
+            {nghenItems.map((it) => (
+              <button key={it.id} onClick={() => pickPhanIn(it)}
+                className="w-full rounded-control border border-line p-3 text-left transition hover:bg-surface-muted">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-ink">{it.ma_phan}</span>
+                  <Badge tone={SLA_BADGE[it.sla_status].tone}>{SLA_BADGE[it.sla_status].label}</Badge>
+                </div>
+                <div className="mt-0.5 text-xs text-ink-soft">
+                  {[it.ten_khach_hang, it.ma_don_hang, it.ma_hang].filter(Boolean).join(' · ')}
+                </div>
+                <div className="text-xs text-ink-soft">
+                  {[it.mau_vai, it.kich_vai, it.kich_phim].filter(Boolean).join(' · ')} · đang ở <b>{it.ten_tram}</b>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </SidePanel>
 
       <Toast toast={toast} />
     </div>
