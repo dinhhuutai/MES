@@ -13,7 +13,8 @@ import usePermissions from '../../../hooks/usePermissions';
 import useNow from '../../../hooks/useNow';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 import HistoryPanel from '../../../components/common/HistoryPanel';
-import { listReadyQcCandidates, getReadyDetail, confirmReadyQC, confirmReadyQcBatch, readyHistory } from '../../../services/readyService';
+import DonePanel from '../../../components/common/DonePanel';
+import { listReadyQcCandidates, getReadyDetail, confirmReadyQC, confirmReadyQcBatch, readyHistory, readyDone } from '../../../services/readyService';
 
 const TECH_ITEMS = [
   { ma: 'KHUON', label: 'Khuôn' },
@@ -43,6 +44,7 @@ export default function ReadyQcPage() {
   const [selected, setSelected] = useState(() => new Set()); // id phần in đã tích
   const [batching, setBatching] = useState(false);
   const [histOpen, setHistOpen] = useState(false);
+  const [doneOpen, setDoneOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -160,6 +162,7 @@ export default function ReadyQcPage() {
         {canQC && selected.size > 0 && (
           <Button loading={batching} onClick={doBatch}>QC xác nhận ({selected.size})</Button>
         )}
+        <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="warning">{meta.total} chờ QC</Badge>
       </Toolbar>
@@ -226,6 +229,9 @@ export default function ReadyQcPage() {
         title="Lịch sử QC chuẩn bị kỹ thuật"
         fetcher={(date) => readyHistory(date, 'qc')}
       />
+      <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
+        title="Phần in đã QC (READY hoàn thành)" maHeader="Phần in"
+        fetcher={(date) => readyDone(date, 'qc')} />
 
       <Toast toast={toast} />
     </div>

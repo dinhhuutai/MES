@@ -6,13 +6,25 @@ import SidePanel from '../../../components/common/SidePanel';
 import Icon from '../../../components/common/Icon';
 import Toast from '../../../components/common/Toast';
 import HistoryPanel from '../../../components/common/HistoryPanel';
+import DonePanel from '../../../components/common/DonePanel';
 import { Input, Textarea } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import {
-  listGomCandidates, listSets, getSet, createSet, removeFromSet, cancelSet, gomHistory,
+  listGomCandidates, listSets, getSet, createSet, removeFromSet, cancelSet, gomHistory, gomDone,
 } from '../../../services/gomsetService';
 import { fmtNum, fmtDate } from '../../../utils/format';
+
+const fmtTimeVi = (t) => (t ? new Date(t).toLocaleTimeString('vi-VN') : '');
+// Cột riêng cho panel "Đã hoàn thành" của Gom set (đơn vị = set, không phải phần in).
+const GOM_DONE_COLUMNS = [
+  { key: 'ma', header: 'Set', render: (r) => <Badge tone="info">{r.ma || '—'}</Badge> },
+  { key: 'hanh_dong', header: 'Thao tác', render: (r) => r.hanh_dong || '—' },
+  { key: 'so_luong', header: 'Số đợt vải', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
+  { key: 'mau_list', header: 'Màu', render: (r) => r.mau_list || '—' },
+  { key: 'tg', header: 'Giờ', className: 'whitespace-nowrap tabular-nums', render: (r) => fmtTimeVi(r.tg) },
+  { key: 'nguoi', header: 'Người', render: (r) => r.nguoi || '—' },
+];
 
 // Thẻ 1 đợt vải (dùng cho cả 2 cột). dir: 'right' (nút →) | 'left' (nút ←).
 function DotVaiCard({ row, dir, onMove }) {
@@ -55,6 +67,7 @@ export default function GomSetPage() {
 
   const [view, setView] = useState('create'); // 'create' | 'sets'
   const [histOpen, setHistOpen] = useState(false);
+  const [doneOpen, setDoneOpen] = useState(false);
 
   // --- Tạo set (transfer list) ---
   const [cands, setCands] = useState([]);
@@ -165,6 +178,7 @@ export default function GomSetPage() {
             Đã gom set
           </button>
         </div>
+        <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
       </Toolbar>
 
@@ -290,6 +304,8 @@ export default function GomSetPage() {
 
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}
         title="Lịch sử thao tác gom set" fetcher={gomHistory} />
+      <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
+        title="Set đã tạo/release" columns={GOM_DONE_COLUMNS} fetcher={gomDone} />
 
       <Toast toast={toast} />
     </div>

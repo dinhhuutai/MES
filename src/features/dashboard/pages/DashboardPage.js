@@ -38,6 +38,17 @@ function StatCard({ icon, label, value, sub, tone = 'text-primary bg-primary-was
 
 const fmtTime = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '');
 
+// Tổng quan mặc định — để trang KHÔNG kẹt "Đang tải" nếu 1 API lỗi/chậm (hiển thị phần còn lại).
+const EMPTY_SUMMARY = {
+  don_hang: { total: 0, by_trang_thai: {} },
+  phan_in: { total: 0, ready: 0 },
+  lenh: {}, tem: {},
+  xe_phoi: { dang_phoi: 0 },
+  giao_hang: { by_trang_thai: {}, tong_sl_da_giao: 0 },
+  chat_luong: { so_kcs: 0, oqc_dat: 0, oqc_khong_dat: 0 },
+  nghen: { dang_nghen: 0 },
+};
+
 function FlowTimelinePanel({ dotVaiId, onClose }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -255,28 +266,25 @@ function StageGrid({ data }) {
 
 export default function DashboardPage() {
   const { toast, show } = useToast();
-  const [s, setS] = useState(null);
+  const [s, setS] = useState(EMPTY_SUMMARY);
   const [stages, setStages] = useState(null);
   const [activity, setActivity] = useState([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    try {
-      const [sum, act, sc] = await Promise.all([getSummary(), getActivity(), getStageCounts()]);
-      setS(sum.data);
-      setActivity(act.data);
-      setStages(sc.data);
-    } catch (e) {
-      show(e.message || 'Lỗi tải', 'error');
-    } finally {
-      setLoading(false);
-    }
+    // allSettled: 1 API lỗi/chậm KHÔNG làm hỏng cả trang (trước đây kẹt "Đang tải" nếu summary lỗi).
+    const [sum, act, sc] = await Promise.allSettled([getSummary(), getActivity(), getStageCounts()]);
+    if (sum.status === 'fulfilled') setS(sum.value.data);
+    else show(sum.reason?.message || 'Lỗi tải tổng quan', 'error');
+    if (act.status === 'fulfilled') setActivity(act.value.data);
+    if (sc.status === 'fulfilled') setStages(sc.value.data);
+    setLoading(false);
   }, [show]);
 
   useEffect(() => { load(); }, [load]);
   useSocketEvent('dashboard:refresh', load);
 
-  if (loading || !s) return <div className="py-10 text-center text-ink-soft">Đang tải...</div>;
+  if (loading) return <div className="py-10 text-center text-ink-soft">Đang tải...</div>;
 
   const tem = s.tem || {};
   const chartData = TEM_STAGES.map((st) => ({ name: st.label, value: tem[st.key] || 0, color: st.color }));

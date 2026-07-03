@@ -8,10 +8,11 @@ import SidePanel from '../../../components/common/SidePanel';
 import Modal from '../../../components/common/Modal';
 import Toast from '../../../components/common/Toast';
 import HistoryPanel from '../../../components/common/HistoryPanel';
+import DonePanel from '../../../components/common/DonePanel';
 import { Field, Input, Select, Textarea } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import { listReplanCandidates, replan, replanBatch, listChuyen, planHistory } from '../../../services/planningService';
+import { listReplanCandidates, replan, replanBatch, listChuyen, planHistory, replanDone } from '../../../services/planningService';
 import { fmtNum, fmtDate } from '../../../utils/format';
 
 // Ngày (Date/ISO) → 'YYYY-MM-DD' theo giờ địa phương cho input[type=date] (tránh lệch ngày do slice ISO/UTC).
@@ -34,6 +35,7 @@ export default function ReplanPage() {
   const [page, setPage] = useState(1);
   const [chuyen, setChuyen] = useState([]);
   const [histOpen, setHistOpen] = useState(false);
+  const [doneOpen, setDoneOpen] = useState(false);
 
   const [detail, setDetail] = useState(null);
   const [form, setForm] = useState({ chuyenId: '', ngayKeHoach: '', lyDo: '' });
@@ -153,6 +155,7 @@ export default function ReplanPage() {
         {canReplan && selected.size > 0 && (
           <Button onClick={openBatch}>Lập lại kế hoạch ({selected.size})</Button>
         )}
+        <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="info">{meta.total} lệnh</Badge>
       </Toolbar>
@@ -239,6 +242,8 @@ export default function ReplanPage() {
 
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}
         title="Lịch sử kế hoạch (Release 2 + lập lại)" fetcher={planHistory} />
+      <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
+        title="Lệnh đã lập lại kế hoạch" maHeader="Lệnh" fetcher={replanDone} />
 
       <Toast toast={toast} />
     </div>

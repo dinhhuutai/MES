@@ -6,6 +6,7 @@ export const listChuyen = () => client.get('/catalog/chuyen');
 export const listRelease1Candidates = (params) => client.get('/planning/release1/candidates', { params });
 export const createRelease1 = (body) => client.post('/planning/release1', body);
 export const release1History = (date) => client.get('/planning/release1/history', { params: { date } });
+export const release1Done = (date) => client.get('/planning/release1/done', { params: { date } });
 export const listReleaseSets = (params) => client.get('/planning/release1/sets', { params });
 export const releaseSet = (setId, body) => client.post(`/planning/release1/set/${setId}`, body);
 
@@ -15,9 +16,13 @@ export const getLenhDetail = (id) => client.get(`/planning/lenh/${id}`);
 export const recordTestRun = (id, body) => client.post(`/planning/test-run/${id}/run`, body);
 export const confirmCNSP = (id) => client.post(`/planning/test-run/${id}/confirm-cnsp`);
 export const confirmQA = (id) => client.post(`/planning/test-run/${id}/confirm-qa`);
+export const cancelCNSP = (id) => client.post(`/planning/test-run/${id}/cancel-cnsp`);
+export const cancelQA = (id) => client.post(`/planning/test-run/${id}/cancel-qa`);
 export const confirmCNSPBatch = (lenhIds) => client.post('/planning/test-run/cnsp-confirm-batch', { lenhIds });
 export const confirmQABatch = (lenhIds) => client.post('/planning/test-run/qa-confirm-batch', { lenhIds });
 export const testRunHistory = (date) => client.get('/planning/test-run/history', { params: { date } });
+export const testCnspDone = (date) => client.get('/planning/test-run/cnsp-done', { params: { date } });
+export const testQaDone = (date) => client.get('/planning/test-run/qa-done', { params: { date } });
 
 // Release 2
 export const listRelease2Candidates = (params) => client.get('/planning/release2/candidates', { params });
@@ -29,3 +34,9 @@ export const listReplanCandidates = (params) => client.get('/planning/replan/can
 export const replan = (id, body) => client.post(`/planning/replan/${id}`, body);
 export const replanBatch = (body) => client.post('/planning/replan/batch', body);
 export const planHistory = (date) => client.get('/planning/plan-history', { params: { date } });
+
+// Hủy lệnh / hoàn tác release
+export const listCancelableLenh = (params) => client.get('/planning/huy-lenh/candidates', { params });
+export const cancelLenh = (lenhId, body) => client.post(`/planning/huy-lenh/${lenhId}`, body);
+export const release2Done = (date) => client.get('/planning/release2/done', { params: { date } });
+export const replanDone = (date) => client.get('/planning/replan/done', { params: { date } });

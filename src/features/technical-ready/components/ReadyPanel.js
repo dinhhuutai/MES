@@ -17,7 +17,7 @@ const ITEMS = [
   { ma: 'KHUON', label: 'Khuôn', perm: 'READY_KHUON', hasOptions: true },
   { ma: 'FILM', label: 'Film', perm: 'READY_FILM', hasOptions: true },
   { ma: 'MUC', label: 'Mực', perm: 'READY_MUC', hasOptions: true },
-  { ma: 'HSKT', label: 'Hồ sơ kỹ thuật (HSKT)', perm: 'READY_HSKT', hasOptions: false },
+  { ma: 'HSKT', label: 'Hồ sơ kỹ thuật (HSKT)', perm: 'READY_HSKT', hasOptions: true },
 ];
 
 const fmt = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '');
@@ -29,7 +29,7 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
 
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [sel, setSel] = useState({ KHUON: '', FILM: '', MUC: '' }); // option đang chọn (chưa xác nhận)
+  const [sel, setSel] = useState({ KHUON: '', FILM: '', MUC: '', HSKT: '' }); // option đang chọn (chưa xác nhận)
   const [busy, setBusy] = useState(null); // ma đang submit
 
   const byMa = (detail?.checkpoints || []).reduce((acc, c) => ({ ...acc, [c.ma_checkpoint]: c }), {});
@@ -46,6 +46,7 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
         KHUON: m.KHUON?.gia_tri_text || '',
         FILM: m.FILM?.gia_tri_text || '',
         MUC: m.MUC?.gia_tri_text || '',
+        HSKT: m.HSKT?.gia_tri_text || '',
       });
     } catch (e) {
       show(e.message || 'Lỗi tải', 'error');

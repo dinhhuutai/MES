@@ -22,3 +22,5 @@ export const confirmReadyQcBatch = (phanInIds) =>
   client.post('/ready/qc-confirm-batch', { phanInIds });
 // Lịch sử theo ngày. scope: 'tech' | 'qc'.
 export const readyHistory = (date, scope) => client.get('/ready/history', { params: { date, scope } });
+// Danh sách phần in đã hoàn thành checkpoint READY theo ngày. scope: 'tech' | 'qc'.
+export const readyDone = (date, scope) => client.get('/ready/done', { params: { date, scope } });

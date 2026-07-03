@@ -5,9 +5,10 @@ import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import Toast from '../../../components/common/Toast';
 import HistoryPanel from '../../../components/common/HistoryPanel';
+import DonePanel from '../../../components/common/DonePanel';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import { listTestRunCandidates, testRunHistory, confirmQABatch } from '../../../services/planningService';
+import { listTestRunCandidates, testRunHistory, confirmQABatch, testQaDone } from '../../../services/planningService';
 import TestRunPanel from '../components/TestRunPanel';
 
 export default function TestRunPage() {
@@ -20,6 +21,7 @@ export default function TestRunPage() {
   const [search, setSearch] = useState('');
   const [sel, setSel] = useState(null);
   const [histOpen, setHistOpen] = useState(false);
+  const [doneOpen, setDoneOpen] = useState(false);
   const [selected, setSelected] = useState(() => new Set());
   const [batching, setBatching] = useState(false);
 
@@ -95,6 +97,7 @@ export default function TestRunPage() {
         {canQA && selected.size > 0 && (
           <Button loading={batching} onClick={doBatch}>QA xác nhận đạt ({selected.size})</Button>
         )}
+        <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="info">{rows.length} lệnh</Badge>
       </Toolbar>
@@ -106,6 +109,8 @@ export default function TestRunPage() {
 
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}
         title="Lịch sử Test Run" fetcher={testRunHistory} />
+      <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
+        title="Lệnh đã QA xác nhận" maHeader="Lệnh" fetcher={testQaDone} />
 
       <Toast toast={toast} />
     </div>

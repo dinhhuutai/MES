@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
@@ -9,7 +9,7 @@ import Icon from '../../../components/common/Icon';
 import { Field, Input, Select, Textarea } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import ReportGrid from '../components/ReportGrid';
+import ReportGrid, { parseKey, cellKey } from '../components/ReportGrid';
 import {
   getReport, getMetrics, updateReport, undoReport, renderReport, reportHistory,
 } from '../../../services/baoCaoService';
@@ -20,7 +20,71 @@ const LOAI_OPTS = [
   { v: 'so', label: 'Số nhập tay' },
   { v: 'metric', label: 'Dữ liệu hệ thống (metric)' },
   { v: 'cong_thuc', label: 'Công thức (+ − × ÷, ngoặc)' },
+  { v: 'hop_kiem', label: 'Hộp kiểm (☑/☐)' },
+  { v: 'tha_xuong', label: 'Trình thả xuống' },
 ];
+
+const SIZE_OPTS = [{ v: 'sm', label: 'Nhỏ' }, { v: 'base', label: 'Vừa' }, { v: 'lg', label: 'Lớn' }, { v: 'xl', label: 'Rất lớn' }];
+// Định dạng kiểu dữ liệu (hiển thị) cho ô số/metric/công thức.
+const SO_OPTS = [
+  { v: 'thousand', label: 'Số (ngăn cách nghìn)' }, { v: 'raw', label: 'Số thô' },
+  { v: 'percent', label: 'Phần trăm %' }, { v: 'dp2', label: '2 số lẻ' },
+  { v: 'currency', label: 'Tiền tệ (₫)' },
+];
+
+// Bảng màu đầy đủ kiểu Google Sheets (10 cột).
+const PALETTE = [
+  '#000000', '#434343', '#666666', '#999999', '#b7b7b7', '#cccccc', '#d9d9d9', '#efefef', '#f3f3f3', '#ffffff',
+  '#980000', '#ff0000', '#ff9900', '#ffff00', '#00ff00', '#00ffff', '#4a86e8', '#0000ff', '#9900ff', '#ff00ff',
+  '#e6b8af', '#f4cccc', '#fce5cd', '#fff2cc', '#d9ead3', '#d0e0e3', '#c9daf8', '#cfe2f3', '#d9d2e9', '#ead1dc',
+  '#dd7e6b', '#ea9999', '#f9cb9c', '#ffe599', '#b6d7a8', '#a2c4c9', '#a4c2f4', '#9fc5e8', '#b4a7d6', '#d5a6bd',
+  '#cc4125', '#e06666', '#f6b26b', '#ffd966', '#93c47d', '#76a5af', '#6d9eeb', '#6fa8dc', '#8e7cc3', '#c27ba0',
+  '#a61c00', '#cc0000', '#e69138', '#f1c232', '#6aa84f', '#45818e', '#3c78d8', '#3d85c6', '#674ea7', '#a64d79',
+  '#85200c', '#990000', '#b45f06', '#bf9000', '#38761d', '#134f5c', '#1155cc', '#0b5394', '#351c75', '#741b47',
+];
+
+// Popover bảng màu (đóng khi bấm ngoài).
+function ColorPopover({ open, onClose, onPick, allowNone }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [open, onClose]);
+  if (!open) return null;
+  return (
+    <div ref={ref} className="absolute z-30 mt-1 rounded-card border border-line bg-surface p-2 shadow-card-hover">
+      {allowNone && (
+        <button type="button" onClick={() => { onPick(null); onClose(); }}
+          className="mb-1.5 w-full rounded-control border border-line px-2 py-1 text-xs text-ink-soft hover:bg-surface-muted">
+          ∅ Không màu
+        </button>
+      )}
+      <div className="grid grid-cols-10 gap-1">
+        {PALETTE.map((c) => (
+          <button key={c} type="button" title={c} onClick={() => { onPick(c); onClose(); }}
+            className="h-5 w-5 rounded border border-line/70 hover:scale-110" style={{ backgroundColor: c }} />
+        ))}
+      </div>
+      <div className="mt-2 flex items-center gap-1.5">
+        <span className="text-xs text-ink-soft">Tùy chọn</span>
+        <input type="color" onChange={(e) => { onPick(e.target.value); }} className="h-6 w-8 cursor-pointer rounded border border-line" />
+      </div>
+    </div>
+  );
+}
+
+// Rectangle bao 2 ô key.
+function rectKeys(a, b) {
+  const pa = parseKey(a); const pb = parseKey(b);
+  if (!pa || !pb) return new Set([b]);
+  const r0 = Math.min(pa.r, pb.r); const r1 = Math.max(pa.r, pb.r);
+  const c0 = Math.min(pa.c, pb.c); const c1 = Math.max(pa.c, pb.c);
+  const s = new Set();
+  for (let r = r0; r <= r1; r += 1) for (let c = c0; c <= c1; c += 1) s.add(cellKey(r, c));
+  return s;
+}
 
 export default function ReportDesignerPage() {
   const { id } = useParams();
@@ -31,12 +95,10 @@ export default function ReportDesignerPage() {
 
   const [rep, setRep] = useState(null);
   const [name, setName] = useState('');
-  const [moTa, setMoTa] = useState('');
-  const [grid, setGrid] = useState({ so_cot: 8, so_hang: 20, o: {} });
-  const [kyTu, setKyTu] = useState('');
-  const [kyDen, setKyDen] = useState('');
+  const [grid, setGrid] = useState({ so_cot: 8, so_hang: 20, o: {}, merges: [], dinh_dang: {} });
   const [metrics, setMetrics] = useState([]);
-  const [selected, setSelected] = useState(null);
+  const [selected, setSelected] = useState(() => new Set()); // đa chọn
+  const [anchor, setAnchor] = useState(null); // ô neo (chỉnh nội dung)
   const [mode, setMode] = useState('design'); // design | view
   const [ketQua, setKetQua] = useState({});
   const [coTheHoanTac, setCoTheHoanTac] = useState(false);
@@ -44,6 +106,16 @@ export default function ReportDesignerPage() {
   const [rendering, setRendering] = useState(false);
   const [histOpen, setHistOpen] = useState(false);
   const [catalogOpen, setCatalogOpen] = useState(false);
+  const [colorPop, setColorPop] = useState(null); // 'chu' | 'nen' | null
+
+  // Kéo chọn vùng ô (như Google Sheets).
+  const dragging = useRef(false);
+  const dragAnchor = useRef(null);
+  useEffect(() => {
+    const up = () => { dragging.current = false; };
+    window.addEventListener('mouseup', up);
+    return () => window.removeEventListener('mouseup', up);
+  }, []);
 
   const metricsByMa = useMemo(() => Object.fromEntries(metrics.map((m) => [m.ma, m])), [metrics]);
   const metricGroups = useMemo(() => {
@@ -58,11 +130,8 @@ export default function ReportDesignerPage() {
       const d = r.data;
       setRep(d);
       setName(d.ten_bao_cao);
-      setMoTa(d.mo_ta || '');
       const nd = d.noi_dung_json || {};
-      setGrid({ so_cot: nd.so_cot || 8, so_hang: nd.so_hang || 20, o: nd.o || {} });
-      setKyTu(d.ky_tu ? String(d.ky_tu).slice(0, 10) : '');
-      setKyDen(d.ky_den ? String(d.ky_den).slice(0, 10) : '');
+      setGrid({ so_cot: nd.so_cot || 8, so_hang: nd.so_hang || 20, o: nd.o || {}, merges: nd.merges || [], dinh_dang: nd.dinh_dang || {} });
       setCoTheHoanTac(!!d.co_the_hoan_tac);
       setMetrics(mt.data);
     } catch (e) { show(e.message || 'Lỗi tải', 'error'); }
@@ -70,25 +139,105 @@ export default function ReportDesignerPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const cell = selected ? grid.o[selected] : null;
+  const cell = anchor ? grid.o[anchor] : null;
   const setCell = (key, next) => setGrid((g) => {
     const o = { ...g.o };
     if (next == null) delete o[key]; else o[key] = next;
     return { ...g, o };
   });
+  const patchCell = (key, patch) => setGrid((g) => {
+    const o = { ...g.o };
+    o[key] = { ...(o[key] || { loai: 'text', gia_tri: '' }), ...patch };
+    return { ...g, o };
+  });
+  // Áp định dạng cho mọi ô đang chọn (tạo ô text rỗng nếu chưa có để giữ định dạng).
+  const applyFormat = (patch) => setGrid((g) => {
+    const o = { ...g.o };
+    selected.forEach((key) => {
+      const c = o[key] || { loai: 'text', gia_tri: '' };
+      o[key] = { ...c, dinh_dang: { ...(c.dinh_dang || {}), ...patch } };
+    });
+    return { ...g, o };
+  });
+
   const changeLoai = (loai) => {
-    if (!loai) return setCell(selected, null);
-    if (loai === 'text') return setCell(selected, { loai, gia_tri: cell?.gia_tri || '' });
-    if (loai === 'so') return setCell(selected, { loai, gia_tri: cell?.gia_tri ?? 0 });
-    if (loai === 'metric') return setCell(selected, { loai, metric: cell?.metric || metrics[0]?.ma || '' });
-    if (loai === 'cong_thuc') return setCell(selected, { loai, bieu_thuc: cell?.bieu_thuc || '' });
+    const dd = cell?.dinh_dang;
+    const base = dd ? { dinh_dang: dd } : {};
+    if (!loai) return setCell(anchor, dd ? { loai: 'text', gia_tri: '', ...base } : null);
+    if (loai === 'text') return setCell(anchor, { loai, gia_tri: cell?.gia_tri || '', ...base });
+    if (loai === 'so') return setCell(anchor, { loai, gia_tri: cell?.gia_tri ?? 0, ...base });
+    if (loai === 'metric') return setCell(anchor, { loai, metric: cell?.metric || metrics[0]?.ma || '', ...base });
+    if (loai === 'cong_thuc') return setCell(anchor, { loai, bieu_thuc: cell?.bieu_thuc || '', ...base });
+    if (loai === 'hop_kiem') return setCell(anchor, { loai, gia_tri: cell?.gia_tri === true, ...base });
+    if (loai === 'tha_xuong') return setCell(anchor, { loai, tuy_chon: cell?.tuy_chon || [], gia_tri: cell?.gia_tri || '', ...base });
     return undefined;
   };
+
+  // Bắt đầu chọn: shift = mở rộng vùng từ neo; thường = neo mới + bắt đầu kéo.
+  const onCellMouseDown = (key, e) => {
+    if (e && e.shiftKey && dragAnchor.current) { setSelected(rectKeys(dragAnchor.current, key)); return; }
+    dragging.current = true;
+    dragAnchor.current = key;
+    setAnchor(key);
+    setSelected(new Set([key]));
+  };
+  const onCellMouseEnter = (key) => {
+    if (dragging.current && dragAnchor.current) setSelected(rectKeys(dragAnchor.current, key));
+  };
+
+  // Nhập trực tiếp trong ô: '=' → công thức; số → ô số; còn lại → văn bản. Giữ định dạng cũ.
+  const commitCell = (key, raw) => {
+    const prev = grid.o[key];
+    const dd = prev?.dinh_dang;
+    const base = dd ? { dinh_dang: dd } : {};
+    const v = (raw ?? '').trim();
+    let next;
+    if (v === '') next = dd ? { loai: 'text', gia_tri: '', ...base } : null;
+    else if (v.startsWith('=')) next = { loai: 'cong_thuc', bieu_thuc: v.slice(1), ...base };
+    else if (Number.isFinite(Number(v))) next = { loai: 'so', gia_tri: Number(v), ...base };
+    else next = { loai: 'text', gia_tri: raw, ...base };
+    setCell(key, next);
+  };
+  const toggleCheck = (key) => patchCell(key, { loai: 'hop_kiem', gia_tri: !(grid.o[key]?.gia_tri === true) });
+  const selectDropdown = (key, val) => patchCell(key, { loai: 'tha_xuong', gia_tri: val });
+
+  // ----- Merge / Unmerge -----
+  const mergeSelected = () => {
+    if (selected.size < 2) { show('Kéo chọn nhiều ô (hoặc giữ Shift) rồi Hợp nhất', 'error'); return; }
+    const pts = [...selected].map(parseKey).filter(Boolean);
+    const r0 = Math.min(...pts.map((p) => p.r)); const r1 = Math.max(...pts.map((p) => p.r));
+    const c0 = Math.min(...pts.map((p) => p.c)); const c1 = Math.max(...pts.map((p) => p.c));
+    const o = cellKey(r0, c0);
+    setGrid((g) => {
+      // bỏ các merge cũ giao với vùng
+      const keep = (g.merges || []).filter((m) => {
+        const p = parseKey(m.o); if (!p) return false;
+        const overlap = !(p.c + (m.c || 1) - 1 < c0 || p.c > c1 || p.r + (m.r || 1) - 1 < r0 || p.r > r1);
+        return !overlap;
+      });
+      return { ...g, merges: [...keep, { o, r: r1 - r0 + 1, c: c1 - c0 + 1 }] };
+    });
+    setSelected(new Set([o])); setAnchor(o);
+  };
+  const unmergeSelected = () => setGrid((g) => ({
+    ...g,
+    merges: (g.merges || []).filter((m) => {
+      const p = parseKey(m.o); if (!p) return true;
+      // bỏ merge nếu anchor hoặc vùng của nó giao với các ô đang chọn
+      for (const k of selected) {
+        const pk = parseKey(k); if (!pk) continue;
+        if (pk.r >= p.r && pk.r <= p.r + (m.r || 1) - 1 && pk.c >= p.c && pk.c <= p.c + (m.c || 1) - 1) return false;
+      }
+      return true;
+    }),
+  }));
+
+  const toggleZebra = () => setGrid((g) => ({ ...g, dinh_dang: { ...(g.dinh_dang || {}), mau_xen_ke: !g.dinh_dang?.mau_xen_ke } }));
 
   const doSave = async () => {
     setSaving(true);
     try {
-      await updateReport(id, { tenBaoCao: name, moTa, noiDungJson: grid, kyTu: kyTu || null, kyDen: kyDen || null });
+      await updateReport(id, { tenBaoCao: name, noiDungJson: grid });
       show('Đã lưu báo cáo');
       setCoTheHoanTac(true);
     } catch (e) { show(e.message || 'Lưu thất bại', 'error'); }
@@ -99,7 +248,7 @@ export default function ReportDesignerPage() {
     try {
       const res = await undoReport(id);
       const nd = res.data.noi_dung_json || {};
-      setGrid({ so_cot: nd.so_cot || 8, so_hang: nd.so_hang || 20, o: nd.o || {} });
+      setGrid({ so_cot: nd.so_cot || 8, so_hang: nd.so_hang || 20, o: nd.o || {}, merges: nd.merges || [], dinh_dang: nd.dinh_dang || {} });
       setCoTheHoanTac(false);
       setMode('design');
       show('Đã hoàn tác về bản trước');
@@ -109,7 +258,7 @@ export default function ReportDesignerPage() {
   const doPreview = async () => {
     setRendering(true);
     try {
-      const res = await renderReport(id, { tu: kyTu || undefined, den: kyDen || undefined, noiDung: grid });
+      const res = await renderReport(id, { noiDung: grid });
       setKetQua(res.data.ket_qua || {});
       setMode('view');
     } catch (e) { show(e.message || 'Xem trước lỗi', 'error'); }
@@ -118,16 +267,18 @@ export default function ReportDesignerPage() {
 
   const doExport = async () => {
     try {
-      const res = await renderReport(id, { tu: kyTu || undefined, den: kyDen || undefined, noiDung: grid });
+      const res = await renderReport(id, { noiDung: grid });
       const kq = res.data.ket_qua || {};
       const lines = [];
       for (let r = 0; r < grid.so_hang; r += 1) {
         const cols = [];
         for (let c = 0; c < grid.so_cot; c += 1) {
-          const key = `${String.fromCharCode(65 + (c % 26))}${r + 1}`;
-          const v = kq[key];
+          const v = kq[cellKey(r, c)];
           let s = '';
-          if (v) s = v.kieu === 'so' && !v.loi ? String(v.value) : String(v.value ?? '');
+          if (v) {
+            if (v.kieu === 'bool') s = v.value ? 'x' : '';
+            else s = String(v.value ?? '');
+          }
           cols.push(`"${s.replace(/"/g, '""')}"`);
         }
         lines.push(cols.join(','));
@@ -141,6 +292,15 @@ export default function ReportDesignerPage() {
   };
 
   if (!rep) return <div className="py-10 text-center text-ink-soft">Đang tải...</div>;
+
+  const canFmt = canDesign && mode === 'design' && selected.size > 0;
+  const FmtBtn = ({ onClick, children, title, active }) => (
+    <button type="button" title={title} onClick={onClick} disabled={!canFmt}
+      className={`h-8 min-w-8 rounded-control border px-2 text-sm font-semibold transition disabled:opacity-40
+        ${active ? 'border-primary bg-primary-wash text-primary' : 'border-line text-ink hover:bg-surface-muted'}`}>
+      {children}
+    </button>
+  );
 
   return (
     <div>
@@ -168,16 +328,12 @@ export default function ReportDesignerPage() {
         </div>
       </div>
 
-      {/* Kỳ + thêm cột/hàng */}
+      {/* Ghi chú realtime + thêm cột/hàng */}
       <div className="mb-3 flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-1.5">
-          <span className="text-sm text-ink-soft">Kỳ:</span>
-          <input type="date" value={kyTu} onChange={(e) => setKyTu(e.target.value)}
-            className="h-9 rounded-input border border-line px-2 text-sm" />
-          <span className="text-ink-soft">→</span>
-          <input type="date" value={kyDen} onChange={(e) => setKyDen(e.target.value)}
-            className="h-9 rounded-input border border-line px-2 text-sm" />
-        </div>
+        <p className="rounded-control bg-primary-wash/50 px-3 py-1.5 text-xs text-ink-soft">
+          <Icon name="clock" size={13} className="mr-1 inline" />
+          Số liệu hệ thống được lấy <b>realtime</b> lúc Xem trước / Xuất. Mỗi chỉ số tự có mốc thời gian riêng (hôm nay / hiện tại) — không cần chọn kỳ.
+        </p>
         {canDesign && mode === 'design' && (
           <div className="flex items-center gap-1.5">
             <Button variant="ghost" className="px-2.5 py-1 text-xs" onClick={() => setGrid((g) => ({ ...g, so_cot: g.so_cot + 1 }))}>+ Cột</Button>
@@ -188,10 +344,61 @@ export default function ReportDesignerPage() {
         {mode === 'view' && <Badge tone="info">Chế độ xem — hiển thị giá trị đã tính</Badge>}
       </div>
 
+      {/* Thanh công cụ định dạng (Google-Sheets-like) */}
+      {canDesign && mode === 'design' && (
+        <div className="mb-3 flex flex-wrap items-center gap-1.5 rounded-card border border-line bg-surface px-3 py-2">
+          <FmtBtn title="In đậm" onClick={() => applyFormat({ dam: !(cell?.dinh_dang?.dam) })} active={cell?.dinh_dang?.dam}><b>B</b></FmtBtn>
+          <FmtBtn title="In nghiêng" onClick={() => applyFormat({ nghieng: !(cell?.dinh_dang?.nghieng) })} active={cell?.dinh_dang?.nghieng}><i>I</i></FmtBtn>
+          <FmtBtn title="Viền đậm" onClick={() => applyFormat({ vien_dam: !(cell?.dinh_dang?.vien_dam) })} active={cell?.dinh_dang?.vien_dam}>▢</FmtBtn>
+          <span className="mx-1 h-6 w-px bg-line" />
+          <FmtBtn title="Căn trái" onClick={() => applyFormat({ can_le: 'left' })}>⬅</FmtBtn>
+          <FmtBtn title="Căn giữa" onClick={() => applyFormat({ can_le: 'center' })}>⬌</FmtBtn>
+          <FmtBtn title="Căn phải" onClick={() => applyFormat({ can_le: 'right' })}>➡</FmtBtn>
+          <span className="mx-1 h-6 w-px bg-line" />
+          <select disabled={!canFmt} title="Cỡ chữ" onChange={(e) => applyFormat({ co_chu: e.target.value })}
+            value={cell?.dinh_dang?.co_chu || 'base'}
+            className="h-8 rounded-control border border-line px-1.5 text-sm disabled:opacity-40">
+            {SIZE_OPTS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
+          </select>
+          <select disabled={!canFmt} title="Định dạng số" onChange={(e) => applyFormat({ dinh_dang_so: e.target.value })}
+            value={cell?.dinh_dang?.dinh_dang_so || 'thousand'}
+            className="h-8 rounded-control border border-line px-1.5 text-sm disabled:opacity-40">
+            {SO_OPTS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
+          </select>
+          <span className="mx-1 h-6 w-px bg-line" />
+          {/* Màu chữ */}
+          <div className="relative">
+            <button type="button" title="Màu chữ" disabled={!canFmt} onClick={() => setColorPop(colorPop === 'chu' ? null : 'chu')}
+              className="flex h-8 items-center gap-1 rounded-control border border-line px-2 text-sm disabled:opacity-40">
+              <span className="font-bold" style={{ color: cell?.dinh_dang?.mau_chu || undefined }}>A</span>
+              <span className="h-1.5 w-4 rounded" style={{ backgroundColor: cell?.dinh_dang?.mau_chu || '#111827' }} />
+            </button>
+            <ColorPopover open={colorPop === 'chu'} onClose={() => setColorPop(null)} onPick={(c) => applyFormat({ mau_chu: c || undefined })} allowNone />
+          </div>
+          {/* Màu nền */}
+          <div className="relative">
+            <button type="button" title="Màu nền" disabled={!canFmt} onClick={() => setColorPop(colorPop === 'nen' ? null : 'nen')}
+              className="flex h-8 items-center gap-1 rounded-control border border-line px-2 text-sm disabled:opacity-40">
+              🖌
+              <span className="h-1.5 w-4 rounded border border-line" style={{ backgroundColor: cell?.dinh_dang?.mau_nen || '#ffffff' }} />
+            </button>
+            <ColorPopover open={colorPop === 'nen'} onClose={() => setColorPop(null)} onPick={(c) => applyFormat({ mau_nen: c || undefined })} allowNone />
+          </div>
+          <span className="mx-1 h-6 w-px bg-line" />
+          <Button variant="ghost" className="px-2 py-1 text-xs" disabled={selected.size < 2} onClick={mergeSelected}>Hợp nhất</Button>
+          <Button variant="ghost" className="px-2 py-1 text-xs" disabled={selected.size === 0} onClick={unmergeSelected}>Bỏ hợp nhất</Button>
+          <Button variant={grid.dinh_dang?.mau_xen_ke ? 'primary' : 'ghost'} className="px-2 py-1 text-xs" onClick={toggleZebra}>Màu xen kẽ</Button>
+          <span className="ml-auto text-xs text-ink-soft">{selected.size > 0 ? `${selected.size} ô đang chọn · kéo/Shift để chọn vùng · bấm đúp để nhập` : 'Kéo chọn ô · bấm đúp để nhập trực tiếp'}</span>
+        </div>
+      )}
+
       <div className="flex flex-col gap-4 lg:flex-row">
         {/* Lưới */}
         <div className="min-w-0 flex-1">
-          <ReportGrid grid={grid} ketQua={ketQua} mode={mode} selected={selected} onSelect={setSelected} metricsByMa={metricsByMa} />
+          <ReportGrid grid={grid} ketQua={ketQua} mode={mode} selected={selected} metricsByMa={metricsByMa}
+            editable={canDesign}
+            onCellMouseDown={onCellMouseDown} onCellMouseEnter={onCellMouseEnter}
+            onEditCommit={commitCell} onToggleCheck={toggleCheck} onSelectDropdown={selectDropdown} />
         </div>
 
         {/* Panel chỉnh ô */}
@@ -199,10 +406,10 @@ export default function ReportDesignerPage() {
           <div className="w-full shrink-0 lg:w-80">
             <div className="card p-4">
               <h3 className="mb-2 text-sm font-semibold text-ink">
-                Ô {selected ? <Badge tone="info">{selected}</Badge> : <span className="text-ink-soft">— chọn 1 ô —</span>}
+                Ô {anchor ? <Badge tone="info">{anchor}</Badge> : <span className="text-ink-soft">— chọn 1 ô —</span>}
               </h3>
-              {!selected ? (
-                <p className="text-sm text-ink-soft">Bấm vào 1 ô trong lưới để gán nội dung.</p>
+              {!anchor ? (
+                <p className="text-sm text-ink-soft">Bấm 1 ô để chọn, <b>bấm đúp để nhập trực tiếp</b>. <b>Kéo chuột</b> (hoặc giữ Shift) để chọn vùng rồi định dạng / hợp nhất.</p>
               ) : !canDesign ? (
                 <p className="text-sm text-ink-soft">Bạn không có quyền chỉnh sửa.</p>
               ) : (
@@ -215,18 +422,18 @@ export default function ReportDesignerPage() {
 
                   {cell?.loai === 'text' && (
                     <Field label="Nội dung">
-                      <Input value={cell.gia_tri || ''} onChange={(e) => setCell(selected, { loai: 'text', gia_tri: e.target.value })} />
+                      <Input value={cell.gia_tri || ''} onChange={(e) => patchCell(anchor, { loai: 'text', gia_tri: e.target.value })} />
                     </Field>
                   )}
                   {cell?.loai === 'so' && (
                     <Field label="Giá trị số">
-                      <Input type="number" value={cell.gia_tri ?? ''} onChange={(e) => setCell(selected, { loai: 'so', gia_tri: e.target.value === '' ? '' : Number(e.target.value) })} />
+                      <Input type="number" value={cell.gia_tri ?? ''} onChange={(e) => patchCell(anchor, { loai: 'so', gia_tri: e.target.value === '' ? '' : Number(e.target.value) })} />
                     </Field>
                   )}
                   {cell?.loai === 'metric' && (
                     <>
                       <Field label="Chọn dữ liệu">
-                        <Select value={cell.metric || ''} onChange={(e) => setCell(selected, { loai: 'metric', metric: e.target.value })}>
+                        <Select value={cell.metric || ''} onChange={(e) => patchCell(anchor, { loai: 'metric', metric: e.target.value })}>
                           {Object.entries(metricGroups).map(([nhom, list]) => (
                             <optgroup key={nhom} label={nhom}>
                               {list.map((m) => <option key={m.ma} value={m.ma}>{m.ten}</option>)}
@@ -242,13 +449,38 @@ export default function ReportDesignerPage() {
                   {cell?.loai === 'cong_thuc' && (
                     <Field label="Biểu thức" hint="Tham chiếu ô: A1, B2… · toán tử: + − * / ( )  · vd (A1+B1)*2">
                       <Textarea rows={2} value={cell.bieu_thuc || ''}
-                        onChange={(e) => setCell(selected, { loai: 'cong_thuc', bieu_thuc: e.target.value })} />
+                        onChange={(e) => patchCell(anchor, { loai: 'cong_thuc', bieu_thuc: e.target.value })} />
                     </Field>
+                  )}
+                  {cell?.loai === 'hop_kiem' && (
+                    <Field label="Trạng thái">
+                      <label className="flex items-center gap-2 text-sm text-ink">
+                        <input type="checkbox" checked={cell.gia_tri === true}
+                          onChange={(e) => patchCell(anchor, { loai: 'hop_kiem', gia_tri: e.target.checked })}
+                          className="h-4 w-4 rounded border-line text-primary focus:ring-primary" />
+                        Đã tích (trong công thức: TRUE=1, FALSE=0)
+                      </label>
+                    </Field>
+                  )}
+                  {cell?.loai === 'tha_xuong' && (
+                    <>
+                      <Field label="Danh sách tùy chọn" hint="Mỗi dòng 1 lựa chọn">
+                        <Textarea rows={3} value={(cell.tuy_chon || []).join('\n')}
+                          onChange={(e) => patchCell(anchor, { loai: 'tha_xuong', tuy_chon: e.target.value.split('\n').map((x) => x.trim()).filter(Boolean) })} />
+                      </Field>
+                      <Field label="Giá trị đang chọn">
+                        <Select value={cell.gia_tri || ''} onChange={(e) => patchCell(anchor, { loai: 'tha_xuong', gia_tri: e.target.value })}>
+                          <option value="">— Chọn —</option>
+                          {(cell.tuy_chon || []).map((o) => <option key={o} value={o}>{o}</option>)}
+                        </Select>
+                      </Field>
+                    </>
                   )}
 
                   {cell && (
-                    <Button variant="ghost" className="w-full text-danger" onClick={() => setCell(selected, null)}>Xóa nội dung ô</Button>
+                    <Button variant="ghost" className="w-full text-danger" onClick={() => setCell(anchor, null)}>Xóa nội dung ô</Button>
                   )}
+                  <p className="mt-2 text-xs text-ink-soft">Định dạng (đậm/màu/viền/căn lề…) áp cho <b>{selected.size}</b> ô đang chọn qua thanh công cụ phía trên.</p>
                 </>
               )}
             </div>

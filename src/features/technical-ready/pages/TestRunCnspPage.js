@@ -6,10 +6,11 @@ import Button from '../../../components/common/Button';
 import SidePanel from '../../../components/common/SidePanel';
 import Toast from '../../../components/common/Toast';
 import HistoryPanel from '../../../components/common/HistoryPanel';
+import DonePanel from '../../../components/common/DonePanel';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import {
-  listTestRunCandidates, getLenhDetail, confirmCNSP, confirmCNSPBatch, testRunHistory,
+  listTestRunCandidates, getLenhDetail, confirmCNSP, cancelCNSP, confirmCNSPBatch, testRunHistory, testCnspDone,
 } from '../../../services/planningService';
 import { fmtNum } from '../../../utils/format';
 
@@ -28,6 +29,7 @@ export default function TestRunCnspPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [histOpen, setHistOpen] = useState(false);
+  const [doneOpen, setDoneOpen] = useState(false);
   const [selected, setSelected] = useState(() => new Set());
   const [batching, setBatching] = useState(false);
 
@@ -75,6 +77,21 @@ export default function TestRunCnspPage() {
       load();
     } catch (e) {
       show(e.message || 'Xác nhận thất bại', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Xóa mềm (hủy) xác nhận CNSP để làm lại.
+  const doCancel = async () => {
+    setSaving(true);
+    try {
+      await cancelCNSP(detail._row.id);
+      show('Đã hủy xác nhận CNSP');
+      setDetail(null);
+      load();
+    } catch (e) {
+      show(e.message || 'Hủy thất bại', 'error');
     } finally {
       setSaving(false);
     }
@@ -135,6 +152,7 @@ export default function TestRunCnspPage() {
         {canCNSP && selected.size > 0 && (
           <Button loading={batching} onClick={doBatch}>CNSP xác nhận ({selected.size})</Button>
         )}
+        <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="info">{rows.length} lệnh</Badge>
       </Toolbar>
@@ -147,8 +165,10 @@ export default function TestRunCnspPage() {
         onClose={() => setDetail(null)}
         title={detail ? `Test Run CNSP — ${detail.lenh?.ma_lenh_san_xuat || ''}` : 'Test Run CNSP'}
         subtitle={detail?._row ? `${detail._row.ten_khach_hang || ''} · ${detail._row.mau_vai || ''}` : ''}
-        footer={canCNSP && detail && !state.cnsp_done ? (
-          <Button onClick={doConfirm} loading={saving} disabled={detailLoading}>CNSP xác nhận</Button>
+        footer={canCNSP && detail ? (
+          state.cnsp_done
+            ? <Button variant="danger" onClick={doCancel} loading={saving} disabled={detailLoading}>Hủy xác nhận CNSP</Button>
+            : <Button onClick={doConfirm} loading={saving} disabled={detailLoading}>CNSP xác nhận</Button>
         ) : null}
       >
         {detailLoading || !detail?.dot_vai ? (
@@ -205,6 +225,8 @@ export default function TestRunCnspPage() {
 
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}
         title="Lịch sử Test Run" fetcher={testRunHistory} />
+      <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
+        title="Lệnh đã CNSP xác nhận" maHeader="Lệnh" fetcher={testCnspDone} />
 
       <Toast toast={toast} />
     </div>

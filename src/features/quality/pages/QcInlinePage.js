@@ -6,11 +6,12 @@ import Button from '../../../components/common/Button';
 import SidePanel from '../../../components/common/SidePanel';
 import Toast from '../../../components/common/Toast';
 import HistoryPanel from '../../../components/common/HistoryPanel';
+import DonePanel from '../../../components/common/DonePanel';
 import { Field, Input, Select, Textarea } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import {
-  listInlineCandidates, listInlineLoaiLoi, recordInline, inlineHistory,
+  listInlineCandidates, listInlineLoaiLoi, recordInline, inlineHistory, inlineDone,
 } from '../../../services/qualityService';
 import { fmtNum } from '../../../utils/format';
 
@@ -23,6 +24,7 @@ export default function QcInlinePage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [histOpen, setHistOpen] = useState(false);
+  const [doneOpen, setDoneOpen] = useState(false);
   const [loaiLoi, setLoaiLoi] = useState([]);
 
   const [detail, setDetail] = useState(null);
@@ -102,6 +104,7 @@ export default function QcInlinePage() {
     <div>
       <Toolbar title="QC in line" subtitle="Kiểm chất lượng tại chuyền — phần in đang sản xuất"
         search={search} onSearch={setSearch} searchPlaceholder="Tìm code phần, mã hàng, màu/kích, mã lệnh/phiếu...">
+        <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="info">{rows.length} đang chạy</Badge>
       </Toolbar>
@@ -188,6 +191,8 @@ export default function QcInlinePage() {
 
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}
         title="Lịch sử QC in-line" fetcher={inlineHistory} />
+      <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
+        title="Phiếu đã QC in-line" maHeader="Phiếu" fetcher={inlineDone} />
 
       <Toast toast={toast} />
     </div>

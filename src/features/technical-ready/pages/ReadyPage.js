@@ -8,13 +8,14 @@ import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
 import Toast from '../../../components/common/Toast';
 import HistoryPanel from '../../../components/common/HistoryPanel';
+import DonePanel from '../../../components/common/DonePanel';
 import { Field, Select } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import useNow from '../../../hooks/useNow';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 import {
-  listReadyCandidates, getReadyConfig, confirmReadyBulk, readyHistory,
+  listReadyCandidates, getReadyConfig, confirmReadyBulk, readyHistory, readyDone,
 } from '../../../services/readyService';
 import ReadyPanel from '../components/ReadyPanel';
 
@@ -29,7 +30,7 @@ const ITEMS = [
   { ma: 'KHUON', label: 'Khuôn', perm: 'READY_KHUON', hasOptions: true },
   { ma: 'FILM', label: 'Film', perm: 'READY_FILM', hasOptions: true },
   { ma: 'MUC', label: 'Mực', perm: 'READY_MUC', hasOptions: true },
-  { ma: 'HSKT', label: 'HSKT', perm: 'READY_HSKT', hasOptions: false },
+  { ma: 'HSKT', label: 'HSKT', perm: 'READY_HSKT', hasOptions: true },
 ];
 
 const DoneCell = (done) =>
@@ -51,6 +52,7 @@ export default function ReadyPage() {
   const [bulk, setBulk] = useState(null); // { ma, value }
   const [bulkSaving, setBulkSaving] = useState(false);
   const [histOpen, setHistOpen] = useState(false);
+  const [doneOpen, setDoneOpen] = useState(false);
 
   const permItems = ITEMS.filter((it) => can(it.perm));
 
@@ -146,6 +148,7 @@ export default function ReadyPage() {
         {permItems.length > 0 && selected.size > 0 && (
           <Button onClick={openBulk}>Xác nhận hàng loạt ({selected.size})</Button>
         )}
+        <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="warning">{meta.total} chưa READY</Badge>
       </Toolbar>
@@ -198,6 +201,9 @@ export default function ReadyPage() {
         title="Lịch sử xác nhận kỹ thuật"
         fetcher={(date) => readyHistory(date, 'tech')}
       />
+      <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
+        title="Phần in đã hoàn tất kỹ thuật (4 mục)" maHeader="Phần in"
+        fetcher={(date) => readyDone(date, 'tech')} />
 
       <Toast toast={toast} />
     </div>

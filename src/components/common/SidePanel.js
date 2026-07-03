@@ -1,12 +1,12 @@
 import { Dialog } from '@headlessui/react';
 import Icon from './Icon';
 
-// Drawer trượt từ phải — dùng cho xem chi tiết (thay vì chuyển trang).
-export default function SidePanel({ open, onClose, title, subtitle, children, footer, width = 'max-w-lg' }) {
+// Drawer trượt từ phải (mặc định) hoặc trái — dùng cho xem chi tiết (thay vì chuyển trang).
+export default function SidePanel({ open, onClose, title, subtitle, children, footer, width = 'max-w-lg', side = 'right' }) {
   return (
     <Dialog open={open} onClose={onClose} className="relative z-50">
       <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" aria-hidden="true" />
-      <div className="fixed inset-y-0 right-0 flex max-w-full">
+      <div className={`fixed inset-y-0 flex max-w-full ${side === 'left' ? 'left-0' : 'right-0'}`}>
         <Dialog.Panel className={`flex w-screen ${width} flex-col bg-surface shadow-card-hover`}>
           <div className="flex items-start justify-between border-b border-line px-4 py-4 sm:px-6">
             <div>

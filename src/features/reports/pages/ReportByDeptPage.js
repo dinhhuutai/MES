@@ -156,7 +156,8 @@ export default function ReportByDeptPage() {
         subtitle={viewing?.content?.ten_bao_cao} width="max-w-4xl">
         {viewing && (
           <ReportGrid
-            grid={{ so_cot: viewing.content.so_cot, so_hang: viewing.content.so_hang, o: viewing.content.o }}
+            grid={{ so_cot: viewing.content.so_cot, so_hang: viewing.content.so_hang, o: viewing.content.o,
+              merges: viewing.content.merges || [], dinh_dang: viewing.content.dinh_dang || {} }}
             ketQua={viewing.content.ket_qua} mode="view" />
         )}
       </SidePanel>

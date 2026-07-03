@@ -6,9 +6,10 @@ import Button from '../../../components/common/Button';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import Toast from '../../../components/common/Toast';
 import HistoryPanel from '../../../components/common/HistoryPanel';
+import DonePanel from '../../../components/common/DonePanel';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import { listRelease2Candidates, approveRelease2, approveRelease2Batch, planHistory } from '../../../services/planningService';
+import { listRelease2Candidates, approveRelease2, approveRelease2Batch, planHistory, release2Done } from '../../../services/planningService';
 import { fmtNum, fmtDate } from '../../../utils/format';
 
 export default function Release2Page() {
@@ -22,6 +23,7 @@ export default function Release2Page() {
   const [confirm, setConfirm] = useState(null); // row (đơn) hoặc { batch: true }
   const [busy, setBusy] = useState(false);
   const [histOpen, setHistOpen] = useState(false);
+  const [doneOpen, setDoneOpen] = useState(false);
   const [selected, setSelected] = useState(() => new Set());
 
   const load = useCallback(async () => {
@@ -106,6 +108,7 @@ export default function Release2Page() {
         {canApprove && selected.size > 0 && (
           <Button onClick={() => setConfirm({ batch: true })}>Duyệt Release 2 ({selected.size})</Button>
         )}
+        <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="info">{rows.length} chờ duyệt</Badge>
       </Toolbar>
@@ -127,6 +130,8 @@ export default function Release2Page() {
 
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}
         title="Lịch sử kế hoạch (Release 2 + lập lại)" fetcher={planHistory} />
+      <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
+        title="Lệnh đã Release 2" maHeader="Lệnh" fetcher={release2Done} />
 
       <Toast toast={toast} />
     </div>

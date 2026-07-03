@@ -36,6 +36,7 @@ import {
   Clock,
   GitBranch,
   Filter,
+  CheckCircle2,
 } from 'lucide-react';
 
 // Map tên kebab → component Lucide.
@@ -77,6 +78,7 @@ const MAP = {
   clock: Clock,
   'git-branch': GitBranch,
   filter: Filter,
+  'check-circle': CheckCircle2,
 };
 
 export default function Icon({ name, size = 20, className = '' }) {

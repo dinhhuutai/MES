@@ -8,11 +8,12 @@ import SidePanel from '../../../components/common/SidePanel';
 import Toast from '../../../components/common/Toast';
 import Icon from '../../../components/common/Icon';
 import HistoryPanel from '../../../components/common/HistoryPanel';
+import DonePanel from '../../../components/common/DonePanel';
 import { Field, Input, Select } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import {
   listRelease1Candidates, createRelease1, listChuyen, release1History,
-  listReleaseSets, releaseSet,
+  listReleaseSets, releaseSet, release1Done,
 } from '../../../services/planningService';
 import { fmtNum, fmtDate } from '../../../utils/format';
 
@@ -64,6 +65,7 @@ export default function Release1Page() {
   const [selectedSets, setSelectedSets] = useState(() => new Set()); // set id
   const [chuyen, setChuyen] = useState([]);
   const [histOpen, setHistOpen] = useState(false);
+  const [doneOpen, setDoneOpen] = useState(false);
 
   const [detail, setDetail] = useState(null);        // row lẻ đang xem
   const [form, setForm] = useState({ chuyenId: '', soLuongRelease: '', ngayKeHoach: '' });
@@ -181,6 +183,7 @@ export default function Release1Page() {
       <Toolbar title="Release 1" subtitle="Phần in đã READY — chọn đợt vải/set & chuyền để release"
         search={search} onSearch={(v) => { setSearch(v); setPage(1); }}
         searchPlaceholder="Tìm code phần, mã hàng, màu, kích...">
+        <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="info">{meta.total} đợt vải · {sets.length} set</Badge>
       </Toolbar>
@@ -359,6 +362,8 @@ export default function Release1Page() {
       </SidePanel>
 
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)} title="Lịch sử Release 1" fetcher={release1History} />
+      <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
+        title="Lệnh đã Release 1" maHeader="Lệnh" fetcher={release1Done} />
       <Toast toast={toast} />
     </div>
   );

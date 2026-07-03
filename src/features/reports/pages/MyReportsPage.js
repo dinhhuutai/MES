@@ -54,7 +54,6 @@ export default function MyReportsPage() {
     { key: 'ma_bao_cao', header: 'Mã', render: (r) => <Badge tone="info">{r.ma_bao_cao}</Badge> },
     { key: 'ten_bao_cao', header: 'Tên báo cáo', className: 'font-medium text-ink' },
     { key: 'mo_ta', header: 'Mô tả', render: (r) => r.mo_ta || '—' },
-    { key: 'ky', header: 'Kỳ mặc định', render: (r) => (r.ky_tu || r.ky_den) ? `${fmtDate(r.ky_tu)} → ${fmtDate(r.ky_den)}` : '—' },
     { key: 'updated_date', header: 'Cập nhật', render: (r) => fmtDate(r.updated_date || r.created_date) },
     { key: 'actions', header: '', className: 'text-right', render: (r) => (
       <div className="flex justify-end gap-1.5">

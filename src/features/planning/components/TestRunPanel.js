@@ -6,7 +6,7 @@ import Toast from '../../../components/common/Toast';
 import { Input, Textarea, Field } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import { getLenhDetail, recordTestRun, confirmQA } from '../../../services/planningService';
+import { getLenhDetail, recordTestRun, confirmQA, cancelQA } from '../../../services/planningService';
 import { fmtNum } from '../../../utils/format';
 
 const fmt = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '');
@@ -61,6 +61,21 @@ export default function TestRunPanel({ lenhId, onClose, onChanged }) {
     }
   };
 
+  // Xóa mềm (hủy) xác nhận QA để làm lại.
+  const doCancel = async () => {
+    setBusy('cancel');
+    try {
+      await cancelQA(lenhId);
+      show('Đã hủy xác nhận QA');
+      await load();
+      onChanged?.();
+    } catch (e) {
+      show(e.message || 'Hủy thất bại', 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+
   // Xác nhận đạt → ghi lần test đạt (nếu có số lượng) rồi QA xác nhận → qua checkpoint tiếp theo.
   const doPass = async () => {
     setBusy('pass');
@@ -84,15 +99,19 @@ export default function TestRunPanel({ lenhId, onClose, onChanged }) {
       onClose={onClose}
       title={data?.lenh ? `Test Run QA — ${data.lenh.ma_lenh_san_xuat}` : 'Test Run QA'}
       subtitle={data?.lenh ? `Chuyền ${data.lenh.ma_chuyen || '—'} · SL ${fmtNum(data.lenh.so_luong_release)}` : ''}
-      footer={canQA && !done ? (
-        <>
-          <Button variant="danger" onClick={doFail} loading={busy === 'fail'} disabled={busy === 'pass'}>
-            Xác nhận test lỗi
-          </Button>
-          <Button onClick={doPass} loading={busy === 'pass'} disabled={busy === 'fail'}>
-            QA xác nhận đạt
-          </Button>
-        </>
+      footer={canQA ? (
+        done ? (
+          <Button variant="danger" onClick={doCancel} loading={busy === 'cancel'}>Hủy xác nhận QA</Button>
+        ) : (
+          <>
+            <Button variant="danger" onClick={doFail} loading={busy === 'fail'} disabled={busy === 'pass'}>
+              Xác nhận test lỗi
+            </Button>
+            <Button onClick={doPass} loading={busy === 'pass'} disabled={busy === 'fail'}>
+              QA xác nhận đạt
+            </Button>
+          </>
+        )
       ) : null}
     >
       {loading || !data ? (

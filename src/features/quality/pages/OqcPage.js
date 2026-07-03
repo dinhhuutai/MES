@@ -7,13 +7,14 @@ import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
 import Toast from '../../../components/common/Toast';
 import HistoryPanel from '../../../components/common/HistoryPanel';
+import DonePanel from '../../../components/common/DonePanel';
 import { Field, Input, Textarea } from '../../../components/common/controls';
 import SearchableSelect from '../../../components/common/SearchableSelect';
 import useToast from '../../../hooks/useToast';
 import useNow from '../../../hooks/useNow';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 import usePermissions from '../../../hooks/usePermissions';
-import { listOqcCandidates, recordOqc, oqcHistory } from '../../../services/qualityService';
+import { listOqcCandidates, recordOqc, oqcHistory, oqcDone } from '../../../services/qualityService';
 import { listUsers } from '../../../services/userService';
 import { fmtNum } from '../../../utils/format';
 
@@ -30,6 +31,7 @@ export default function OqcPage() {
   const [form, setForm] = useState({ soLuongKiem: '', soLuongDat: '', soLuongLoi: '', ketQua: 'DAT', ownerChoGiaoId: '', lyDoChoGiao: '' });
   const [saving, setSaving] = useState(false);
   const [histOpen, setHistOpen] = useState(false);
+  const [doneOpen, setDoneOpen] = useState(false);
   const [users, setUsers] = useState([]);
 
   useEffect(() => { listUsers({ limit: 500 }).then((r) => setUsers(r.data.items || r.data || [])).catch(() => {}); }, []);
@@ -92,6 +94,7 @@ export default function OqcPage() {
     <div>
       <Toolbar title="OQC — Kiểm cuối" subtitle="Kiểm cuối theo tem trước giao hàng"
         search={search} onSearch={setSearch} searchPlaceholder="Quét/nhập mã tem...">
+        <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="warning">{rows.length} tem chờ OQC</Badge>
       </Toolbar>
@@ -172,6 +175,8 @@ export default function OqcPage() {
 
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}
         title="Lịch sử OQC" fetcher={oqcHistory} />
+      <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
+        title="Tem đã OQC" maHeader="Tem" fetcher={oqcDone} />
 
       <Toast toast={toast} />
     </div>

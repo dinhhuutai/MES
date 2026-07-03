@@ -9,3 +9,4 @@ export const addToSet = (id, dotVaiIds) => client.post(`/gom-set/${id}/them`, { 
 export const removeFromSet = (id, dotVaiId) => client.delete(`/gom-set/${id}/dot-vai/${dotVaiId}`);
 export const cancelSet = (id) => client.post(`/gom-set/${id}/huy`);
 export const gomHistory = (date) => client.get('/gom-set/history', { params: { date } });
+export const gomDone = (date) => client.get('/gom-set/done', { params: { date } });

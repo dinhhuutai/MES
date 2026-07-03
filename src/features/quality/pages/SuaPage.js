@@ -7,12 +7,13 @@ import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
 import Toast from '../../../components/common/Toast';
 import HistoryPanel from '../../../components/common/HistoryPanel';
+import DonePanel from '../../../components/common/DonePanel';
 import { Field, Input } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import useNow from '../../../hooks/useNow';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 import usePermissions from '../../../hooks/usePermissions';
-import { listSuaCandidates, recordSua, suaHistory } from '../../../services/qualityService';
+import { listSuaCandidates, recordSua, suaHistory, suaDone } from '../../../services/qualityService';
 import { fmtNum } from '../../../utils/format';
 
 const empty = { soLuongHuyThang: '', soLuongSua: '', soLuongSuaDat: '', soLuongSuaHuy: '' };
@@ -30,6 +31,7 @@ export default function SuaPage() {
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
   const [histOpen, setHistOpen] = useState(false);
+  const [doneOpen, setDoneOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -87,6 +89,7 @@ export default function SuaPage() {
     <div>
       <Toolbar title="Sửa hàng lỗi" subtitle="Xử lý tem lỗi từ KCS / OQC"
         search={search} onSearch={setSearch} searchPlaceholder="Quét/nhập mã tem...">
+        <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="warning">{rows.length} tem chờ sửa</Badge>
       </Toolbar>
@@ -122,6 +125,8 @@ export default function SuaPage() {
 
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}
         title="Lịch sử Sửa" fetcher={suaHistory} />
+      <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
+        title="Tem đã sửa" maHeader="Tem" fetcher={suaDone} />
 
       <Toast toast={toast} />
     </div>

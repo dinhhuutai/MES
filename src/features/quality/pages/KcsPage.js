@@ -7,10 +7,11 @@ import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
 import Toast from '../../../components/common/Toast';
 import HistoryPanel from '../../../components/common/HistoryPanel';
+import DonePanel from '../../../components/common/DonePanel';
 import { Field, Input } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import { listKcsCandidates, recordKcs, kcsHistory } from '../../../services/qualityService';
+import { listKcsCandidates, recordKcs, kcsHistory, kcsDone } from '../../../services/qualityService';
 import { fmtNum } from '../../../utils/format';
 import useNow from '../../../hooks/useNow';
 import { evalSla, slaRowClass } from '../../../utils/sla';
@@ -30,6 +31,7 @@ export default function KcsPage() {
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
   const [histOpen, setHistOpen] = useState(false);
+  const [doneOpen, setDoneOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -95,6 +97,7 @@ export default function KcsPage() {
     <div>
       <Toolbar title="KCS — Kiểm tra chất lượng" subtitle="Kiểm theo tem (tem đã khô)"
         search={search} onSearch={setSearch} searchPlaceholder="Quét/nhập mã tem...">
+        <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="warning">{rows.length} tem chờ kiểm</Badge>
       </Toolbar>
@@ -134,6 +137,8 @@ export default function KcsPage() {
 
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}
         title="Lịch sử KCS" fetcher={kcsHistory} />
+      <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
+        title="Tem đã KCS" maHeader="Tem" fetcher={kcsDone} />
 
       <Toast toast={toast} />
     </div>
