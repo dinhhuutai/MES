@@ -30,7 +30,6 @@ import GomSetPage from './features/technical-ready/pages/GomSetPage';
 import Release1Page from './features/planning/pages/Release1Page';
 import Release2Page from './features/planning/pages/Release2Page';
 import ReplanPage from './features/planning/pages/ReplanPage';
-import HuyLenhPage from './features/planning/pages/HuyLenhPage';
 import TestRunPage from './features/planning/pages/TestRunPage';
 import XacNhanChayPage from './features/production/pages/XacNhanChayPage';
 import TheoDoiChuyenPage from './features/production/pages/TheoDoiChuyenPage';
@@ -59,7 +58,6 @@ const PAGES = {
   '/ke-hoach/release-1': <Release1Page />,
   '/ke-hoach/release-2': <Release2Page />,
   '/ke-hoach/lap-lai': <ReplanPage />,
-  '/ke-hoach/huy-lenh': <HuyLenhPage />,
   '/chat-luong/test-run': <TestRunPage />,
   '/san-xuat/xac-nhan-chay': <XacNhanChayPage />,
   '/san-xuat/theo-doi-chuyen': <TheoDoiChuyenPage />,
@@ -98,7 +96,7 @@ const moduleRoutes = MODULES.flatMap((m) =>
       <Route
         key={c.route}
         path={c.route}
-        element={c.perm ? <RequirePermission anyOf={[c.perm]}>{element}</RequirePermission> : element}
+        element={c.perm ? <RequirePermission anyOf={Array.isArray(c.perm) ? c.perm : [c.perm]}>{element}</RequirePermission> : element}
       />
     );
   })

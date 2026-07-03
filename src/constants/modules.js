@@ -36,7 +36,6 @@ export const MODULES = [
       { ten: 'Release 1', route: '/ke-hoach/release-1', perm: 'RELEASE1' },
       { ten: 'Release 2', route: '/ke-hoach/release-2', perm: 'RELEASE2' },
       { ten: 'Lập kế hoạch lại', route: '/ke-hoach/lap-lai', perm: 'RELEASE2' },
-      { ten: 'Hoàn tác chuyển trạm', route: '/ke-hoach/huy-lenh', perm: 'RELEASE1' },
     ],
   },
   {
@@ -119,7 +118,7 @@ export const MODULES = [
       { ten: 'Điều kiện chuyển checkpoint', route: '/he-thong/dieu-kien', perm: 'WORKFLOW_VIEW' },
       { ten: 'Owner checkpoint/checklist', route: '/he-thong/owner', perm: 'WORKFLOW_VIEW' },
       { ten: 'Trạng thái', route: '/he-thong/trang-thai', perm: 'STATUS_VIEW' },
-      { ten: 'Lịch sử trạng thái', route: '/he-thong/lich-su-trang-thai', perm: 'READY_CANCEL' },
+      { ten: 'Hủy lệnh xác nhận', route: '/he-thong/lich-su-trang-thai', perm: ['READY_CANCEL', 'RELEASE1', 'RELEASE2'] },
       { ten: 'Đồng bộ ERP', route: '/he-thong/erp-sync', perm: 'ERP_SYNC' },
       { ten: 'Người dùng online', route: '/he-thong/online', perm: 'PRESENCE_VIEW' },
     ],

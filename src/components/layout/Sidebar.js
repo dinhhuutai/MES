@@ -11,7 +11,9 @@ export default function Sidebar({ module }) {
   const mobileOpen = useSelector(selectMobileNavOpen);
   const dispatch = useDispatch();
   const { can } = usePermissions();
-  const items = (module?.children || []).filter((c) => !c.perm || can(c.perm));
+  const items = (module?.children || []).filter(
+    (c) => !c.perm || (Array.isArray(c.perm) ? can(...c.perm) : can(c.perm)),
+  );
 
   // Nội dung dùng chung; `mini` = thu gọn (chỉ desktop). Mobile luôn hiện đầy đủ nhãn.
   const content = (mini, onNavigate) => (
@@ -67,7 +69,7 @@ export default function Sidebar({ module }) {
     <>
       {/* Desktop: rail cố định, thu gọn được */}
       <aside
-        className={`hidden shrink-0 flex-col border-r border-line bg-surface transition-all duration-200 md:flex ${
+        className={`sticky top-header hidden h-[calc(100vh-72px)] shrink-0 flex-col self-start border-r border-line bg-surface transition-all duration-200 md:flex ${
           collapsed ? 'w-16' : 'w-64'
         }`}
       >

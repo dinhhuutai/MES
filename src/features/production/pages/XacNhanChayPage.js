@@ -5,7 +5,8 @@ import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
 import Toast from '../../../components/common/Toast';
-import { Field, Select } from '../../../components/common/controls';
+import { Field } from '../../../components/common/controls';
+import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import {
@@ -130,10 +131,7 @@ export default function XacNhanChayPage() {
               <div>Code phần: {confirmRun.ma_phan || '—'} · SL release: <b className="text-ink">{fmtNum(confirmRun.so_luong_release)}</b></div>
             </div>
             <Field label="Chuyền thực tế" required hint="Kế thừa chuyền kế hoạch — đổi nếu chạy chuyền khác">
-              <Select value={runChuyenId} onChange={(e) => setRunChuyenId(e.target.value)}>
-                <option value="">— Chọn chuyền —</option>
-                {chuyen.map((c) => <option key={c.id} value={c.id}>{c.ma_chuyen} — {c.ten_chuyen}{c.loai_chuyen ? ` (${c.loai_chuyen})` : ''}</option>)}
-              </Select>
+              <ChuyenPicker chuyen={chuyen} value={runChuyenId} onChange={setRunChuyenId} />
             </Field>
           </div>
         )}

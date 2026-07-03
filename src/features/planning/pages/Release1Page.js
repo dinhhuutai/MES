@@ -9,7 +9,8 @@ import Toast from '../../../components/common/Toast';
 import Icon from '../../../components/common/Icon';
 import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
-import { Field, Input, Select } from '../../../components/common/controls';
+import { Field, Input } from '../../../components/common/controls';
+import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import useToast from '../../../hooks/useToast';
 import {
   listRelease1Candidates, createRelease1, listChuyen, release1History,
@@ -302,10 +303,7 @@ export default function Release1Page() {
           {looseList.length > 0 && <div>{looseList.length} đợt vải lẻ → mỗi đợt 1 lệnh</div>}
         </div>
         <Field label="Chuyền in" required>
-          <Select value={relForm.chuyenId} onChange={(e) => setRelForm({ ...relForm, chuyenId: e.target.value })}>
-            <option value="">— Chọn chuyền —</option>
-            {chuyen.map((c) => <option key={c.id} value={c.id}>{c.ma_chuyen} — {c.ten_chuyen}</option>)}
-          </Select>
+          <ChuyenPicker chuyen={chuyen} value={relForm.chuyenId} onChange={(id) => setRelForm({ ...relForm, chuyenId: id })} />
         </Field>
         <Field label="Ngày kế hoạch">
           <Input type="date" value={relForm.ngayKeHoach} onChange={(e) => setRelForm({ ...relForm, ngayKeHoach: e.target.value })} />
@@ -343,10 +341,7 @@ export default function Release1Page() {
             </div>
             <div className="space-y-3 border-t border-line pt-4">
               <Field label="Chuyền in" required>
-                <Select value={form.chuyenId} onChange={(e) => setForm({ ...form, chuyenId: e.target.value })}>
-                  <option value="">— Chọn chuyền —</option>
-                  {chuyen.map((c) => <option key={c.id} value={c.id}>{c.ma_chuyen} — {c.ten_chuyen}</option>)}
-                </Select>
+                <ChuyenPicker chuyen={chuyen} value={form.chuyenId} onChange={(id) => setForm({ ...form, chuyenId: id })} />
               </Field>
               <div className="grid grid-cols-2 gap-x-4">
                 <Field label="Số lượng release">
