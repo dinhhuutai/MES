@@ -103,149 +103,151 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="max-w-3xl">
+    <div className="max-w-6xl">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-ink">Thông tin cá nhân</h1>
         <p className="mt-1 text-sm text-ink-soft">Xem và cập nhật thông tin tài khoản của bạn.</p>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Avatar */}
-        <div className="card flex flex-col items-center p-6 text-center lg:col-span-1">
-          <div className="relative">
-            <img
-              src={avatarFor(user)}
-              alt={user?.hoTen || 'avatar'}
-              className="h-28 w-28 rounded-full object-cover ring-1 ring-line"
-            />
-            {avatarBusy && (
-              <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/30 text-xs font-medium text-white">
-                Đang xử lý…
+        {/* CỘT TRÁI: avatar + thông tin */}
+        <div className="space-y-6 lg:col-span-2">
+          {/* Avatar (ngang) */}
+          <div className="card flex flex-col items-center gap-5 p-6 text-center sm:flex-row sm:text-left">
+            <div className="relative shrink-0">
+              <img
+                src={avatarFor(user)}
+                alt={user?.hoTen || 'avatar'}
+                className="h-24 w-24 rounded-full object-cover ring-1 ring-line"
+              />
+              {avatarBusy && (
+                <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/30 text-xs font-medium text-white">
+                  Đang xử lý…
+                </div>
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-base font-semibold text-ink">{user?.hoTen || user?.tenDangNhap}</div>
+              <div className="text-xs text-ink-soft">@{user?.tenDangNhap}</div>
+
+              <input
+                ref={fileRef}
+                type="file"
+                accept={ACCEPT}
+                className="hidden"
+                onChange={onPickFile}
+              />
+              <div className="mt-3 flex flex-wrap justify-center gap-2 sm:justify-start">
+                <Button
+                  variant="secondary"
+                  disabled={avatarBusy}
+                  onClick={() => fileRef.current?.click()}
+                >
+                  Đổi avatar
+                </Button>
+                {user?.avatarUrl && (
+                  <Button variant="ghost" disabled={avatarBusy} onClick={resetAvatar}>
+                    Đặt lại mặc định
+                  </Button>
+                )}
               </div>
-            )}
-          </div>
-          <div className="mt-4 text-base font-semibold text-ink">{user?.hoTen || user?.tenDangNhap}</div>
-          <div className="text-xs text-ink-soft">@{user?.tenDangNhap}</div>
-
-          <input
-            ref={fileRef}
-            type="file"
-            accept={ACCEPT}
-            className="hidden"
-            onChange={onPickFile}
-          />
-          <Button
-            variant="secondary"
-            className="mt-4 w-full"
-            disabled={avatarBusy}
-            onClick={() => fileRef.current?.click()}
-          >
-            Đổi avatar
-          </Button>
-          {user?.avatarUrl && (
-            <Button
-              variant="ghost"
-              className="mt-2 w-full"
-              disabled={avatarBusy}
-              onClick={resetAvatar}
-            >
-              Đặt lại mặc định
-            </Button>
-          )}
-          <p className="mt-2 text-[11px] text-ink-soft">
-            JPG, PNG, WEBP, GIF · tối đa {MAX_AVATAR_MB}MB. Mặc định theo giới tính.
-          </p>
-        </div>
-
-        {/* Thông tin */}
-        <div className="card p-6 lg:col-span-2">
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-ink-soft">Thông tin tài khoản</h2>
-
-          <div className="mb-5 grid grid-cols-1 gap-x-4 sm:grid-cols-2">
-            <Field label="Mã nhân viên">
-              <Input value={user?.maUser || '—'} disabled />
-            </Field>
-            <Field label="Tên đăng nhập">
-              <Input value={user?.tenDangNhap || ''} disabled />
-            </Field>
-            <Field label="Phòng ban">
-              <Input value={user?.phongBan || '—'} disabled />
-            </Field>
-            <Field label="Vai trò">
-              <div className="flex min-h-11 flex-wrap items-center gap-1.5">
-                {(user?.roles || []).length
-                  ? user.roles.map((r) => <Badge key={r} tone="info">{r}</Badge>)
-                  : <span className="text-sm text-ink-soft">—</span>}
-              </div>
-            </Field>
+              <p className="mt-2 text-[11px] text-ink-soft">
+                JPG, PNG, WEBP, GIF · tối đa {MAX_AVATAR_MB}MB. Mặc định theo giới tính.
+              </p>
+            </div>
           </div>
 
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-ink-soft">Thông tin cá nhân</h2>
-          <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
-            <Field label="Họ tên" required>
-              <Input value={form.hoTen} onChange={set('hoTen')} />
-            </Field>
-            <Field label="Giới tính" hint="Quyết định avatar mặc định">
-              <Select value={form.gioiTinh} onChange={set('gioiTinh')}>
-                <option value="">— Chưa xác định —</option>
-                <option value="NAM">{GIOI_TINH_LABEL.NAM}</option>
-                <option value="NU">{GIOI_TINH_LABEL.NU}</option>
-              </Select>
-            </Field>
-            <Field label="Email">
-              <Input type="email" value={form.email} onChange={set('email')} />
-            </Field>
-            <Field label="Số điện thoại">
-              <Input value={form.soDienThoai} onChange={set('soDienThoai')} />
-            </Field>
-            <Field label="Chức vụ">
-              <Input value={form.chucVu} onChange={set('chucVu')} />
-            </Field>
+          {/* Thông tin */}
+          <div className="card p-6">
+            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-ink-soft">Thông tin tài khoản</h2>
+
+            <div className="mb-5 grid grid-cols-1 gap-x-4 sm:grid-cols-2">
+              <Field label="Mã nhân viên">
+                <Input value={user?.maUser || '—'} disabled />
+              </Field>
+              <Field label="Tên đăng nhập">
+                <Input value={user?.tenDangNhap || ''} disabled />
+              </Field>
+              <Field label="Phòng ban">
+                <Input value={user?.phongBan || '—'} disabled />
+              </Field>
+              <Field label="Vai trò">
+                <div className="flex min-h-11 flex-wrap items-center gap-1.5">
+                  {(user?.roles || []).length
+                    ? user.roles.map((r) => <Badge key={r} tone="info">{r}</Badge>)
+                    : <span className="text-sm text-ink-soft">—</span>}
+                </div>
+              </Field>
+            </div>
+
+            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-ink-soft">Thông tin cá nhân</h2>
+            <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
+              <Field label="Họ tên" required>
+                <Input value={form.hoTen} onChange={set('hoTen')} />
+              </Field>
+              <Field label="Giới tính" hint="Quyết định avatar mặc định">
+                <Select value={form.gioiTinh} onChange={set('gioiTinh')}>
+                  <option value="">— Chưa xác định —</option>
+                  <option value="NAM">{GIOI_TINH_LABEL.NAM}</option>
+                  <option value="NU">{GIOI_TINH_LABEL.NU}</option>
+                </Select>
+              </Field>
+              <Field label="Email">
+                <Input type="email" value={form.email} onChange={set('email')} />
+              </Field>
+              <Field label="Số điện thoại">
+                <Input value={form.soDienThoai} onChange={set('soDienThoai')} />
+              </Field>
+              <Field label="Chức vụ">
+                <Input value={form.chucVu} onChange={set('chucVu')} />
+              </Field>
+            </div>
+
+            <div className="mt-2 flex justify-end">
+              <Button onClick={save} loading={saving} disabled={!form.hoTen.trim()}>
+                Lưu thay đổi
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* CỘT PHẢI: đổi mật khẩu + giao diện */}
+        <div className="space-y-6">
+          {/* Đổi mật khẩu */}
+          <div className="card p-6">
+            <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-ink-soft">Đổi mật khẩu</h2>
+            <div className="grid grid-cols-1 gap-x-4">
+              <Field label="Mật khẩu hiện tại" required>
+                <Input type="password" value={pwd.cu} onChange={setPw('cu')} autoComplete="current-password" />
+              </Field>
+              <Field label="Mật khẩu mới" required hint="Tối thiểu 6 ký tự">
+                <Input type="password" value={pwd.moi} onChange={setPw('moi')} autoComplete="new-password" />
+              </Field>
+              <Field label="Xác nhận mật khẩu mới" required>
+                <Input type="password" value={pwd.xacNhan} onChange={setPw('xacNhan')} autoComplete="new-password" />
+              </Field>
+            </div>
+            <div className="flex justify-end">
+              <Button onClick={changePassword} loading={pwdSaving}
+                disabled={!pwd.cu || !pwd.moi || !pwd.xacNhan}>Đổi mật khẩu</Button>
+            </div>
           </div>
 
-          <div className="mt-2 flex justify-end">
-            <Button onClick={save} loading={saving} disabled={!form.hoTen.trim()}>
-              Lưu thay đổi
-            </Button>
+          {/* Giao diện sáng/tối (lưu theo tài khoản trên thiết bị này) */}
+          <div className="card p-6">
+            <h2 className="text-sm font-semibold text-ink">Giao diện</h2>
+            <p className="mt-1 text-sm text-ink-soft">Chọn chế độ sáng hoặc tối cho tài khoản của bạn.</p>
+            <div className="mt-4 flex rounded-control border border-line p-1">
+              <button onClick={() => dispatch(setTheme('light'))}
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-[10px] px-3.5 py-1.5 text-sm font-medium transition ${theme === 'light' ? 'bg-primary text-white' : 'text-ink-soft hover:text-ink'}`}>
+                <Icon name="sun" size={16} /> Sáng
+              </button>
+              <button onClick={() => dispatch(setTheme('dark'))}
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-[10px] px-3.5 py-1.5 text-sm font-medium transition ${theme === 'dark' ? 'bg-primary text-white' : 'text-ink-soft hover:text-ink'}`}>
+                <Icon name="moon" size={16} /> Tối
+              </button>
+            </div>
           </div>
-        </div>
-      </div>
-
-      {/* Đổi mật khẩu */}
-      <div className="card mt-6 p-6">
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-ink-soft">Đổi mật khẩu</h2>
-        <div className="grid grid-cols-1 gap-x-4 sm:grid-cols-3">
-          <Field label="Mật khẩu hiện tại" required>
-            <Input type="password" value={pwd.cu} onChange={setPw('cu')} autoComplete="current-password" />
-          </Field>
-          <Field label="Mật khẩu mới" required hint="Tối thiểu 6 ký tự">
-            <Input type="password" value={pwd.moi} onChange={setPw('moi')} autoComplete="new-password" />
-          </Field>
-          <Field label="Xác nhận mật khẩu mới" required>
-            <Input type="password" value={pwd.xacNhan} onChange={setPw('xacNhan')} autoComplete="new-password" />
-          </Field>
-        </div>
-        <div className="flex justify-end">
-          <Button onClick={changePassword} loading={pwdSaving}
-            disabled={!pwd.cu || !pwd.moi || !pwd.xacNhan}>Đổi mật khẩu</Button>
-        </div>
-      </div>
-
-      {/* Giao diện sáng/tối (lưu theo tài khoản trên thiết bị này) */}
-      <div className="card mt-6 flex flex-wrap items-center justify-between gap-3 p-6">
-        <div>
-          <h2 className="text-sm font-semibold text-ink">Giao diện</h2>
-          <p className="mt-1 text-sm text-ink-soft">Chọn chế độ sáng hoặc tối cho tài khoản của bạn.</p>
-        </div>
-        <div className="flex rounded-control border border-line p-1">
-          <button onClick={() => dispatch(setTheme('light'))}
-            className={`flex items-center gap-1.5 rounded-[10px] px-3.5 py-1.5 text-sm font-medium transition ${theme === 'light' ? 'bg-primary text-white' : 'text-ink-soft hover:text-ink'}`}>
-            <Icon name="sun" size={16} /> Sáng
-          </button>
-          <button onClick={() => dispatch(setTheme('dark'))}
-            className={`flex items-center gap-1.5 rounded-[10px] px-3.5 py-1.5 text-sm font-medium transition ${theme === 'dark' ? 'bg-primary text-white' : 'text-ink-soft hover:text-ink'}`}>
-            <Icon name="moon" size={16} /> Tối
-          </button>
         </div>
       </div>
 

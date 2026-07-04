@@ -138,6 +138,7 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
   const printed = Number(data?.printed) || 0;
   const pct = target ? Math.min(100, Math.round((printed / target) * 100)) : 0;
   const maxTotal = target ? Math.floor(target * 1.1) : 0;       // trần 110% SL release
+  const minFinish = target ? Math.ceil(target * 0.9) : 0;       // tối thiểu 90% SL release (cho -10%) mới hoàn tất được
   const remain = target ? Math.max(0, maxTotal - printed) : null; // còn được in
   const overMax = target > 0 && Number(soLuong) > remain;
 
@@ -149,7 +150,7 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
       subtitle={data?.lenh ? `Chuyền ${data.lenh.ma_chuyen || '—'} · Phần ${data.lenh.phan_list || '—'}` : ''}
       footer={
         running && canRun && (
-          <Button variant="danger" onClick={doFinish} loading={busy} disabled={printed < target}>
+          <Button variant="danger" onClick={doFinish} loading={busy} disabled={printed < minFinish}>
             Chạy hoàn tất
           </Button>
         )
@@ -171,9 +172,9 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
               <span>Phiếu {phieu?.ma_phieu_san_xuat}</span>
               <Badge tone={running ? 'info' : 'success'}>{running ? 'Đang chạy' : 'Hoàn tất'}</Badge>
             </div>
-            {running && canRun && printed < target && (
+            {running && canRun && printed < minFinish && (
               <p className="mt-2 text-xs text-amber-600">
-                Cần in đủ SL release ({fmtNum(target)}) mới hoàn tất được — còn thiếu <b>{fmtNum(target - printed)}</b>.
+                Cần in tối thiểu 90% SL release ({fmtNum(minFinish)}) mới hoàn tất được — còn thiếu <b>{fmtNum(minFinish - printed)}</b>.
               </p>
             )}
           </section>

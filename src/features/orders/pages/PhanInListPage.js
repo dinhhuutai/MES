@@ -8,7 +8,7 @@ import Toast from '../../../components/common/Toast';
 import Icon from '../../../components/common/Icon';
 import useToast from '../../../hooks/useToast';
 import { listVaiVe, getPhanIn } from '../../../services/orderService';
-import { fmtNum, fmtDate, fmtCurrency } from '../../../utils/format';
+import { fmtNum, fmtDate, fmtDateTime, fmtCurrency } from '../../../utils/format';
 
 const LIMIT = 20;
 const TH = 'px-4 py-3 text-xs font-semibold uppercase tracking-wide text-ink-soft';
@@ -20,6 +20,7 @@ const STAGES = [
   { code: 'RELEASE_1', label: 'Release 1' },
   { code: 'TEST_RUN', label: 'Test Run' },
   { code: 'RELEASE_2', label: 'Release 2' },
+  { code: 'CHO_SAN_XUAT', label: 'Chờ sản xuất' },
   { code: 'SAN_XUAT', label: 'Đang sản xuất' },
   { code: 'CHO_KHO', label: 'Chờ khô' },
   { code: 'KCS', label: 'KCS' },
@@ -50,6 +51,51 @@ function Row({ label, value }) {
       <span className="text-right font-medium text-ink">{value}</span>
     </div>
   );
+}
+
+// Từ CHỜ KHÔ trở đi: quản lý theo tem → hiện mỗi tem 1 hàng + cột chất lượng.
+const TEM_ROW_STAGES = ['CHO_KHO', 'KCS', 'SUA', 'OQC', 'GIAO', 'DA_GIAO'];
+
+// Số lượng theo tem, HỢP NHẤT theo phần in (dùng ở thẻ mobile).
+function TemSummary({ g }) {
+  if (!g.pcs_in) return <span className="text-xs text-ink-soft">—</span>;
+  return (
+    <div className="flex flex-wrap gap-1">
+      <Badge tone="default">{fmtNum(g.pcs_in)} pcs · {fmtNum(g.so_tem)} tem</Badge>
+      {g.sl_dat > 0 && <Badge tone="success">Đạt {fmtNum(g.sl_dat)}</Badge>}
+      {g.sl_sua > 0 && <Badge tone="warning">Sửa {fmtNum(g.sl_sua)}</Badge>}
+      {g.sl_sua_dat > 0 && <Badge tone="info">Sửa đạt {fmtNum(g.sl_sua_dat)}</Badge>}
+    </div>
+  );
+}
+
+const TEM_STATUS = {
+  IN: { label: 'Đã in', tone: 'default' },
+  DANG_PHOI: { label: 'Đang phơi', tone: 'info' },
+  DA_KHO: { label: 'Đã khô', tone: 'info' },
+  CHO_SUA: { label: 'Chờ sửa', tone: 'warning' },
+  CHO_OQC: { label: 'Chờ OQC', tone: 'info' },
+  OQC_DAT: { label: 'OQC đạt', tone: 'success' },
+  DA_GIAO: { label: 'Đã giao', tone: 'success' },
+  LOAI: { label: 'Loại/hủy', tone: 'danger' },
+};
+
+function TemQuality({ tm }) {
+  const parts = [];
+  if (tm.kcs_dat != null || tm.kcs_loi != null) {
+    parts.push(`KCS: đạt ${fmtNum(tm.kcs_dat || 0)}${tm.kcs_loi ? ` · lỗi ${fmtNum(tm.kcs_loi)}` : ''}`);
+  }
+  if (tm.sua_dat != null) parts.push(`Sửa đạt ${fmtNum(tm.sua_dat)}`);
+  if (tm.oqc_ket_qua) parts.push(`OQC: ${tm.oqc_ket_qua === 'DAT' ? 'đạt' : 'không đạt'}`);
+  return <span className="text-xs text-ink-soft">{parts.length ? parts.join(' · ') : '—'}</span>;
+}
+
+// Giá trị đợt vải gộp (khi hiển thị theo tem, cột đợt vải hợp nhất theo phần in).
+function aggDotVai(dotVai = []) {
+  const total = dotVai.reduce((s, d) => s + (d.so_luong_vai_ve || 0), 0);
+  const ngay = dotVai.map((d) => d.ngay_vai_ve).filter(Boolean).sort();
+  const han = dotVai.map((d) => d.han_giao_hang).filter(Boolean).sort();
+  return { total, ngay: ngay[0] || null, han: han[0] || null };
 }
 
 export default function PhanInListPage() {
@@ -107,7 +153,9 @@ export default function PhanInListPage() {
   };
 
   const sttStart = (meta.page - 1) * LIMIT;
-  const COLS = 11;
+  const showTemRows = TEM_ROW_STAGES.includes(stage); // tem/hàng + chất lượng
+  const showPcsCol = stage === 'SAN_XUAT';             // chỉ thêm cột "SL đã in"
+  const COLS = 11 + (showTemRows ? 4 : 0) + (showPcsCol ? 1 : 0);
 
   return (
     <div>
@@ -198,6 +246,15 @@ export default function PhanInListPage() {
                 <th className={`${TH} text-right`}>SL vải về</th>
                 <th className={TH}>Ngày vải về</th>
                 <th className={TH}>Hạn giao</th>
+                {showTemRows && (
+                  <>
+                    <th className={`${TH} border-l border-line/60`}>Mã tem</th>
+                    <th className={`${TH} text-right`}>SL pcs</th>
+                    <th className={TH}>Trạng thái</th>
+                    <th className={TH}>Chất lượng</th>
+                  </>
+                )}
+                {showPcsCol && <th className={`${TH} text-right border-l border-line/60`}>SL đã in</th>}
               </tr>
             </thead>
             <tbody>
@@ -209,38 +266,72 @@ export default function PhanInListPage() {
                 <tr><td colSpan={COLS} className="px-4 py-12 text-center text-ink-soft">Chưa có phần in / đợt vải về</td></tr>
               ) : (
                 rows.map((g, gi) => {
+                  const stt = sttStart + gi + 1;
+                  // Cột phần in (STT → SL đơn hàng) hợp nhất ô — dùng chung cho cả 2 chế độ.
+                  const headCells = (n) => (
+                    <>
+                      <td rowSpan={n} className={`${TD} text-right tabular-nums text-ink-soft`}>{stt}</td>
+                      <td rowSpan={n} className={`${TD} font-medium text-ink`}>{g.ten_khach_hang}</td>
+                      <td rowSpan={n} className={TD}>
+                        <div className="text-ink">{g.ma_don_hang}</div>
+                        <div className="text-xs text-ink-soft">{g.so_po}</div>
+                      </td>
+                      <td rowSpan={n} className={TD}>
+                        <div className="text-ink">{g.ma_hang}</div>
+                        {g.so_dot > 1 && <div className="mt-1"><Badge tone="warning">{g.so_dot} đợt vải</Badge></div>}
+                      </td>
+                      <td rowSpan={n} className={TD}>{g.mau_vai || '—'}</td>
+                      <td rowSpan={n} className={TD}>{g.kich_vai || '—'}</td>
+                      <td rowSpan={n} className={TD}>{g.kich_phim || '—'}</td>
+                      <td rowSpan={n} className={`${TD} text-right tabular-nums border-r border-line/60`}>{fmtNum(g.so_luong_don_hang)}</td>
+                    </>
+                  );
+
+                  // Chế độ THEO TEM (từ chờ khô): STT → Hạn giao hợp nhất, mỗi tem 1 hàng.
+                  if (showTemRows) {
+                    const tems = g.tems && g.tems.length ? g.tems : [null];
+                    const n = tems.length;
+                    const agg = aggDotVai(g.dot_vai);
+                    return tems.map((tm, ti) => (
+                      <tr key={`${g.phan_in_id}-${tm?.tem_id || 'none'}`}
+                        onClick={() => openDetail(g.phan_in_id)}
+                        className={`cursor-pointer transition hover:bg-surface-muted/40 ${ti === n - 1 ? 'border-b border-line/70' : ''}`}>
+                        {ti === 0 && (
+                          <>
+                            {headCells(n)}
+                            <td rowSpan={n} className={`${TD} text-right tabular-nums`}>{fmtNum(agg.total)}</td>
+                            <td rowSpan={n} className={TD}>{fmtDate(agg.ngay)}</td>
+                            <td rowSpan={n} className={TD}>{fmtDate(agg.han)}</td>
+                          </>
+                        )}
+                        <td className={`${TD} border-l border-line/60 font-medium text-ink`}>{tm?.ma_tem || <span className="text-xs italic text-ink-soft">Chưa in tem</span>}</td>
+                        <td className={`${TD} text-right tabular-nums`}>{tm ? `${fmtNum(tm.so_luong)} pcs` : '—'}</td>
+                        <td className={TD}>{tm ? <Badge tone={(TEM_STATUS[tm.trang_thai] || {}).tone || 'default'}>{(TEM_STATUS[tm.trang_thai] || {}).label || tm.trang_thai}</Badge> : '—'}</td>
+                        <td className={TD}>{tm ? <TemQuality tm={tm} /> : '—'}</td>
+                      </tr>
+                    ));
+                  }
+
+                  // Chế độ mặc định: mỗi đợt vải 1 hàng.
                   const dots = g.dot_vai && g.dot_vai.length ? g.dot_vai : [null];
                   const n = dots.length;
-                  const stt = sttStart + gi + 1;
                   return dots.map((dv, di) => (
                     <tr
                       key={`${g.phan_in_id}-${dv?.dot_vai_id || 'none'}`}
                       onClick={() => openDetail(g.phan_in_id)}
                       className={`cursor-pointer transition hover:bg-surface-muted/40 ${di === n - 1 ? 'border-b border-line/70' : ''}`}
                     >
-                      {di === 0 && (
-                        <>
-                          <td rowSpan={n} className={`${TD} text-right tabular-nums text-ink-soft`}>{stt}</td>
-                          <td rowSpan={n} className={`${TD} font-medium text-ink`}>{g.ten_khach_hang}</td>
-                          <td rowSpan={n} className={TD}>
-                            <div className="text-ink">{g.ma_don_hang}</div>
-                            <div className="text-xs text-ink-soft">{g.so_po}</div>
-                          </td>
-                          <td rowSpan={n} className={TD}>
-                            <div className="text-ink">{g.ma_hang}</div>
-                            {g.so_dot > 1 && <div className="mt-1"><Badge tone="warning">{g.so_dot} đợt vải</Badge></div>}
-                          </td>
-                          <td rowSpan={n} className={TD}>{g.mau_vai || '—'}</td>
-                          <td rowSpan={n} className={TD}>{g.kich_vai || '—'}</td>
-                          <td rowSpan={n} className={TD}>{g.kich_phim || '—'}</td>
-                          <td rowSpan={n} className={`${TD} text-right tabular-nums border-r border-line/60`}>{fmtNum(g.so_luong_don_hang)}</td>
-                        </>
-                      )}
+                      {di === 0 && headCells(n)}
                       <td className={`${TD} text-right tabular-nums`}>
                         {dv ? fmtNum(dv.so_luong_vai_ve) : <span className="text-xs italic text-ink-soft">Chưa có vải về</span>}
                       </td>
                       <td className={TD}>{dv ? fmtDate(dv.ngay_vai_ve) : '—'}</td>
                       <td className={TD}>{dv ? fmtDate(dv.han_giao_hang) : '—'}</td>
+                      {di === 0 && showPcsCol && (
+                        <td rowSpan={n} className={`${TD} text-right tabular-nums border-l border-line/60 font-medium text-ink`}>
+                          {g.pcs_in ? `${fmtNum(g.pcs_in)} pcs` : '—'}
+                        </td>
+                      )}
                     </tr>
                   ));
                 })
@@ -279,6 +370,9 @@ export default function PhanInListPage() {
                 <span>Ngày vải: <b className="text-ink">{g.dot_vai?.length ? fmtDate(g.dot_vai[0].ngay_vai_ve) : '—'}</b></span>
                 <span>Hạn giao: <b className="text-ink">{g.dot_vai?.length ? fmtDate(g.dot_vai[0].han_giao_hang) : '—'}</b></span>
               </div>
+              {(showTemRows || showPcsCol) && g.pcs_in > 0 && (
+                <div className="mt-2 border-t border-line/60 pt-2"><TemSummary g={g} /></div>
+              )}
             </div>
           ))
         )}
@@ -335,6 +429,73 @@ export default function PhanInListPage() {
                 </div>
               ) : (
                 <p className="text-sm text-ink-soft">Chưa có đợt vải về.</p>
+              )}
+            </section>
+
+            {detail.tem_summary?.pcs_in > 0 && (
+              <section className="border-t border-line pt-4">
+                <h3 className="mb-1 text-xs font-bold uppercase tracking-wide text-ink-soft">
+                  Sản xuất &amp; chất lượng (hợp nhất theo phần in)
+                </h3>
+                <Row label="Đã in (pcs tem)" value={`${fmtNum(detail.tem_summary.pcs_in)} pcs · ${fmtNum(detail.tem_summary.so_tem)} tem`} />
+                {(detail.tem_summary.sl_dat > 0 || detail.tem_summary.sl_sua > 0) && (
+                  <>
+                    <Row label="SL đạt (KCS)" value={fmtNum(detail.tem_summary.sl_dat)} />
+                    <Row label="SL chuyển sửa" value={fmtNum(detail.tem_summary.sl_sua)} />
+                  </>
+                )}
+                {detail.tem_summary.sl_sua_dat > 0 && (
+                  <Row label="SL sửa đạt" value={fmtNum(detail.tem_summary.sl_sua_dat)} />
+                )}
+              </section>
+            )}
+
+            <section className="border-t border-line pt-4">
+              <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-ink-soft">
+                Hành trình qua các checkpoint
+              </h3>
+              {detail.timeline?.length ? (
+                <ol>
+                  {detail.timeline.map((t, i) => (
+                    <li key={t.ma_tram}>
+                      <div className="rounded-control border border-line p-3">
+                        <div className="flex items-center gap-2">
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-wash text-[11px] font-bold text-primary">{i + 1}</span>
+                          <span className="text-sm font-semibold text-ink">{t.ten_tram}</span>
+                        </div>
+
+                        {t.checklists.length > 0 && (
+                          <div className="mt-2 space-y-1.5 pl-8">
+                            {t.checklists.map((c) => (
+                              <div key={c.ma_checkpoint} className="text-xs">
+                                <div className="flex flex-wrap items-center gap-x-1.5">
+                                  <span className="font-medium text-ink">{c.ten_checkpoint}</span>
+                                  {c.gia_tri_text && <span className="text-ink-soft">· {c.gia_tri_text}</span>}
+                                </div>
+                                <div className="text-ink-soft">{fmtDateTime(c.tg)} · {c.nguoi || '—'}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {t.moc && (
+                          <div className="mt-2 pl-8 text-xs text-ink-soft">
+                            {fmtDateTime(t.moc.tg)} · {t.moc.nguoi || '—'}
+                            {t.moc.so_luong > 1 ? ` · ${t.moc.so_luong} lần` : ''}
+                          </div>
+                        )}
+                      </div>
+
+                      {i < detail.timeline.length - 1 && (
+                        <div className="flex justify-center py-1 text-ink-soft">
+                          <Icon name="arrow-down" size={16} />
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="text-sm text-ink-soft">Phần in chưa đi qua checkpoint nào có xác nhận.</p>
               )}
             </section>
           </div>

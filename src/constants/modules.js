@@ -48,8 +48,8 @@ export const MODULES = [
     children: [
       { ten: 'Xác nhận chạy', route: '/san-xuat/xac-nhan-chay', perm: 'PROD_RUN' },
       { ten: 'Theo dõi chuyền', route: '/san-xuat/theo-doi-chuyen', perm: 'PROD_MONITOR' },
-      { ten: 'Quét chờ khô', route: '/san-xuat/cho-kho', perm: 'DRYING' },
       { ten: 'Tình trạng xe phơi', route: '/san-xuat/xe-phoi', perm: 'XEPHOI' },
+      { ten: 'Quét chờ khô', route: '/san-xuat/cho-kho', perm: 'DRYING' },
       { ten: 'KCS', route: '/san-xuat/kcs', perm: 'KCS' },
       { ten: 'Sửa', route: '/san-xuat/sua', perm: 'SUA' },
     ],

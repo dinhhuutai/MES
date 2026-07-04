@@ -93,7 +93,7 @@ export default function Release2Page() {
     { key: 'so_luong_vai_ve', header: 'SLNV', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong_vai_ve) },
     { key: 'ngay_vai_ve', header: 'Ngày nhận vải', render: (r) => fmtDate(r.ngay_vai_ve) },
     { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => fmtDate(r.han_giao_hang) },
-    { key: 'chuyen', header: 'Chuyền', render: (r) => `${r.ma_chuyen || '—'} ${r.ten_chuyen || ''}` },
+    { key: 'chuyen', header: 'Chuyền', render: (r) => r.ten_chuyen || '—' },
     { key: 'ngay_ke_hoach', header: 'Ngày SX kế hoạch', render: (r) => fmtDate(r.ngay_ke_hoach) },
     { key: 'test', header: 'Test', className: 'whitespace-nowrap',
       render: () => <Badge tone="success" className="whitespace-nowrap">CNSP ✓ · QA ✓</Badge> },

@@ -170,6 +170,7 @@ function FlowBoard({ show }) {
                 <th className="py-2 pr-3">Khách · Đơn</th>
                 <th className="py-2 pr-3">Mã hàng · Code phần</th>
                 <th className="py-2 pr-3">Màu · Kích</th>
+                <th className="py-2 pr-3 text-right">SL pcs</th>
                 <th className="py-2 pr-3">Checkpoint hiện tại</th>
                 <th className="py-2 pr-3">Ở checkpoint</th>
                 <th className="py-2 pr-3">SLA</th>
@@ -178,7 +179,7 @@ function FlowBoard({ show }) {
             </thead>
             <tbody>
               {rows.length === 0 && (
-                <tr><td colSpan={7} className="py-6 text-center text-ink-soft">Không có đợt vải trong dòng chảy.</td></tr>
+                <tr><td colSpan={8} className="py-6 text-center text-ink-soft">Không có đợt vải trong dòng chảy.</td></tr>
               )}
               {rows.map((r) => {
                 const { phut, status } = evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now);
@@ -195,6 +196,7 @@ function FlowBoard({ show }) {
                       <div className="text-xs text-ink-soft">{r.ma_phan || ''}</div>
                     </td>
                     <td className="py-2 pr-3 text-xs text-ink-soft">{[r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ')}</td>
+                    <td className="py-2 pr-3 text-right tabular-nums">{r.pcs ? `${fmtNum(r.pcs)}` : '—'}</td>
                     <td className="py-2 pr-3"><Badge tone="info">{r.ten_tram}</Badge></td>
                     <td className={`py-2 pr-3 tabular-nums ${status === 'NGHEN' ? 'font-semibold text-danger' : status === 'SAP_NGHEN' ? 'text-warning' : 'text-ink'}`}>
                       {fmtDur(phut)}{r.sla_phut ? <span className="text-ink-soft"> / {fmtDur(r.sla_phut)}</span> : ''}
@@ -218,18 +220,30 @@ function FlowBoard({ show }) {
   );
 }
 
-// Các giai đoạn đếm trên Dashboard (đúng thứ tự dòng chảy). type 'total' đọc từ totals, còn lại từ stages.
-const STAGE_CELLS = [
+// TẦNG 1 — tổng quan giai đoạn lớn. Mỗi ô gộp nhiều giai đoạn chi tiết (sub).
+const TIER1_CELLS = [
   { key: 'so_don', label: 'Đơn hàng', type: 'total' },
   { key: 'so_ma', label: 'Mã hàng', type: 'total' },
   { key: 'so_phan_in', label: 'Phần in', type: 'total' },
+  { label: 'READY', sub: ['READY_KT', 'READY_QA'] },
+  { label: 'Release 1', sub: ['RELEASE_1'] },
+  { label: 'Test Run', sub: ['TESTRUN_CNSP', 'TESTRUN_QA'] },
+  { label: 'Release 2', sub: ['RELEASE_2', 'CHO_SAN_XUAT'] },
+  { label: 'Sản xuất', sub: ['SAN_XUAT', 'CHO_KHO'], pcs: true },
+  { label: 'OQC', sub: ['KCS', 'SUA', 'OQC'] },
+  { label: 'Giao', sub: ['DANG_GIAO', 'DA_GIAO'] },
+];
+
+// TẦNG 2 — chi tiết theo từng giai đoạn (từ READY Kỹ thuật đến Đã giao xong).
+const STAGE_CELLS = [
   { key: 'READY_KT', label: 'READY Kỹ thuật' },
   { key: 'READY_QA', label: 'READY QA' },
   { key: 'RELEASE_1', label: 'Release 1' },
   { key: 'TESTRUN_CNSP', label: 'Test Run CNSP' },
   { key: 'TESTRUN_QA', label: 'Test Run QA' },
   { key: 'RELEASE_2', label: 'Release 2' },
-  { key: 'SAN_XUAT', label: 'Sản xuất' },
+  { key: 'CHO_SAN_XUAT', label: 'Chờ sản xuất' },
+  { key: 'SAN_XUAT', label: 'Đang sản xuất' },
   { key: 'CHO_KHO', label: 'Chờ khô' },
   { key: 'KCS', label: 'KCS' },
   { key: 'SUA', label: 'Sửa' },
@@ -238,11 +252,12 @@ const STAGE_CELLS = [
   { key: 'DA_GIAO', label: 'Đã giao xong' },
 ];
 
-function StageGrid({ data }) {
+function Tier1Grid({ data }) {
   if (!data) return null;
+  const sum = (subs, field) => subs.reduce((a, k) => a + (data.stages?.[k]?.[field] || 0), 0);
   return (
-    <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
-      {STAGE_CELLS.map((c) => {
+    <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
+      {TIER1_CELLS.map((c) => {
         if (c.type === 'total') {
           return (
             <div key={c.key} className="card p-3 text-center">
@@ -251,12 +266,29 @@ function StageGrid({ data }) {
             </div>
           );
         }
-        const st = data.stages?.[c.key] || { phan_in: 0, ma: 0 };
+        return (
+          <div key={c.label} className="card p-3 text-center">
+            <div className="text-2xl font-bold text-primary tabular-nums">{fmtNum(sum(c.sub, 'phan_in'))}</div>
+            <div className="text-xs font-medium text-ink">{c.label}</div>
+            {c.pcs ? <div className="text-[11px] text-ink-soft">{fmtNum(sum(c.sub, 'pcs'))} pcs</div> : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function StageGrid({ data }) {
+  if (!data) return null;
+  return (
+    <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+      {STAGE_CELLS.map((c) => {
+        const st = data.stages?.[c.key] || { phan_in: 0, ma: 0, pcs: 0 };
         return (
           <div key={c.key} className="card p-3 text-center">
             <div className="text-2xl font-bold text-primary tabular-nums">{fmtNum(st.phan_in)}</div>
             <div className="text-xs font-medium text-ink">{c.label}</div>
-            <div className="text-[11px] text-ink-soft">{fmtNum(st.ma)} mã</div>
+            <div className="text-[11px] text-ink-soft">{fmtNum(st.ma)} mã{st.pcs ? ` · ${fmtNum(st.pcs)} pcs` : ''}</div>
           </div>
         );
       })}
@@ -300,17 +332,13 @@ export default function DashboardPage() {
         <Badge tone="success"><span className="mr-1.5 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-500" />Realtime</Badge>
       </div>
 
-      {/* Đếm phần in / mã theo từng giai đoạn dòng chảy */}
-      <StageGrid data={stages} />
+      {/* Tầng 1 — tổng quan giai đoạn lớn */}
+      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-soft">Tổng quan giai đoạn</div>
+      <Tier1Grid data={stages} />
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
-        <StatCard icon="package" label="Đơn hàng" value={fmtNum(s.don_hang.total)} />
-        <StatCard icon="wrench" label="Phần in READY" value={`${s.phan_in.ready}/${s.phan_in.total}`} tone="text-amber-600 bg-amber-50" />
-        <StatCard icon="factory" label="Lệnh đang SX" value={fmtNum(s.lenh.SAN_XUAT || 0)} tone="text-emerald-600 bg-emerald-50" />
-        <StatCard icon="shield-check" label="OQC đạt" value={fmtNum(s.chat_luong.oqc_dat)} tone="text-teal-600 bg-teal-50" />
-        <StatCard icon="truck" label="Tem đã giao" value={fmtNum(tem.DA_GIAO || 0)} sub={`${fmtNum(s.giao_hang.tong_sl_da_giao)} sp`} tone="text-green-600 bg-green-50" />
-        <StatCard icon="loader" label="Nghẽn" value={fmtNum(s.nghen.dang_nghen)} tone={s.nghen.dang_nghen > 0 ? 'text-rose-600 bg-rose-50' : 'text-ink-soft bg-surface-muted'} />
-      </div>
+      {/* Tầng 2 — chi tiết từng giai đoạn */}
+      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-soft">Chi tiết theo giai đoạn</div>
+      <StageGrid data={stages} />
 
       {/* Dòng chảy + SLA + nghẽn (theo dõi chủ động) */}
       <FlowBoard show={show} />

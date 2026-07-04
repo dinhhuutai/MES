@@ -260,6 +260,16 @@ export default function TinhTrangTramPage() {
             <Badge tone="info" className="ml-auto">{detail.dot_vai.length} đợt vải</Badge>
           </div>
 
+          {/* Tổng hợp số lượng theo tem (hợp nhất theo phần in) */}
+          {detail.tem_summary?.pcs_in > 0 && (
+            <div className="mb-4 flex flex-wrap gap-2">
+              <Badge tone="default">{fmtNum(detail.tem_summary.pcs_in)} pcs · {fmtNum(detail.tem_summary.so_tem)} tem</Badge>
+              {detail.tem_summary.sl_dat > 0 && <Badge tone="success">Đạt {fmtNum(detail.tem_summary.sl_dat)}</Badge>}
+              {detail.tem_summary.sl_sua > 0 && <Badge tone="warning">Sửa {fmtNum(detail.tem_summary.sl_sua)}</Badge>}
+              {detail.tem_summary.sl_sua_dat > 0 && <Badge tone="info">Sửa đạt {fmtNum(detail.tem_summary.sl_sua_dat)}</Badge>}
+            </div>
+          )}
+
           {/* Các đợt vải (rẽ nhánh) */}
           <div className="space-y-4">
             {detail.dot_vai.map((d) => <DotVaiFlow key={d.id} dot={d} now={now} />)}

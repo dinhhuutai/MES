@@ -31,21 +31,22 @@ export default function XePhoiPage() {
   const [adjust, setAdjust] = useState(null); // { tem_xe_id, ma_tem } đang chỉnh giờ
   const [adjustMin, setAdjustMin] = useState('60');
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  // silent=true: làm mới nền (interval / sau thao tác) — KHÔNG bật loading để tránh chớp cả lưới.
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const res = await getXePhoi();
       setXe(res.data);
     } catch (e) {
       show(e.message || 'Lỗi tải', 'error');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [show]);
 
   useEffect(() => {
     load();
-    const t = setInterval(load, 15000);
+    const t = setInterval(() => load(true), 15000);
     return () => clearInterval(t);
   }, [load]);
 
@@ -71,7 +72,7 @@ export default function XePhoiPage() {
       });
       show('Đã đưa tem vào xe phơi');
       setModalOpen(false);
-      load();
+      load(true);
     } catch (e) {
       show(e.message || 'Thất bại', 'error');
     } finally {
@@ -86,7 +87,7 @@ export default function XePhoiPage() {
       await adjustPhoi(adjust.tem_xe_id, Number(adjustMin) || 0);
       show(`Đã chỉnh thời gian phơi tem ${adjust.ma_tem}`);
       setAdjust(null);
-      load();
+      load(true);
     } catch (e) {
       show(e.message || 'Thất bại', 'error');
     } finally {

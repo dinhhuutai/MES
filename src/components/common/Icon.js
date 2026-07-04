@@ -37,6 +37,7 @@ import {
   GitBranch,
   Filter,
   CheckCircle2,
+  ArrowDown,
 } from 'lucide-react';
 
 // Map tên kebab → component Lucide.
@@ -79,6 +80,7 @@ const MAP = {
   'git-branch': GitBranch,
   filter: Filter,
   'check-circle': CheckCircle2,
+  'arrow-down': ArrowDown,
 };
 
 export default function Icon({ name, size = 20, className = '' }) {
