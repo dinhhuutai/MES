@@ -4,7 +4,7 @@ import OwnerHint from '../../../components/common/OwnerHint';
 import DataTable from '../../../components/common/DataTable';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
-import Modal from '../../../components/common/Modal';
+import SidePanel from '../../../components/common/SidePanel';
 import Toast from '../../../components/common/Toast';
 import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
@@ -54,8 +54,9 @@ export default function SuaPage() {
     setSaving(true);
     try {
       const r = await recordSua(editing.tem_id, form);
-      const map = { CHO_OQC: 'chuyển OQC', LOAI: 'loại bỏ' };
-      show(`Sửa ${editing.ma_tem} → ${map[r.data.next] || r.data.next}`);
+      const conLai = Number(r.data.con_sua) || 0;
+      show(`Sửa ${editing.ma_tem}: đạt ${fmtNum(r.data.so_luong_sua_dat)} → OQC`
+        + (conLai > 0 ? ` · còn ${fmtNum(conLai)} chờ sửa` : ' · đã sửa hết'));
       setEditing(null);
       load();
     } catch (e) {
@@ -73,10 +74,10 @@ export default function SuaPage() {
     { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
     { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
-    { key: 'so_luong', header: 'SL cần sửa', className: 'text-right tabular-nums font-semibold',
-      render: (r) => <span className="text-amber-600">{fmtNum(r.so_luong)}</span> },
+    { key: 'con_sua', header: 'SL cần sửa', className: 'text-right tabular-nums font-semibold',
+      render: (r) => <span className="text-amber-600">{fmtNum(r.con_sua)}</span> },
     { key: 'actions', header: '', className: 'text-right', render: (r) =>
-      canSua && <Button className="px-3 py-1.5" onClick={() => { setEditing(r); setForm({ ...empty, soLuongSua: String(r.so_luong || '') }); }}>Sửa</Button> },
+      canSua && <Button className="px-3 py-1.5" onClick={() => { setEditing(r); setForm({ ...empty, soLuongSuaDat: String(r.con_sua || '') }); }}>Sửa</Button> },
   ];
 
   const N = (f, label) => (
@@ -100,7 +101,7 @@ export default function SuaPage() {
         rowClassName={(r) => slaRowClass(evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status)}
         emptyText="Không có tem nào chờ sửa" />
 
-      <Modal
+      <SidePanel
         open={!!editing}
         onClose={() => setEditing(null)}
         title={`Sửa — ${editing?.ma_tem || ''}`}
@@ -112,16 +113,15 @@ export default function SuaPage() {
         }
       >
         <div className="mb-3 rounded-control bg-surface-muted px-3 py-2 text-sm text-ink-soft">
-          {editing?.ma_lenh_san_xuat} · {editing?.phan_list} · <b className="text-amber-600">SL cần sửa {fmtNum(editing?.so_luong)}</b> (kế thừa từ KCS)
+          {editing?.ma_lenh_san_xuat} · {editing?.phan_list} · <b className="text-amber-600">SL cần sửa {fmtNum(editing?.con_sua)}</b> (kế thừa từ KCS)
         </div>
         <div className="grid grid-cols-2 gap-x-4">
-          {N('soLuongHuyThang', 'Hủy thẳng')}
-          {N('soLuongSua', 'Số lượng sửa')}
           {N('soLuongSuaDat', 'Sửa đạt')}
           {N('soLuongSuaHuy', 'Sửa hủy')}
+          {N('soLuongHuyThang', 'Hủy thẳng')}
         </div>
-        <p className="text-xs text-ink-soft">Sửa đạt &gt; 0 → <b>sinh tem mới</b> chuyển <b>OQC</b>; phần còn lại loại bỏ.</p>
-      </Modal>
+        <p className="text-xs text-ink-soft">Xử lý <b>từng phần</b> (sửa đạt + sửa hủy + hủy thẳng ≤ SL cần sửa). Sửa đạt → quay lại <b>OQC</b>; phần chưa xử lý giữ lại cho lần sau.</p>
+      </SidePanel>
 
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}
         title="Lịch sử Sửa" fetcher={suaHistory} />

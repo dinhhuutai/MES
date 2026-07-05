@@ -26,11 +26,11 @@ const STATUS = {
   DONE: { tone: 'success', label: 'Hoàn thành' },
 };
 
+// Thứ tự hiển thị/thao tác: FILM → KHUÔN → MỰC (HSKT đã bỏ khỏi checklist READY).
 const ITEMS = [
-  { ma: 'KHUON', label: 'Khuôn', perm: 'READY_KHUON', hasOptions: true },
   { ma: 'FILM', label: 'Film', perm: 'READY_FILM', hasOptions: true },
+  { ma: 'KHUON', label: 'Khuôn', perm: 'READY_KHUON', hasOptions: true },
   { ma: 'MUC', label: 'Mực', perm: 'READY_MUC', hasOptions: true },
-  { ma: 'HSKT', label: 'HSKT', perm: 'READY_HSKT', hasOptions: true },
 ];
 
 const DoneCell = (done) =>
@@ -53,8 +53,10 @@ export default function ReadyPage() {
   const [bulkSaving, setBulkSaving] = useState(false);
   const [histOpen, setHistOpen] = useState(false);
   const [doneOpen, setDoneOpen] = useState(false);
+  const [onlyReturned, setOnlyReturned] = useState(false); // lọc phần bị QC trả về
 
   const permItems = ITEMS.filter((it) => can(it.perm));
+  const viewRows = onlyReturned ? rows.filter((r) => r.tra_ve_ly_do) : rows;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -123,6 +125,7 @@ export default function ReadyPage() {
       <div>
         <div>{r.ten_khach_hang}</div>
         {r.gom_set_list && <Badge tone="info" className="mt-1"><Icon name="git-branch" size={12} className="mr-1" />Gom set {r.gom_set_list}</Badge>}
+        {r.tra_ve_ly_do && <Badge tone="danger" className="mt-1" title={r.tra_ve_ly_do}>Bị QC trả về</Badge>}
       </div>
     ) },
     { key: 'ma_don_hang', header: 'Đơn hàng' },
@@ -130,10 +133,9 @@ export default function ReadyPage() {
     { key: 'mau_vai', header: 'Màu vải' },
     { key: 'kich_vai', header: 'Kích vải' },
     { key: 'kich_phim', header: 'Kích phim' },
-    { key: 'khuon_done', header: 'Khuôn', className: 'text-center', render: (r) => DoneCell(r.khuon_done) },
     { key: 'film_done', header: 'Film', className: 'text-center', render: (r) => DoneCell(r.film_done) },
+    { key: 'khuon_done', header: 'Khuôn', className: 'text-center', render: (r) => DoneCell(r.khuon_done) },
     { key: 'muc_done', header: 'Mực', className: 'text-center', render: (r) => DoneCell(r.muc_done) },
-    { key: 'hskt_done', header: 'HSKT', className: 'text-center', render: (r) => DoneCell(r.hskt_done) },
     { key: 'trang_thai_ready', header: 'Trạng thái', render: (r) => {
       const s = STATUS[r.trang_thai_ready] || STATUS.CHUA;
       return <Badge tone={s.tone}>{s.label}</Badge>;
@@ -142,18 +144,22 @@ export default function ReadyPage() {
 
   return (
     <div>
-      <Toolbar title="Chuẩn bị kỹ thuật — READY" subtitle="Xác nhận khuôn / film / mực / HSKT trước khi Release"
+      <Toolbar title="Chuẩn bị kỹ thuật — READY" subtitle="Xác nhận film / khuôn / mực trước khi Release"
         search={search} onSearch={(v) => { setSearch(v); setPage(1); }}
         searchPlaceholder="Tìm code phần, mã hàng, màu/kích vải, kích phim...">
         {permItems.length > 0 && selected.size > 0 && (
           <Button onClick={openBulk}>Xác nhận hàng loạt ({selected.size})</Button>
         )}
+        <label className="flex items-center gap-1.5 text-xs text-ink-soft">
+          <input type="checkbox" checked={onlyReturned} onChange={(e) => setOnlyReturned(e.target.checked)} />
+          Chỉ hiện phần bị trả về
+        </label>
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="warning">{meta.total} chưa READY</Badge>
       </Toolbar>
 
-      <DataTable columns={columns} rows={rows} loading={loading} onRowClick={(r) => setSel(r.id)} sttStart={(meta.page - 1) * 20}
+      <DataTable columns={columns} rows={viewRows} loading={loading} onRowClick={(r) => setSel(r.id)} sttStart={(meta.page - 1) * 20}
         rowClassName={(r) => slaRowClass(evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status)}
         emptyText="Tất cả phần in đã READY 🎉" />
       <Pagination page={meta.page} totalPages={meta.totalPages} total={meta.total} onPage={setPage} />
@@ -202,7 +208,7 @@ export default function ReadyPage() {
         fetcher={(date) => readyHistory(date, 'tech')}
       />
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
-        title="Phần in đã hoàn tất kỹ thuật (4 mục)" maHeader="Phần in"
+        title="Phần in đã hoàn tất kỹ thuật (3 mục)" maHeader="Phần in"
         fetcher={(date) => readyDone(date, 'tech')} />
 
       <Toast toast={toast} />

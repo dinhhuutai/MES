@@ -5,10 +5,10 @@ import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import Icon from '../../../components/common/Icon';
 import Toast from '../../../components/common/Toast';
-import { Input, Textarea } from '../../../components/common/controls';
+import { Input, Textarea, Select } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import { getRun, printTem, reprintTem, getTemLabel, getTemLogs, finishRun, stopLine, resumeLine } from '../../../services/productionService';
+import { getRun, printTem, reprintTem, getTemLabel, getTemLogs, finishRun, stopLine, resumeLine, addVaiHuy } from '../../../services/productionService';
 import printTemLabel from '../utils/printTemLabel';
 import { fmtNum } from '../../../utils/format';
 
@@ -30,11 +30,14 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
   const [reprintReason, setReprintReason] = useState('');
   const [logsOpen, setLogsOpen] = useState(false);
   const [temLogs, setTemLogs] = useState([]);
+  const [vhForm, setVhForm] = useState({ dotVaiId: '', soLuong: '', lyDo: '' });
 
   const phieu = data?.phieu;
   const running = phieu?.trang_thai === 'DANG_CHAY';
   const ngungActive = data?.ngung_active || null;
   const ngungList = data?.ngung_list || [];
+  const dotVaiList = data?.dot_vai || [];
+  const vaiHuyList = data?.vai_huy || [];
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -105,6 +108,27 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
     setLogsOpen(true);
     try { const res = await getTemLogs(phieu.id); setTemLogs(res.data); }
     catch (e) { show(e.message || 'Lỗi tải lịch sử', 'error'); }
+  };
+
+  // Ghi vải hủy theo phần in. Lệnh chỉ 1 phần in → tự chọn; nhiều phần in → phải chọn.
+  const doVaiHuy = async () => {
+    const qty = Number(vhForm.soLuong);
+    if (!qty || qty <= 0) { show('Nhập số lượng vải hủy', 'error'); return; }
+    if (dotVaiList.length > 1 && !vhForm.dotVaiId) { show('Chọn phần in cần ghi vải hủy', 'error'); return; }
+    setBusy(true);
+    try {
+      await addVaiHuy(phieu.id, {
+        dotVaiId: vhForm.dotVaiId || (dotVaiList.length === 1 ? dotVaiList[0].dot_vai_ve_id : null),
+        soLuong: qty,
+        lyDo: vhForm.lyDo.trim() || null,
+      });
+      show('Đã ghi vải hủy');
+      setVhForm({ dotVaiId: '', soLuong: '', lyDo: '' });
+      await load();
+      onChanged?.();
+    } catch (e) {
+      show(e.message || 'Ghi vải hủy thất bại', 'error');
+    } finally { setBusy(false); }
   };
 
   const doReprint = async () => {
@@ -243,6 +267,57 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
               )}
             </section>
           )}
+
+          {/* Vải hủy trong sản xuất (theo phần in) */}
+          <section className="border-t border-line pt-4">
+            <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-soft">Vải hủy (theo phần in)</h3>
+            {canRun && phieu && (
+              <div className="space-y-2">
+                {dotVaiList.length > 1 && (
+                  <Select value={vhForm.dotVaiId} onChange={(e) => setVhForm({ ...vhForm, dotVaiId: e.target.value })}>
+                    <option value="">— Chọn phần in —</option>
+                    {dotVaiList.map((d) => (
+                      <option key={d.dot_vai_ve_id} value={d.dot_vai_ve_id}>
+                        {d.ma_phan} · {d.mau_vai} · {d.kich_vai}/{d.kich_phim}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+                {dotVaiList.length === 1 && (
+                  <div className="rounded-control bg-surface-muted px-3 py-1.5 text-xs text-ink-soft">
+                    Phần in: <b className="text-ink">{dotVaiList[0].ma_phan}</b> · {dotVaiList[0].mau_vai}
+                  </div>
+                )}
+                <div className="flex items-end gap-2">
+                  <div className="flex-1">
+                    <label className="mb-1 block text-sm font-medium text-ink">Số lượng vải hủy</label>
+                    <Input type="number" min="1" value={vhForm.soLuong}
+                      onChange={(e) => setVhForm({ ...vhForm, soLuong: e.target.value })} placeholder="vd: 5" />
+                  </div>
+                  <Button variant="danger" onClick={doVaiHuy} loading={busy}
+                    disabled={!vhForm.soLuong || Number(vhForm.soLuong) <= 0}>Ghi vải hủy</Button>
+                </div>
+                <Textarea rows={2} value={vhForm.lyDo} onChange={(e) => setVhForm({ ...vhForm, lyDo: e.target.value })}
+                  placeholder="Lý do vải hủy (vd: lỗi vải, in hỏng, rách...)" />
+              </div>
+            )}
+            {vaiHuyList.length > 0 && (
+              <div className="mt-3 space-y-1.5">
+                <div className="text-xs font-medium text-ink-soft">Đã ghi ({vaiHuyList.length})</div>
+                {vaiHuyList.map((v) => (
+                  <div key={v.id} className="rounded-control border border-line px-3 py-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-ink">{v.ma_phan || '—'}{v.mau_vai ? ` · ${v.mau_vai}` : ''}</span>
+                      <Badge tone="danger">{fmtNum(v.so_luong)}</Badge>
+                    </div>
+                    <div className="mt-0.5 text-xs text-ink-soft">
+                      {v.nguoi ? `${v.nguoi} · ` : ''}{fmtDt(v.created_date)}{v.ly_do ? ` · ${v.ly_do}` : ''}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
 
           <section className="border-t border-line pt-4">
             <div className="mb-2 flex items-center justify-between">

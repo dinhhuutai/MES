@@ -4,6 +4,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { selectTheme } from './store/uiSlice';
 import ProtectedRoute from './routes/ProtectedRoute';
 import RequirePermission from './routes/RequirePermission';
+import ScrollToTop from './components/common/ScrollToTop';
 import PortalLayout from './components/layout/PortalLayout';
 import ModuleLayout from './components/layout/ModuleLayout';
 import LoginPage from './features/auth/pages/LoginPage';
@@ -41,6 +42,8 @@ import SuaPage from './features/quality/pages/SuaPage';
 import OqcPage from './features/quality/pages/OqcPage';
 import QcInlinePage from './features/quality/pages/QcInlinePage';
 import LoaiLoiPage from './features/quality/pages/LoaiLoiPage';
+import GiaoDacBietPage from './features/quality/pages/GiaoDacBietPage';
+import QcTraVePage from './features/quality/pages/QcTraVePage';
 import GiaoHangPage from './features/delivery/pages/GiaoHangPage';
 import DashboardPage from './features/dashboard/pages/DashboardPage';
 import TinhTrangTramPage from './features/dashboard/pages/TinhTrangTramPage';
@@ -69,6 +72,8 @@ const PAGES = {
   '/chat-luong/qc-in-line': <QcInlinePage />,
   '/chat-luong/oqc': <OqcPage />,
   '/chat-luong/danh-muc-loi': <LoaiLoiPage />,
+  '/chat-luong/giao-dac-biet': <GiaoDacBietPage />,
+  '/chat-luong/qc-tra-ve': <QcTraVePage />,
   '/giao-hang': <GiaoHangPage />,
   '/dashboard': <DashboardPage />,
   '/dashboard/tinh-trang-tram': <TinhTrangTramPage />,
@@ -109,6 +114,8 @@ export default function App() {
   }, [theme]);
 
   return (
+    <>
+    <ScrollToTop />
     <Routes>
       <Route path="/login" element={<LoginPage />} />
 
@@ -128,5 +135,6 @@ export default function App() {
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+    </>
   );
 }

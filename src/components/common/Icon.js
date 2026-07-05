@@ -38,6 +38,7 @@ import {
   Filter,
   CheckCircle2,
   ArrowDown,
+  GripVertical,
 } from 'lucide-react';
 
 // Map tên kebab → component Lucide.
@@ -81,6 +82,7 @@ const MAP = {
   filter: Filter,
   'check-circle': CheckCircle2,
   'arrow-down': ArrowDown,
+  'grip-vertical': GripVertical,
 };
 
 export default function Icon({ name, size = 20, className = '' }) {

@@ -11,6 +11,8 @@ export const getTemLabel = (temId) => client.get(`/production/tem/${temId}/label
 export const getTemLogs = (phieuId) => client.get(`/production/phieu/${phieuId}/tem-logs`);
 export const finishRun = (phieuId) => client.post(`/production/phieu/${phieuId}/finish`);
 export const stopLine = (phieuId, lyDo) => client.post(`/production/phieu/${phieuId}/ngung`, { lyDo });
+// Ghi vải hủy trong sản xuất (theo đợt vải / phần in của lệnh)
+export const addVaiHuy = (phieuId, body) => client.post(`/production/phieu/${phieuId}/vai-huy`, body);
 export const resumeLine = (phieuId) => client.post(`/production/phieu/${phieuId}/hoat-dong-lai`);
 
 // Theo dõi chuyền
@@ -25,3 +27,5 @@ export const adjustPhoi = (temXeId, phut) => client.patch(`/production/tem-xe-ph
 // Chờ khô
 export const listDrying = (params) => client.get('/production/drying', { params });
 export const confirmDry = (temId) => client.post(`/production/drying/${temId}/confirm`);
+// Phơi lại 1 tem (từ KCS)
+export const redryTem = (temId, phut) => client.post(`/production/tem/${temId}/phoi-lai`, { phut });

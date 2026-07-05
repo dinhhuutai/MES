@@ -141,6 +141,7 @@ export default function TestRunCnspPage() {
     { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
     { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
+    { key: 'chuyen', header: 'Chuyền', render: (r) => r.ten_chuyen || '—' },
     { key: 'so_lan_test', header: 'Lần test', className: 'text-right tabular-nums', render: (r) => r.so_lan_test },
     { key: 'cnsp_done', header: 'CNSP', render: (r) => r.cnsp_done ? <Badge tone="success">✓</Badge> : <Badge tone="warning">Chờ</Badge> },
   ];
@@ -179,10 +180,22 @@ export default function TestRunCnspPage() {
               <div className="rounded-control border border-line p-3">
                 <div className="text-xs text-ink-soft">CNSP (kỹ thuật)</div>
                 {state.cnsp_done ? <Badge tone="success">Đã xác nhận</Badge> : <Badge tone="warning">Chờ</Badge>}
+                {state.cnsp_done && (state.cnsp_nguoi || state.cnsp_tg) && (
+                  <div className="mt-1 text-xs text-ink-soft">
+                    {state.cnsp_nguoi ? <div className="font-medium text-ink">{state.cnsp_nguoi}</div> : null}
+                    {state.cnsp_tg ? <div>{fmt(state.cnsp_tg)}</div> : null}
+                  </div>
+                )}
               </div>
               <div className="rounded-control border border-line p-3">
                 <div className="text-xs text-ink-soft">QA (chất lượng)</div>
                 {state.qa_done ? <Badge tone="success">Đã xác nhận</Badge> : <Badge tone="warning">Chờ</Badge>}
+                {state.qa_done && (state.qa_nguoi || state.qa_tg) && (
+                  <div className="mt-1 text-xs text-ink-soft">
+                    {state.qa_nguoi ? <div className="font-medium text-ink">{state.qa_nguoi}</div> : null}
+                    {state.qa_tg ? <div>{fmt(state.qa_tg)}</div> : null}
+                  </div>
+                )}
               </div>
             </section>
 

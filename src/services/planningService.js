@@ -15,9 +15,11 @@ export const listTestRunCandidates = (params) => client.get('/planning/test-run/
 export const getLenhDetail = (id) => client.get(`/planning/lenh/${id}`);
 export const recordTestRun = (id, body) => client.post(`/planning/test-run/${id}/run`, body);
 export const confirmCNSP = (id) => client.post(`/planning/test-run/${id}/confirm-cnsp`);
-export const confirmQA = (id) => client.post(`/planning/test-run/${id}/confirm-qa`);
+export const confirmQA = (id, soLuong) => client.post(`/planning/test-run/${id}/confirm-qa`, { soLuong });
 export const cancelCNSP = (id) => client.post(`/planning/test-run/${id}/cancel-cnsp`);
 export const cancelQA = (id) => client.post(`/planning/test-run/${id}/cancel-qa`);
+// Test Run QC trả về Release 1 (hủy lệnh + lý do)
+export const returnTestRunToRelease1 = (id, body) => client.post(`/planning/test-run/${id}/tra-ve-release1`, body);
 export const confirmCNSPBatch = (lenhIds) => client.post('/planning/test-run/cnsp-confirm-batch', { lenhIds });
 export const confirmQABatch = (lenhIds) => client.post('/planning/test-run/qa-confirm-batch', { lenhIds });
 export const testRunHistory = (date) => client.get('/planning/test-run/history', { params: { date } });

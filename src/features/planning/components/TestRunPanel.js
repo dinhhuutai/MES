@@ -6,7 +6,7 @@ import Toast from '../../../components/common/Toast';
 import { Input, Textarea, Field } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import { getLenhDetail, recordTestRun, confirmQA, cancelQA } from '../../../services/planningService';
+import { getLenhDetail, recordTestRun, confirmQA, cancelQA, returnTestRunToRelease1 } from '../../../services/planningService';
 import { fmtNum } from '../../../utils/format';
 
 const fmt = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '');
@@ -23,9 +23,11 @@ export default function TestRunPanel({ lenhId, onClose, onChanged }) {
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [busy, setBusy] = useState(null); // 'fail' | 'pass'
+  const [busy, setBusy] = useState(null); // 'fail' | 'pass' | 'return'
   const [soLuong, setSoLuong] = useState('');
   const [lyDo, setLyDo] = useState('');
+  const [returnMode, setReturnMode] = useState(false);
+  const [returnReason, setReturnReason] = useState('');
 
   const state = data?.state || {};
   const done = state.qa_done;
@@ -76,18 +78,33 @@ export default function TestRunPanel({ lenhId, onClose, onChanged }) {
     }
   };
 
-  // Xác nhận đạt → ghi lần test đạt (nếu có số lượng) rồi QA xác nhận → qua checkpoint tiếp theo.
+  // Xác nhận đạt → QA xác nhận đạt = tính 1 LẦN TEST (đạt), kèm số lượng nếu nhập → qua checkpoint tiếp theo.
   const doPass = async () => {
     setBusy('pass');
     try {
-      if (soLuong) await recordTestRun(lenhId, { soLuong: Number(soLuong), ketQua: 'DAT' });
-      await confirmQA(lenhId);
+      await confirmQA(lenhId, soLuong ? Number(soLuong) : null);
       show('QA xác nhận đạt — chuyển bước tiếp theo');
       setSoLuong(''); setLyDo('');
       await load();
       onChanged?.();
     } catch (e) {
       show(e.message || 'Thất bại', 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // Trả về Release 1 → hủy lệnh, đợt vải về pool Release 1 (kèm lý do bắt buộc).
+  const doReturn = async () => {
+    if (!returnReason.trim()) { show('Nhập lý do trả về Release 1', 'error'); return; }
+    setBusy('return');
+    try {
+      await returnTestRunToRelease1(lenhId, { lyDo: returnReason.trim() });
+      show('Đã trả về Release 1 — đợt vải quay lại danh sách chờ release');
+      onChanged?.();
+      onClose?.();
+    } catch (e) {
+      show(e.message || 'Trả về thất bại', 'error');
     } finally {
       setBusy(null);
     }
@@ -122,10 +139,22 @@ export default function TestRunPanel({ lenhId, onClose, onChanged }) {
             <div className="rounded-control border border-line p-3">
               <div className="text-xs text-ink-soft">CNSP (kỹ thuật)</div>
               {state.cnsp_done ? <Badge tone="success">Đã xác nhận</Badge> : <Badge tone="warning">Chờ</Badge>}
+              {state.cnsp_done && (state.cnsp_nguoi || state.cnsp_tg) && (
+                <div className="mt-1 text-xs text-ink-soft">
+                  {state.cnsp_nguoi ? <div className="font-medium text-ink">{state.cnsp_nguoi}</div> : null}
+                  {state.cnsp_tg ? <div>{fmt(state.cnsp_tg)}</div> : null}
+                </div>
+              )}
             </div>
             <div className="rounded-control border border-line p-3">
               <div className="text-xs text-ink-soft">QA (chất lượng)</div>
               {state.qa_done ? <Badge tone="success">Đã xác nhận</Badge> : <Badge tone="warning">Chờ</Badge>}
+              {state.qa_done && (state.qa_nguoi || state.qa_tg) && (
+                <div className="mt-1 text-xs text-ink-soft">
+                  {state.qa_nguoi ? <div className="font-medium text-ink">{state.qa_nguoi}</div> : null}
+                  {state.qa_tg ? <div>{fmt(state.qa_tg)}</div> : null}
+                </div>
+              )}
             </div>
           </section>
 
@@ -146,6 +175,31 @@ export default function TestRunPanel({ lenhId, onClose, onChanged }) {
               ))}
             </div>
           </section>
+
+          {canQA && !done && (
+            <section className="border-t border-line pt-4">
+              {!returnMode ? (
+                <button type="button" onClick={() => setReturnMode(true)}
+                  className="text-xs font-medium text-danger hover:underline">↩ Trả về Release 1 (test không đạt)</button>
+              ) : (
+                <div className="rounded-control border border-rose-200 bg-rose-50 p-3 dark:border-rose-900/60 dark:bg-rose-950/40">
+                  <p className="mb-2 text-xs font-medium text-rose-700 dark:text-rose-300">
+                    Trả về Release 1 sẽ <b>hủy lệnh</b> — đợt vải quay lại danh sách chờ release để lập lại. Lý do bắt buộc.
+                  </p>
+                  <Field label="Lý do trả về Release 1" required>
+                    <Textarea rows={2} value={returnReason} onChange={(e) => setReturnReason(e.target.value)}
+                      placeholder="Vì sao trả về Release 1..." />
+                  </Field>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="ghost" className="px-3 py-1.5" onClick={() => { setReturnMode(false); setReturnReason(''); }}>Hủy</Button>
+                    <Button variant="danger" className="px-3 py-1.5" onClick={doReturn} loading={busy === 'return'} disabled={!returnReason.trim()}>
+                      Trả về Release 1
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
 
           <section className="border-t border-line pt-4">
             <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-soft">Lịch sử test ({data.test_runs.length})</h3>

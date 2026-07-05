@@ -12,12 +12,11 @@ import useNow from '../../../hooks/useNow';
 import { evalSla, SLA_BADGE, fmtDur } from '../../../utils/sla';
 import { getReadyDetail, confirmReadyItem, confirmReadyItemsBatch } from '../../../services/readyService';
 
-// 4 mục kỹ thuật + quyền tương ứng.
+// 3 mục kỹ thuật + quyền tương ứng. Thứ tự hiển thị: FILM → KHUÔN → MỰC (HSKT đã bỏ).
 const ITEMS = [
-  { ma: 'KHUON', label: 'Khuôn', perm: 'READY_KHUON', hasOptions: true },
   { ma: 'FILM', label: 'Film', perm: 'READY_FILM', hasOptions: true },
+  { ma: 'KHUON', label: 'Khuôn', perm: 'READY_KHUON', hasOptions: true },
   { ma: 'MUC', label: 'Mực', perm: 'READY_MUC', hasOptions: true },
-  { ma: 'HSKT', label: 'Hồ sơ kỹ thuật (HSKT)', perm: 'READY_HSKT', hasOptions: true },
 ];
 
 const fmt = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '');
@@ -29,7 +28,7 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
 
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [sel, setSel] = useState({ KHUON: '', FILM: '', MUC: '', HSKT: '' }); // option đang chọn (chưa xác nhận)
+  const [sel, setSel] = useState({ KHUON: '', FILM: '', MUC: '' }); // option đang chọn (chưa xác nhận)
   const [busy, setBusy] = useState(null); // ma đang submit
 
   const byMa = (detail?.checkpoints || []).reduce((acc, c) => ({ ...acc, [c.ma_checkpoint]: c }), {});
@@ -46,7 +45,6 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
         KHUON: m.KHUON?.gia_tri_text || '',
         FILM: m.FILM?.gia_tri_text || '',
         MUC: m.MUC?.gia_tri_text || '',
-        HSKT: m.HSKT?.gia_tri_text || '',
       });
     } catch (e) {
       show(e.message || 'Lỗi tải', 'error');
@@ -172,11 +170,11 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
             </div>
           ) : state.tech_done ? (
             <div className="rounded-control border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-700">
-              Đã đủ 4 mục kỹ thuật — chờ QC xác nhận (Module Chất lượng).
+              Đã đủ 3 mục kỹ thuật — chờ QC xác nhận (Module Chất lượng).
             </div>
           ) : (
             <div className="rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-              Mỗi bộ phận xác nhận mục của mình. Đủ 4 mục sẽ chuyển sang chờ QC.
+              Mỗi bộ phận xác nhận mục của mình. Đủ 3 mục sẽ chuyển sang chờ QC.
             </div>
           )}
 
@@ -191,10 +189,10 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
           <div className="space-y-2 border-t border-line pt-4">
             <h3 className="text-xs font-bold uppercase tracking-wide text-ink-soft">Tiến trình</h3>
             <div className="flex items-center justify-between rounded-control border border-line px-3 py-2">
-              <span className="text-sm font-medium text-ink">Kỹ thuật (4 mục)</span>
+              <span className="text-sm font-medium text-ink">Kỹ thuật (3 mục)</span>
               {state.tech_done
                 ? <Badge tone="success">Hoàn tất</Badge>
-                : <Badge tone="warning">{[state.khuon_done, state.film_done, state.muc_done, state.hskt_done].filter(Boolean).length}/4</Badge>}
+                : <Badge tone="warning">{[state.khuon_done, state.film_done, state.muc_done].filter(Boolean).length}/3</Badge>}
             </div>
             <p className="flex items-center gap-1.5 text-xs text-ink-soft">
               <Icon name="shield-check" size={14} /> QC thực hiện tại Module Chất lượng → QC chuẩn bị kỹ thuật.

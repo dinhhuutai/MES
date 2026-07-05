@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { fmtNum } from '../../../utils/format';
+import { parseRange } from './ConditionalFormatModal';
 
 // Ký hiệu cột: 0→A, 25→Z, 26→AA...
 export function colLabel(n) {
@@ -34,6 +35,45 @@ const LOAI_BG = {
 
 const SIZE_CLS = { sm: 'text-xs', base: 'text-sm', lg: 'text-base', xl: 'text-lg' };
 const ALIGN_CLS = { left: 'text-left', center: 'text-center', right: 'text-right' };
+const VALIGN_CLS = { top: 'align-top', giua: 'align-middle', duoi: 'align-bottom' };
+const FONT_CLS = { serif: 'font-serif', mono: 'font-mono', sans: 'font-sans' };
+const COL_W = 128; // bề rộng mặc định mỗi cột dữ liệu (px)
+
+const toNum = (v) => { if (v == null || v === '') return null; const n = Number(v); return Number.isFinite(n) ? n : null; };
+
+// Giá trị ô để so khớp điều kiện: { text, num }.
+function cellValue(cell, res, mode) {
+  if (mode === 'view') {
+    if (!res) return { text: cell?.loai === 'text' ? (cell.gia_tri || '') : '', num: null };
+    if (res.kieu === 'bool') return { text: res.value ? 'TRUE' : 'FALSE', num: res.value ? 1 : 0 };
+    const n = Number(res.value);
+    return { text: String(res.value ?? ''), num: Number.isFinite(n) ? n : null };
+  }
+  if (!cell) return { text: '', num: null };
+  if (cell.loai === 'so') { const n = Number(cell.gia_tri); return { text: String(cell.gia_tri ?? ''), num: Number.isFinite(n) ? n : null }; }
+  if (cell.loai === 'hop_kiem') return { text: cell.gia_tri ? 'TRUE' : 'FALSE', num: cell.gia_tri ? 1 : 0 };
+  return { text: cell.gia_tri || '', num: null };
+}
+
+// Một quy tắc định dạng có điều kiện có khớp ô hay không.
+function matchDieuKien(r, text, num) {
+  const t = (text ?? '').toString();
+  const a = toNum(r.v1); const b = toNum(r.v2);
+  switch (r.toan_tu) {
+    case 'khong_trong': return t.trim() !== '';
+    case 'trong': return t.trim() === '';
+    case 'chua': return t.toLowerCase().includes(String(r.v1 || '').toLowerCase());
+    case 'khong_chua': return !t.toLowerCase().includes(String(r.v1 || '').toLowerCase());
+    case 'bang': return t === String(r.v1) || (num != null && a != null && num === a);
+    case 'khac': return !(t === String(r.v1) || (num != null && a != null && num === a));
+    case 'lon_hon': return num != null && a != null && num > a;
+    case 'lon_hon_bang': return num != null && a != null && num >= a;
+    case 'nho_hon': return num != null && a != null && num < a;
+    case 'nho_hon_bang': return num != null && a != null && num <= a;
+    case 'giua': return num != null && a != null && b != null && num >= Math.min(a, b) && num <= Math.max(a, b);
+    default: return false;
+  }
+}
 
 // Định dạng số/kiểu dữ liệu theo dinh_dang_so của ô.
 export function fmtSo(value, kieuSo) {
@@ -86,13 +126,16 @@ function rawOf(cell) {
 export default function ReportGrid({
   grid, ketQua = {}, mode = 'design', selected, metricsByMa = {},
   editable = false,
-  onCellMouseDown, onCellMouseEnter, onEditCommit, onToggleCheck, onSelectDropdown,
+  onCellMouseDown, onCellMouseEnter, onEditCommit, onToggleCheck, onSelectDropdown, onDropMetric,
 }) {
   const soCot = grid?.so_cot || 8;
   const soHang = grid?.so_hang || 20;
   const cells = grid?.o || {};
   const merges = grid?.merges || [];
   const xenKe = !!(grid?.dinh_dang?.mau_xen_ke);
+  const dieuKien = (grid?.dinh_dang?.dieu_kien || [])
+    .map((r) => ({ ...r, _range: parseRange(r.vung, parseKey) }))
+    .filter((r) => r._range);
   const metricName = (ma) => metricsByMa[ma]?.ten || ma;
   const selSet = selected instanceof Set ? selected : (selected ? new Set([selected]) : new Set());
 
@@ -131,12 +174,18 @@ export default function ReportGrid({
 
   return (
     <div className="overflow-auto rounded-card border border-line">
-      <table className={`border-collapse text-sm ${mode === 'design' ? 'select-none' : ''}`}>
+      {/* table-fixed + colgroup: cột có bề rộng cố định → "xuống dòng" mới bẻ dòng đúng
+          khi nội dung dài hơn ô (thay vì cột nở ra theo nội dung). */}
+      <table className={`w-max table-fixed border-collapse text-sm ${mode === 'design' ? 'select-none' : ''}`}>
+        <colgroup>
+          <col style={{ width: 44 }} />
+          {Array.from({ length: soCot }).map((_, c) => <col key={c} style={{ width: COL_W }} />)}
+        </colgroup>
         <thead>
           <tr>
-            <th className="sticky left-0 z-10 w-10 border border-line bg-surface-muted" />
+            <th className="sticky left-0 z-10 border border-line bg-surface-muted" />
             {Array.from({ length: soCot }).map((_, c) => (
-              <th key={c} className="min-w-[110px] border border-line bg-surface-muted px-2 py-1 text-xs font-semibold text-ink-soft">
+              <th key={c} className="border border-line bg-surface-muted px-2 py-1 text-xs font-semibold text-ink-soft">
                 {colLabel(c)}
               </th>
             ))}
@@ -154,20 +203,35 @@ export default function ReportGrid({
                 const cell = cells[key];
                 const res = ketQua[key];
                 const isSel = selSet.has(key);
-                const dd = cell?.dinh_dang || {};
+                const ddBase = cell?.dinh_dang || {};
+                // Định dạng có điều kiện: gộp đè lên định dạng gốc theo thứ tự quy tắc.
+                let cfmt = null;
+                if (dieuKien.length) {
+                  const p = parseKey(key);
+                  const { text, num } = cellValue(cell, res, mode);
+                  for (const rl of dieuKien) {
+                    const rg = rl._range;
+                    if (p && p.r >= rg.r0 && p.r <= rg.r1 && p.c >= rg.c0 && p.c <= rg.c1 && matchDieuKien(rl, text, num)) {
+                      cfmt = { ...(cfmt || {}), ...(rl.dinh_dang || {}) };
+                    }
+                  }
+                }
+                const dd = cfmt ? { ...ddBase, ...cfmt } : ddBase;
                 const span = spanByKey[key] || {};
                 const bg = mode === 'design' && cell ? LOAI_BG[cell.loai] || '' : '';
                 const err = mode === 'view' && res?.loi;
                 const zebra = xenKe && mode === 'view' && r % 2 === 1 && !dd.mau_nen;
                 const disp = display(cell, res, mode, metricName);
                 const editing = edit && edit.key === key;
+                const deco = [dd.gach_chan && 'underline', dd.gach_ngang && 'line-through'].filter(Boolean).join(' ');
 
                 const cls = [
-                  'border px-2 py-1 align-middle',
-                  isSel ? 'border-primary ring-1 ring-primary' : 'border-line',
+                  'border border-line px-2 py-1',
+                  VALIGN_CLS[dd.can_doc] || 'align-middle',
                   err ? 'bg-rose-50 text-danger dark:bg-rose-950/20' : bg,
                   zebra ? 'bg-surface-muted/40' : '',
                   SIZE_CLS[dd.co_chu] || 'text-sm',
+                  FONT_CLS[dd.phong_chu] || '',
                   dd.dam ? 'font-semibold' : '',
                   dd.nghieng ? 'italic' : '',
                   dd.vien_dam ? 'border-2 border-ink/60' : '',
@@ -178,6 +242,20 @@ export default function ReportGrid({
                 const style = {};
                 if (dd.mau_chu) style.color = dd.mau_chu;
                 if (dd.mau_nen && !err) style.backgroundColor = dd.mau_nen;
+                if (deco) style.textDecorationLine = deco;
+                // Viền + ô đang chọn — vẽ bằng box-shadow inset (không bị "border-collapse"
+                // của bảng nuốt mất cạnh; ô chọn hiện đủ 4 cạnh kể cả cột lẻ).
+                const sh = [];
+                if (isSel && mode === 'design') sh.push('inset 0 0 0 2px #0058be');
+                if (dd.vien && typeof dd.vien === 'object') {
+                  const t = dd.vien_day === 'dam' ? 2 : 1;
+                  const bc = dd.vien_mau || '#000000';
+                  if (dd.vien.tren) sh.push(`inset 0 ${t}px 0 0 ${bc}`);
+                  if (dd.vien.duoi) sh.push(`inset 0 -${t}px 0 0 ${bc}`);
+                  if (dd.vien.trai) sh.push(`inset ${t}px 0 0 0 ${bc}`);
+                  if (dd.vien.phai) sh.push(`inset -${t}px 0 0 0 ${bc}`);
+                }
+                if (sh.length) style.boxShadow = sh.join(', ');
 
                 // Nội dung ô
                 let inner;
@@ -209,8 +287,15 @@ export default function ReportGrid({
                       className="block text-center text-base">{disp.checked ? '☑' : '☐'}</span>
                   );
                 } else {
+                  const isMetricDesign = cell?.loai === 'metric' && mode === 'design';
                   inner = (
-                    <span className={`block max-w-[220px] truncate ${cell?.loai === 'cong_thuc' && mode === 'design' ? 'font-mono text-xs text-amber-700 dark:text-amber-400' : ''}`}>
+                    <span
+                      // Xuống dòng: bẻ dòng trong bề rộng cột cố định; nếu không thì cắt bớt (…).
+                      className={`block ${dd.xuong_dong ? 'whitespace-pre-wrap break-words' : 'truncate'} ${cell?.loai === 'cong_thuc' && mode === 'design' ? 'font-mono text-xs text-amber-700 dark:text-amber-400' : ''}`}
+                    >
+                      {isMetricDesign && (
+                        <span className="mr-1 rounded bg-primary/20 px-1 text-[10px] font-bold uppercase text-primary">Σ</span>
+                      )}
                       {disp.text}
                     </span>
                   );
@@ -221,8 +306,16 @@ export default function ReportGrid({
                     rowSpan={span.rowSpan} colSpan={span.colSpan}
                     onMouseDown={(e) => { if (mode === 'design' && !editing && onCellMouseDown) onCellMouseDown(key, e); }}
                     onMouseEnter={() => { if (mode === 'design' && !editing && onCellMouseEnter) onCellMouseEnter(key); }}
+                    onDragOver={(e) => { if (mode === 'design' && editable && onDropMetric) e.preventDefault(); }}
+                    onDrop={(e) => {
+                      if (mode !== 'design' || !editable || !onDropMetric) return;
+                      const ma = e.dataTransfer.getData('text/metric');
+                      if (ma) { e.preventDefault(); onDropMetric(key, ma); }
+                    }}
                     onDoubleClick={() => startEdit(key)}
-                    title={cell?.loai === 'metric' ? metricsByMa[cell.metric]?.mo_ta : undefined}
+                    title={mode === 'view'
+                      ? (!dd.xuong_dong && disp.text ? String(disp.text) : undefined)
+                      : (cell?.loai === 'metric' ? metricsByMa[cell.metric]?.mo_ta : undefined)}
                     style={style}
                     className={`h-9 ${cls}`}>
                     {inner}

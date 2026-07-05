@@ -135,6 +135,11 @@ export default function ReplanPage() {
           onChange={() => toggleOne(r.id)} aria-label="Chọn lệnh" />
       ) }] : []),
     { key: 'ma_lenh_san_xuat', header: 'Mã lệnh', render: (r) => <Badge tone="info">{r.ma_lenh_san_xuat}</Badge> },
+    { key: 'giai_doan', header: 'Giai đoạn', render: (r) => (
+      r.trang_thai === 'RELEASE_1'
+        ? <Badge tone="warning">Test Run</Badge>
+        : <Badge tone="success">Release 2</Badge>
+    ) },
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
@@ -149,7 +154,7 @@ export default function ReplanPage() {
 
   return (
     <div>
-      <Toolbar title="Lập kế hoạch lại" subtitle="Lệnh đã Release 2 nhưng chưa bắt đầu sản xuất — đổi chuyền / ngày sản xuất kèm lý do"
+      <Toolbar title="Lập kế hoạch lại" subtitle="Lệnh đang Test Run hoặc đã Release 2 (chưa bắt đầu sản xuất) — đổi chuyền / ngày sản xuất kèm lý do"
         search={search} onSearch={(v) => { setSearch(v); setPage(1); }}
         searchPlaceholder="Tìm mã lệnh, code phần, mã hàng, màu/kích...">
         {canReplan && selected.size > 0 && (

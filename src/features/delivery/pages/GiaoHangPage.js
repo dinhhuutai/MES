@@ -11,6 +11,7 @@ import { evalSla, slaRowClass } from '../../../utils/sla';
 import {
   listTemSanSang, createGiaoHang, listGiaoHang,
 } from '../../../services/deliveryService';
+import { Input } from '../../../components/common/controls';
 import { fmtNum, fmtDate } from '../../../utils/format';
 import GiaoHangPanel from '../components/GiaoHangPanel';
 
@@ -44,17 +45,20 @@ export default function GiaoHangPage() {
   useEffect(() => { load(); }, [load]);
 
   const selectedList = useMemo(() => Object.values(selected), [selected]);
+  // Mỗi tem chọn = { row, qty } — qty = SL giao lần này (mặc định = còn giao). Giao TỪNG PHẦN nhiều lần.
   const toggle = (row) =>
     setSelected((s) => {
       const n = { ...s };
-      if (n[row.tem_id]) delete n[row.tem_id]; else n[row.tem_id] = row;
+      if (n[row.tem_id]) delete n[row.tem_id]; else n[row.tem_id] = { row, qty: Number(row.con_giao) || 0 };
       return n;
     });
+  const setQty = (temId, v) => setSelected((s) => (s[temId] ? { ...s, [temId]: { ...s[temId], qty: v } } : s));
 
   const doCreate = async () => {
     setCreating(true);
     try {
-      const r = await createGiaoHang({ temIds: selectedList.map((t) => t.tem_id) });
+      const items = selectedList.map((x) => ({ temId: x.row.tem_id, soLuong: Number(x.qty) || null }));
+      const r = await createGiaoHang({ items });
       show(`Đã tạo phiếu giao ${r.data.ma_phieu_giao}`);
       setSelected({});
       setSel(r.data.id);
@@ -79,7 +83,15 @@ export default function GiaoHangPage() {
     { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
     { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
-    { key: 'so_luong', header: 'SL pcs', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
+    { key: 'so_luong', header: 'SL in', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
+    { key: 'con_giao', header: 'Còn giao', className: 'text-right tabular-nums font-medium text-primary', render: (r) => fmtNum(r.con_giao) },
+    { key: 'giao_qty', header: 'SL giao lần này', className: 'w-32', render: (r) => (
+      selected[r.tem_id] ? (
+        <Input type="number" min="1" max={r.con_giao} value={selected[r.tem_id].qty}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => setQty(r.tem_id, e.target.value)} className="py-1 text-right" />
+      ) : <span className="text-ink-soft">—</span>
+    ) },
   ];
 
   const histCols = [
@@ -113,7 +125,7 @@ export default function GiaoHangPage() {
             emptyText="Không có tem OQC đạt nào chờ giao" />
           {selectedList.length > 0 && (
             <div className="sticky bottom-4 mt-4 flex items-center justify-between rounded-card border border-line bg-surface px-5 py-3 shadow-card-hover">
-              <span className="text-sm text-ink">Đã chọn <b>{selectedList.length}</b> tem · Tổng <b>{fmtNum(selectedList.reduce((s, t) => s + (Number(t.so_luong) || 0), 0))}</b></span>
+              <span className="text-sm text-ink">Đã chọn <b>{selectedList.length}</b> tem · Tổng giao <b>{fmtNum(selectedList.reduce((s, x) => s + (Number(x.qty) || 0), 0))}</b></span>
               <div className="flex gap-2">
                 <Button variant="ghost" onClick={() => setSelected({})}>Bỏ chọn</Button>
                 {canManage && <Button onClick={doCreate} loading={creating}>Tạo phiếu giao</Button>}

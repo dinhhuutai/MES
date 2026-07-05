@@ -14,13 +14,14 @@ import useNow from '../../../hooks/useNow';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
-import { listReadyQcCandidates, getReadyDetail, confirmReadyQC, confirmReadyQcBatch, readyHistory, readyDone } from '../../../services/readyService';
+import { Field, Textarea } from '../../../components/common/controls';
+import { listReadyQcCandidates, getReadyDetail, confirmReadyQC, confirmReadyQcBatch, readyHistory, readyDone, returnReadyToTech } from '../../../services/readyService';
 
+// Thứ tự hiển thị: FILM → KHUÔN → MỰC (HSKT đã bỏ khỏi checklist READY).
 const TECH_ITEMS = [
-  { ma: 'KHUON', label: 'Khuôn' },
   { ma: 'FILM', label: 'Film' },
+  { ma: 'KHUON', label: 'Khuôn' },
   { ma: 'MUC', label: 'Mực' },
-  { ma: 'HSKT', label: 'HSKT' },
 ];
 
 const fmt = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '');
@@ -45,6 +46,10 @@ export default function ReadyQcPage() {
   const [batching, setBatching] = useState(false);
   const [histOpen, setHistOpen] = useState(false);
   const [doneOpen, setDoneOpen] = useState(false);
+  // Trả về kỹ thuật (chọn checklist rớt + lý do)
+  const [returnMode, setReturnMode] = useState(false);
+  const [returnChecklists, setReturnChecklists] = useState(() => new Set());
+  const [returnReason, setReturnReason] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -69,6 +74,9 @@ export default function ReadyQcPage() {
     setEditing(row);
     setDetail(null);
     setLoadingDetail(true);
+    setReturnMode(false);
+    setReturnChecklists(new Set());
+    setReturnReason('');
     try {
       const res = await getReadyDetail(row.id);
       setDetail(res.data);
@@ -76,6 +84,28 @@ export default function ReadyQcPage() {
       show(e.message || 'Lỗi tải chi tiết', 'error');
     } finally {
       setLoadingDetail(false);
+    }
+  };
+
+  const toggleReturnItem = (ma) => setReturnChecklists((s) => {
+    const next = new Set(s);
+    if (next.has(ma)) next.delete(ma); else next.add(ma);
+    return next;
+  });
+
+  const doReturn = async () => {
+    if (returnChecklists.size === 0) { show('Chọn ít nhất 1 mục không đạt', 'error'); return; }
+    if (!returnReason.trim()) { show('Nhập lý do trả về', 'error'); return; }
+    setSaving(true);
+    try {
+      await returnReadyToTech(editing.id, { checklists: [...returnChecklists], lyDo: returnReason.trim() });
+      show(`Đã trả ${editing.ma_phan} về kỹ thuật`);
+      setEditing(null);
+      load();
+    } catch (e) {
+      show(e.message || 'Trả về thất bại', 'error');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -96,8 +126,8 @@ export default function ReadyQcPage() {
   const byMa = (detail?.checkpoints || []).reduce((acc, c) => ({ ...acc, [c.ma_checkpoint]: c }), {});
   const techDone = detail?.state?.tech_done === true;
 
-  // QC chỉ xác nhận được khi kỹ thuật đã đủ 4 mục.
-  const isReady = (r) => (r.n_tech_done || 0) >= 4;
+  // QC chỉ xác nhận được khi kỹ thuật đã đủ 3 mục.
+  const isReady = (r) => (r.n_tech_done || 0) >= 3;
   const readyRows = rows.filter(isReady);
 
   const toggleOne = (id) => setSelected((s) => {
@@ -156,7 +186,7 @@ export default function ReadyQcPage() {
 
   return (
     <div>
-      <Toolbar title="QC chuẩn bị kỹ thuật" subtitle="Phần in đã đủ 4 mục kỹ thuật — chờ QC xác nhận"
+      <Toolbar title="QC chuẩn bị kỹ thuật" subtitle="Phần in đã đủ 3 mục kỹ thuật — chờ QC xác nhận"
         search={search} onSearch={(v) => { setSearch(v); setPage(1); }}
         searchPlaceholder="Tìm code phần, mã hàng, màu/kích vải, kích phim...">
         {canQC && selected.size > 0 && (
@@ -179,10 +209,17 @@ export default function ReadyQcPage() {
         subtitle={editing ? [editing.ten_khach_hang, editing.ma_don_hang, editing.ma_hang, editing.mau_vai].filter(Boolean).join(' · ') : ''}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setEditing(null)}>Hủy</Button>
-            <Button onClick={doConfirm} loading={saving} disabled={!canQC || loadingDetail || !techDone}>
-              QC xác nhận
-            </Button>
+            <Button variant="ghost" onClick={() => setEditing(null)}>Đóng</Button>
+            {returnMode ? (
+              <Button variant="danger" onClick={doReturn} loading={saving}
+                disabled={!canQC || loadingDetail || returnChecklists.size === 0 || !returnReason.trim()}>
+                Trả về kỹ thuật ({returnChecklists.size})
+              </Button>
+            ) : (
+              <Button onClick={doConfirm} loading={saving} disabled={!canQC || loadingDetail || !techDone}>
+                QC xác nhận
+              </Button>
+            )}
           </>
         }
       >
@@ -190,14 +227,31 @@ export default function ReadyQcPage() {
           <div className="py-6 text-center text-ink-soft">Đang tải...</div>
         ) : (
           <div className="space-y-2">
-            <h3 className="text-xs font-bold uppercase tracking-wide text-ink-soft">Kết quả kỹ thuật</h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold uppercase tracking-wide text-ink-soft">Kết quả kỹ thuật</h3>
+              {canQC && (
+                <button type="button" onClick={() => { setReturnMode((v) => !v); setReturnChecklists(new Set()); setReturnReason(''); }}
+                  className={`text-xs font-medium ${returnMode ? 'text-ink-soft hover:underline' : 'text-danger hover:underline'}`}>
+                  {returnMode ? '← QC xác nhận' : 'Trả về kỹ thuật'}
+                </button>
+              )}
+            </div>
+            {returnMode && (
+              <p className="rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
+                Tick các mục <b>không đạt</b> để trả về cho bộ phận kỹ thuật làm lại (kèm lý do bắt buộc).
+              </p>
+            )}
             {TECH_ITEMS.map((it) => {
               const cp = byMa[it.ma];
               const done = cp?.trang_thai === 'DAT';
               return (
                 <div key={it.ma} className="rounded-control border border-line px-3 py-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-ink">
+                    <span className="flex items-center gap-2 text-sm font-medium text-ink">
+                      {returnMode && (
+                        <input type="checkbox" checked={returnChecklists.has(it.ma)}
+                          onChange={() => toggleReturnItem(it.ma)} aria-label={`Trả về ${it.label}`} />
+                      )}
                       {it.label}
                       {cp?.gia_tri_text ? <span className="ml-2 font-normal text-ink-soft">({cp.gia_tri_text})</span> : null}
                     </span>
@@ -211,14 +265,23 @@ export default function ReadyQcPage() {
                       <Badge tone={done ? 'success' : 'default'}>{done ? 'Đã xác nhận' : 'Chưa'}</Badge>
                     </div>
                   </div>
-                  {!done && <OwnerHint checkpoint={it.ma} className="mt-1.5" />}
+                  {!returnMode && !done && <OwnerHint checkpoint={it.ma} className="mt-1.5" />}
                 </div>
               );
             })}
-            {techDone && <OwnerHint checkpoint="QC_XAC_NHAN" className="pt-1" />}
-            {techDone
-              ? <p className="pt-1 text-xs text-ink-soft">QC xác nhận → READY hoàn thành, cho phép Release 1.</p>
-              : <p className="pt-1 text-xs font-medium text-warning">Kỹ thuật chưa xác nhận đủ 4 mục — QC chưa thể xác nhận.</p>}
+            {returnMode ? (
+              <Field label="Lý do trả về" required>
+                <Textarea rows={2} value={returnReason} onChange={(e) => setReturnReason(e.target.value)}
+                  placeholder="Vì sao trả về kỹ thuật (vd: film mờ, sai khuôn...)" />
+              </Field>
+            ) : (
+              <>
+                {techDone && <OwnerHint checkpoint="QC_XAC_NHAN" className="pt-1" />}
+                {techDone
+                  ? <p className="pt-1 text-xs text-ink-soft">QC xác nhận → READY hoàn thành, cho phép Release 1.</p>
+                  : <p className="pt-1 text-xs font-medium text-warning">Kỹ thuật chưa xác nhận đủ 3 mục — QC chưa thể xác nhận.</p>}
+              </>
+            )}
           </div>
         )}
       </SidePanel>

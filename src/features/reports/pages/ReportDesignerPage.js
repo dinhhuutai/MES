@@ -10,6 +10,9 @@ import { Field, Input, Select, Textarea } from '../../../components/common/contr
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import ReportGrid, { parseKey, cellKey } from '../components/ReportGrid';
+import { ColorPopover, BorderPopover } from '../components/formatControls';
+import ConditionalFormatModal from '../components/ConditionalFormatModal';
+import MetricPalette from '../components/MetricPalette';
 import {
   getReport, getMetrics, updateReport, undoReport, renderReport, reportHistory,
 } from '../../../services/baoCaoService';
@@ -31,49 +34,10 @@ const SO_OPTS = [
   { v: 'percent', label: 'Phần trăm %' }, { v: 'dp2', label: '2 số lẻ' },
   { v: 'currency', label: 'Tiền tệ (₫)' },
 ];
-
-// Bảng màu đầy đủ kiểu Google Sheets (10 cột).
-const PALETTE = [
-  '#000000', '#434343', '#666666', '#999999', '#b7b7b7', '#cccccc', '#d9d9d9', '#efefef', '#f3f3f3', '#ffffff',
-  '#980000', '#ff0000', '#ff9900', '#ffff00', '#00ff00', '#00ffff', '#4a86e8', '#0000ff', '#9900ff', '#ff00ff',
-  '#e6b8af', '#f4cccc', '#fce5cd', '#fff2cc', '#d9ead3', '#d0e0e3', '#c9daf8', '#cfe2f3', '#d9d2e9', '#ead1dc',
-  '#dd7e6b', '#ea9999', '#f9cb9c', '#ffe599', '#b6d7a8', '#a2c4c9', '#a4c2f4', '#9fc5e8', '#b4a7d6', '#d5a6bd',
-  '#cc4125', '#e06666', '#f6b26b', '#ffd966', '#93c47d', '#76a5af', '#6d9eeb', '#6fa8dc', '#8e7cc3', '#c27ba0',
-  '#a61c00', '#cc0000', '#e69138', '#f1c232', '#6aa84f', '#45818e', '#3c78d8', '#3d85c6', '#674ea7', '#a64d79',
-  '#85200c', '#990000', '#b45f06', '#bf9000', '#38761d', '#134f5c', '#1155cc', '#0b5394', '#351c75', '#741b47',
+// Phông chữ.
+const FONT_OPTS = [
+  { v: 'sans', label: 'Mặc định' }, { v: 'serif', label: 'Có chân (Serif)' }, { v: 'mono', label: 'Đơn cách (Mono)' },
 ];
-
-// Popover bảng màu (đóng khi bấm ngoài).
-function ColorPopover({ open, onClose, onPick, allowNone }) {
-  const ref = useRef(null);
-  useEffect(() => {
-    if (!open) return undefined;
-    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
-    document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
-  }, [open, onClose]);
-  if (!open) return null;
-  return (
-    <div ref={ref} className="absolute z-30 mt-1 rounded-card border border-line bg-surface p-2 shadow-card-hover">
-      {allowNone && (
-        <button type="button" onClick={() => { onPick(null); onClose(); }}
-          className="mb-1.5 w-full rounded-control border border-line px-2 py-1 text-xs text-ink-soft hover:bg-surface-muted">
-          ∅ Không màu
-        </button>
-      )}
-      <div className="grid grid-cols-10 gap-1">
-        {PALETTE.map((c) => (
-          <button key={c} type="button" title={c} onClick={() => { onPick(c); onClose(); }}
-            className="h-5 w-5 rounded border border-line/70 hover:scale-110" style={{ backgroundColor: c }} />
-        ))}
-      </div>
-      <div className="mt-2 flex items-center gap-1.5">
-        <span className="text-xs text-ink-soft">Tùy chọn</span>
-        <input type="color" onChange={(e) => { onPick(e.target.value); }} className="h-6 w-8 cursor-pointer rounded border border-line" />
-      </div>
-    </div>
-  );
-}
 
 // Rectangle bao 2 ô key.
 function rectKeys(a, b) {
@@ -106,7 +70,11 @@ export default function ReportDesignerPage() {
   const [rendering, setRendering] = useState(false);
   const [histOpen, setHistOpen] = useState(false);
   const [catalogOpen, setCatalogOpen] = useState(false);
+  const [catalogQ, setCatalogQ] = useState('');
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [colorPop, setColorPop] = useState(null); // 'chu' | 'nen' | null
+  const [borderPop, setBorderPop] = useState(false);
+  const [cfOpen, setCfOpen] = useState(false);
 
   // Kéo chọn vùng ô (như Google Sheets).
   const dragging = useRef(false);
@@ -159,6 +127,70 @@ export default function ReportDesignerPage() {
     });
     return { ...g, o };
   });
+
+  // Vùng chọn dạng "A1:C10" (dùng cho định dạng có điều kiện).
+  const selectionRange = useMemo(() => {
+    const pts = [...selected].map(parseKey).filter(Boolean);
+    if (!pts.length) return '';
+    const r0 = Math.min(...pts.map((p) => p.r)); const r1 = Math.max(...pts.map((p) => p.r));
+    const c0 = Math.min(...pts.map((p) => p.c)); const c1 = Math.max(...pts.map((p) => p.c));
+    const a = cellKey(r0, c0); const b = cellKey(r1, c1);
+    return a === b ? a : `${a}:${b}`;
+  }, [selected]);
+
+  // Áp viền theo preset (biết vị trí ô trong vùng chọn để làm "Ngoài/Trong…").
+  const applyBorder = (preset, mau, day) => setGrid((g) => {
+    const pts = [...selected].map(parseKey).filter(Boolean);
+    if (!pts.length) return g;
+    const r0 = Math.min(...pts.map((p) => p.r)); const r1 = Math.max(...pts.map((p) => p.r));
+    const c0 = Math.min(...pts.map((p) => p.c)); const c1 = Math.max(...pts.map((p) => p.c));
+    const o = { ...g.o };
+    selected.forEach((key) => {
+      const p = parseKey(key); if (!p) return;
+      const c = o[key] || { loai: 'text', gia_tri: '' };
+      const dd = { ...(c.dinh_dang || {}) };
+      if (preset === 'none') {
+        delete dd.vien; delete dd.vien_mau; delete dd.vien_day; delete dd.vien_dam;
+      } else {
+        const all = preset === 'all';
+        const v = {
+          tren: all || preset === 'top' || preset === 'horizontal' || (preset === 'outer' && p.r === r0) || (preset === 'inner' && p.r > r0),
+          duoi: all || preset === 'bottom' || preset === 'horizontal' || (preset === 'outer' && p.r === r1) || (preset === 'inner' && p.r < r1),
+          trai: all || preset === 'left' || preset === 'vertical' || (preset === 'outer' && p.c === c0) || (preset === 'inner' && p.c > c0),
+          phai: all || preset === 'right' || preset === 'vertical' || (preset === 'outer' && p.c === c1) || (preset === 'inner' && p.c < c1),
+        };
+        dd.vien = v; dd.vien_mau = mau; dd.vien_day = day;
+      }
+      o[key] = { ...c, dinh_dang: dd };
+    });
+    return { ...g, o };
+  });
+
+  // Xóa toàn bộ định dạng của các ô đang chọn (giữ nội dung).
+  const clearFormat = () => setGrid((g) => {
+    const o = { ...g.o };
+    selected.forEach((key) => {
+      const c = o[key]; if (!c) return;
+      const { dinh_dang, ...rest } = c;
+      o[key] = rest;
+    });
+    return { ...g, o };
+  });
+
+  const saveDieuKien = (rules) => setGrid((g) => ({ ...g, dinh_dang: { ...(g.dinh_dang || {}), dieu_kien: rules } }));
+
+  // Gán 1 ô thành metric (giữ định dạng cũ). Dùng cho kéo–thả + bấm chọn từ Bảng dữ liệu.
+  const setCellMetric = (key, ma) => setGrid((g) => {
+    const o = { ...g.o };
+    const dd = o[key]?.dinh_dang;
+    o[key] = { loai: 'metric', metric: ma, ...(dd ? { dinh_dang: dd } : {}) };
+    return { ...g, o };
+  });
+  const dropMetric = (key, ma) => { setCellMetric(key, ma); setAnchor(key); setSelected(new Set([key])); };
+  const pickMetric = (ma) => {
+    if (!selected.size) { show('Chọn 1 ô trước rồi bấm chỉ số (hoặc kéo–thả thẳng vào ô)', 'error'); return; }
+    selected.forEach((k) => setCellMetric(k, ma));
+  };
 
   const changeLoai = (loai) => {
     const dd = cell?.dinh_dang;
@@ -338,7 +370,8 @@ export default function ReportDesignerPage() {
           <div className="flex items-center gap-1.5">
             <Button variant="ghost" className="px-2.5 py-1 text-xs" onClick={() => setGrid((g) => ({ ...g, so_cot: g.so_cot + 1 }))}>+ Cột</Button>
             <Button variant="ghost" className="px-2.5 py-1 text-xs" onClick={() => setGrid((g) => ({ ...g, so_hang: g.so_hang + 1 }))}>+ Hàng</Button>
-            <Button variant="ghost" className="px-2.5 py-1 text-xs" onClick={() => setCatalogOpen(true)}>Danh mục dữ liệu</Button>
+            <Button variant={paletteOpen ? 'primary' : 'ghost'} className="px-2.5 py-1 text-xs" onClick={() => setPaletteOpen((v) => !v)}>Bảng dữ liệu</Button>
+            <Button variant="ghost" className="px-2.5 py-1 text-xs" onClick={() => setCatalogOpen(true)}>Giải thích chỉ số</Button>
           </div>
         )}
         {mode === 'view' && <Badge tone="info">Chế độ xem — hiển thị giá trị đã tính</Badge>}
@@ -349,21 +382,18 @@ export default function ReportDesignerPage() {
         <div className="mb-3 flex flex-wrap items-center gap-1.5 rounded-card border border-line bg-surface px-3 py-2">
           <FmtBtn title="In đậm" onClick={() => applyFormat({ dam: !(cell?.dinh_dang?.dam) })} active={cell?.dinh_dang?.dam}><b>B</b></FmtBtn>
           <FmtBtn title="In nghiêng" onClick={() => applyFormat({ nghieng: !(cell?.dinh_dang?.nghieng) })} active={cell?.dinh_dang?.nghieng}><i>I</i></FmtBtn>
-          <FmtBtn title="Viền đậm" onClick={() => applyFormat({ vien_dam: !(cell?.dinh_dang?.vien_dam) })} active={cell?.dinh_dang?.vien_dam}>▢</FmtBtn>
+          <FmtBtn title="Gạch chân" onClick={() => applyFormat({ gach_chan: !(cell?.dinh_dang?.gach_chan) })} active={cell?.dinh_dang?.gach_chan}><span className="underline">U</span></FmtBtn>
+          <FmtBtn title="Gạch ngang" onClick={() => applyFormat({ gach_ngang: !(cell?.dinh_dang?.gach_ngang) })} active={cell?.dinh_dang?.gach_ngang}><s>S</s></FmtBtn>
           <span className="mx-1 h-6 w-px bg-line" />
-          <FmtBtn title="Căn trái" onClick={() => applyFormat({ can_le: 'left' })}>⬅</FmtBtn>
-          <FmtBtn title="Căn giữa" onClick={() => applyFormat({ can_le: 'center' })}>⬌</FmtBtn>
-          <FmtBtn title="Căn phải" onClick={() => applyFormat({ can_le: 'right' })}>➡</FmtBtn>
-          <span className="mx-1 h-6 w-px bg-line" />
+          <select disabled={!canFmt} title="Phông chữ" onChange={(e) => applyFormat({ phong_chu: e.target.value })}
+            value={cell?.dinh_dang?.phong_chu || 'sans'}
+            className="h-8 rounded-control border border-line px-1.5 text-sm disabled:opacity-40">
+            {FONT_OPTS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
+          </select>
           <select disabled={!canFmt} title="Cỡ chữ" onChange={(e) => applyFormat({ co_chu: e.target.value })}
             value={cell?.dinh_dang?.co_chu || 'base'}
             className="h-8 rounded-control border border-line px-1.5 text-sm disabled:opacity-40">
             {SIZE_OPTS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
-          </select>
-          <select disabled={!canFmt} title="Định dạng số" onChange={(e) => applyFormat({ dinh_dang_so: e.target.value })}
-            value={cell?.dinh_dang?.dinh_dang_so || 'thousand'}
-            className="h-8 rounded-control border border-line px-1.5 text-sm disabled:opacity-40">
-            {SO_OPTS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
           </select>
           <span className="mx-1 h-6 w-px bg-line" />
           {/* Màu chữ */}
@@ -373,7 +403,8 @@ export default function ReportDesignerPage() {
               <span className="font-bold" style={{ color: cell?.dinh_dang?.mau_chu || undefined }}>A</span>
               <span className="h-1.5 w-4 rounded" style={{ backgroundColor: cell?.dinh_dang?.mau_chu || '#111827' }} />
             </button>
-            <ColorPopover open={colorPop === 'chu'} onClose={() => setColorPop(null)} onPick={(c) => applyFormat({ mau_chu: c || undefined })} allowNone />
+            <ColorPopover open={colorPop === 'chu'} onClose={() => setColorPop(null)} current={cell?.dinh_dang?.mau_chu}
+              onPick={(c) => applyFormat({ mau_chu: c || undefined })} allowNone />
           </div>
           {/* Màu nền */}
           <div className="relative">
@@ -382,12 +413,39 @@ export default function ReportDesignerPage() {
               🖌
               <span className="h-1.5 w-4 rounded border border-line" style={{ backgroundColor: cell?.dinh_dang?.mau_nen || '#ffffff' }} />
             </button>
-            <ColorPopover open={colorPop === 'nen'} onClose={() => setColorPop(null)} onPick={(c) => applyFormat({ mau_nen: c || undefined })} allowNone />
+            <ColorPopover open={colorPop === 'nen'} onClose={() => setColorPop(null)} current={cell?.dinh_dang?.mau_nen}
+              onPick={(c) => applyFormat({ mau_nen: c || undefined })} allowNone />
           </div>
+          {/* Viền */}
+          <div className="relative">
+            <button type="button" title="Viền" disabled={!canFmt} onClick={() => setBorderPop((v) => !v)}
+              className="h-8 min-w-8 rounded-control border border-line px-2 text-sm disabled:opacity-40">▦</button>
+            <BorderPopover open={borderPop && canFmt} onClose={() => setBorderPop(false)} onApply={applyBorder} />
+          </div>
+          <span className="mx-1 h-6 w-px bg-line" />
+          {/* Căn lề ngang */}
+          <FmtBtn title="Căn trái" onClick={() => applyFormat({ can_le: 'left' })} active={cell?.dinh_dang?.can_le === 'left'}>⬅</FmtBtn>
+          <FmtBtn title="Căn giữa" onClick={() => applyFormat({ can_le: 'center' })} active={cell?.dinh_dang?.can_le === 'center'}>⬌</FmtBtn>
+          <FmtBtn title="Căn phải" onClick={() => applyFormat({ can_le: 'right' })} active={cell?.dinh_dang?.can_le === 'right'}>➡</FmtBtn>
+          {/* Căn dọc */}
+          <FmtBtn title="Căn trên" onClick={() => applyFormat({ can_doc: 'top' })} active={cell?.dinh_dang?.can_doc === 'top'}>⤒</FmtBtn>
+          <FmtBtn title="Căn giữa dọc" onClick={() => applyFormat({ can_doc: 'giua' })} active={cell?.dinh_dang?.can_doc === 'giua'}>↕</FmtBtn>
+          <FmtBtn title="Căn dưới" onClick={() => applyFormat({ can_doc: 'duoi' })} active={cell?.dinh_dang?.can_doc === 'duoi'}>⤓</FmtBtn>
+          <FmtBtn title="Xuống dòng tự động" onClick={() => applyFormat({ xuong_dong: !(cell?.dinh_dang?.xuong_dong) })} active={cell?.dinh_dang?.xuong_dong}>↵</FmtBtn>
+          <span className="mx-1 h-6 w-px bg-line" />
+          <select disabled={!canFmt} title="Định dạng dữ liệu (số)" onChange={(e) => applyFormat({ dinh_dang_so: e.target.value })}
+            value={cell?.dinh_dang?.dinh_dang_so || 'thousand'}
+            className="h-8 rounded-control border border-line px-1.5 text-sm disabled:opacity-40">
+            {SO_OPTS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
+          </select>
+          <FmtBtn title="Xóa định dạng" onClick={clearFormat}>⌫</FmtBtn>
           <span className="mx-1 h-6 w-px bg-line" />
           <Button variant="ghost" className="px-2 py-1 text-xs" disabled={selected.size < 2} onClick={mergeSelected}>Hợp nhất</Button>
           <Button variant="ghost" className="px-2 py-1 text-xs" disabled={selected.size === 0} onClick={unmergeSelected}>Bỏ hợp nhất</Button>
           <Button variant={grid.dinh_dang?.mau_xen_ke ? 'primary' : 'ghost'} className="px-2 py-1 text-xs" onClick={toggleZebra}>Màu xen kẽ</Button>
+          <Button variant={grid.dinh_dang?.dieu_kien?.length ? 'primary' : 'ghost'} className="px-2 py-1 text-xs" onClick={() => setCfOpen(true)}>
+            Định dạng có điều kiện{grid.dinh_dang?.dieu_kien?.length ? ` (${grid.dinh_dang.dieu_kien.length})` : ''}
+          </Button>
           <span className="ml-auto text-xs text-ink-soft">{selected.size > 0 ? `${selected.size} ô đang chọn · kéo/Shift để chọn vùng · bấm đúp để nhập` : 'Kéo chọn ô · bấm đúp để nhập trực tiếp'}</span>
         </div>
       )}
@@ -398,12 +456,17 @@ export default function ReportDesignerPage() {
           <ReportGrid grid={grid} ketQua={ketQua} mode={mode} selected={selected} metricsByMa={metricsByMa}
             editable={canDesign}
             onCellMouseDown={onCellMouseDown} onCellMouseEnter={onCellMouseEnter}
-            onEditCommit={commitCell} onToggleCheck={toggleCheck} onSelectDropdown={selectDropdown} />
+            onEditCommit={commitCell} onToggleCheck={toggleCheck} onSelectDropdown={selectDropdown}
+            onDropMetric={dropMetric} />
         </div>
 
-        {/* Panel chỉnh ô */}
+        {/* Panel chỉnh ô + Bảng dữ liệu */}
         {mode === 'design' && (
-          <div className="w-full shrink-0 lg:w-80">
+          <div className="w-full shrink-0 space-y-4 lg:w-80">
+            {paletteOpen && (
+              <MetricPalette metricGroups={metricGroups} hasSelection={selected.size > 0}
+                onPick={pickMetric} onClose={() => setPaletteOpen(false)} />
+            )}
             <div className="card p-4">
               <h3 className="mb-2 text-sm font-semibold text-ink">
                 Ô {anchor ? <Badge tone="info">{anchor}</Badge> : <span className="text-ink-soft">— chọn 1 ô —</span>}
@@ -441,9 +504,25 @@ export default function ReportDesignerPage() {
                           ))}
                         </Select>
                       </Field>
-                      {metricsByMa[cell.metric] && (
-                        <p className="-mt-2 mb-3 text-xs text-ink-soft">{metricsByMa[cell.metric].mo_ta}</p>
-                      )}
+                      {metricsByMa[cell.metric] && (() => {
+                        const m = metricsByMa[cell.metric];
+                        return (
+                          <div className="-mt-1 mb-3 rounded-card border border-primary/30 bg-primary-wash/40 p-3 text-xs">
+                            <div className="mb-1.5 flex items-start justify-between gap-2">
+                              <span className="font-semibold text-ink">{m.ten}</span>
+                              <span className="shrink-0 rounded-full bg-primary/15 px-2 py-0.5 font-mono text-[10px] text-primary">{m.don_vi || '—'}</span>
+                            </div>
+                            <p className="leading-relaxed text-ink-soft">{m.mo_ta}</p>
+                            <div className="mt-2 grid grid-cols-[54px_1fr] gap-x-2 gap-y-0.5 text-ink-soft">
+                              <span className="font-medium text-ink">Nhóm</span><span>{m.nhom}</span>
+                              <span className="font-medium text-ink">Mã</span><span className="font-mono">{m.ma}</span>
+                            </div>
+                            <p className="mt-2 flex items-center gap-1 font-medium text-primary">
+                              <Icon name="clock" size={12} /> Tự cập nhật realtime khi Xem trước / Xuất.
+                            </p>
+                          </div>
+                        );
+                      })()}
                     </>
                   )}
                   {cell?.loai === 'cong_thuc' && (
@@ -490,25 +569,48 @@ export default function ReportDesignerPage() {
 
       {/* Danh mục dữ liệu (metric) */}
       <Modal open={catalogOpen} onClose={() => setCatalogOpen(false)} title="Danh mục dữ liệu có sẵn" size="lg">
-        <div className="space-y-4">
-          {Object.entries(metricGroups).map(([nhom, list]) => (
-            <div key={nhom}>
-              <div className="mb-1.5 text-xs font-bold uppercase tracking-wide text-ink-soft">{nhom}</div>
-              <div className="space-y-1.5">
-                {list.map((m) => (
-                  <div key={m.ma} className="rounded-control border border-line p-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium text-ink">{m.ten}</span>
-                      <span className="font-mono text-xs text-ink-soft">{m.ma}{m.don_vi ? ` · ${m.don_vi}` : ''}</span>
-                    </div>
-                    <div className="text-xs text-ink-soft">{m.mo_ta}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
+        <p className="mb-3 rounded-control bg-primary-wash/50 px-3 py-2 text-xs text-ink-soft">
+          Đây là các <b>chỉ số hệ thống</b> có thể chèn vào ô (Loại ô → “Dữ liệu hệ thống”). Mỗi chỉ số tự tính <b>realtime</b> lúc Xem trước / Xuất,
+          tự mang mốc thời gian riêng: nhóm <b>“… hôm nay”</b> lọc theo ngày hôm nay, nhóm <b>“… (hiện tại)/tổng”</b> là trạng thái hiện tại hoặc lũy kế.
+        </p>
+        <div className="mb-3">
+          <Input placeholder="Tìm theo tên, mã, mô tả…" value={catalogQ} onChange={(e) => setCatalogQ(e.target.value)} />
         </div>
+        {(() => {
+          const q = catalogQ.trim().toLowerCase();
+          const groups = Object.entries(metricGroups)
+            .map(([nhom, list]) => [nhom, q ? list.filter((m) => `${m.ten} ${m.ma} ${m.mo_ta} ${nhom}`.toLowerCase().includes(q)) : list])
+            .filter(([, list]) => list.length);
+          if (!groups.length) return <p className="py-6 text-center text-sm text-ink-soft">Không có chỉ số khớp “{catalogQ}”.</p>;
+          return (
+            <div className="space-y-4">
+              {groups.map(([nhom, list]) => (
+                <div key={nhom}>
+                  <div className="mb-1.5 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-ink-soft">
+                    <span>{nhom}</span>
+                    <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-medium normal-case">{list.length} chỉ số</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {list.map((m) => (
+                      <div key={m.ma} className="rounded-control border border-line p-2.5 hover:border-primary/40 hover:bg-primary-wash/20">
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="font-medium text-ink">{m.ten}</span>
+                          <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 font-mono text-[10px] text-primary">{m.don_vi || '—'}</span>
+                        </div>
+                        <div className="mt-0.5 text-xs leading-relaxed text-ink-soft">{m.mo_ta}</div>
+                        <div className="mt-1 font-mono text-[10px] text-ink-soft/70">{m.ma}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
       </Modal>
+
+      <ConditionalFormatModal open={cfOpen} onClose={() => setCfOpen(false)}
+        rules={grid.dinh_dang?.dieu_kien || []} selectionRange={selectionRange} onSave={saveDieuKien} />
 
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}
         title={`Lịch sử thao tác — ${rep.ma_bao_cao}`} fetcher={(date) => reportHistory(id, date)} />

@@ -284,11 +284,14 @@ function StageGrid({ data }) {
     <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
       {STAGE_CELLS.map((c) => {
         const st = data.stages?.[c.key] || { phan_in: 0, ma: 0, pcs: 0 };
+        const showTem = st.so_tem != null; // Chờ khô / KCS / Sửa: hiển thị thêm số tem
         return (
           <div key={c.key} className="card p-3 text-center">
             <div className="text-2xl font-bold text-primary tabular-nums">{fmtNum(st.phan_in)}</div>
             <div className="text-xs font-medium text-ink">{c.label}</div>
-            <div className="text-[11px] text-ink-soft">{fmtNum(st.ma)} mã{st.pcs ? ` · ${fmtNum(st.pcs)} pcs` : ''}</div>
+            <div className="text-[11px] text-ink-soft">
+              {fmtNum(st.ma)} mã{showTem ? ` · ${fmtNum(st.so_tem)} tem` : ''}{st.pcs ? ` · ${fmtNum(st.pcs)} pcs` : ''}
+            </div>
           </div>
         );
       })}

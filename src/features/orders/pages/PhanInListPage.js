@@ -7,7 +7,7 @@ import SidePanel from '../../../components/common/SidePanel';
 import Toast from '../../../components/common/Toast';
 import Icon from '../../../components/common/Icon';
 import useToast from '../../../hooks/useToast';
-import { listVaiVe, getPhanIn } from '../../../services/orderService';
+import { listVaiVe, getPhanIn, setChoKho } from '../../../services/orderService';
 import { fmtNum, fmtDate, fmtDateTime, fmtCurrency } from '../../../utils/format';
 
 const LIMIT = 20;
@@ -111,6 +111,8 @@ export default function PhanInListPage() {
 
   const [detail, setDetail] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [choKhoMin, setChoKhoMin] = useState('');
+  const [savingChoKho, setSavingChoKho] = useState(false);
 
   const filtersKey = useMemo(() => JSON.stringify(filters), [filters]);
   const activeFilters = useMemo(() => Object.entries(filters).filter(([, v]) => v), [filters]);
@@ -144,11 +146,25 @@ export default function PhanInListPage() {
     try {
       const res = await getPhanIn(phanInId);
       setDetail(res.data);
+      setChoKhoMin(res.data.thoi_gian_cho_kho_phut ?? '');
     } catch (e) {
       show(e.message || 'Lỗi tải chi tiết', 'error');
       setDetail(null);
     } finally {
       setLoadingDetail(false);
+    }
+  };
+
+  const saveChoKho = async () => {
+    setSavingChoKho(true);
+    try {
+      const r = await setChoKho(detail.id, choKhoMin === '' ? '' : Number(choKhoMin));
+      setDetail(r.data);
+      show('Đã cập nhật thời gian chờ khô');
+    } catch (e) {
+      show(e.message || 'Lưu thất bại', 'error');
+    } finally {
+      setSavingChoKho(false);
     }
   };
 
@@ -406,6 +422,17 @@ export default function PhanInListPage() {
               <Row label="Độ in / Màu in" value={`${detail.do_in || '—'} / ${detail.mau_in || '—'}`} />
               <Row label="SL đơn hàng" value={fmtNum(detail.so_luong_don_hang)} />
               <Row label="Lợi nhuận" value={detail.loi_nhuan == null ? 'Chưa có' : fmtCurrency(detail.loi_nhuan)} />
+            </section>
+
+            <section className="border-t border-line pt-4">
+              <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-soft">Thời gian chờ khô</h3>
+              <div className="flex items-center gap-2">
+                <input type="number" min="0" value={choKhoMin} onChange={(e) => setChoKhoMin(e.target.value)} placeholder="60"
+                  className="h-10 w-28 rounded-input border border-line bg-surface px-3 text-sm focus:border-primary focus:outline-none" />
+                <span className="text-sm text-ink-soft">phút</span>
+                <Button className="px-3 py-1.5" onClick={saveChoKho} loading={savingChoKho}>Lưu</Button>
+              </div>
+              <p className="mt-1 text-xs text-ink-soft">Thời gian phơi mặc định khi in tem cho phần in này (bỏ trống = 60 phút).</p>
             </section>
             <section className="border-t border-line pt-4">
               <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-soft">

@@ -12,8 +12,12 @@ export const suaDone = (date) => client.get('/quality/sua/done', { params: { dat
 
 export const listOqcCandidates = (params) => client.get('/quality/oqc/candidates', { params });
 export const recordOqc = (temId, body) => client.post(`/quality/oqc/${temId}`, body);
+export const returnOqcToKcs = (temId, body) => client.post(`/quality/oqc/${temId}/tra-ve`, body);
 export const oqcHistory = (date) => client.get('/quality/oqc/history', { params: { date } });
 export const oqcDone = (date) => client.get('/quality/oqc/done', { params: { date } });
+
+// Lịch sử QC trả về (toggle READY/TEST_RUN/OQC)
+export const qcTraVeHistory = (loai, date) => client.get('/quality/qc-tra-ve', { params: { loai, date } });
 
 // QC in-line (kiểm tại chuyền)
 export const listInlineCandidates = (params) => client.get('/quality/inline/candidates', { params });
@@ -27,3 +31,10 @@ export const listLoaiLoi = (params) => client.get('/quality/loai-loi', { params 
 export const createLoaiLoi = (body) => client.post('/quality/loai-loi', body);
 export const updateLoaiLoi = (id, body) => client.patch(`/quality/loai-loi/${id}`, body);
 export const toggleLoaiLoi = (id, active) => client.patch(`/quality/loai-loi/${id}/active`, { active });
+
+// Danh mục trường hợp giao đặc biệt (OQC)
+export const listGiaoDacBietActive = () => client.get('/quality/giao-dac-biet');
+export const listGiaoDacBiet = (params) => client.get('/quality/giao-dac-biet/all', { params });
+export const createGiaoDacBiet = (body) => client.post('/quality/giao-dac-biet', body);
+export const updateGiaoDacBiet = (id, body) => client.patch(`/quality/giao-dac-biet/${id}`, body);
+export const toggleGiaoDacBiet = (id, active) => client.patch(`/quality/giao-dac-biet/${id}/active`, { active });

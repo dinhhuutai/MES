@@ -13,6 +13,8 @@ export const confirmReadyItemsBatch = (id, items) =>
 // Bulk 1 mục cho nhiều phần in (theo mã hàng): { phanInIds, ma, value }.
 export const confirmReadyBulk = (payload) => client.post('/ready/confirm-bulk', payload);
 export const confirmReadyQC = (id) => client.post(`/ready/${id}/confirm-qc`);
+// QC trả về Ready kỹ thuật: { checklists: ['FILM',...], lyDo }.
+export const returnReadyToTech = (id, body) => client.post(`/ready/${id}/tra-ve`, body);
 // Hủy xác nhận 1 mục (Admin/READY_CANCEL): ma ∈ KHUON|FILM|MUC|HSKT|QC_XAC_NHAN.
 export const cancelReadyItem = (id, ma) => client.post(`/ready/${id}/huy`, { ma });
 // Lịch sử trạng thái (xác nhận READY đang hiệu lực) theo ngày — cho trang Hệ thống.

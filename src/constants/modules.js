@@ -66,7 +66,9 @@ export const MODULES = [
       { ten: 'Test Run - QA', route: '/chat-luong/test-run', perm: 'TESTRUN_QA' },
       { ten: 'QC in line', route: '/chat-luong/qc-in-line', perm: 'QC_INLINE' },
       { ten: 'OQC', route: '/chat-luong/oqc', perm: 'OQC' },
+      { ten: 'Lịch sử QC trả về', route: '/chat-luong/qc-tra-ve', perm: 'QC_TRAVE_VIEW' },
       { ten: 'Danh mục lỗi', route: '/chat-luong/danh-muc-loi', perm: 'LOI_MANAGE' },
+      { ten: 'Trường hợp giao đặc biệt', route: '/chat-luong/giao-dac-biet', perm: 'GIAODB_MANAGE' },
     ],
   },
   {

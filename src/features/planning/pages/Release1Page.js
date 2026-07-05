@@ -40,7 +40,10 @@ const TD = 'px-4 py-3 align-middle';
 function DataCells({ r }) {
   return (
     <>
-      <td className={`${TD} font-medium text-ink`}>{r.ten_khach_hang || '—'}</td>
+      <td className={`${TD} font-medium text-ink`}>
+        <div>{r.ten_khach_hang || '—'}</div>
+        {r.tra_ve_ly_do && <Badge tone="danger" className="mt-1" title={r.tra_ve_ly_do}>Bị QC trả về</Badge>}
+      </td>
       <td className={TD}>{r.ma_don_hang || '—'}</td>
       <td className={TD}>{r.ma_hang || '—'}</td>
       <td className={TD}>{r.mau_vai || '—'}</td>
@@ -67,6 +70,7 @@ export default function Release1Page() {
   const [chuyen, setChuyen] = useState([]);
   const [histOpen, setHistOpen] = useState(false);
   const [doneOpen, setDoneOpen] = useState(false);
+  const [onlyReturned, setOnlyReturned] = useState(false); // lọc đợt vải bị QC trả về
 
   const [detail, setDetail] = useState(null);        // row lẻ đang xem
   const [form, setForm] = useState({ chuyenId: '', soLuongRelease: '', ngayKeHoach: '' });
@@ -93,6 +97,10 @@ export default function Release1Page() {
 
   useEffect(() => { listChuyen().then((r) => setChuyen(r.data)).catch(() => {}); }, []);
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
+
+  // Lọc "chỉ hiện phần bị trả về": ẩn set (đợt vải bị trả về nằm ở pool lẻ), chỉ hiện đợt vải lẻ bị trả về.
+  const viewSets = onlyReturned ? [] : sets;
+  const viewRows = onlyReturned ? rows.filter((r) => r.tra_ve_ly_do) : rows;
 
   const looseList = useMemo(() => Object.values(selected), [selected]);
   const selectedSetList = useMemo(() => sets.filter((s) => selectedSets.has(s.id)), [sets, selectedSets]);
@@ -184,6 +192,10 @@ export default function Release1Page() {
       <Toolbar title="Release 1" subtitle="Phần in đã READY — chọn đợt vải/set & chuyền để release"
         search={search} onSearch={(v) => { setSearch(v); setPage(1); }}
         searchPlaceholder="Tìm code phần, mã hàng, màu, kích...">
+        <label className="flex items-center gap-1.5 text-xs text-ink-soft">
+          <input type="checkbox" checked={onlyReturned} onChange={(e) => setOnlyReturned(e.target.checked)} />
+          Chỉ hiện phần bị trả về
+        </label>
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="info">{meta.total} đợt vải · {sets.length} set</Badge>
@@ -213,12 +225,12 @@ export default function Release1Page() {
             <tbody>
               {loading ? (
                 <tr><td colSpan={colCount} className="px-4 py-12 text-center text-ink-soft"><Icon name="loader" size={22} className="mx-auto animate-spin" /></td></tr>
-              ) : (sets.length === 0 && rows.length === 0) ? (
+              ) : (viewSets.length === 0 && viewRows.length === 0) ? (
                 <tr><td colSpan={colCount} className="px-4 py-12 text-center text-ink-soft">Không có đợt vải nào sẵn sàng Release 1</td></tr>
               ) : (
                 <>
                   {/* Các SET — gộp nhóm như 1 khối, 1 checkbox hợp nhất */}
-                  {sets.map((s, si) => s.members.map((m, i) => {
+                  {viewSets.map((s, si) => s.members.map((m, i) => {
                     const first = i === 0;
                     const last = i === s.members.length - 1;
                     const on = selectedSets.has(s.id);
@@ -252,7 +264,7 @@ export default function Release1Page() {
                   }))}
 
                   {/* Đợt vải lẻ */}
-                  {rows.map((r, ri) => (
+                  {viewRows.map((r, ri) => (
                     <tr key={r.dot_vai_id} onClick={() => openDetail(r)}
                       className="cursor-pointer border-b border-line/70 transition hover:bg-surface-muted/40">
                       <td className={TD}>
@@ -260,7 +272,7 @@ export default function Release1Page() {
                           onClick={(e) => e.stopPropagation()} onChange={() => toggle(r)}
                           className="h-4 w-4 rounded border-line text-primary focus:ring-primary" />
                       </td>
-                      <td className={`${TD} text-right tabular-nums text-ink-soft`}>{sets.length + ri + 1}</td>
+                      <td className={`${TD} text-right tabular-nums text-ink-soft`}>{viewSets.length + ri + 1}</td>
                       <DataCells r={r} />
                     </tr>
                   ))}
