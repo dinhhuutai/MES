@@ -9,12 +9,16 @@ import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
+import useNghenMap from '../../../hooks/useNghenMap';
+import { slaRowClass } from '../../../utils/sla';
+import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 import { listRelease2Candidates, approveRelease2, approveRelease2Batch, planHistory, release2Done } from '../../../services/planningService';
 import { fmtNum, fmtDate } from '../../../utils/format';
 
 export default function Release2Page() {
   const { can } = usePermissions();
   const { toast, show } = useToast();
+  const { statusLenh } = useNghenMap();
   const canApprove = can('RELEASE2');
 
   const [rows, setRows] = useState([]);
@@ -89,6 +93,7 @@ export default function Release2Page() {
     { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
     { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
+    { key: 'loai_dot_vai', header: 'Loại đợt vải', render: (r) => <LoaiDotVaiBadge value={r.loai_dot_vai} /> },
     { key: 'so_luong_don_hang', header: 'SLĐH', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong_don_hang) },
     { key: 'so_luong_vai_ve', header: 'SLNV', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong_vai_ve) },
     { key: 'ngay_vai_ve', header: 'Ngày nhận vải', render: (r) => fmtDate(r.ngay_vai_ve) },
@@ -114,6 +119,7 @@ export default function Release2Page() {
       </Toolbar>
 
       <DataTable columns={columns} rows={rows} loading={loading} sttStart={0}
+        rowClassName={(r) => slaRowClass(statusLenh(r.id))}
         emptyText="Không có lệnh nào chờ Release 2" />
 
       <ConfirmDialog

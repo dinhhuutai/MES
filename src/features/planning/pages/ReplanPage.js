@@ -12,6 +12,9 @@ import DonePanel from '../../../components/common/DonePanel';
 import { Field, Input, Select, Textarea } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
+import useNghenMap from '../../../hooks/useNghenMap';
+import { slaRowClass } from '../../../utils/sla';
+import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 import { listReplanCandidates, replan, replanBatch, listChuyen, planHistory, replanDone } from '../../../services/planningService';
 import { fmtNum, fmtDate } from '../../../utils/format';
 
@@ -26,6 +29,7 @@ const dateStr = (d) => {
 export default function ReplanPage() {
   const { can } = usePermissions();
   const { toast, show } = useToast();
+  const { statusLenh } = useNghenMap();
   const canReplan = can('RELEASE2') || can('RELEASE1');
 
   const [rows, setRows] = useState([]);
@@ -146,6 +150,7 @@ export default function ReplanPage() {
     { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
     { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
+    { key: 'loai_dot_vai', header: 'Loại đợt vải', render: (r) => <LoaiDotVaiBadge value={r.loai_dot_vai} /> },
     { key: 'so_luong_vai_ve', header: 'SLNV', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong_vai_ve) },
     { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => fmtDate(r.han_giao_hang) },
     { key: 'chuyen', header: 'Chuyền hiện tại', render: (r) => r.ten_chuyen || '—' },
@@ -166,6 +171,7 @@ export default function ReplanPage() {
       </Toolbar>
 
       <DataTable columns={columns} rows={rows} loading={loading} onRowClick={openDetail} sttStart={(meta.page - 1) * 50}
+        rowClassName={(r) => slaRowClass(statusLenh(r.id))}
         emptyText="Không có lệnh nào để lập lại kế hoạch" />
       <Pagination page={meta.page} totalPages={meta.totalPages} total={meta.total} onPage={setPage} />
 

@@ -6,16 +6,19 @@ import Button from '../../../components/common/Button';
 import SidePanel from '../../../components/common/SidePanel';
 import Toast from '../../../components/common/Toast';
 import Icon from '../../../components/common/Icon';
+import DateRangePicker from '../../../components/common/DateRangePicker';
 import useToast from '../../../hooks/useToast';
 import { listVaiVe, getPhanIn, setChoKho } from '../../../services/orderService';
 import { fmtNum, fmtDate, fmtDateTime, fmtCurrency } from '../../../utils/format';
 
 const LIMIT = 20;
+const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const TH = 'px-4 py-3 text-xs font-semibold uppercase tracking-wide text-ink-soft';
 const TD = 'px-4 py-3 align-top';
 
-// Giai đoạn dòng chảy (khớp stageCondition ở backend).
+// Giai đoạn dòng chảy (khớp stageCondition ở backend). 'ALL' = tất cả (backend coi mã lạ = không lọc giai đoạn).
 const STAGES = [
+  { code: 'ALL', label: 'Tất cả' },
   { code: 'READY', label: 'READY' },
   { code: 'RELEASE_1', label: 'Release 1' },
   { code: 'TEST_RUN', label: 'Test Run' },
@@ -133,7 +136,13 @@ export default function PhanInListPage() {
 
   const setField = (key, value) => { setFilters((f) => ({ ...f, [key]: value })); setPage(1); };
   const clearFilters = () => { setFilters({}); setPage(1); };
-  const pickStage = (code) => { setStage(code); setPage(1); };
+  // Vào "Tất cả" → mặc định lọc ngày = HÔM NAY; rời "Tất cả" → bỏ lọc ngày.
+  const pickStage = (code) => {
+    setStage(code);
+    setPage(1);
+    if (code === 'ALL') { const t = todayISO(); setFilters((f) => ({ ...f, ngayVaiTu: t, ngayVaiDen: t })); }
+    else setFilters(({ ngayVaiTu, ngayVaiDen, ...rest }) => rest);
+  };
 
   useEffect(() => {
     const t = setTimeout(load, 250);
@@ -199,6 +208,17 @@ export default function PhanInListPage() {
         ))}
       </div>
 
+      {/* Lọc theo ngày vải về — CHỈ hiện ở chế độ "Tất cả"; 1 ô chọn cả khoảng bắt đầu → kết thúc */}
+      {stage === 'ALL' && (
+        <div className="mb-3 flex flex-wrap items-end gap-3 rounded-card border border-line bg-surface p-3">
+          <div>
+            <label className="mb-1 block text-xs font-medium text-ink-soft">Ngày vải về</label>
+            <DateRangePicker value={{ from: filters.ngayVaiTu, to: filters.ngayVaiDen }}
+              onChange={(r) => { setFilters((f) => ({ ...f, ngayVaiTu: r.from || '', ngayVaiDen: r.to || '' })); setPage(1); }} />
+          </div>
+        </div>
+      )}
+
       {/* Bộ lọc nhiều trường cùng lúc */}
       {showFilters && (
         <div className="mb-3 card p-4">
@@ -216,17 +236,8 @@ export default function PhanInListPage() {
                   className="h-10 w-full rounded-input border border-line bg-surface px-3 text-sm focus:border-primary focus:outline-none" />
               </div>
             ))}
-            <div>
-              <label className="mb-1 block text-xs font-medium text-ink-soft">Ngày vải từ</label>
-              <input type="date" value={filters.ngayVaiTu || ''} onChange={(e) => setField('ngayVaiTu', e.target.value)}
-                className="h-10 w-full rounded-input border border-line bg-surface px-3 text-sm focus:border-primary focus:outline-none" />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-ink-soft">Ngày vải đến</label>
-              <input type="date" value={filters.ngayVaiDen || ''} onChange={(e) => setField('ngayVaiDen', e.target.value)}
-                className="h-10 w-full rounded-input border border-line bg-surface px-3 text-sm focus:border-primary focus:outline-none" />
-            </div>
           </div>
+          <p className="mt-2 text-xs text-ink-soft">Lọc theo <b>ngày vải về</b> nằm ở chế độ chip <b>“Tất cả”</b>.</p>
         </div>
       )}
 

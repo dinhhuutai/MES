@@ -11,7 +11,10 @@ import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
 import { Field, Input } from '../../../components/common/controls';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
+import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 import useToast from '../../../hooks/useToast';
+import useNghenMap from '../../../hooks/useNghenMap';
+import { slaRowClass } from '../../../utils/sla';
 import {
   listRelease1Candidates, createRelease1, listChuyen, release1History,
   listReleaseSets, releaseSet, release1Done,
@@ -49,6 +52,7 @@ function DataCells({ r }) {
       <td className={TD}>{r.mau_vai || '—'}</td>
       <td className={TD}>{r.kich_vai || '—'}</td>
       <td className={TD}>{r.kich_phim || '—'}</td>
+      <td className={TD}><LoaiDotVaiBadge value={r.loai_dot_vai} /></td>
       <td className={`${TD} text-right tabular-nums`}>{fmtNum(r.so_luong_don_hang)}</td>
       <td className={`${TD} text-right tabular-nums`}>{fmtNum(r.so_luong_vai_ve)}</td>
       <td className={TD}>{fmtDate(r.ngay_vai_ve)}</td>
@@ -65,6 +69,7 @@ export default function Release1Page() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const { statusDot } = useNghenMap();
   const [selected, setSelected] = useState({});      // dot_vai_id -> row (lẻ)
   const [selectedSets, setSelectedSets] = useState(() => new Set()); // set id
   const [chuyen, setChuyen] = useState([]);
@@ -185,7 +190,7 @@ export default function Release1Page() {
     } finally { setSaving(false); }
   };
 
-  const colCount = 12;
+  const colCount = 13;
 
   return (
     <div>
@@ -216,6 +221,7 @@ export default function Release1Page() {
                 <th className={TH}>Màu vải</th>
                 <th className={TH}>Kích vải</th>
                 <th className={TH}>Kích phim</th>
+                <th className={TH}>Loại đợt vải</th>
                 <th className={`${TH} text-right`}>SLĐH</th>
                 <th className={`${TH} text-right`}>SLNV</th>
                 <th className={TH}>Ngày nhận vải</th>
@@ -266,7 +272,7 @@ export default function Release1Page() {
                   {/* Đợt vải lẻ */}
                   {viewRows.map((r, ri) => (
                     <tr key={r.dot_vai_id} onClick={() => openDetail(r)}
-                      className="cursor-pointer border-b border-line/70 transition hover:bg-surface-muted/40">
+                      className={`cursor-pointer border-b border-line/70 transition hover:bg-surface-muted/40 ${slaRowClass(statusDot(r.dot_vai_id))}`}>
                       <td className={TD}>
                         <input type="checkbox" checked={!!selected[r.dot_vai_id]}
                           onClick={(e) => e.stopPropagation()} onChange={() => toggle(r)}

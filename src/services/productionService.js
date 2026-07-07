@@ -24,6 +24,10 @@ export const listTemChoPhoi = (params) => client.get('/production/tem-cho-phoi',
 export const addTemToXe = (body) => client.post('/production/xe-phoi/them-tem', body);
 export const adjustPhoi = (temXeId, phut) => client.patch(`/production/tem-xe-phoi/${temXeId}`, { phut });
 
+// Hủy lệnh in tem (tem chưa kiểm) — trang Hủy lệnh xác nhận
+export const listCancelableTem = (params) => client.get('/production/huy-tem/candidates', { params });
+export const cancelPrintTem = (temId, lyDo) => client.post(`/production/huy-tem/${temId}`, { lyDo });
+
 // Chờ khô
 export const listDrying = (params) => client.get('/production/drying', { params });
 export const confirmDry = (temId) => client.post(`/production/drying/${temId}/confirm`);

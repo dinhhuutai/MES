@@ -8,12 +8,15 @@ import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
+import useNghenMap from '../../../hooks/useNghenMap';
+import { slaRowClass } from '../../../utils/sla';
 import { listTestRunCandidates, testRunHistory, confirmQABatch, testQaDone } from '../../../services/planningService';
 import TestRunPanel from '../components/TestRunPanel';
 
 export default function TestRunPage() {
   const { can } = usePermissions();
   const { toast, show } = useToast();
+  const { statusLenh } = useNghenMap();
   const canQA = can('TESTRUN_QA');
 
   const [rows, setRows] = useState([]);
@@ -104,6 +107,7 @@ export default function TestRunPage() {
       </Toolbar>
 
       <DataTable columns={columns} rows={rows} loading={loading} onRowClick={(r) => setSel(r.id)} sttStart={0}
+        rowClassName={(r) => slaRowClass(statusLenh(r.id))}
         emptyText="Không có lệnh nào đang Test Run" />
 
       {sel && <TestRunPanel lenhId={sel} onClose={() => setSel(null)} onChanged={load} />}

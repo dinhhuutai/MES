@@ -12,6 +12,7 @@ import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import { listConfirmHistory, cancelReadyItem } from '../../../services/readyService';
 import { listCancelableLenh, cancelLenh } from '../../../services/planningService';
+import { listCancelableTem, cancelPrintTem } from '../../../services/productionService';
 import { fmtNum } from '../../../utils/format';
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -251,6 +252,113 @@ function LenhCancelSection({ show }) {
   );
 }
 
+// ─── Tab 3: Hủy lệnh in tem (xóa tem CHƯA kiểm + gỡ xe phơi, trả SL về) ──────
+const TEM_TT = {
+  IN: { tone: 'info', label: 'Đã in (chờ phơi)' },
+  DANG_PHOI: { tone: 'warning', label: 'Đang phơi' },
+  DA_KHO: { tone: 'success', label: 'Đã khô (chờ kiểm)' },
+};
+
+function TemCancelSection({ show }) {
+  const [rows, setRows] = useState([]);
+  const [meta, setMeta] = useState({ page: 1, totalPages: 1, total: 0 });
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [target, setTargetRow] = useState(null); // tem đang hủy
+  const [lyDo, setLyDo] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listCancelableTem({ search, page, limit: 50 });
+      setRows(res.data.items);
+      setMeta(res.data.meta);
+    } catch (e) {
+      show(e.message || 'Lỗi tải', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [search, page, show]);
+
+  useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
+
+  const openRow = (r) => { setTargetRow(r); setLyDo(''); };
+
+  const doCancel = async () => {
+    setBusy(true);
+    try {
+      const res = await cancelPrintTem(target.id, lyDo.trim() || null);
+      show(`Đã hủy lệnh in tem ${res.data.ma_tem} (${fmtNum(res.data.so_luong)} cái) — đã gỡ khỏi xe phơi, trả SL về lệnh ${res.data.ma_lenh_san_xuat}.`);
+      setTargetRow(null); setLyDo('');
+      load();
+    } catch (e) {
+      show(e.message || 'Hủy lệnh in tem thất bại', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const columns = [
+    { key: 'ma_tem', header: 'Mã tem', render: (r) => <Badge tone="info">{r.ma_tem}</Badge> },
+    { key: 'trang_thai', header: 'Trạng thái', render: (r) => {
+      const s = TEM_TT[r.trang_thai] || { tone: 'default', label: r.trang_thai };
+      return <Badge tone={s.tone}>{s.label}</Badge>;
+    } },
+    { key: 'so_luong', header: 'SL in', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
+    { key: 'ma_lenh_san_xuat', header: 'Mã lệnh', render: (r) => r.ma_lenh_san_xuat || '—' },
+    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
+    { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
+    { key: 'ma_phan', header: 'Code phần', render: (r) => r.ma_phan || '—' },
+    { key: 'mau_vai', header: 'Màu · Kích', render: (r) => [r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—' },
+    { key: 'nguoi_in', header: 'Người in', render: (r) => r.nguoi_in || '—' },
+    { key: 'actions', header: '', className: 'text-right whitespace-nowrap', render: (r) =>
+      <Button variant="danger" className="px-2.5 py-1 text-xs" onClick={() => openRow(r)}>Hủy lệnh in tem</Button> },
+  ];
+
+  return (
+    <div>
+      <Toolbar title="Hủy lệnh in tem"
+        subtitle="In nhầm tem — hủy để xóa tem đó, gỡ khỏi xe phơi và trả SL về lệnh (chỉ tem CHƯA kiểm)"
+        search={search} onSearch={(v) => { setSearch(v); setPage(1); }}
+        searchPlaceholder="Tìm mã tem, mã lệnh, code phần, mã hàng, màu/kích...">
+        <Badge tone="info">{meta.total} tem hủy được</Badge>
+      </Toolbar>
+
+      <div className="mb-3 rounded-control border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700">
+        Chỉ hủy được tem <b>chưa kiểm</b> (đang chờ phơi / đang phơi / đã khô). Tem đã KCS/OQC/giao sẽ không hiện ở đây
+        để tránh hỏng sổ cái số lượng. Hủy xong tem bị loại khỏi tổng đã in ⇒ <b>SL release được trả về</b> để in lại.
+      </div>
+
+      <DataTable columns={columns} rows={rows} loading={loading} rowKey="id" sttStart={(meta.page - 1) * 50}
+        emptyText="Không có tem nào hủy được (chỉ tem chưa kiểm)" />
+      <Pagination page={meta.page} totalPages={meta.totalPages} total={meta.total} onPage={setPage} />
+
+      <Modal
+        open={!!target}
+        onClose={() => setTargetRow(null)}
+        title={`Hủy lệnh in tem ${target?.ma_tem || ''}`}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setTargetRow(null)}>Đóng</Button>
+            <Button variant="danger" onClick={doCancel} loading={busy}>Xác nhận hủy in tem</Button>
+          </>
+        }
+      >
+        <div className="mb-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          Tem <b>{target?.ma_tem}</b> ({fmtNum(target?.so_luong)} cái) sẽ bị <b>hủy</b> và <b>gỡ khỏi xe phơi</b>.
+          Số lượng này được trả về lệnh <b>{target?.ma_lenh_san_xuat}</b> để có thể in lại. Thao tác không tự phục hồi tem đã hủy.
+        </div>
+        <Field label="Lý do (khuyến nghị)">
+          <Textarea rows={2} value={lyDo} onChange={(e) => setLyDo(e.target.value)}
+            placeholder="Vd: in nhầm số lượng, sai phần in..." />
+        </Field>
+      </Modal>
+    </div>
+  );
+}
+
 // ─── Trang gộp: Hủy lệnh xác nhận ───────────────────────────────────────────
 export default function LichSuTrangThaiPage() {
   const { can } = usePermissions();
@@ -259,6 +367,7 @@ export default function LichSuTrangThaiPage() {
   const tabs = [
     can('READY_CANCEL') && { key: 'ready', label: 'Hủy xác nhận READY' },
     (can('RELEASE1') || can('RELEASE2')) && { key: 'lenh', label: 'Hủy lệnh sản xuất' },
+    can('PROD_RUN') && { key: 'tem', label: 'Hủy lệnh in tem' },
   ].filter(Boolean);
 
   const [tab, setTab] = useState(tabs[0]?.key);
@@ -283,6 +392,7 @@ export default function LichSuTrangThaiPage() {
 
       {tab === 'ready' && <ReadyCancelSection show={show} />}
       {tab === 'lenh' && <LenhCancelSection show={show} />}
+      {tab === 'tem' && <TemCancelSection show={show} />}
 
       <Toast toast={toast} />
     </div>

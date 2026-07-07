@@ -5,7 +5,9 @@ import Badge from '../../../components/common/Badge';
 import Toast from '../../../components/common/Toast';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
+import TemJourneyPanel from '../../../components/common/TemJourneyPanel';
 import { getGiaoHang, confirmGiao } from '../../../services/deliveryService';
+import { getTemHanhTrinh } from '../../../services/qualityService';
 import { fmtNum, fmtDate } from '../../../utils/format';
 import { printGiaoHang } from '../../../utils/print';
 
@@ -17,6 +19,7 @@ export default function GiaoHangPanel({ giaoHangId, onClose, onChanged }) {
   const [gh, setGh] = useState(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [journey, setJourney] = useState(null); // { temId, maTem }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -78,15 +81,21 @@ export default function GiaoHangPanel({ giaoHangId, onClose, onChanged }) {
             <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-soft">Tem giao ({gh.tems.length})</h3>
             <div className="space-y-1.5">
               {gh.tems.map((t) => (
-                <div key={t.id} className="flex items-center justify-between rounded-control border border-line px-3 py-2 text-sm">
+                <div key={t.id} className="flex items-center justify-between gap-2 rounded-control border border-line px-3 py-2 text-sm">
                   <span className="font-medium text-ink">{t.ma_tem}</span>
                   <span className="text-ink-soft">{t.ma_lenh_san_xuat}</span>
-                  <span className="tabular-nums">{fmtNum(t.so_luong_giao)}</span>
+                  <span className="ml-auto tabular-nums">{fmtNum(t.so_luong_giao)}</span>
+                  <button type="button" onClick={() => setJourney({ temId: t.tem_id, maTem: t.ma_tem })}
+                    className="rounded-control border border-line px-2 py-0.5 text-xs text-ink-soft hover:bg-surface-muted">Hành trình</button>
                 </div>
               ))}
             </div>
           </section>
         </div>
+      )}
+      {journey && (
+        <TemJourneyPanel temId={journey.temId} maTem={journey.maTem}
+          fetcher={getTemHanhTrinh} onClose={() => setJourney(null)} />
       )}
       <Toast toast={toast} />
     </SidePanel>

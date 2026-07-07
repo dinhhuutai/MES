@@ -10,6 +10,8 @@ import DonePanel from '../../../components/common/DonePanel';
 import { Field, Input, Select, Textarea } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
+import useNghenMap from '../../../hooks/useNghenMap';
+import { slaRowClass } from '../../../utils/sla';
 import {
   listInlineCandidates, listInlineLoaiLoi, recordInline, inlineHistory, inlineDone,
 } from '../../../services/qualityService';
@@ -18,6 +20,7 @@ import { fmtNum } from '../../../utils/format';
 export default function QcInlinePage() {
   const { can } = usePermissions();
   const { toast, show } = useToast();
+  const { statusLenh } = useNghenMap();
   const canQc = can('QC_INLINE');
 
   const [rows, setRows] = useState([]);
@@ -110,6 +113,7 @@ export default function QcInlinePage() {
       </Toolbar>
 
       <DataTable columns={columns} rows={rows} loading={loading} rowKey="phieu_id" onRowClick={canQc ? open : undefined}
+        rowClassName={(r) => slaRowClass(statusLenh(r.lenh_id))}
         emptyText="Không có phần in nào đang sản xuất" />
 
       <SidePanel

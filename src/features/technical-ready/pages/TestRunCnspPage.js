@@ -9,6 +9,8 @@ import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
+import useNghenMap from '../../../hooks/useNghenMap';
+import { slaRowClass } from '../../../utils/sla';
 import {
   listTestRunCandidates, getLenhDetail, confirmCNSP, cancelCNSP, confirmCNSPBatch, testRunHistory, testCnspDone,
 } from '../../../services/planningService';
@@ -23,6 +25,7 @@ const ketQuaBadge = (kq) =>
 export default function TestRunCnspPage() {
   const { can } = usePermissions();
   const { toast, show } = useToast();
+  const { statusLenh } = useNghenMap();
   const canCNSP = can('TESTRUN_CNSP');
 
   const [rows, setRows] = useState([]);
@@ -159,6 +162,7 @@ export default function TestRunCnspPage() {
       </Toolbar>
 
       <DataTable columns={columns} rows={rows} loading={loading} onRowClick={open} sttStart={0}
+        rowClassName={(r) => slaRowClass(statusLenh(r.id))}
         emptyText="Không có lệnh nào đang Test Run" />
 
       <SidePanel

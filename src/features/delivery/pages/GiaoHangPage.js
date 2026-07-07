@@ -14,6 +14,8 @@ import {
 import { Input } from '../../../components/common/controls';
 import { fmtNum, fmtDate } from '../../../utils/format';
 import GiaoHangPanel from '../components/GiaoHangPanel';
+import TemJourneyPanel from '../../../components/common/TemJourneyPanel';
+import { getTemHanhTrinh } from '../../../services/qualityService';
 
 export default function GiaoHangPage() {
   const { can } = usePermissions();
@@ -28,6 +30,7 @@ export default function GiaoHangPage() {
   const [selected, setSelected] = useState({});
   const [sel, setSel] = useState(null);
   const [creating, setCreating] = useState(false);
+  const [journey, setJourney] = useState(null); // { temId, maTem } — panel hành trình theo tem
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -92,6 +95,10 @@ export default function GiaoHangPage() {
           onChange={(e) => setQty(r.tem_id, e.target.value)} className="py-1 text-right" />
       ) : <span className="text-ink-soft">—</span>
     ) },
+    { key: 'ht', header: '', className: 'text-right', render: (r) => (
+      <Button variant="ghost" className="px-3 py-1.5"
+        onClick={(e) => { e.stopPropagation(); setJourney({ temId: r.tem_id, maTem: r.ma_tem }); }}>Hành trình</Button>
+    ) },
   ];
 
   const histCols = [
@@ -139,6 +146,10 @@ export default function GiaoHangPage() {
       )}
 
       {sel && <GiaoHangPanel giaoHangId={sel} onClose={() => setSel(null)} onChanged={load} />}
+      {journey && (
+        <TemJourneyPanel temId={journey.temId} maTem={journey.maTem}
+          fetcher={getTemHanhTrinh} onClose={() => setJourney(null)} />
+      )}
       <Toast toast={toast} />
     </div>
   );

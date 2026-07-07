@@ -9,6 +9,8 @@ import { Field } from '../../../components/common/controls';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
+import useNghenMap from '../../../hooks/useNghenMap';
+import { slaRowClass } from '../../../utils/sla';
 import {
   listProductionCandidates, startProduction, getMonitor, listChuyen,
 } from '../../../services/productionService';
@@ -18,6 +20,7 @@ import RunPanel from '../components/RunPanel';
 export default function XacNhanChayPage() {
   const { can } = usePermissions();
   const { toast, show } = useToast();
+  const { statusLenh } = useNghenMap();
   const canRun = can('PROD_RUN');
 
   const [candidates, setCandidates] = useState([]);
@@ -111,10 +114,12 @@ export default function XacNhanChayPage() {
 
       <h3 className="mb-2 mt-1 text-sm font-semibold text-ink">Đang chạy ({running.length})</h3>
       <DataTable columns={runCols} rows={running} loading={loading} rowKey="phieu_id" sttStart={0}
+        rowClassName={(r) => slaRowClass(statusLenh(r.lenh_id))}
         onRowClick={(r) => setSel(r.lenh_id)} emptyText="Không có lệnh đang chạy" />
 
       <h3 className="mb-2 mt-6 text-sm font-semibold text-ink">Chờ chạy ({candidates.length})</h3>
       <DataTable columns={candCols} rows={candidates} loading={loading} sttStart={0}
+        rowClassName={(r) => slaRowClass(statusLenh(r.id))}
         emptyText="Không có lệnh nào chờ chạy" />
 
       {/* Xác nhận thông tin chạy + chọn chuyền thực tế */}

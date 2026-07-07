@@ -56,7 +56,7 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
   // Lấy dữ liệu nhãn tem rồi mở cửa sổ in (barcode Code128 = mã tem).
   const printLabelFor = async (temId) => {
     if (!temId) return;
-    try { const res = await getTemLabel(temId); printTemLabel(res.data); }
+    try { const res = await getTemLabel(temId); await printTemLabel(res.data); }
     catch (e) { show('Không lấy được dữ liệu tem để in', 'error'); }
   };
 
@@ -383,18 +383,28 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
           <p className="text-sm text-ink-soft">Chưa có lượt in nào.</p>
         ) : (
           <div className="space-y-1.5">
-            {temLogs.map((l) => (
-              <div key={l.id} className="flex items-center justify-between rounded-control border border-line px-3 py-2 text-sm">
-                <span className="flex items-center gap-2 font-medium text-ink">
-                  {l.ma_tem}
-                  {l.so_lan_in > 1 ? <Badge tone="warning">In lại lần {l.so_lan_in}</Badge> : <Badge tone="info">In lần đầu</Badge>}
-                </span>
-                <div className="text-right text-xs text-ink-soft">
-                  <div>{l.nguoi || '—'} · {fmtDt(l.tg_in)}</div>
-                  {l.ly_do_in_lai && <div className="text-danger">Lý do: {l.ly_do_in_lai}</div>}
+            {temLogs.map((l) => {
+              const huy = l.tem_trang_thai === 'HUY';
+              return (
+                <div key={l.id} className={`flex items-center justify-between rounded-control border px-3 py-2 text-sm ${huy ? 'border-danger/30 bg-danger/5' : 'border-line'}`}>
+                  <span className={`flex items-center gap-2 font-medium ${huy ? 'text-ink-soft line-through' : 'text-ink'}`}>
+                    {l.ma_tem}
+                    {l.so_lan_in > 1 ? <Badge tone="warning">In lại lần {l.so_lan_in}</Badge> : <Badge tone="info">In lần đầu</Badge>}
+                    {huy && <Badge tone="danger">Đã hủy</Badge>}
+                  </span>
+                  <div className="text-right text-xs text-ink-soft">
+                    <div>{l.nguoi || '—'} · {fmtDt(l.tg_in)}</div>
+                    {l.ly_do_in_lai && <div className="text-danger">Lý do in lại: {l.ly_do_in_lai}</div>}
+                    {huy && (l.tg_huy || l.nguoi_huy || l.ly_do_huy) && (
+                      <div className="mt-0.5 text-danger">
+                        Hủy in tem{l.nguoi_huy ? ` · ${l.nguoi_huy}` : ''}{l.tg_huy ? ` · ${fmtDt(l.tg_huy)}` : ''}
+                        {l.ly_do_huy ? <div>Lý do hủy: {l.ly_do_huy}</div> : null}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </Modal>
