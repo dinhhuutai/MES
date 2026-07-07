@@ -122,6 +122,7 @@ export const MODULES = [
       { ten: 'Trạng thái', route: '/he-thong/trang-thai', perm: 'STATUS_VIEW' },
       { ten: 'Hủy lệnh xác nhận', route: '/he-thong/lich-su-trang-thai', perm: ['READY_CANCEL', 'RELEASE1', 'RELEASE2', 'PROD_RUN'] },
       { ten: 'Đồng bộ ERP', route: '/he-thong/erp-sync', perm: 'ERP_SYNC' },
+      { ten: 'Mẫu form (tem/phiếu)', route: '/he-thong/mau-form', perm: 'WORKFLOW_VIEW' },
       { ten: 'Người dùng online', route: '/he-thong/online', perm: 'PRESENCE_VIEW' },
     ],
   },

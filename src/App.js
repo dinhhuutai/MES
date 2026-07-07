@@ -24,6 +24,7 @@ import TrangThaiPage from './features/system/pages/TrangThaiPage';
 import LichSuTrangThaiPage from './features/system/pages/LichSuTrangThaiPage';
 import ErpSyncPage from './features/system/pages/ErpSyncPage';
 import OnlineUsersPage from './features/system/pages/OnlineUsersPage';
+import FormTemplatesPage from './features/system/pages/FormTemplatesPage';
 import PhanInListPage from './features/orders/pages/PhanInListPage';
 import ReadyPage from './features/technical-ready/pages/ReadyPage';
 import TestRunCnspPage from './features/technical-ready/pages/TestRunCnspPage';
@@ -92,6 +93,7 @@ const PAGES = {
   '/he-thong/lich-su-trang-thai': <LichSuTrangThaiPage />,
   '/he-thong/erp-sync': <ErpSyncPage />,
   '/he-thong/online': <OnlineUsersPage />,
+  '/he-thong/mau-form': <FormTemplatesPage />,
 };
 
 const moduleRoutes = MODULES.flatMap((m) =>

@@ -30,9 +30,9 @@ const TIER1_CELLS = [
   { label: 'READY', sub: ['READY_KT', 'READY_QA'], trams: ['READY'], hn: ['Khuôn', 'Film', 'Mực', 'QC xác nhận'] },
   { label: 'Release 1', sub: ['RELEASE_1'], trams: ['RELEASE_1'] },
   { label: 'Test Run', sub: ['TESTRUN_CNSP', 'TESTRUN_QA'], trams: ['TEST_RUN'], hn: ['CNSP xác nhận test', 'QA xác nhận test'] },
-  { label: 'Release 2', sub: ['RELEASE_2', 'CHO_SAN_XUAT'], trams: ['RELEASE_2'] },
-  { label: 'Sản xuất', sub: ['SAN_XUAT', 'CHO_KHO'], trams: ['SAN_XUAT', 'CHO_KHO'], pcs: true },
-  { label: 'OQC', sub: ['KCS', 'SUA', 'OQC'], trams: ['KIEM', 'SUA', 'OQC'], hn: ['KCS', 'Sửa', 'OQC'] },
+  { label: 'Release 2', sub: ['RELEASE_2'], trams: ['RELEASE_2'] },
+  { label: 'Sản xuất', sub: ['CHO_SAN_XUAT', 'SAN_XUAT', 'CHO_KHO', 'KCS', 'SUA'], trams: ['SAN_XUAT', 'CHO_KHO', 'KIEM', 'SUA'], pcs: true, hn: ['KCS', 'Sửa'] },
+  { label: 'OQC', sub: ['OQC'], trams: ['OQC'], hn: ['OQC'] },
   { label: 'Giao', sub: ['DANG_GIAO', 'DA_GIAO'], trams: ['FINISH'], hn: ['Giao'] },
 ];
 
@@ -58,18 +58,18 @@ const CHART_BUCKETS = [
   { label: 'RELEASE 1', keys: ['RELEASE_1'], color: '#6366f1' },
   { label: 'TEST RUN', keys: ['TESTRUN_CNSP', 'TESTRUN_QA'], color: '#8b5cf6' },
   { label: 'RELEASE 2', keys: ['RELEASE_2'], color: '#0ea5e9' },
-  { label: 'SẢN XUẤT', keys: ['CHO_SAN_XUAT', 'SAN_XUAT', 'CHO_KHO'], color: '#f59e0b' },
-  { label: 'OQC', keys: ['KCS', 'SUA', 'OQC'], color: '#a855f7' },
+  { label: 'SẢN XUẤT', keys: ['CHO_SAN_XUAT', 'SAN_XUAT', 'CHO_KHO', 'KCS', 'SUA'], color: '#f59e0b' },
+  { label: 'OQC', keys: ['OQC'], color: '#a855f7' },
   { label: 'GIAO', keys: ['DANG_GIAO', 'DA_GIAO'], color: '#22c55e' },
 ];
 
 function CellBadges({ nghen, sap, homNay }) {
   if (!nghen && !sap && !homNay) return null;
   return (
-    <div className="mt-1 flex flex-wrap justify-center gap-1">
-      {homNay > 0 && <span className="rounded bg-emerald-100 px-1 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">✓{fmtNum(homNay)}</span>}
-      {sap > 0 && <span className="rounded bg-amber-100 px-1 text-[10px] font-semibold text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">⏳{fmtNum(sap)}</span>}
-      {nghen > 0 && <span className="rounded bg-rose-100 px-1 text-[10px] font-semibold text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">⚠{fmtNum(nghen)}</span>}
+    <div className="mt-1.5 flex flex-wrap justify-center gap-1.5">
+      {homNay > 0 && <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-sm font-bold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">✓{fmtNum(homNay)}</span>}
+      {sap > 0 && <span className="rounded-md bg-amber-100 px-2 py-0.5 text-sm font-bold text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">⏳{fmtNum(sap)}</span>}
+      {nghen > 0 && <span className="rounded-md bg-rose-100 px-2 py-0.5 text-sm font-bold text-rose-700 dark:bg-rose-950/40 dark:text-rose-300">⚠{fmtNum(nghen)}</span>}
     </div>
   );
 }

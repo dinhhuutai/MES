@@ -28,6 +28,14 @@ export const adjustPhoi = (temXeId, phut) => client.patch(`/production/tem-xe-ph
 export const listCancelableTem = (params) => client.get('/production/huy-tem/candidates', { params });
 export const cancelPrintTem = (temId, lyDo) => client.post(`/production/huy-tem/${temId}`, { lyDo });
 
+// Đóng lệnh sản xuất (= Chạy hoàn tất) — trang Hủy lệnh xác nhận
+export const listCloseCandidates = () => client.get('/production/dong-lenh/candidates');
+export const closeProduction = (phieuId, lyDo) => client.post(`/production/dong-lenh/${phieuId}`, { lyDo });
+
+// Hủy lệnh đang chạy (bấm nhầm Xác nhận chạy) → về chờ chạy — trang Hủy lệnh xác nhận
+export const listUndoStartCandidates = () => client.get('/production/huy-chay/candidates');
+export const undoStartProduction = (phieuId) => client.post(`/production/huy-chay/${phieuId}`);
+
 // Chờ khô
 export const listDrying = (params) => client.get('/production/drying', { params });
 export const confirmDry = (temId) => client.post(`/production/drying/${temId}/confirm`);

@@ -83,7 +83,7 @@ export default function XacNhanChayPage() {
     { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
     { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
-    { key: 'ma_chuyen', header: 'Chuyền KH', render: (r) => `${r.ma_chuyen || '—'} ${r.ten_chuyen || ''}` },
+    { key: 'ma_chuyen', header: 'Chuyền', render: (r) => r.ten_chuyen || '—' },
     { key: 'so_luong_release', header: 'SL release', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong_release) },
     { key: 'ngay_ke_hoach', header: 'Ngày SX KH', render: (r) => fmtDate(r.ngay_ke_hoach) },
     { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => fmtDate(r.han_giao_hang) },

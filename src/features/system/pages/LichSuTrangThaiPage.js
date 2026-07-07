@@ -12,7 +12,7 @@ import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import { listConfirmHistory, cancelReadyItem } from '../../../services/readyService';
 import { listCancelableLenh, cancelLenh } from '../../../services/planningService';
-import { listCancelableTem, cancelPrintTem } from '../../../services/productionService';
+import { listCancelableTem, cancelPrintTem, listCloseCandidates, closeProduction, listUndoStartCandidates, undoStartProduction } from '../../../services/productionService';
 import { fmtNum } from '../../../utils/format';
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -359,6 +359,197 @@ function TemCancelSection({ show }) {
   );
 }
 
+// ─── Tab 4: Đóng lệnh sản xuất (= Chạy hoàn tất khi lệch SL không bấm được) ──
+function CloseProductionSection({ show }) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [target, setTargetRow] = useState(null); // phiếu đang đóng
+  const [lyDo, setLyDo] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listCloseCandidates();
+      setRows(res.data);
+    } catch (e) {
+      show(e.message || 'Lỗi tải', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [show]);
+
+  useEffect(() => { const t = setTimeout(load, 200); return () => clearTimeout(t); }, [load]);
+
+  const kw = search.trim().toLowerCase();
+  const view = kw
+    ? rows.filter((r) => [r.ma_lenh_san_xuat, r.ma_phan, r.ma_hang, r.mau_vai, r.kich_vai, r.kich_phim, r.ten_khach_hang]
+        .some((v) => (v || '').toLowerCase().includes(kw)))
+    : rows;
+
+  const doClose = async () => {
+    setBusy(true);
+    try {
+      const res = await closeProduction(target.phieu_id, lyDo.trim() || null);
+      show(`Đã đóng lệnh sản xuất ${res.data.ma_lenh_san_xuat || ''} (đã in ${fmtNum(res.data.printed)}) — chuyển sang Chờ khô.`);
+      setTargetRow(null); setLyDo('');
+      load();
+    } catch (e) {
+      show(e.message || 'Đóng lệnh thất bại', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const pct = (r) => (r.target > 0 ? Math.round((Number(r.printed) / Number(r.target)) * 100) : null);
+
+  const columns = [
+    { key: 'ma_lenh_san_xuat', header: 'Mã lệnh', render: (r) => <Badge tone="info">{r.ma_lenh_san_xuat}</Badge> },
+    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
+    { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
+    { key: 'ma_phan', header: 'Code phần', render: (r) => r.ma_phan || '—' },
+    { key: 'mau_vai', header: 'Màu · Kích', render: (r) => [r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—' },
+    { key: 'chuyen', header: 'Chuyền', render: (r) => r.ten_chuyen || r.ma_chuyen || '—' },
+    { key: 'printed', header: 'Đã in / SL', className: 'text-right tabular-nums', render: (r) => {
+      const p = pct(r);
+      const low = p != null && p < 90;
+      return (
+        <span className={low ? 'font-semibold text-amber-600' : ''}>
+          {fmtNum(r.printed)} / {fmtNum(r.target)}{p != null ? ` (${p}%)` : ''}
+        </span>
+      );
+    } },
+    { key: 'actions', header: '', className: 'text-right whitespace-nowrap', render: (r) =>
+      <Button variant="danger" className="px-2.5 py-1 text-xs" onClick={() => { setTargetRow(r); setLyDo(''); }}>Đóng lệnh</Button> },
+  ];
+
+  return (
+    <div>
+      <Toolbar title="Đóng lệnh sản xuất"
+        subtitle="Lệnh đang chạy nhưng lệch SL nên không bấm được 'Chạy hoàn tất' — đóng tại đây (tương đương Chạy hoàn tất) để chuyển sang Chờ khô/kiểm"
+        search={search} onSearch={setSearch} searchPlaceholder="Tìm mã lệnh, code phần, mã hàng, màu/kích...">
+        <Badge tone="info">{view.length} lệnh đang chạy</Badge>
+      </Toolbar>
+
+      <div className="mb-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+        Đóng lệnh = <b>Chạy hoàn tất</b> cho phiếu đang chạy (không cần đủ 90% SL release). Sau khi đóng, tem đã in đi tiếp
+        <b> Chờ khô → KCS</b> bình thường. Thao tác được ghi <b>audit</b> (người, giờ, SL đã in, lý do).
+      </div>
+
+      <DataTable columns={columns} rows={view} loading={loading} rowKey="phieu_id" sttStart={0}
+        emptyText="Không có lệnh nào đang chạy" />
+
+      <Modal
+        open={!!target}
+        onClose={() => setTargetRow(null)}
+        title={`Đóng lệnh sản xuất ${target?.ma_lenh_san_xuat || ''}`}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setTargetRow(null)}>Đóng</Button>
+            <Button variant="danger" onClick={doClose} loading={busy}>Xác nhận đóng lệnh</Button>
+          </>
+        }
+      >
+        <div className="mb-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          Lệnh <b>{target?.ma_lenh_san_xuat}</b> đã in <b>{fmtNum(target?.printed)}</b> / {fmtNum(target?.target)}
+          {target && pct(target) != null ? ` (${pct(target)}%)` : ''}. Xác nhận <b>đóng lệnh</b> (= Chạy hoàn tất) —
+          phiếu chuyển sang hoàn tất, tem đi tiếp Chờ khô/kiểm. Không tự hoàn tác.
+        </div>
+        <Field label="Lý do (khuyến nghị)">
+          <Textarea rows={2} value={lyDo} onChange={(e) => setLyDo(e.target.value)}
+            placeholder="Vd: lệch số lượng do vải hủy, không đủ 90% nhưng đã chạy xong..." />
+        </Field>
+      </Modal>
+    </div>
+  );
+}
+
+// ─── Tab 5: Hủy lệnh ĐANG CHẠY (bấm nhầm Xác nhận chạy) → về chờ chạy ────────
+function UndoStartSection({ show }) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [confirm, setConfirm] = useState(null); // lệnh đang hủy chạy
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listUndoStartCandidates();
+      setRows(res.data);
+    } catch (e) {
+      show(e.message || 'Lỗi tải', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [show]);
+
+  useEffect(() => { const t = setTimeout(load, 200); return () => clearTimeout(t); }, [load]);
+
+  const kw = search.trim().toLowerCase();
+  const view = kw
+    ? rows.filter((r) => [r.ma_lenh_san_xuat, r.ma_phan, r.ma_hang, r.mau_vai, r.kich_vai, r.kich_phim, r.ten_khach_hang]
+        .some((v) => (v || '').toLowerCase().includes(kw)))
+    : rows;
+
+  const doUndo = async () => {
+    setBusy(true);
+    try {
+      const res = await undoStartProduction(confirm.phieu_id);
+      show(`Đã hủy lệnh đang chạy ${res.data.ma_lenh_san_xuat || ''} — quay về danh sách chờ chạy.`);
+      setConfirm(null);
+      load();
+    } catch (e) {
+      show(e.message || 'Hủy lệnh chạy thất bại', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const columns = [
+    { key: 'ma_lenh_san_xuat', header: 'Mã lệnh', render: (r) => <Badge tone="info">{r.ma_lenh_san_xuat}</Badge> },
+    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
+    { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
+    { key: 'ma_phan', header: 'Code phần', render: (r) => r.ma_phan || '—' },
+    { key: 'mau_vai', header: 'Màu · Kích', render: (r) => [r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—' },
+    { key: 'chuyen', header: 'Chuyền', render: (r) => r.ten_chuyen || r.ma_chuyen || '—' },
+    { key: 'actions', header: '', className: 'text-right whitespace-nowrap', render: (r) =>
+      <Button variant="danger" className="px-2.5 py-1 text-xs" onClick={() => setConfirm(r)}>Hủy lệnh chạy</Button> },
+  ];
+
+  return (
+    <div>
+      <Toolbar title="Hủy lệnh đang chạy"
+        subtitle="Lỡ bấm nhầm 'Xác nhận chạy' (chưa in tem) — hủy để lệnh quay lại danh sách chờ chạy"
+        search={search} onSearch={setSearch} searchPlaceholder="Tìm mã lệnh, code phần, mã hàng, màu/kích...">
+        <Badge tone="info">{view.length} lệnh (chưa in tem)</Badge>
+      </Toolbar>
+
+      <div className="mb-3 rounded-control border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700">
+        Chỉ hủy được lệnh <b>chưa in tem nào</b>. Sau khi hủy, lệnh trở lại <b>chờ chạy</b> (Release 2) để bấm Xác nhận chạy lại.
+        Lệnh đã in tem thì dùng <b>Hủy lệnh in tem</b> hoặc <b>Đóng lệnh sản xuất</b>.
+      </div>
+
+      <DataTable columns={columns} rows={view} loading={loading} rowKey="phieu_id" sttStart={0}
+        emptyText="Không có lệnh đang chạy nào (chưa in tem)" />
+
+      <ConfirmDialog
+        open={!!confirm}
+        onClose={() => setConfirm(null)}
+        onConfirm={doUndo}
+        loading={busy}
+        title="Hủy lệnh đang chạy"
+        message={confirm
+          ? `Hủy xác nhận chạy lệnh ${confirm.ma_lenh_san_xuat} (chuyền ${confirm.ten_chuyen || confirm.ma_chuyen || '—'})? Lệnh sẽ quay lại danh sách chờ chạy để bấm Xác nhận chạy lại.`
+          : ''}
+        confirmText="Hủy lệnh chạy"
+        variant="danger"
+      />
+    </div>
+  );
+}
+
 // ─── Trang gộp: Hủy lệnh xác nhận ───────────────────────────────────────────
 export default function LichSuTrangThaiPage() {
   const { can } = usePermissions();
@@ -368,6 +559,8 @@ export default function LichSuTrangThaiPage() {
     can('READY_CANCEL') && { key: 'ready', label: 'Hủy xác nhận READY' },
     (can('RELEASE1') || can('RELEASE2')) && { key: 'lenh', label: 'Hủy lệnh sản xuất' },
     can('PROD_RUN') && { key: 'tem', label: 'Hủy lệnh in tem' },
+    can('PROD_RUN') && { key: 'dong', label: 'Đóng lệnh sản xuất' },
+    can('PROD_RUN') && { key: 'huychay', label: 'Hủy lệnh đang chạy' },
   ].filter(Boolean);
 
   const [tab, setTab] = useState(tabs[0]?.key);
@@ -393,6 +586,8 @@ export default function LichSuTrangThaiPage() {
       {tab === 'ready' && <ReadyCancelSection show={show} />}
       {tab === 'lenh' && <LenhCancelSection show={show} />}
       {tab === 'tem' && <TemCancelSection show={show} />}
+      {tab === 'dong' && <CloseProductionSection show={show} />}
+      {tab === 'huychay' && <UndoStartSection show={show} />}
 
       <Toast toast={toast} />
     </div>
