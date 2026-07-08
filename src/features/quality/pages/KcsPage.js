@@ -10,12 +10,15 @@ import Toast from '../../../components/common/Toast';
 import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
 import TemJourneyPanel from '../../../components/common/TemJourneyPanel';
+import QrScanner from '../../../components/common/QrScanner';
+import Icon from '../../../components/common/Icon';
 import { Field, Input } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import { listKcsCandidates, recordKcs, kcsHistory, kcsDone, getTemHanhTrinh } from '../../../services/qualityService';
-import { redryTem } from '../../../services/productionService';
-import { fmtNum } from '../../../utils/format';
+import { redryTem, getTemLabel } from '../../../services/productionService';
+import { printKcsGiaoTem } from '../../production/utils/printTemLabel';
+import { fmtNum, fmtDateTime } from '../../../utils/format';
 import useNow from '../../../hooks/useNow';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 
@@ -30,6 +33,7 @@ export default function KcsPage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [ngay, setNgay] = useState('');
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
@@ -40,20 +44,42 @@ export default function KcsPage() {
   const [redrying, setRedrying] = useState(false);
   const [onlyReturned, setOnlyReturned] = useState(false); // lọc tem bị OQC trả về
   const [journey, setJourney] = useState(null); // { temId, maTem } — panel hành trình
+  const [scanOpen, setScanOpen] = useState(false);
 
   const viewRows = onlyReturned ? rows.filter((r) => r.tra_ve_ly_do) : rows;
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await listKcsCandidates({ search });
+      const res = await listKcsCandidates({ search, ngay: ngay || undefined });
       setRows(res.data);
     } catch (e) {
       show(e.message || 'Lỗi tải', 'error');
     } finally {
       setLoading(false);
     }
-  }, [search, show]);
+  }, [search, ngay, show]);
+
+  // In tem GIAO (KCS đã hoàn thành) — cấu trúc tem 1, SL IN = số lượng đã kiểm.
+  const printKcsGiao = async (row) => {
+    try {
+      const res = await getTemLabel(row.tem_id);
+      await printKcsGiaoTem({ ...res.data, so_luong: row.so_luong_kiem });
+    } catch (e) { show(e.message || 'Không in được tem', 'error'); }
+  };
+
+  const doneColumns = [
+    { key: 'ma', header: 'Tem', className: 'whitespace-nowrap', render: (r) => <Badge tone="info">{r.ma || '—'}</Badge> },
+    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
+    { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
+    { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
+    { key: 'so_luong_kiem', header: 'SL kiểm', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong_kiem) },
+    { key: 'so_luong', header: 'SL đạt', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
+    { key: 'tg', header: 'Giờ', className: 'whitespace-nowrap tabular-nums', render: (r) => (r.tg ? new Date(r.tg).toLocaleTimeString('vi-VN') : '') },
+    { key: 'in_tem', header: '', className: 'text-right', render: (r) => (
+      r.tem_id ? <Button variant="secondary" className="!px-3 !py-1.5 !text-xs" onClick={() => printKcsGiao(r)}>In tem</Button> : null
+    ) },
+  ];
 
   useEffect(() => {
     const t = setTimeout(load, 250);
@@ -62,6 +88,19 @@ export default function KcsPage() {
 
   // Prefill SL đạt = SL còn cần kiểm (con_kcs). Kiểm từng phần nhiều lần.
   const open = (row) => { setEditing(row); setForm({ ...empty, soLuongDat: String(row.con_kcs ?? row.so_luong ?? '') }); };
+
+  // Quét QR (ma_tem) → tra tem đang chờ KCS → mở modal nhập.
+  const onScan = async (maTem) => {
+    setScanOpen(false);
+    const code = (maTem || '').trim();
+    if (!code) return;
+    try {
+      const res = await listKcsCandidates({ search: code });
+      const row = (res.data || []).find((r) => (r.ma_tem || '').toLowerCase() === code.toLowerCase());
+      if (row) open(row);
+      else show(`Tem ${code} không có phần chờ KCS`, 'error');
+    } catch (e) { show(e.message || 'Không tra được tem', 'error'); }
+  };
 
   const doRedry = async () => {
     setRedrying(true);
@@ -107,6 +146,8 @@ export default function KcsPage() {
     { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
     { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
+    { key: 'ten_chuyen', header: 'Chuyền', render: (r) => r.ten_chuyen || '—' },
+    { key: 'ngay_in_tem', header: 'Giờ in tem', className: 'whitespace-nowrap tabular-nums', render: (r) => fmtDateTime(r.ngay_in_tem) },
     { key: 'so_luong', header: 'SL in', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
     { key: 'con_kcs', header: 'Còn kiểm', className: 'text-right tabular-nums font-medium text-primary', render: (r) => fmtNum(r.con_kcs) },
     { key: 'actions', header: '', className: 'text-right', render: (r) =>
@@ -138,6 +179,13 @@ export default function KcsPage() {
     <div>
       <Toolbar title="KCS — Kiểm tra chất lượng" subtitle="Kiểm theo tem (tem đã khô)"
         search={search} onSearch={setSearch} searchPlaceholder="Quét/nhập mã tem...">
+        {canKcs && <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét QR</Button>}
+        <div className="flex items-center gap-1.5 text-xs text-ink-soft">
+          <span>Ngày in tem</span>
+          <input type="date" value={ngay} onChange={(e) => setNgay(e.target.value)}
+            className="h-9 rounded-input border border-line bg-surface px-2 text-sm" />
+          {ngay && <button type="button" onClick={() => setNgay('')} className="text-ink-soft hover:text-danger" aria-label="Xóa lọc ngày"><Icon name="x" size={14} /></button>}
+        </div>
         <label className="flex items-center gap-1.5 text-xs text-ink-soft">
           <input type="checkbox" checked={onlyReturned} onChange={(e) => setOnlyReturned(e.target.checked)} />
           Chỉ hiện tem bị trả về
@@ -205,11 +253,13 @@ export default function KcsPage() {
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}
         title="Lịch sử KCS" fetcher={kcsHistory} />
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
-        title="Tem đã KCS" maHeader="Tem" fetcher={kcsDone} />
+        title="Tem đã KCS" maHeader="Tem" fetcher={kcsDone} columns={doneColumns} />
       {journey && (
         <TemJourneyPanel temId={journey.temId} maTem={journey.maTem}
           fetcher={getTemHanhTrinh} onClose={() => setJourney(null)} />
       )}
+
+      <QrScanner open={scanOpen} onClose={() => setScanOpen(false)} onResult={onScan} />
 
       <Toast toast={toast} />
     </div>

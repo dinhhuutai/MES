@@ -29,13 +29,13 @@ import PhanInListPage from './features/orders/pages/PhanInListPage';
 import ReadyPage from './features/technical-ready/pages/ReadyPage';
 import TestRunCnspPage from './features/technical-ready/pages/TestRunCnspPage';
 import GomSetPage from './features/technical-ready/pages/GomSetPage';
+import CaiDatPage from './features/planning/pages/CaiDatPage';
 import Release1Page from './features/planning/pages/Release1Page';
 import Release2Page from './features/planning/pages/Release2Page';
 import ReplanPage from './features/planning/pages/ReplanPage';
 import TestRunPage from './features/planning/pages/TestRunPage';
 import XacNhanChayPage from './features/production/pages/XacNhanChayPage';
 import TheoDoiChuyenPage from './features/production/pages/TheoDoiChuyenPage';
-import ChoKhoPage from './features/production/pages/ChoKhoPage';
 import XePhoiPage from './features/production/pages/XePhoiPage';
 import ReadyQcPage from './features/quality/pages/ReadyQcPage';
 import KcsPage from './features/quality/pages/KcsPage';
@@ -59,13 +59,13 @@ const PAGES = {
   '/ky-thuat/ready': <ReadyPage />,
   '/ky-thuat/gom-set': <GomSetPage />,
   '/ky-thuat/test-run-cnsp': <TestRunCnspPage />,
+  '/ke-hoach/cai-dat': <CaiDatPage />,
   '/ke-hoach/release-1': <Release1Page />,
   '/ke-hoach/release-2': <Release2Page />,
   '/ke-hoach/lap-lai': <ReplanPage />,
   '/chat-luong/test-run': <TestRunPage />,
   '/san-xuat/xac-nhan-chay': <XacNhanChayPage />,
   '/san-xuat/theo-doi-chuyen': <TheoDoiChuyenPage />,
-  '/san-xuat/cho-kho': <ChoKhoPage />,
   '/san-xuat/xe-phoi': <XePhoiPage />,
   '/san-xuat/kcs': <KcsPage />,
   '/san-xuat/sua': <SuaPage />,

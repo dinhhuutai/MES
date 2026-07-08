@@ -2,6 +2,13 @@ import client from './axiosClient';
 
 export const listChuyen = () => client.get('/catalog/chuyen');
 
+// Cài đặt ca theo tuần
+export const listCaTuan = () => client.get('/planning/ca-tuan');
+export const saveCaTuan = (body) => client.post('/planning/ca-tuan', body);
+
+// Kế hoạch tự động
+export const autoPlanCandidates = (params) => client.get('/planning/auto-plan/candidates', { params });
+
 // Release 1
 export const listRelease1Candidates = (params) => client.get('/planning/release1/candidates', { params });
 export const createRelease1 = (body) => client.post('/planning/release1', body);

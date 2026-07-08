@@ -7,6 +7,7 @@ import SidePanel from '../../../components/common/SidePanel';
 import Toast from '../../../components/common/Toast';
 import Icon from '../../../components/common/Icon';
 import DateRangePicker from '../../../components/common/DateRangePicker';
+import KcsBreakdown from '../../../components/common/KcsBreakdown';
 import useToast from '../../../hooks/useToast';
 import { listVaiVe, getPhanIn, setChoKho } from '../../../services/orderService';
 import { fmtNum, fmtDate, fmtDateTime, fmtCurrency } from '../../../utils/format';
@@ -54,6 +55,27 @@ function Row({ label, value }) {
       <span className="text-right font-medium text-ink">{value}</span>
     </div>
   );
+}
+
+// SL pcs hiển thị tại từng node hành trình (Release 1 / Sản xuất / OQC). null = trạm không có số.
+function StagePcsNote({ maTram, sp }) {
+  if (!sp) return null;
+  if (maTram === 'RELEASE_1' && sp.sl_release > 0)
+    return <div className="mt-1 pl-8 text-xs font-medium text-primary">SL release: {fmtNum(sp.sl_release)}</div>;
+  if (maTram === 'SAN_XUAT' && sp.sl_in_xong > 0)
+    return <div className="mt-1 pl-8 text-xs font-medium text-primary">SL in xong: {fmtNum(sp.sl_in_xong)} pcs</div>;
+  if (maTram === 'OQC' && (sp.oqc_dat > 0 || sp.sua_dat > 0))
+    return (
+      <div className="mt-1 pl-8 text-xs">
+        <span className="font-medium text-emerald-600">OQC đạt: {fmtNum(sp.oqc_dat)}</span>
+        {(sp.kcs_dat > 0 || sp.sua_dat > 0) && (
+          <span className="text-ink-soft"> · nguồn vào: đạt thẳng {fmtNum(sp.kcs_dat)}
+            {sp.sua_dat > 0 && <> · <span className="text-amber-600">qua sửa {fmtNum(sp.sua_dat)}</span></>}
+          </span>
+        )}
+      </div>
+    );
+  return null;
 }
 
 // Từ CHỜ KHÔ trở đi: quản lý theo tem → hiện mỗi tem 1 hàng + cột chất lượng.
@@ -520,6 +542,14 @@ export default function PhanInListPage() {
                           <div className="mt-2 pl-8 text-xs text-ink-soft">
                             {fmtDateTime(t.moc.tg)} · {t.moc.nguoi || '—'}
                             {t.moc.so_luong > 1 ? ` · ${t.moc.so_luong} lần` : ''}
+                          </div>
+                        )}
+
+                        <StagePcsNote maTram={t.ma_tram} sp={detail.stage_pcs} />
+
+                        {t.ma_tram === 'KIEM' && detail.kcs_by_dot?.dot?.length > 0 && (
+                          <div className="mt-1 pl-8">
+                            <KcsBreakdown data={detail.kcs_by_dot} />
                           </div>
                         )}
                       </div>

@@ -9,6 +9,7 @@
     "exceljs": "^4.4.0",
     "framer-motion": "^11.11.0",
     "jsbarcode": "^3.12.3",
+    "jsqr": "^1.4.0",
     "lucide-react": "^0.460.0",
     "qrcode": "^1.5.4",
     "react": "^19.0.0",

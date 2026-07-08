@@ -15,6 +15,7 @@ import { Input } from '../../../components/common/controls';
 import { fmtNum, fmtDate } from '../../../utils/format';
 import GiaoHangPanel from '../components/GiaoHangPanel';
 import TemJourneyPanel from '../../../components/common/TemJourneyPanel';
+import Icon from '../../../components/common/Icon';
 import { getTemHanhTrinh } from '../../../services/qualityService';
 
 export default function GiaoHangPage() {
@@ -31,11 +32,12 @@ export default function GiaoHangPage() {
   const [sel, setSel] = useState(null);
   const [creating, setCreating] = useState(false);
   const [journey, setJourney] = useState(null); // { temId, maTem } — panel hành trình theo tem
+  const [ngay, setNgay] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [t, h] = await Promise.all([listTemSanSang({}), listGiaoHang({})]);
+      const [t, h] = await Promise.all([listTemSanSang({ ngay: ngay || undefined }), listGiaoHang({})]);
       setTems(t.data);
       setHistory(h.data);
     } catch (e) {
@@ -43,7 +45,7 @@ export default function GiaoHangPage() {
     } finally {
       setLoading(false);
     }
-  }, [show]);
+  }, [ngay, show]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -127,6 +129,12 @@ export default function GiaoHangPage() {
 
       {tab === 'tao' ? (
         <>
+          <div className="mb-3 flex items-center gap-1.5 text-xs text-ink-soft">
+            <span>Lọc theo ngày in tem</span>
+            <input type="date" value={ngay} onChange={(e) => setNgay(e.target.value)}
+              className="h-9 rounded-input border border-line bg-surface px-2 text-sm" />
+            {ngay && <button type="button" onClick={() => setNgay('')} className="text-ink-soft hover:text-danger" aria-label="Xóa lọc ngày"><Icon name="x" size={14} /></button>}
+          </div>
           <DataTable columns={temCols} rows={tems} loading={loading} rowKey="tem_id" sttStart={0}
             rowClassName={(r) => slaRowClass(evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status)}
             emptyText="Không có tem OQC đạt nào chờ giao" />

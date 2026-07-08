@@ -4,6 +4,7 @@ import Icon from '../../../components/common/Icon';
 import Badge from '../../../components/common/Badge';
 import Toast from '../../../components/common/Toast';
 import SidePanel from '../../../components/common/SidePanel';
+import KcsBreakdown from '../../../components/common/KcsBreakdown';
 import useToast from '../../../hooks/useToast';
 import useSocketEvent from '../../../hooks/useSocketEvent';
 import { getActivity, getStageCounts, getBang2, getTinhTrangPhanIn, getHoanThanhHomNay } from '../../../services/dashboardService';
@@ -32,8 +33,8 @@ const TIER1_CELLS = [
   { label: 'Test Run', sub: ['TESTRUN_CNSP', 'TESTRUN_QA'], trams: ['TEST_RUN'], hn: ['CNSP xác nhận test', 'QA xác nhận test'] },
   { label: 'Release 2', sub: ['RELEASE_2'], trams: ['RELEASE_2'] },
   { label: 'Sản xuất', sub: ['CHO_SAN_XUAT', 'SAN_XUAT', 'CHO_KHO', 'KCS', 'SUA'], trams: ['SAN_XUAT', 'CHO_KHO', 'KIEM', 'SUA'], pcs: true, hn: ['KCS', 'Sửa'] },
-  { label: 'OQC', sub: ['OQC'], trams: ['OQC'], hn: ['OQC'] },
-  { label: 'Giao', sub: ['DANG_GIAO', 'DA_GIAO'], trams: ['FINISH'], hn: ['Giao'] },
+  { label: 'OQC', sub: ['OQC'], trams: ['OQC'], pcs: true, hn: ['OQC'] },
+  { label: 'Giao', sub: ['DANG_GIAO', 'DA_GIAO'], trams: ['FINISH'], pcs: true, hn: ['Giao'] },
 ];
 
 const STAGE_CELLS = [
@@ -49,8 +50,8 @@ const STAGE_CELLS = [
   { key: 'KCS', label: 'KCS', trams: ['KIEM'], hn: ['KCS'] },
   { key: 'SUA', label: 'Sửa', trams: ['SUA'], hn: ['Sửa'] },
   { key: 'OQC', label: 'OQC', trams: ['OQC'], hn: ['OQC'] },
-  { key: 'DANG_GIAO', label: 'Đang giao', trams: ['FINISH'] },
-  { key: 'DA_GIAO', label: 'Đã giao xong', hn: ['Giao'] },
+  { key: 'DANG_GIAO', label: 'Đang chờ giao', trams: ['FINISH'] },
+  { key: 'DA_GIAO', label: 'Đã giao', hn: ['Giao'] },
 ];
 
 const CHART_BUCKETS = [
@@ -85,16 +86,26 @@ function PhanInJourney({ id }) {
   if (loading) return <div className="py-10 text-center text-ink-soft">Đang tải...</div>;
   if (!d) return <div className="py-10 text-center text-ink-soft">Không có dữ liệu.</div>;
   const ts = d.tem_summary || {};
+  const sp = d.stage_pcs || {};
   return (
     <div className="space-y-4">
       <div className="rounded-control border border-line p-3 text-sm">
         <div className="font-semibold text-ink">{d.phan_in.ma_phan} · {d.phan_in.ten_khach_hang}</div>
         <div className="text-xs text-ink-soft">{d.phan_in.ma_don_hang} · {d.phan_in.ma_hang} · {[d.phan_in.mau_vai, d.phan_in.kich_vai, d.phan_in.kich_phim].filter(Boolean).join(' · ')}</div>
-        {ts.pcs_in > 0 && (
+        {(ts.pcs_in > 0 || sp.sl_release > 0) && (
           <div className="mt-1.5 flex flex-wrap gap-1.5">
-            <Badge tone="default">{fmtNum(ts.pcs_in)} pcs · {fmtNum(ts.so_tem)} tem</Badge>
+            {sp.sl_release > 0 && <Badge tone="info">Release {fmtNum(sp.sl_release)}</Badge>}
+            {ts.pcs_in > 0 && <Badge tone="default">In xong {fmtNum(ts.pcs_in)} pcs · {fmtNum(ts.so_tem)} tem</Badge>}
             {ts.sl_dat > 0 && <Badge tone="success">Đạt {fmtNum(ts.sl_dat)}</Badge>}
             {ts.sl_sua > 0 && <Badge tone="warning">Sửa {fmtNum(ts.sl_sua)}</Badge>}
+            {sp.oqc_dat > 0 && <Badge tone="success">OQC đạt {fmtNum(sp.oqc_dat)}</Badge>}
+            {sp.sua_dat > 0 && <Badge tone="warning">OQC qua sửa {fmtNum(sp.sua_dat)}</Badge>}
+          </div>
+        )}
+        {d.kcs_by_dot?.dot?.length > 0 && (
+          <div className="mt-2 border-t border-line pt-2">
+            <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-ink-soft">KCS theo đợt vải</div>
+            <KcsBreakdown data={d.kcs_by_dot} />
           </div>
         )}
       </div>

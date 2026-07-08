@@ -33,9 +33,11 @@ export const MODULES = [
     perm: 'RELEASE1',
     mau: 'bg-violet-50 text-violet-600',
     children: [
+      { ten: 'Kế hoạch tự động', route: '/ke-hoach/tu-dong', perm: 'RELEASE1' },
       { ten: 'Release 1', route: '/ke-hoach/release-1', perm: 'RELEASE1' },
       { ten: 'Release 2', route: '/ke-hoach/release-2', perm: 'RELEASE2' },
       { ten: 'Lập kế hoạch lại', route: '/ke-hoach/lap-lai', perm: 'RELEASE2' },
+      { ten: 'Cài đặt', route: '/ke-hoach/cai-dat', perm: ['RELEASE1', 'RELEASE2'] },
     ],
   },
   {
@@ -49,7 +51,6 @@ export const MODULES = [
       { ten: 'Xác nhận chạy', route: '/san-xuat/xac-nhan-chay', perm: 'PROD_RUN' },
       { ten: 'Theo dõi chuyền', route: '/san-xuat/theo-doi-chuyen', perm: 'PROD_MONITOR' },
       { ten: 'Tình trạng xe phơi', route: '/san-xuat/xe-phoi', perm: 'XEPHOI' },
-      { ten: 'Quét chờ khô', route: '/san-xuat/cho-kho', perm: 'DRYING' },
       { ten: 'KCS', route: '/san-xuat/kcs', perm: 'KCS' },
       { ten: 'Sửa', route: '/san-xuat/sua', perm: 'SUA' },
     ],

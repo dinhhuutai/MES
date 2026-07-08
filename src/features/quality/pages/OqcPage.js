@@ -10,6 +10,8 @@ import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
 import { Field, Input, Textarea } from '../../../components/common/controls';
 import SearchableSelect from '../../../components/common/SearchableSelect';
+import QrScanner from '../../../components/common/QrScanner';
+import Icon from '../../../components/common/Icon';
 import useToast from '../../../hooks/useToast';
 import useNow from '../../../hooks/useNow';
 import { evalSla, slaRowClass } from '../../../utils/sla';
@@ -27,6 +29,7 @@ export default function OqcPage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [ngay, setNgay] = useState('');
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ soLuongKiem: '', soLuongDat: '', soLuongLoi: '', ketQua: 'DAT', ownerChoGiaoId: '', truongHopGiaoId: '', lyDoChoGiao: '' });
   const [saving, setSaving] = useState(false);
@@ -36,6 +39,7 @@ export default function OqcPage() {
   const [truongHopList, setTruongHopList] = useState([]);
   const [returnReason, setReturnReason] = useState('');
   const [returnMode, setReturnMode] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
 
   useEffect(() => { listUsers({ limit: 500 }).then((r) => setUsers(r.data.items || r.data || [])).catch(() => {}); }, []);
   useEffect(() => { listGiaoDacBietActive().then((r) => setTruongHopList(r.data || [])).catch(() => {}); }, []);
@@ -43,14 +47,14 @@ export default function OqcPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await listOqcCandidates({ search });
+      const res = await listOqcCandidates({ search, ngay: ngay || undefined });
       setRows(res.data);
     } catch (e) {
       show(e.message || 'Lỗi tải', 'error');
     } finally {
       setLoading(false);
     }
-  }, [search, show]);
+  }, [search, ngay, show]);
 
   useEffect(() => {
     const t = setTimeout(load, 250);
@@ -63,6 +67,19 @@ export default function OqcPage() {
     setReturnReason('');
     const con = row.con_oqc ?? row.so_luong ?? '';
     setForm({ soLuongKiem: String(con), soLuongDat: String(con), soLuongLoi: '', ketQua: 'DAT', ownerChoGiaoId: '', truongHopGiaoId: '', lyDoChoGiao: '' });
+  };
+
+  // Quét QR (ma_tem) → tra tem đang chờ OQC → mở modal nhập.
+  const onScan = async (maTem) => {
+    setScanOpen(false);
+    const code = (maTem || '').trim();
+    if (!code) return;
+    try {
+      const res = await listOqcCandidates({ search: code });
+      const row = (res.data || []).find((r) => (r.ma_tem || '').toLowerCase() === code.toLowerCase());
+      if (row) open(row);
+      else show(`Tem ${code} không có phần chờ OQC`, 'error');
+    } catch (e) { show(e.message || 'Không tra được tem', 'error'); }
   };
 
   const doReturnKcs = async () => {
@@ -118,6 +135,13 @@ export default function OqcPage() {
     <div>
       <Toolbar title="OQC — Kiểm cuối" subtitle="Kiểm cuối theo tem trước giao hàng"
         search={search} onSearch={setSearch} searchPlaceholder="Quét/nhập mã tem...">
+        {canOqc && <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét QR</Button>}
+        <div className="flex items-center gap-1.5 text-xs text-ink-soft">
+          <span>Ngày in tem</span>
+          <input type="date" value={ngay} onChange={(e) => setNgay(e.target.value)}
+            className="h-9 rounded-input border border-line bg-surface px-2 text-sm" />
+          {ngay && <button type="button" onClick={() => setNgay('')} className="text-ink-soft hover:text-danger" aria-label="Xóa lọc ngày"><Icon name="x" size={14} /></button>}
+        </div>
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="warning">{rows.length} tem chờ OQC</Badge>
@@ -232,6 +256,8 @@ export default function OqcPage() {
         title="Lịch sử OQC" fetcher={oqcHistory} />
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
         title="Tem đã OQC" maHeader="Tem" fetcher={oqcDone} />
+
+      <QrScanner open={scanOpen} onClose={() => setScanOpen(false)} onResult={onScan} />
 
       <Toast toast={toast} />
     </div>

@@ -41,6 +41,8 @@ import {
   GripVertical,
   Download,
   FileSpreadsheet,
+  ScanLine,
+  QrCode,
 } from 'lucide-react';
 
 // Map tên kebab → component Lucide.
@@ -87,6 +89,8 @@ const MAP = {
   'grip-vertical': GripVertical,
   download: Download,
   'file-spreadsheet': FileSpreadsheet,
+  'scan-line': ScanLine,
+  'qr-code': QrCode,
 };
 
 export default function Icon({ name, size = 20, className = '' }) {

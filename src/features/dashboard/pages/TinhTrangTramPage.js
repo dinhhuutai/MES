@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import Icon from '../../../components/common/Icon';
 import Badge from '../../../components/common/Badge';
 import SidePanel from '../../../components/common/SidePanel';
+import KcsBreakdown from '../../../components/common/KcsBreakdown';
 import Toast from '../../../components/common/Toast';
 import useToast from '../../../hooks/useToast';
 import useNow from '../../../hooks/useNow';
@@ -261,12 +262,22 @@ export default function TinhTrangTramPage() {
           </div>
 
           {/* Tổng hợp số lượng theo tem (hợp nhất theo phần in) */}
-          {detail.tem_summary?.pcs_in > 0 && (
+          {(detail.tem_summary?.pcs_in > 0 || detail.stage_pcs?.sl_release > 0) && (
             <div className="mb-4 flex flex-wrap gap-2">
-              <Badge tone="default">{fmtNum(detail.tem_summary.pcs_in)} pcs · {fmtNum(detail.tem_summary.so_tem)} tem</Badge>
-              {detail.tem_summary.sl_dat > 0 && <Badge tone="success">Đạt {fmtNum(detail.tem_summary.sl_dat)}</Badge>}
-              {detail.tem_summary.sl_sua > 0 && <Badge tone="warning">Sửa {fmtNum(detail.tem_summary.sl_sua)}</Badge>}
-              {detail.tem_summary.sl_sua_dat > 0 && <Badge tone="info">Sửa đạt {fmtNum(detail.tem_summary.sl_sua_dat)}</Badge>}
+              {detail.stage_pcs?.sl_release > 0 && <Badge tone="info">Release {fmtNum(detail.stage_pcs.sl_release)}</Badge>}
+              {detail.tem_summary?.pcs_in > 0 && <Badge tone="default">In xong {fmtNum(detail.tem_summary.pcs_in)} pcs · {fmtNum(detail.tem_summary.so_tem)} tem</Badge>}
+              {detail.tem_summary?.sl_dat > 0 && <Badge tone="success">Đạt {fmtNum(detail.tem_summary.sl_dat)}</Badge>}
+              {detail.tem_summary?.sl_sua > 0 && <Badge tone="warning">Sửa {fmtNum(detail.tem_summary.sl_sua)}</Badge>}
+              {detail.stage_pcs?.oqc_dat > 0 && <Badge tone="success">OQC đạt {fmtNum(detail.stage_pcs.oqc_dat)}</Badge>}
+              {detail.stage_pcs?.sua_dat > 0 && <Badge tone="warning">OQC qua sửa {fmtNum(detail.stage_pcs.sua_dat)}</Badge>}
+            </div>
+          )}
+
+          {/* KCS theo từng đợt vải + tổng */}
+          {detail.kcs_by_dot?.dot?.length > 0 && (
+            <div className="mb-4 rounded-card border border-line bg-surface-muted/40 p-3">
+              <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-ink-soft">KCS theo đợt vải</div>
+              <KcsBreakdown data={detail.kcs_by_dot} />
             </div>
           )}
 
