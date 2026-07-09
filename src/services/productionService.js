@@ -32,6 +32,13 @@ export const cancelPrintTem = (temId, lyDo) => client.post(`/production/huy-tem/
 export const listCloseCandidates = () => client.get('/production/dong-lenh/candidates');
 export const closeProduction = (phieuId, lyDo) => client.post(`/production/dong-lenh/${phieuId}`, { lyDo });
 
+// Mở lại lệnh sản xuất (đã đóng/hoàn tất trong 2 ngày) — trang Đóng lệnh sản xuất
+export const listReopenCandidates = () => client.get('/production/mo-lai/candidates');
+export const reopenProduction = (phieuId) => client.post(`/production/mo-lai/${phieuId}`);
+
+// Ngừng lệnh chạy (ngừng phần in để in hàng gấp) → lệnh về chờ chạy — màn Xác nhận chạy
+export const pauseLenhChay = (phieuId) => client.post(`/production/phieu/${phieuId}/ngung-lenh`);
+
 // Hủy lệnh đang chạy (bấm nhầm Xác nhận chạy) → về chờ chạy — trang Hủy lệnh xác nhận
 export const listUndoStartCandidates = () => client.get('/production/huy-chay/candidates');
 export const undoStartProduction = (phieuId) => client.post(`/production/huy-chay/${phieuId}`);

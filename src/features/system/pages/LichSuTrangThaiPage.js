@@ -12,7 +12,8 @@ import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import { listConfirmHistory, cancelReadyItem } from '../../../services/readyService';
 import { listCancelableLenh, cancelLenh } from '../../../services/planningService';
-import { listCancelableTem, cancelPrintTem, listCloseCandidates, closeProduction, listUndoStartCandidates, undoStartProduction } from '../../../services/productionService';
+import { listCancelableTem, cancelPrintTem, listCloseCandidates, closeProduction, listReopenCandidates, reopenProduction, listUndoStartCandidates, undoStartProduction } from '../../../services/productionService';
+import { listCancelKcs, cancelKcs, listCancelSua, cancelSua, listCancelOqc, cancelOqc } from '../../../services/qualityService';
 import { fmtNum } from '../../../utils/format';
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -362,17 +363,20 @@ function TemCancelSection({ show }) {
 // ─── Tab 4: Đóng lệnh sản xuất (= Chạy hoàn tất khi lệch SL không bấm được) ──
 function CloseProductionSection({ show }) {
   const [rows, setRows] = useState([]);
+  const [reopenRows, setReopenRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [target, setTargetRow] = useState(null); // phiếu đang đóng
+  const [reopen, setReopen] = useState(null);     // phiếu đang mở lại
   const [lyDo, setLyDo] = useState('');
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await listCloseCandidates();
+      const [res, resReopen] = await Promise.all([listCloseCandidates(), listReopenCandidates()]);
       setRows(res.data);
+      setReopenRows(resReopen.data);
     } catch (e) {
       show(e.message || 'Lỗi tải', 'error');
     } finally {
@@ -402,6 +406,20 @@ function CloseProductionSection({ show }) {
     }
   };
 
+  const doReopen = async () => {
+    setBusy(true);
+    try {
+      const res = await reopenProduction(reopen.phieu_id);
+      show(`Đã mở lại lệnh sản xuất ${res.data.ma_lenh_san_xuat || ''} — tiếp tục in, giữ nguyên số lượng đã có.`);
+      setReopen(null);
+      load();
+    } catch (e) {
+      show(e.message || 'Mở lại lệnh thất bại', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const pct = (r) => (r.target > 0 ? Math.round((Number(r.printed) / Number(r.target)) * 100) : null);
 
   const columns = [
@@ -424,6 +442,24 @@ function CloseProductionSection({ show }) {
       <Button variant="danger" className="px-2.5 py-1 text-xs" onClick={() => { setTargetRow(r); setLyDo(''); }}>Đóng lệnh</Button> },
   ];
 
+  const reopenCols = [
+    { key: 'ma_lenh_san_xuat', header: 'Mã lệnh', render: (r) => <Badge tone="info">{r.ma_lenh_san_xuat}</Badge> },
+    { key: 'tg_kt', header: 'Đóng lúc', className: 'whitespace-nowrap tabular-nums', render: (r) => fmtTime(r.tg_kt) },
+    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
+    { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
+    { key: 'ma_phan', header: 'Code phần', render: (r) => r.ma_phan || '—' },
+    { key: 'mau_vai', header: 'Màu · Kích', render: (r) => [r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—' },
+    { key: 'chuyen', header: 'Chuyền', render: (r) => r.ten_chuyen || r.ma_chuyen || '—' },
+    { key: 'printed', header: 'Đã in / SL', className: 'text-right tabular-nums', render: (r) =>
+      `${fmtNum(r.printed)} / ${fmtNum(r.target)}` },
+    { key: 'actions', header: '', className: 'text-right whitespace-nowrap', render: (r) =>
+      <Button className="px-2.5 py-1 text-xs" onClick={() => setReopen(r)}>Mở lại</Button> },
+  ];
+  const reopenView = kw
+    ? reopenRows.filter((r) => [r.ma_lenh_san_xuat, r.ma_phan, r.ma_hang, r.mau_vai, r.kich_vai, r.kich_phim, r.ten_khach_hang]
+        .some((v) => (v || '').toLowerCase().includes(kw)))
+    : reopenRows;
+
   return (
     <div>
       <Toolbar title="Đóng lệnh sản xuất"
@@ -439,6 +475,30 @@ function CloseProductionSection({ show }) {
 
       <DataTable columns={columns} rows={view} loading={loading} rowKey="phieu_id" sttStart={0}
         emptyText="Không có lệnh nào đang chạy" />
+
+      {/* Mở lại lệnh sản xuất đã đóng/hoàn tất (trong 2 ngày) */}
+      <div className="mt-8 mb-2 flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-ink">Mở lại lệnh sản xuất</h3>
+        <Badge tone="default">{reopenView.length} lệnh (2 ngày gần nhất)</Badge>
+      </div>
+      <div className="mb-3 rounded-control border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700">
+        Lệnh đã <b>đóng / chạy hoàn tất</b> trong <b>2 ngày</b> gần nhất — mở lại để <b>in tiếp</b> (đóng nhầm hoặc cần in thêm).
+        Mở lại <b>giữ nguyên số lượng đã in</b>; phiếu quay lại <b>đang chạy</b> để in tiếp trên màn Sản xuất.
+      </div>
+      <DataTable columns={reopenCols} rows={reopenView} loading={loading} rowKey="phieu_id" sttStart={0}
+        emptyText="Không có lệnh nào đóng trong 2 ngày gần nhất" />
+
+      <ConfirmDialog
+        open={!!reopen}
+        onClose={() => setReopen(null)}
+        onConfirm={doReopen}
+        loading={busy}
+        title="Mở lại lệnh sản xuất"
+        message={reopen
+          ? `Mở lại lệnh ${reopen.ma_lenh_san_xuat} (đã in ${fmtNum(reopen.printed)}/${fmtNum(reopen.target)}, đóng lúc ${fmtTime(reopen.tg_kt)})? Phiếu quay lại "đang chạy" để in tiếp — số lượng đã in được giữ nguyên.`
+          : ''}
+        confirmText="Mở lại lệnh"
+      />
 
       <Modal
         open={!!target}
@@ -527,7 +587,7 @@ function UndoStartSection({ show }) {
       </Toolbar>
 
       <div className="mb-3 rounded-control border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700">
-        Chỉ hủy được lệnh <b>chưa in tem nào</b>. Sau khi hủy, lệnh trở lại <b>chờ chạy</b> (Release 2) để bấm Xác nhận chạy lại.
+        Chỉ hủy được lệnh <b>chưa in tem nào</b>. Sau khi hủy, lệnh trở lại <b>chờ chạy</b> để bấm Xác nhận chạy lại.
         Lệnh đã in tem thì dùng <b>Hủy lệnh in tem</b> hoặc <b>Đóng lệnh sản xuất</b>.
       </div>
 
@@ -550,6 +610,134 @@ function UndoStartSection({ show }) {
   );
 }
 
+// ─── Tab 6-8: Hủy xác nhận KCS / Sửa / OQC (đảo sổ cái tem, đánh dấu audit) ──
+const QC_CANCEL_CFG = {
+  kcs: {
+    short: 'KCS', title: 'Hủy xác nhận KCS',
+    subtitle: 'Lỡ xác nhận KCS lộn / nhập sai số — hủy để đảo sổ cái về trước, tem quay lại chờ KCS',
+    list: listCancelKcs, cancel: cancelKcs, ketQua: true,
+    detail: (r) => `Đạt ${fmtNum(r.so_luong_dat)} · Hư ${fmtNum(r.so_luong_loi)} · Hủy ${fmtNum(r.so_luong_huy)}`
+      + (r.so_luong_chenh_lech ? ` · Chênh ${r.so_luong_chenh_lech > 0 ? '+' : ''}${r.so_luong_chenh_lech}` : ''),
+    hint: 'Chỉ hủy được khi phần ĐẠT của lần đó chưa đi tiếp OQC và phần SỬA chưa xử lý ở màn Sửa. Tem quay lại chờ KCS.',
+  },
+  sua: {
+    short: 'Sửa', title: 'Hủy xác nhận Sửa',
+    subtitle: 'Lỡ xác nhận Sửa lộn / nhập sai số — hủy để đảo sổ cái về trước, phần quay lại chờ sửa',
+    list: listCancelSua, cancel: cancelSua,
+    detail: (r) => `Sửa ${fmtNum(r.so_luong_sua)} · Đạt ${fmtNum(r.so_luong_sua_dat)} · Hủy ${fmtNum(r.so_luong_sua_huy)}`,
+    hint: 'Chỉ hủy được khi phần SỬA ĐẠT của lần đó chưa đi tiếp OQC. Phần này quay lại chờ sửa.',
+  },
+  oqc: {
+    short: 'OQC', title: 'Hủy xác nhận OQC',
+    subtitle: 'Lỡ xác nhận OQC lộn / nhập sai số — hủy để đảo sổ cái về trước, tem quay lại chờ OQC',
+    list: listCancelOqc, cancel: cancelOqc, ketQua: true, choGiao: true,
+    detail: (r) => `Kiểm ${fmtNum(r.so_luong_kiem)} · Đạt ${fmtNum(r.so_luong_dat)} · Lỗi ${fmtNum(r.so_luong_loi)}`,
+    hint: 'Chỉ hủy được khi phần OQC ĐẠT của lần đó chưa được GIAO. Tem quay lại chờ OQC.',
+  },
+};
+
+function QcCancelSection({ show, kind }) {
+  const cfg = QC_CANCEL_CFG[kind];
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [date, setDate] = useState(todayStr);
+  const [search, setSearch] = useState('');
+  const [target, setTargetRow] = useState(null);
+  const [lyDo, setLyDo] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await cfg.list(date);
+      setRows(res.data);
+    } catch (e) {
+      show(e.message || 'Lỗi tải', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [date, show, cfg]);
+
+  useEffect(() => { const t = setTimeout(load, 200); return () => clearTimeout(t); }, [load]);
+
+  const kw = search.trim().toLowerCase();
+  const view = kw
+    ? rows.filter((r) => [r.ma_tem, r.ma_hang, r.mau_vai, r.kich_vai, r.kich_phim, r.ten_khach_hang]
+        .some((v) => (v || '').toLowerCase().includes(kw)))
+    : rows;
+
+  const doCancel = async () => {
+    setBusy(true);
+    try {
+      await cfg.cancel(target.id, lyDo.trim() || null);
+      show(`Đã hủy xác nhận ${cfg.short} — tem ${target.ma_tem} đã đảo về trước lần xác nhận.`);
+      setTargetRow(null); setLyDo('');
+      load();
+    } catch (e) {
+      show(e.message || 'Hủy xác nhận thất bại', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const columns = [
+    { key: 'tg', header: 'Giờ', className: 'whitespace-nowrap tabular-nums', render: (r) => fmtTime(r.tg) },
+    { key: 'ma_tem', header: 'Tem', render: (r) => <Badge tone="info">{r.ma_tem}</Badge> },
+    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
+    { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
+    { key: 'mau_vai', header: 'Màu · Kích', render: (r) => [r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—' },
+    ...(cfg.ketQua ? [{ key: 'ket_qua', header: 'Kết quả', render: (r) => (
+      <div className="flex items-center gap-1">
+        <Badge tone={r.ket_qua === 'DAT' ? 'success' : 'danger'}>{r.ket_qua === 'DAT' ? 'Đạt' : (r.ket_qua === 'KHONG_DAT' ? 'Không đạt' : (r.ket_qua || '—'))}</Badge>
+        {cfg.choGiao && r.cho_giao ? <Badge tone="warning">Cho giao</Badge> : null}
+      </div>
+    ) }] : []),
+    { key: 'detail', header: 'Số lượng', render: (r) => <span className="text-xs text-ink-soft">{cfg.detail(r)}</span> },
+    { key: 'nguoi', header: 'Người xác nhận', render: (r) => r.nguoi || '—' },
+    { key: 'actions', header: '', className: 'text-right whitespace-nowrap', render: (r) =>
+      <Button variant="danger" className="px-2.5 py-1 text-xs" onClick={() => { setTargetRow(r); setLyDo(''); }}>Hủy xác nhận</Button> },
+  ];
+
+  return (
+    <div>
+      <Toolbar title={cfg.title} subtitle={cfg.subtitle}
+        search={search} onSearch={setSearch} searchPlaceholder="Tìm mã tem, mã hàng, màu/kích, khách...">
+        <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
+          className="h-10 rounded-input border border-line px-3 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10" />
+        <Badge tone="info">{view.length} lượt</Badge>
+      </Toolbar>
+
+      <div className="mb-3 rounded-control border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700">
+        {cfg.hint} Thao tác được ghi <b>audit</b> (người, giờ, lý do) và loại bản ghi khỏi lịch sử/hành trình.
+      </div>
+
+      <DataTable columns={columns} rows={view} loading={loading} rowKey="id" sttStart={0}
+        emptyText="Không có lượt xác nhận nào trong ngày" />
+
+      <Modal
+        open={!!target}
+        onClose={() => setTargetRow(null)}
+        title={`Hủy xác nhận ${cfg.short} — ${target?.ma_tem || ''}`}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setTargetRow(null)}>Đóng</Button>
+            <Button variant="danger" onClick={doCancel} loading={busy}>Xác nhận hủy</Button>
+          </>
+        }
+      >
+        <div className="mb-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          Hủy lần xác nhận {cfg.short} của tem <b>{target?.ma_tem}</b> ({target ? cfg.detail(target) : ''}).
+          Sổ cái số lượng của tem sẽ <b>đảo về trước</b> lần này. {cfg.hint}
+        </div>
+        <Field label="Lý do (khuyến nghị)">
+          <Textarea rows={2} value={lyDo} onChange={(e) => setLyDo(e.target.value)}
+            placeholder="Vd: nhập sai số lượng, xác nhận nhầm tem..." />
+        </Field>
+      </Modal>
+    </div>
+  );
+}
+
 // ─── Trang gộp: Hủy lệnh xác nhận ───────────────────────────────────────────
 export default function LichSuTrangThaiPage() {
   const { can } = usePermissions();
@@ -561,6 +749,9 @@ export default function LichSuTrangThaiPage() {
     can('PROD_RUN') && { key: 'tem', label: 'Hủy lệnh in tem' },
     can('PROD_RUN') && { key: 'dong', label: 'Đóng lệnh sản xuất' },
     can('PROD_RUN') && { key: 'huychay', label: 'Hủy lệnh đang chạy' },
+    can('KCS') && { key: 'huykcs', label: 'Hủy xác nhận KCS' },
+    can('SUA') && { key: 'huysua', label: 'Hủy xác nhận Sửa' },
+    can('OQC') && { key: 'huyoqc', label: 'Hủy xác nhận OQC' },
   ].filter(Boolean);
 
   const [tab, setTab] = useState(tabs[0]?.key);
@@ -588,6 +779,9 @@ export default function LichSuTrangThaiPage() {
       {tab === 'tem' && <TemCancelSection show={show} />}
       {tab === 'dong' && <CloseProductionSection show={show} />}
       {tab === 'huychay' && <UndoStartSection show={show} />}
+      {tab === 'huykcs' && <QcCancelSection show={show} kind="kcs" />}
+      {tab === 'huysua' && <QcCancelSection show={show} kind="sua" />}
+      {tab === 'huyoqc' && <QcCancelSection show={show} kind="oqc" />}
 
       <Toast toast={toast} />
     </div>

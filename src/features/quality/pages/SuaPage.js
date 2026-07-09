@@ -16,7 +16,9 @@ import useNow from '../../../hooks/useNow';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 import usePermissions from '../../../hooks/usePermissions';
 import { listSuaCandidates, recordSua, suaHistory, suaDone } from '../../../services/qualityService';
-import { fmtNum } from '../../../utils/format';
+import { getTemLabel } from '../../../services/productionService';
+import { printOqcTem } from '../../production/utils/printTemLabel';
+import { fmtNum, baseMaTem } from '../../../utils/format';
 
 const empty = { soLuongHuyThang: '', soLuongSua: '', soLuongSuaDat: '', soLuongSuaHuy: '' };
 
@@ -69,10 +71,30 @@ export default function SuaPage() {
 
   const openRow = (row) => { setEditing(row); setForm({ ...empty, soLuongSuaDat: String(row.con_sua || '') }); };
 
+  // In tem OQC (Sửa đã hoàn thành) = tem 17, bố cục y hệt tem 15. SL IN = số lượng sửa đạt (→ OQC).
+  const printOqc = async (row) => {
+    try {
+      const res = await getTemLabel(row.tem_id);
+      await printOqcTem({ ...res.data, so_luong: row.so_luong });
+    } catch (e) { show(e.message || 'Không in được tem', 'error'); }
+  };
+
+  const doneColumns = [
+    { key: 'ma', header: 'Tem', className: 'whitespace-nowrap', render: (r) => <Badge tone="info">{r.ma || '—'}</Badge> },
+    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
+    { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
+    { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
+    { key: 'so_luong', header: 'Sửa đạt', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
+    { key: 'tg', header: 'Giờ', className: 'whitespace-nowrap tabular-nums', render: (r) => (r.tg ? new Date(r.tg).toLocaleTimeString('vi-VN') : '') },
+    { key: 'in_tem', header: '', className: 'text-right', render: (r) => (
+      r.tem_id ? <Button variant="secondary" className="!px-3 !py-1.5 !text-xs" onClick={() => printOqc(r)}>In tem</Button> : null
+    ) },
+  ];
+
   // Quét QR (ma_tem) → tra tem đang chờ sửa → mở modal nhập.
   const onScan = async (maTem) => {
     setScanOpen(false);
-    const code = (maTem || '').trim();
+    const code = baseMaTem(maTem); // QR có thể mã hóa '16-TEM...'; tách lấy mã gốc
     if (!code) return;
     try {
       const res = await listSuaCandidates({ search: code });
@@ -208,7 +230,7 @@ export default function SuaPage() {
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}
         title="Lịch sử Sửa" fetcher={suaHistory} />
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
-        title="Tem đã sửa" maHeader="Tem" fetcher={suaDone} />
+        title="Tem đã sửa" maHeader="Tem" fetcher={suaDone} columns={doneColumns} />
 
       <QrScanner open={scanOpen} onClose={() => setScanOpen(false)} onResult={onScan} />
 

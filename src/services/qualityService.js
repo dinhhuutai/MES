@@ -17,6 +17,14 @@ export const returnOqcToKcs = (temId, body) => client.post(`/quality/oqc/${temId
 export const oqcHistory = (date) => client.get('/quality/oqc/history', { params: { date } });
 export const oqcDone = (date) => client.get('/quality/oqc/done', { params: { date } });
 
+// Hủy xác nhận KCS / Sửa / OQC (lỡ xác nhận lộn / nhập sai số) — trang Hủy lệnh xác nhận
+export const listCancelKcs = (date) => client.get('/quality/kcs/cancelable', { params: { date } });
+export const cancelKcs = (id, lyDo) => client.post(`/quality/kcs/${id}/huy`, { lyDo });
+export const listCancelSua = (date) => client.get('/quality/sua/cancelable', { params: { date } });
+export const cancelSua = (id, lyDo) => client.post(`/quality/sua/${id}/huy`, { lyDo });
+export const listCancelOqc = (date) => client.get('/quality/oqc/cancelable', { params: { date } });
+export const cancelOqc = (id, lyDo) => client.post(`/quality/oqc/${id}/huy`, { lyDo });
+
 // Lịch sử QC trả về (toggle READY/TEST_RUN/OQC)
 export const qcTraVeHistory = (loai, date) => client.get('/quality/qc-tra-ve', { params: { loai, date } });
 

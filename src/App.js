@@ -29,6 +29,7 @@ import PhanInListPage from './features/orders/pages/PhanInListPage';
 import ReadyPage from './features/technical-ready/pages/ReadyPage';
 import TestRunCnspPage from './features/technical-ready/pages/TestRunCnspPage';
 import GomSetPage from './features/technical-ready/pages/GomSetPage';
+import KeHoachTuDongPage from './features/planning/pages/KeHoachTuDongPage';
 import CaiDatPage from './features/planning/pages/CaiDatPage';
 import Release1Page from './features/planning/pages/Release1Page';
 import Release2Page from './features/planning/pages/Release2Page';
@@ -59,6 +60,7 @@ const PAGES = {
   '/ky-thuat/ready': <ReadyPage />,
   '/ky-thuat/gom-set': <GomSetPage />,
   '/ky-thuat/test-run-cnsp': <TestRunCnspPage />,
+  '/ke-hoach/tu-dong': <KeHoachTuDongPage />,
   '/ke-hoach/cai-dat': <CaiDatPage />,
   '/ke-hoach/release-1': <Release1Page />,
   '/ke-hoach/release-2': <Release2Page />,

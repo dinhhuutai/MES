@@ -78,6 +78,13 @@ export default function XacNhanChayPage() {
       <div>
         <div className="text-ink">{r.ma_hang || '—'}</div>
         {r.so_dot_vai > 1 && <Badge tone="warning">Gom set ({r.so_dot_vai} đợt)</Badge>}
+        {Number(r.da_in_truoc) > 0 && (
+          <div className="mt-0.5">
+            <Badge tone="warning">
+              Đã in {fmtNum(r.da_in_truoc)}{r.tg_ngung ? ` · ngừng ${new Date(r.tg_ngung).toLocaleString('vi-VN')}` : ''} → in tiếp
+            </Badge>
+          </div>
+        )}
       </div>
     ) },
     { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },

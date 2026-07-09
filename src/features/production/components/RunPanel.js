@@ -8,9 +8,9 @@ import Toast from '../../../components/common/Toast';
 import { Input, Textarea, Select } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import { getRun, printTem, reprintTem, getTemLabel, getTemLogs, finishRun, stopLine, resumeLine, addVaiHuy } from '../../../services/productionService';
+import { getRun, printTem, reprintTem, getTemLabel, getTemLogs, finishRun, stopLine, resumeLine, addVaiHuy, pauseLenhChay, listProductionCandidates, startProduction } from '../../../services/productionService';
 import printTemLabel from '../utils/printTemLabel';
-import { fmtNum } from '../../../utils/format';
+import { fmtNum, fmtDate } from '../../../utils/format';
 
 const TEM_TONE = { IN: 'warning', DANG_PHOI: 'info', DA_KHO: 'success', HUY: 'danger' };
 const TEM_LABEL = { IN: 'Chờ phơi', DANG_PHOI: 'Đang phơi', DA_KHO: 'Đã khô', HUY: 'Đã hủy' };
@@ -31,6 +31,9 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
   const [logsOpen, setLogsOpen] = useState(false);
   const [temLogs, setTemLogs] = useState([]);
   const [vhForm, setVhForm] = useState({ dotVaiId: '', soLuong: '', lyDo: '' });
+  const [pauseOpen, setPauseOpen] = useState(false);   // modal ngừng lệnh chạy (in hàng gấp)
+  const [swapList, setSwapList] = useState([]);        // phần in đang chờ sản xuất để hoán đổi
+  const [swapLoading, setSwapLoading] = useState(false);
 
   const phieu = data?.phieu;
   const running = phieu?.trang_thai === 'DANG_CHAY';
@@ -108,6 +111,47 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
     setLogsOpen(true);
     try { const res = await getTemLogs(phieu.id); setTemLogs(res.data); }
     catch (e) { show(e.message || 'Lỗi tải lịch sử', 'error'); }
+  };
+
+  // Ngừng lệnh chạy để in hàng gấp: mở modal + nạp danh sách phần in đang chờ sản xuất (để hoán đổi).
+  const openPause = async () => {
+    setPauseOpen(true);
+    setSwapLoading(true);
+    try {
+      const res = await listProductionCandidates({ limit: 50 });
+      setSwapList((res.data.items || []).filter((r) => r.id !== lenhId)); // trừ chính lệnh đang mở
+    } catch (e) {
+      show(e.message || 'Lỗi tải danh sách chờ sản xuất', 'error');
+    } finally { setSwapLoading(false); }
+  };
+
+  // Chỉ ngừng lệnh chạy (không hoán đổi) → lệnh về chờ chạy.
+  const doPauseOnly = async () => {
+    setBusy(true);
+    try {
+      await pauseLenhChay(phieu.id);
+      show('Đã ngừng lệnh chạy — lệnh về chờ chạy để lập lại kế hoạch (giữ nguyên số lượng đã in)');
+      setPauseOpen(false);
+      onChanged?.();
+      onClose?.();
+    } catch (e) {
+      show(e.message || 'Ngừng lệnh chạy thất bại', 'error');
+    } finally { setBusy(false); }
+  };
+
+  // Hoán đổi: ngừng lệnh hiện tại rồi bắt đầu chạy phần in gấp hơn TRÊN CÙNG CHUYỀN.
+  const doSwap = async (cand) => {
+    setBusy(true);
+    try {
+      await pauseLenhChay(phieu.id);
+      await startProduction(cand.id, data?.lenh?.chuyen_id || null);
+      show(`Đã ngừng ${data?.lenh?.ma_lenh_san_xuat || ''} & chạy ${cand.ma_lenh_san_xuat} thay thế`);
+      setPauseOpen(false);
+      onChanged?.();
+      onClose?.();
+    } catch (e) {
+      show(e.message || 'Hoán đổi thất bại', 'error');
+    } finally { setBusy(false); }
   };
 
   // Ghi vải hủy theo phần in. Lệnh chỉ 1 phần in → tự chọn; nhiều phần in → phải chọn.
@@ -268,6 +312,20 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
             </section>
           )}
 
+          {/* Ngừng lệnh chạy để in hàng gấp hơn (khác với "Ngừng chuyền" downtime) */}
+          {running && canRun && (
+            <section className="border-t border-line pt-4">
+              <h3 className="mb-1 text-xs font-bold uppercase tracking-wide text-ink-soft">Ngừng lệnh chạy (in hàng gấp)</h3>
+              <p className="mb-2 text-xs text-ink-soft">
+                Ngừng phần in này để chạy phần in cần giao gấp hơn. Tem đã in <b>giữ nguyên</b>; lệnh quay về
+                <b> chờ chạy</b> để lập lại kế hoạch (không cần test lại). Có thể <b>hoán đổi</b> ngay phần in đang chờ.
+              </p>
+              <Button variant="secondary" className="w-full" onClick={openPause} disabled={busy}>
+                Ngừng lệnh chạy…
+              </Button>
+            </section>
+          )}
+
           {/* Vải hủy trong sản xuất (theo phần in) */}
           <section className="border-t border-line pt-4">
             <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-soft">Vải hủy (theo phần in)</h3>
@@ -360,6 +418,47 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
           </section>
         </div>
       )}
+      {/* Ngừng lệnh chạy + hoán đổi phần in gấp hơn */}
+      <Modal open={pauseOpen} onClose={() => setPauseOpen(false)} title="Ngừng lệnh chạy — in hàng gấp" size="lg"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setPauseOpen(false)}>Đóng</Button>
+            <Button variant="danger" onClick={doPauseOnly} loading={busy}>Chỉ ngừng lệnh chạy</Button>
+          </>
+        }
+      >
+        <div className="mb-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/30">
+          Ngừng lệnh <b>{data?.lenh?.ma_lenh_san_xuat}</b> (đã in <b>{fmtNum(printed)}</b>/{fmtNum(target)}).
+          Tem đã in đi tiếp <b>Chờ khô/kiểm</b> — số lượng giữ nguyên. Lệnh về <b>chờ chạy</b> để lập lại kế hoạch
+          (không cần test lại). Chọn một phần in bên dưới để <b>hoán đổi</b> chạy ngay trên cùng chuyền.
+        </div>
+        <div className="mb-1 text-xs font-medium text-ink-soft">Đang chờ sản xuất — bấm để hoán đổi ({swapList.length})</div>
+        {swapLoading ? (
+          <div className="py-6 text-center text-sm text-ink-soft">Đang tải...</div>
+        ) : swapList.length === 0 ? (
+          <p className="py-4 text-sm text-ink-soft">Không có phần in nào đang chờ sản xuất để hoán đổi.</p>
+        ) : (
+          <div className="max-h-80 space-y-1.5 overflow-y-auto">
+            {swapList.map((r) => (
+              <div key={r.id} className="flex items-center justify-between gap-2 rounded-control border border-line px-3 py-2 text-sm">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <Badge tone="info">{r.ma_lenh_san_xuat}</Badge>
+                    <span className="truncate font-medium text-ink">{r.ten_khach_hang || '—'}</span>
+                  </div>
+                  <div className="mt-0.5 truncate text-xs text-ink-soft">
+                    {[r.ma_hang, r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ')}
+                    {r.han_giao_hang ? ` · Hạn giao ${fmtDate(r.han_giao_hang)}` : ''}
+                    {` · SL ${fmtNum(r.so_luong_release)}`}
+                  </div>
+                </div>
+                <Button className="shrink-0 px-2.5 py-1 text-xs" onClick={() => doSwap(r)} loading={busy}>Hoán đổi</Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </Modal>
+
       <Modal open={!!reprint} onClose={() => setReprint(null)}
         title={reprint ? `In lại tem ${reprint.ma_tem}` : 'In lại tem'}
         footer={

@@ -18,7 +18,7 @@ import { evalSla, slaRowClass } from '../../../utils/sla';
 import usePermissions from '../../../hooks/usePermissions';
 import { listOqcCandidates, recordOqc, oqcHistory, oqcDone, listGiaoDacBietActive, returnOqcToKcs } from '../../../services/qualityService';
 import { listUsers } from '../../../services/userService';
-import { fmtNum } from '../../../utils/format';
+import { fmtNum, baseMaTem } from '../../../utils/format';
 
 export default function OqcPage() {
   const { can } = usePermissions();
@@ -72,7 +72,7 @@ export default function OqcPage() {
   // Quét QR (ma_tem) → tra tem đang chờ OQC → mở modal nhập.
   const onScan = async (maTem) => {
     setScanOpen(false);
-    const code = (maTem || '').trim();
+    const code = baseMaTem(maTem); // QR có thể mã hóa '17-TEM...'; tách lấy mã gốc
     if (!code) return;
     try {
       const res = await listOqcCandidates({ search: code });

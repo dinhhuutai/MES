@@ -18,7 +18,7 @@ import usePermissions from '../../../hooks/usePermissions';
 import { listKcsCandidates, recordKcs, kcsHistory, kcsDone, getTemHanhTrinh } from '../../../services/qualityService';
 import { redryTem, getTemLabel } from '../../../services/productionService';
 import { printKcsGiaoTem } from '../../production/utils/printTemLabel';
-import { fmtNum, fmtDateTime } from '../../../utils/format';
+import { fmtNum, fmtDateTime, baseMaTem } from '../../../utils/format';
 import useNow from '../../../hooks/useNow';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 
@@ -92,7 +92,7 @@ export default function KcsPage() {
   // Quét QR (ma_tem) → tra tem đang chờ KCS → mở modal nhập.
   const onScan = async (maTem) => {
     setScanOpen(false);
-    const code = (maTem || '').trim();
+    const code = baseMaTem(maTem); // QR có thể mã hóa '15-TEM...'; tách lấy mã gốc
     if (!code) return;
     try {
       const res = await listKcsCandidates({ search: code });

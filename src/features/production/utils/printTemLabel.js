@@ -19,14 +19,24 @@ const fmtDtShort = (t) => {
   return `${p2(d.getDate())}/${p2(d.getMonth() + 1)} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
 };
 
-// Chuẩn hóa dữ liệu + QR cho 1 nhãn.
-async function buildData(label) {
+// Mã tem hiển thị = <tiền tố công đoạn>-<ma_tem>[-<hậu tố lần giao>].
+// Tiền tố: 15 = KCS đạt · 16 = sửa · 17 = OQC/giao. Hậu tố = lần giao (tem tách nhiều lần).
+// Vd: '15-TEM00123', '17-TEM00030-1'. QR mã hóa đúng chuỗi này; máy quét tự tách lại mã gốc.
+export function temCode(maTem, prefix, suffix) {
+  const p = prefix != null && prefix !== '' ? `${prefix}-` : '';
+  const s = suffix != null && suffix !== '' ? `-${suffix}` : '';
+  return `${p}${maTem}${s}`;
+}
+
+// Chuẩn hóa dữ liệu + QR cho 1 nhãn. `code` = mã tem hiển thị (có tiền tố/hậu tố); mặc định = ma_tem.
+async function buildData(label, code) {
+  const codeStr = String(code || label.ma_tem);
   let qrUrl = '';
   try {
-    qrUrl = await QRCode.toDataURL(String(label.ma_tem), { margin: 0, width: 320, errorCorrectionLevel: 'M' });
+    qrUrl = await QRCode.toDataURL(codeStr, { margin: 0, width: 320, errorCorrectionLevel: 'M' });
   } catch (e) { qrUrl = ''; }
   const d = {
-    ma_tem: esc(label.ma_tem),
+    ma_tem: esc(codeStr),
     ngayIn: esc(fmtDt(label.created_date)),
     khach: esc(label.ten_khach_hang),
     chuyen: esc(label.ma_chuyen || label.ten_chuyen || ''),
@@ -96,16 +106,18 @@ function rightLabel(d) {
     </div>`;
 }
 
+// Bù lệch NGANG khi in (mm): ÂM = dời sang TRÁI, DƯƠNG = dời sang PHẢI.
+// Chỉnh số này nếu bản in bị lệch (vd máy in đẩy mực sang phải → đặt số âm để bù về trái).
+const H_OFFSET_MM = -5;
+
 const SHEET_CSS = `
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
   body { font-family: Arial, "Segoe UI", sans-serif; color: #000; }
-  /* Tờ 100x80mm; mỗi tem khung 50x80, nội dung 46x76 (căn lề 2mm) → 2 tem cách 4mm */
-  /* Bù lệch máy in: translateX dời nội dung trong khổ 100mm CỐ ĐỊNH & CẮT phần tràn mép (KHÔNG đẩy giấy).
-     Lề mỗi tem chỉ 2mm → dời trái quá 2mm là bắt đầu cắt NỘI DUNG (–5mm cắt mất 3mm mép trái tem 1).
-     Chốt –2mm = dời trái tối đa mà không cắt chữ. Máy in vẫn lệch phải nhiều hơn 2mm → chỉnh
-     "horizontal offset" trong DRIVER/print settings của máy in (đó mới dời mực so với giấy, không cắt). */
-  .sheet { display: flex; width: 100mm; height: 80mm; transform: translateX(-2mm); }
+  /* Tờ 100x80mm; mỗi tem khung 50x80, nội dung 46x76 → căn giữa tự nhiên, lề đều 2mm mỗi bên. */
+  /* Bù lệch ngang qua H_OFFSET_MM (transform translateX). Nếu vẫn lệch: đặt Margins=None + Scale=100%
+     trong hộp thoại in, hoặc chỉnh Horizontal Offset trong DRIVER máy in. */
+  .sheet { display: flex; width: 100mm; height: 80mm; transform: translateX(${H_OFFSET_MM}mm); }
   .label { width: 50mm; height: 80mm; padding: 2mm; display: flex; flex-direction: column; overflow: hidden; }
   table { width: 100%; border-collapse: collapse; table-layout: fixed; }
   td, th { border: 0.025mm solid #000; padding: 0.25mm 0.6mm; font-size: 2.2mm; line-height: 1.02;
@@ -158,18 +170,29 @@ function openSheet(inner, title) {
   w.document.close();
 }
 
-// In tem sản xuất theo mẫu THLA: nhãn trái PHIẾU GIAO HÀNG + nhãn phải IN-K.
+// In tem sản xuất theo mẫu THLA: nhãn TRÁI = tem 15 (KCS đạt / PHIẾU GIAO HÀNG),
+// nhãn PHẢI = tem 16 (sửa / IN-K, lưới kiểm). Số công đoạn ghép vào đầu mã tem + QR.
 export default async function printTemLabel(label) {
   if (!label || !label.ma_tem) return;
-  const d = await buildData(label);
-  openSheet(leftLabel(d, 'THLA') + rightLabel(d), `Tem ${d.ma_tem}`);
+  const dL = await buildData(label, temCode(label.ma_tem, 15));
+  const dR = await buildData(label, temCode(label.ma_tem, 16));
+  openSheet(leftLabel(dL) + rightLabel(dR), `Tem ${label.ma_tem}`);
 }
 
-// In tem GIAO cho KCS (đã hoàn thành): cấu trúc y hệt PHIẾU GIAO HÀNG (tem 1), brand 'THLA 17',
+// In tem GIAO cho KCS (đã hoàn thành) = tem 15 (KCS đạt): cấu trúc PHIẾU GIAO HÀNG (nhãn trái),
 // "IN" = số lượng đã kiểm (caller truyền qua label.so_luong). In 2 nhãn giống nhau cho vừa tờ 2-up.
 export async function printKcsGiaoTem(label) {
   if (!label || !label.ma_tem) return;
-  const d = await buildData(label);
-  const l = leftLabel(d, 'THLA 17');
-  openSheet(l + l, `Tem KCS ${d.ma_tem}`);
+  const d = await buildData(label, temCode(label.ma_tem, 15));
+  const l = leftLabel(d);
+  openSheet(l + l, `Tem 15 ${label.ma_tem}`);
+}
+
+// In tem OQC (sau khi SỬA xong → OQC) = tem 17: bố cục Y HỆT tem 15 (nhãn trái PHIẾU GIAO HÀNG).
+// suffix = lần giao (nếu tem tách nhiều lần giao) → '17-TEM00030-1'. so_luong caller truyền vào.
+export async function printOqcTem(label, suffix) {
+  if (!label || !label.ma_tem) return;
+  const d = await buildData(label, temCode(label.ma_tem, 17, suffix));
+  const l = leftLabel(d);
+  openSheet(l + l, `Tem 17 ${label.ma_tem}`);
 }

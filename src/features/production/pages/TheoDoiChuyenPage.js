@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import Modal from '../../../components/common/Modal';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
+import Icon from '../../../components/common/Icon';
 import Toast from '../../../components/common/Toast';
 import { Textarea } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
@@ -15,6 +16,8 @@ const pad = (n) => String(n).padStart(2, '0');
 const hhmm = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 const oneDecimal = (n) => (Math.round(n * 10) / 10).toLocaleString('vi-VN');
 const dateLabel = (d) => `T${d.getDay() === 0 ? 'CN' : d.getDay() + 1}, ${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
+const fmtDMY = (d) => (d ? `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}` : '—');
+const fmtDMHM = (d) => (d ? `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}` : '—');
 
 export default function TheoDoiChuyenPage() {
   const { toast, show } = useToast();
@@ -73,6 +76,16 @@ export default function TheoDoiChuyenPage() {
   const oee = dinhMuc ? (speed / dinhMuc) * 100 : null;
   const etc = (speed > 0 && remaining > 0) ? new Date(nowMs + (remaining / speed) * 3600 * 1000) : null;
 
+  // Dự phóng thời điểm GIAO XONG = xong SX (etc) + tổng SLA các trạm sau (chờ khô/KCS/OQC/hoàn tất).
+  // So với HẠN GIAO → cảnh báo: trễ hạn (đỏ) / đúng ngày sát nút (vàng).
+  const slaSauSx = Number(data.sla_sau_sx_phut) || 0;
+  const hanGiao = r?.han_giao_hang ? new Date(r.han_giao_hang) : null;
+  const prodFinish = r ? (remaining <= 0 ? now : etc) : null; // null nếu chưa ước tính được (tốc độ 0)
+  const projected = prodFinish ? new Date(prodFinish.getTime() + slaSauSx * 60000) : null;
+  const dayStart = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const dayDiff = (projected && hanGiao) ? Math.round((dayStart(projected) - dayStart(hanGiao)) / 86400000) : null;
+  const risk = dayDiff == null ? null : dayDiff > 0 ? 'red' : dayDiff === 0 ? 'yellow' : null;
+
   const go = (n) => setIdx((i) => ((i + n) % count + count) % count);
 
   const doResume = async () => {
@@ -98,7 +111,7 @@ export default function TheoDoiChuyenPage() {
 
   return (
     <div>
-      <div className="card p-6 sm:p-7">
+      <div className={`card p-6 sm:p-7 ${risk === 'red' ? 'ring-2 ring-danger' : risk === 'yellow' ? 'ring-2 ring-warning' : ''}`}>
         {/* Top bar */}
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -131,6 +144,20 @@ export default function TheoDoiChuyenPage() {
           <>
             <div className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-ink-soft">Đang sản xuất</div>
 
+            {/* Cảnh báo tiến độ giao hàng */}
+            {risk && (
+              <div className={`mb-4 flex flex-wrap items-center gap-2 rounded-control border px-3 py-2 text-sm font-medium ${
+                risk === 'red'
+                  ? 'border-danger/40 bg-danger/10 text-danger'
+                  : 'border-warning/40 bg-warning/10 text-warning'
+              }`}>
+                <Icon name="alert-triangle" size={16} />
+                {risk === 'red'
+                  ? `Theo tiến độ này KHÔNG kịp giao hàng — dự kiến giao xong ${fmtDMHM(projected)}, trễ hạn ${fmtDMY(hanGiao)}${dayDiff > 0 ? ` (~${dayDiff} ngày)` : ''}`
+                  : `Sát hạn giao — dự kiến giao xong ${fmtDMHM(projected)}, đúng ngày hạn ${fmtDMY(hanGiao)}`}
+              </div>
+            )}
+
             {/* Lệnh + tiến độ */}
             <div className="mb-5">
               <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-soft">Lệnh sản xuất</div>
@@ -147,6 +174,13 @@ export default function TheoDoiChuyenPage() {
                 <span className="font-semibold text-primary">{nf(printed)} / {nf(target)} · {oneDecimal(pct)}%</span>
                 <span className="text-ink-soft">còn {nf(remaining)} cái</span>
               </div>
+              {(hanGiao || projected) && (
+                <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
+                  <span className="text-ink-soft">Hạn giao: <b className={risk === 'red' ? 'text-danger' : risk === 'yellow' ? 'text-warning' : 'text-ink'}>{fmtDMY(hanGiao)}</b></span>
+                  <span className="text-ink-soft">Dự kiến giao xong: <b className={risk === 'red' ? 'text-danger' : risk === 'yellow' ? 'text-warning' : 'text-ink'}>{projected ? fmtDMHM(projected) : '—'}</b></span>
+                  <span className="text-[11px] text-ink-soft">(xong SX + {nf(slaSauSx)}′ trạm sau)</span>
+                </div>
+              )}
             </div>
 
             {/* 4 thẻ chỉ số */}
@@ -205,6 +239,7 @@ export default function TheoDoiChuyenPage() {
                   <div className="flex items-center gap-4 text-ink-soft">
                     <span>SL {nf(q.target)}</span>
                     <span>KH {q.ngay_ke_hoach ? new Date(q.ngay_ke_hoach).toLocaleDateString('vi-VN') : '—'}</span>
+                    <span>Hạn giao <b className="text-ink">{q.han_giao_hang ? new Date(q.han_giao_hang).toLocaleDateString('vi-VN') : '—'}</b></span>
                   </div>
                 </div>
               ))
