@@ -180,7 +180,7 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
     setBusy(true);
     try {
       const res = await reprintTem(reprint.id, reprintReason.trim());
-      show(`Đã hủy tem ${reprint.ma_tem} & in tem mới`);
+      show(`Đã in lại tem ${reprint.ma_tem} (giữ nguyên mã)`);
       setReprint(null); setReprintReason('');
       await printLabelFor(res.data?.new_tem_id);
       await load();
@@ -469,10 +469,11 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
         }
       >
         <div className="mb-2 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/30">
-          Sẽ <b>HỦY tem {reprint?.ma_tem}</b> (gỡ khỏi xe phơi) và tạo <b>tem mới</b> có mã/barcode mới để in lại.
+          In lại nhãn của tem <b>{reprint?.ma_tem}</b> — <b>giữ nguyên mã tem</b>, không đổi số lượng/sổ cái
+          (dùng khi tem giấy bị <b>mất/rách</b>). Lần in lại được lưu vào lịch sử in tem.
         </div>
         <Textarea rows={3} value={reprintReason} onChange={(e) => setReprintReason(e.target.value)}
-          placeholder="Lý do in lại (vd: tem rách, in mờ, mất tem...)" />
+          placeholder="Lý do in lại (vd: tem rách, mất tem, in mờ...)" />
       </Modal>
 
       <Modal open={logsOpen} onClose={() => setLogsOpen(false)} title="Lịch sử in tem" size="lg"

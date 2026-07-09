@@ -1,8 +1,10 @@
 import { useEffect, useState, useCallback } from 'react';
 import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
+import Pagination from '../../../components/common/Pagination';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
+import Icon from '../../../components/common/Icon';
 import SidePanel from '../../../components/common/SidePanel';
 import Toast from '../../../components/common/Toast';
 import useToast from '../../../hooks/useToast';
@@ -28,6 +30,9 @@ export default function ErpSyncPage() {
   const canSync = can('ERP_SYNC');
 
   const [rows, setRows] = useState([]);
+  const [meta, setMeta] = useState({ page: 1, totalPages: 1, total: 0 });
+  const [date, setDate] = useState('');
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
@@ -37,14 +42,15 @@ export default function ErpSyncPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await syncHistory(50);
-      setRows(res.data);
+      const res = await syncHistory({ date: date || undefined, page, limit: 20 });
+      setRows(res.data.items);
+      setMeta(res.data.meta);
     } catch (e) {
       show(e.message || 'Lỗi tải', 'error');
     } finally {
       setLoading(false);
     }
-  }, [show]);
+  }, [date, page, show]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -55,7 +61,7 @@ export default function ErpSyncPage() {
       const d = res.data;
       show(`Đồng bộ xong: ${d.soMoi} mới · ${d.soCapNhat} cập nhật · ${d.soBoQua || 0} bỏ qua · ${d.soLoi} lỗi (tổng ${d.tong})`,
         d.soLoi && d.tong === 0 ? 'error' : 'success');
-      load();
+      if (page !== 1) setPage(1); else load();
     } catch (e) {
       show(e.message || 'Đồng bộ thất bại', 'error');
     } finally {
@@ -89,12 +95,21 @@ export default function ErpSyncPage() {
   return (
     <div>
       <Toolbar title="Đồng bộ ERP" subtitle="Lấy phiếu nhận vải từ ERP (tự động mỗi giờ) — bấm 1 phiên để xem dữ liệu gốc">
+        <div className="flex items-center gap-1.5 text-xs text-ink-soft">
+          <span>Ngày</span>
+          <input type="date" value={date} onChange={(e) => { setDate(e.target.value); setPage(1); }}
+            className="h-9 rounded-input border border-line bg-surface px-2 text-sm outline-none focus:border-primary" />
+          {date && <button type="button" onClick={() => { setDate(''); setPage(1); }}
+            className="text-ink-soft hover:text-danger" aria-label="Xóa lọc ngày"><Icon name="x" size={14} /></button>}
+        </div>
         {canSync && <Button icon="loader" loading={busy} onClick={doSync}>Đồng bộ ngay</Button>}
-        <Badge tone="info">{rows.length} lần</Badge>
+        <Badge tone="info">{meta.total} lần</Badge>
       </Toolbar>
 
-      <DataTable columns={columns} rows={rows} loading={loading} onRowClick={openRaw}
-        emptyText="Chưa có lần đồng bộ nào" />
+      <DataTable columns={columns} rows={rows} loading={loading} onRowClick={openRaw} rowKey="id"
+        sttStart={(meta.page - 1) * 20}
+        emptyText={date ? 'Không có lần đồng bộ nào trong ngày' : 'Chưa có lần đồng bộ nào'} />
+      <Pagination page={meta.page} totalPages={meta.totalPages} total={meta.total} onPage={setPage} />
 
       <SidePanel
         open={!!raw}

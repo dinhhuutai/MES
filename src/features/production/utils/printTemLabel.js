@@ -110,7 +110,7 @@ function rightLabel(d) {
 // 0 = KHÔNG bù (căn giữa tự nhiên). Chỉ đổi khỏi 0 nếu chắc chắn bản in lệch đều một hướng —
 // tờ rộng đúng 100mm nên bù quá tay sẽ đẩy nội dung ra ngoài mép (mất chữ). Lệch do máy in nên
 // chỉnh Margins=None + Scale=100% hoặc Horizontal Offset trong DRIVER thay vì ở đây.
-const H_OFFSET_MM = -1;
+const H_OFFSET_MM = 3;
 
 const SHEET_CSS = `
   * { box-sizing: border-box; }
