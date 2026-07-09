@@ -9,77 +9,71 @@ import usePermissions from '../../../hooks/usePermissions';
 import { autoPlanCandidates, createRelease1 } from '../../../services/planningService';
 import { fmtNum, fmtDate } from '../../../utils/format';
 
-const fmtDay = (s) => {
-  if (!s) return '';
-  const d = new Date(`${s}T00:00:00`);
-  const wd = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][d.getDay()];
-  return `${wd} ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+// Sơ đồ mặt bằng chuyền theo file PDF nhà máy. 'h' = thanh ngang, 'v' = thanh dọc.
+// A: cụm trái (M7..M1 thanh ngang). B: cụm giữa (M8 trên + M1A-1B..M8A-8B thanh dọc).
+// C: MRB1..3 thanh dọc. D: cụm phải 2 hàng (trên M10B..M13B, dưới M10A..M13A).
+const FLOOR = {
+  A: ['M7', 'M6', 'M5', 'M4', 'M3', 'M2', 'M1'],
+  B_top: 'M8',
+  B: ['M1A-1B', 'M2A-2B', 'M3A-3B', 'M4A-4B', 'M5A-5B', 'M6A-6B', 'M7A-7B', 'M8A-8B'],
+  C: ['MRB1', 'MRB2', 'MRB3'],
+  D_top: ['M10B', 'M11B', 'M12B', 'M13B'],
+  D_bot: ['M10A', 'M11A', 'M12A', 'M13A'],
 };
 
-// 1 đợt vải trong kế hoạch của chuyền.
-function PlanItem({ it, onConfirm, busy }) {
-  const b = it.best_chuyen || {};
+const norm = (s) => String(s || '').trim().toUpperCase();
+
+// 1 ô chuyền trên sơ đồ. info = { chuyenId, chuyen, count, pcs } (null nếu chưa gắn chuyền hệ thống).
+function Box({ code, orient, info, selected, onSelect }) {
+  const mapped = !!(info && info.chuyenId);
+  const has = mapped && info.count > 0;
+  const tone = selected
+    ? 'border-primary bg-primary-wash text-primary ring-2 ring-primary/30'
+    : has ? 'border-primary/60 bg-primary-wash/50 text-ink'
+      : mapped ? 'border-line bg-surface text-ink'
+        : 'border-dashed border-line bg-surface-muted/40 text-ink-soft';
+  const common = `flex items-center justify-center rounded border text-[11px] font-semibold transition ${tone} ${mapped ? 'cursor-pointer hover:border-primary' : 'cursor-default'}`;
+  const label = `${code}${has ? ` · ${info.count}` : ''}`;
+  if (orient === 'v') {
+    return (
+      <button type="button" disabled={!mapped} onClick={() => onSelect(code)}
+        title={info?.chuyen?.ten_chuyen || code}
+        className={`${common} min-h-[190px] w-[30px] px-0.5`}
+        style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}>
+        <span className="py-1">{label}</span>
+      </button>
+    );
+  }
   return (
-    <div className="rounded-control border border-line bg-surface p-2.5">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="truncate text-sm font-semibold text-ink">{it.ma_phan}{it.ten_khach_hang ? ` · ${it.ten_khach_hang}` : ''}</div>
-          <div className="truncate text-xs text-ink-soft">{[it.ma_hang, it.mau_vai, it.kich_vai, it.kich_phim].filter(Boolean).join(' · ')}</div>
-          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-soft">
-            <Badge tone="info">{it.ma_dot_vai}</Badge>
-            <span>SL vải {fmtNum(it.so_luong_vai_ve)}</span>
-            <span>· NS {fmtNum(b.nang_suat_gio)}/giờ</span>
-            <span>· ~{fmtNum(it.so_gio_sx)}h</span>
-            {it.han_giao_hang && <span>· hạn {fmtDate(it.han_giao_hang)}</span>}
-          </div>
-          {it.tra_ve_ly_do && <div className="mt-1"><Badge tone="danger" title={it.tra_ve_ly_do}>Test Run trả về</Badge></div>}
-        </div>
-        <Button variant="secondary" className="!px-3 !py-1.5 !text-xs shrink-0" loading={busy}
-          onClick={() => onConfirm(it)}>Xác nhận</Button>
-      </div>
-    </div>
+    <button type="button" disabled={!mapped} onClick={() => onSelect(code)}
+      title={info?.chuyen?.ten_chuyen || code}
+      className={`${common} h-9 w-full px-2`}>
+      {label}{has ? ' đợt' : ''}
+    </button>
   );
 }
 
-// 1 card chuyền: header + kế hoạch nhóm theo ngày.
-function ChuyenCard({ chuyen, items, onConfirm, onConfirmAll, busyId, busyChuyen }) {
-  const byDay = useMemo(() => {
-    const m = {};
-    items.forEach((it) => { (m[it.ngay_ke_hoach] = m[it.ngay_ke_hoach] || []).push(it); });
-    return Object.entries(m).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [items]);
-  const tongPcs = items.reduce((s, it) => s + (Number(it.so_luong_vai_ve) || 0), 0);
-
+function FloorMap({ boxInfo, selected, onSelect }) {
+  const b = (code, orient) => (
+    <Box key={code} code={code} orient={orient} info={boxInfo(code)} selected={selected === code} onSelect={onSelect} />
+  );
   return (
-    <div className="flex w-[320px] shrink-0 flex-col rounded-card border border-line bg-surface-muted/40">
-      <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-2.5">
-        <div className="min-w-0">
-          <div className="truncate text-sm font-bold text-ink">{chuyen.ten_chuyen}</div>
-          <div className="text-[11px] text-ink-soft">{chuyen.so_pass} pass · {items.length} đợt · {fmtNum(tongPcs)} pcs</div>
-        </div>
-        {items.length > 0 && (
-          <Button variant="primary" className="!px-3 !py-1.5 !text-xs shrink-0" loading={busyChuyen === chuyen.id}
-            onClick={() => onConfirmAll(chuyen.id, items)}>Xác nhận cả chuyền</Button>
-        )}
+    <div className="flex items-start gap-6 overflow-x-auto rounded-card border border-line bg-surface p-4">
+      {/* Cụm trái: M7..M1 (thanh ngang) */}
+      <div className="flex w-[188px] shrink-0 flex-col gap-2">
+        {FLOOR.A.map((c) => b(c, 'h'))}
       </div>
-      <div className="flex-1 space-y-3 overflow-y-auto p-2.5" style={{ maxHeight: '60vh' }}>
-        {items.length === 0 ? (
-          <div className="py-8 text-center text-xs text-ink-soft">Chưa có đợt vải phù hợp</div>
-        ) : (
-          byDay.map(([day, list]) => (
-            <div key={day}>
-              <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-primary">
-                <Icon name="calendar-days" size={13} /> {fmtDay(day)}
-                <span className="text-ink-soft">· {list.length} đợt</span>
-              </div>
-              <div className="space-y-1.5">
-                {list.map((it) => (
-                  <PlanItem key={it.dot_vai_id} it={it} busy={busyId === it.dot_vai_id} onConfirm={onConfirm} />
-                ))}
-              </div>
-            </div>
-          ))
-        )}
+      {/* Cụm giữa: M8 (ngang) + M1A-1B..M8A-8B (dọc) */}
+      <div className="flex shrink-0 flex-col gap-2">
+        <div className="w-full">{b(FLOOR.B_top, 'h')}</div>
+        <div className="flex gap-1.5">{FLOOR.B.map((c) => b(c, 'v'))}</div>
+      </div>
+      {/* MRB1..3 (dọc) — hạ xuống ngang hàng thanh dọc cụm giữa */}
+      <div className="flex shrink-0 gap-1.5 pt-[46px]">{FLOOR.C.map((c) => b(c, 'v'))}</div>
+      {/* Cụm phải: 2 hàng thanh dọc */}
+      <div className="flex shrink-0 flex-col gap-5">
+        <div className="flex gap-1.5">{FLOOR.D_top.map((c) => b(c, 'v'))}</div>
+        <div className="flex gap-1.5">{FLOOR.D_bot.map((c) => b(c, 'v'))}</div>
       </div>
     </div>
   );
@@ -94,9 +88,9 @@ export default function KeHoachTuDongPage() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [showEmpty, setShowEmpty] = useState(false);
-  const [busyId, setBusyId] = useState(null);       // dot_vai_id đang xác nhận
-  const [busyChuyen, setBusyChuyen] = useState(null); // chuyen_id đang xác nhận cả chuyền
+  const [selected, setSelected] = useState(null); // chuyen_id đang chọn để lọc list bên phải
+  const [busyId, setBusyId] = useState(null);
+  const [busyChuyen, setBusyChuyen] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -109,13 +103,41 @@ export default function KeHoachTuDongPage() {
 
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
 
+  // Nhóm đợt theo chuyền được xếp (best_chuyen).
   const itemsByChuyen = useMemo(() => {
     const m = {};
     items.forEach((it) => { const cid = it.best_chuyen && it.best_chuyen.chuyen_id; if (cid) (m[cid] = m[cid] || []).push(it); });
     return m;
   }, [items]);
 
-  const confirmOne = async (it) => {
+  // Gắn chuyền hệ thống vào ô sơ đồ theo tên (ma_chuyen hoặc ten_chuyen == mã ô).
+  const chuyenByCode = useMemo(() => {
+    const m = {};
+    chuyens.forEach((c) => { m[norm(c.ma_chuyen)] = c; if (c.ten_chuyen) m[norm(c.ten_chuyen)] = m[norm(c.ten_chuyen)] || c; });
+    return m;
+  }, [chuyens]);
+
+  const boxInfo = useCallback((code) => {
+    const c = chuyenByCode[norm(code)];
+    if (!c) return null;
+    const list = itemsByChuyen[c.id] || [];
+    return { chuyenId: c.id, chuyen: c, count: list.length, pcs: list.reduce((s, x) => s + (Number(x.so_luong_vai_ve) || 0), 0) };
+  }, [chuyenByCode, itemsByChuyen]);
+
+  // Chuyền hệ thống KHÔNG khớp ô sơ đồ nào (vd C01/C02) — hiện dải riêng để vẫn thao tác được.
+  const mappedIds = useMemo(() => {
+    const set = new Set();
+    [...FLOOR.A, FLOOR.B_top, ...FLOOR.B, ...FLOOR.C, ...FLOOR.D_top, ...FLOOR.D_bot].forEach((code) => {
+      const c = chuyenByCode[norm(code)]; if (c) set.add(c.id);
+    });
+    return set;
+  }, [chuyenByCode]);
+  const unmapped = chuyens.filter((c) => !mappedIds.has(c.id));
+
+  const selectedChuyen = chuyens.find((c) => c.id === selected) || null;
+  const backlog = selected ? (itemsByChuyen[selected] || []) : items;
+
+  const releaseOne = async (it) => {
     if (!canRelease) return;
     setBusyId(it.dot_vai_id);
     try {
@@ -124,12 +146,12 @@ export default function KeHoachTuDongPage() {
         soLuongRelease: it.so_luong_vai_ve, ngayKeHoach: it.ngay_ke_hoach,
       });
       setItems((prev) => prev.filter((x) => x.dot_vai_id !== it.dot_vai_id));
-      show(`Đã xác nhận Release 1 — ${it.ma_phan} · ${it.ma_dot_vai}`);
+      show(`Đã Release 1 — ${it.ma_phan} · ${it.ma_dot_vai}`);
     } catch (e) { show(e.message || 'Xác nhận thất bại', 'error'); } finally { setBusyId(null); }
   };
 
-  const confirmAll = async (chuyenId, list) => {
-    if (!canRelease) return;
+  const releaseChuyen = async (chuyenId, list) => {
+    if (!canRelease || !list.length) return;
     setBusyChuyen(chuyenId);
     let ok = 0; let fail = 0; const doneIds = [];
     for (const it of list) {
@@ -143,40 +165,103 @@ export default function KeHoachTuDongPage() {
       } catch (e) { fail += 1; }
     }
     setItems((prev) => prev.filter((x) => !doneIds.includes(x.dot_vai_id)));
-    show(fail ? `Xác nhận ${ok} đợt, ${fail} lỗi` : `Đã xác nhận ${ok} đợt trên chuyền`, fail ? 'error' : 'success');
+    show(fail ? `Xác nhận ${ok} đợt, ${fail} lỗi` : `Đã Release 1 ${ok} đợt trên chuyền`, fail ? 'error' : 'success');
     setBusyChuyen(null);
   };
-
-  const withItems = chuyens.filter((c) => (itemsByChuyen[c.id] || []).length > 0);
-  const empty = chuyens.filter((c) => (itemsByChuyen[c.id] || []).length === 0);
-  const visible = showEmpty ? [...withItems, ...empty] : withItems;
 
   return (
     <div>
       <Toolbar title="Kế hoạch tự động"
-        subtitle="Hệ thống xếp đợt vải chờ Release 1 lên chuyền tối ưu theo năng suất & ngày — bấm Xác nhận = Release 1"
+        subtitle="Sơ đồ chuyền theo mặt bằng nhà máy — chọn 1 chuyền để lọc, xác nhận Release 1 ở danh sách bên phải"
         search={search} onSearch={setSearch} searchPlaceholder="Tìm code phần, mã hàng, màu/kích, đợt vải...">
-        <label className="flex items-center gap-1.5 text-xs text-ink-soft">
-          <input type="checkbox" checked={showEmpty} onChange={(e) => setShowEmpty(e.target.checked)} />
-          Hiện chuyền trống
-        </label>
-        <Badge tone="info">{items.length} đợt · {withItems.length}/{chuyens.length} chuyền</Badge>
+        <Badge tone="info">{items.length} đợt chờ · {chuyens.length} chuyền</Badge>
       </Toolbar>
 
       <div className="mb-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
-        Thông số HSKT (vải/pass, số lần in, pass bỏ) & số pass mỗi chuyền hiện là <b>dữ liệu tạm</b> — sẽ lấy từ ERP.
+        Thông số HSKT & số pass mỗi chuyền hiện là <b>dữ liệu tạm</b> (sẽ lấy từ ERP). Ô sơ đồ tô đậm = chuyền có đợt được xếp;
+        ô nét đứt = vị trí chuyền chưa cấu hình trong hệ thống.
       </div>
 
       {loading ? (
         <div className="py-16 text-center text-ink-soft">Đang tải...</div>
-      ) : withItems.length === 0 && !showEmpty ? (
-        <div className="card p-12 text-center text-ink-soft">Không có đợt vải nào chờ Release 1.</div>
       ) : (
-        <div className="flex gap-3 overflow-x-auto pb-3">
-          {visible.map((c) => (
-            <ChuyenCard key={c.id} chuyen={c} items={itemsByChuyen[c.id] || []}
-              onConfirm={confirmOne} onConfirmAll={confirmAll} busyId={busyId} busyChuyen={busyChuyen} />
-          ))}
+        <div className="flex flex-col gap-4 lg:flex-row">
+          {/* Trái: sơ đồ mặt bằng chuyền */}
+          <div className="min-w-0 flex-1">
+            <FloorMap boxInfo={boxInfo} selected={selectedChuyen ? norm(selectedChuyen.ma_chuyen) : null}
+              onSelect={(code) => { const c = chuyenByCode[norm(code)]; if (c) setSelected((p) => (p === c.id ? null : c.id)); }} />
+
+            {unmapped.length > 0 && (
+              <div className="mt-3 rounded-card border border-line bg-surface p-3">
+                <div className="mb-2 text-xs font-semibold text-ink-soft">Chuyền khác (chưa xếp vào sơ đồ)</div>
+                <div className="flex flex-wrap gap-2">
+                  {unmapped.map((c) => {
+                    const n = (itemsByChuyen[c.id] || []).length;
+                    return (
+                      <button key={c.id} type="button" onClick={() => setSelected((p) => (p === c.id ? null : c.id))}
+                        className={`rounded-control border px-3 py-1.5 text-xs font-medium transition ${selected === c.id ? 'border-primary bg-primary-wash text-primary' : n > 0 ? 'border-primary/50 bg-primary-wash/40 text-ink' : 'border-line text-ink-soft'}`}>
+                        {c.ten_chuyen || c.ma_chuyen}{n > 0 ? ` · ${n} đợt` : ''}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Phải: danh sách đợt chờ xác nhận Release 1 (chưa release) */}
+          <div className="w-full shrink-0 lg:w-[380px]">
+            <div className="flex h-full flex-col rounded-card border border-line bg-surface">
+              <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-2.5">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-bold text-ink">
+                    {selectedChuyen ? (selectedChuyen.ten_chuyen || selectedChuyen.ma_chuyen) : 'Chờ Release 1'}
+                  </div>
+                  <div className="text-[11px] text-ink-soft">{backlog.length} đợt chưa release đủ SL</div>
+                </div>
+                {selectedChuyen && (
+                  <Button variant="ghost" className="!px-2 !py-1 !text-xs" onClick={() => setSelected(null)}>Bỏ lọc</Button>
+                )}
+              </div>
+
+              {canRelease && selectedChuyen && backlog.length > 0 && (
+                <div className="border-b border-line px-3 py-2">
+                  <Button variant="primary" className="w-full !py-1.5 !text-xs" loading={busyChuyen === selected}
+                    onClick={() => releaseChuyen(selected, backlog)}>Xác nhận cả chuyền ({backlog.length})</Button>
+                </div>
+              )}
+
+              <div className="flex-1 space-y-1.5 overflow-y-auto p-2.5" style={{ maxHeight: '68vh' }}>
+                {backlog.length === 0 ? (
+                  <div className="py-10 text-center text-xs text-ink-soft">Không có đợt vải nào chờ Release 1.</div>
+                ) : backlog.map((it) => {
+                  const bc = it.best_chuyen || {};
+                  return (
+                    <div key={it.dot_vai_id} className="rounded-control border border-line p-2.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-semibold text-ink">{it.ma_phan}{it.ten_khach_hang ? ` · ${it.ten_khach_hang}` : ''}</div>
+                          <div className="truncate text-xs text-ink-soft">{[it.ma_hang, it.mau_vai, it.kich_vai, it.kich_phim].filter(Boolean).join(' · ')}</div>
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-soft">
+                            <Badge tone="info">{it.ma_dot_vai}</Badge>
+                            <span>SL {fmtNum(it.so_luong_vai_ve)}</span>
+                            {bc.ten_chuyen && <span>· {bc.ten_chuyen}</span>}
+                            {it.ngay_ke_hoach && <span className="inline-flex items-center gap-0.5"><Icon name="calendar-days" size={11} />{fmtDate(it.ngay_ke_hoach)}</span>}
+                            {it.han_giao_hang && <span>· hạn {fmtDate(it.han_giao_hang)}</span>}
+                          </div>
+                          {it.tra_ve_ly_do && <div className="mt-1"><Badge tone="danger" title={it.tra_ve_ly_do}>Test Run trả về</Badge></div>}
+                        </div>
+                        {canRelease && (
+                          <Button variant="secondary" className="!px-3 !py-1.5 !text-xs shrink-0" loading={busyId === it.dot_vai_id}
+                            onClick={() => releaseOne(it)}>Xác nhận</Button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
