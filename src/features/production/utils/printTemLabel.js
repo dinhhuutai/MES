@@ -110,17 +110,17 @@ function rightLabel(d) {
 // 0 = KHÔNG bù (căn giữa tự nhiên). Chỉ đổi khỏi 0 nếu chắc chắn bản in lệch đều một hướng —
 // tờ rộng đúng 100mm nên bù quá tay sẽ đẩy nội dung ra ngoài mép (mất chữ). Lệch do máy in nên
 // chỉnh Margins=None + Scale=100% hoặc Horizontal Offset trong DRIVER thay vì ở đây.
-const H_OFFSET_MM = 3;
+const H_OFFSET_MM = 0;
 
 const SHEET_CSS = `
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
   body { font-family: Arial, "Segoe UI", sans-serif; color: #000; }
-  /* Tờ 100x80mm; mỗi tem khung 50x80, nội dung 46x76 → căn giữa tự nhiên, lề đều 2mm mỗi bên. */
+  /* Tờ 110x80mm cho 2 tem; mỗi tem khung 55x80, thụt 1mm mỗi cạnh → nội dung 53x78 (chia đều 2 bên). */
   /* Bù lệch ngang qua H_OFFSET_MM (transform translateX). Nếu vẫn lệch: đặt Margins=None + Scale=100%
      trong hộp thoại in, hoặc chỉnh Horizontal Offset trong DRIVER máy in. */
-  .sheet { display: flex; width: 100mm; height: 80mm; transform: translateX(${H_OFFSET_MM}mm); }
-  .label { width: 50mm; height: 80mm; padding: 2mm; display: flex; flex-direction: column; overflow: hidden; }
+  .sheet { display: flex; width: 110mm; height: 80mm; transform: translateX(${H_OFFSET_MM}mm); }
+  .label { width: 55mm; height: 80mm; padding: 1mm; display: flex; flex-direction: column; overflow: hidden; }
   table { width: 100%; border-collapse: collapse; table-layout: fixed; }
   td, th { border: 0.025mm solid #000; padding: 0.25mm 0.6mm; font-size: 2.2mm; line-height: 1.02;
            overflow: hidden; word-break: break-word; text-align: center; vertical-align: middle; }
@@ -148,7 +148,7 @@ const SHEET_CSS = `
   .grid { flex: 1; }
   .grid td { height: 4.4mm; }
   .code { font-size: 1.8mm; text-align: right; padding: 0.5mm 0.6mm 0; }
-  @page { size: 100mm 80mm; margin: 0; }`;
+  @page { size: 110mm 80mm; margin: 0; }`;
 
 // Mở cửa sổ in với 2 nhãn (inner = HTML 2 label) trên tờ 100x80mm.
 function openSheet(inner, title) {
