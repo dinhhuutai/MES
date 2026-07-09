@@ -135,6 +135,7 @@ export default function SuaPage() {
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
     { key: 'ten_chuyen', header: 'Chuyền', render: (r) => r.ten_chuyen || '—' },
     { key: 'ca', header: 'Ca SX', render: (r) => (r.ca ? <Badge tone="default">{r.ca}</Badge> : '—') },
+    { key: 'nguoi_truoc', header: 'Người XN trạm trước', render: (r) => r.nguoi_truoc || '—' },
     { key: 'con_sua', header: 'SL cần sửa', className: 'text-right tabular-nums font-semibold',
       render: (r) => <span className="text-amber-600">{fmtNum(r.con_sua)}</span> },
     { key: 'actions', header: '', className: 'text-right', render: (r) =>

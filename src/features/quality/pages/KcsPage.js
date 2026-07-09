@@ -148,6 +148,7 @@ export default function KcsPage() {
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
     { key: 'ten_chuyen', header: 'Chuyền', render: (r) => r.ten_chuyen || '—' },
     { key: 'ngay_in_tem', header: 'Giờ in tem', className: 'whitespace-nowrap tabular-nums', render: (r) => fmtDateTime(r.ngay_in_tem) },
+    { key: 'nguoi_truoc', header: 'Người XN trạm trước', render: (r) => r.nguoi_truoc || '—' },
     { key: 'so_luong', header: 'SL in', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
     { key: 'con_kcs', header: 'Còn kiểm', className: 'text-right tabular-nums font-medium text-primary', render: (r) => fmtNum(r.con_kcs) },
     { key: 'actions', header: '', className: 'text-right', render: (r) =>
