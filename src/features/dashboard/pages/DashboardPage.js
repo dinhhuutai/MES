@@ -187,7 +187,7 @@ function StageDetailPanel({ stage, bang2, hoanThanhDetail, onClose }) {
           )}
           {homNay.length > 0 && (
             <div>
-              <div className="mb-1.5 text-xs font-bold uppercase tracking-wide text-emerald-600">Đã xác nhận hôm nay ({homNay.length})</div>
+              <div className="mb-1.5 text-xs font-bold uppercase tracking-wide text-emerald-600">Đã xác nhận hôm nay ({new Set(homNay.map((r) => r.phan_in_id || r.doi_tuong)).size})</div>
               <div className="space-y-1.5">
                 {homNay.map((r, i) => {
                   const clickable = !!r.phan_in_id;
@@ -340,7 +340,6 @@ export default function DashboardPage() {
 
   const nghenByTram = useMemo(() => Object.fromEntries((bang2?.nhom_nghen || []).map((g) => [g.ma_tram, g.count])), [bang2]);
   const sapByTram = useMemo(() => Object.fromEntries((bang2?.nhom_sap || []).map((g) => [g.ma_tram, g.count])), [bang2]);
-  const homNayByNhom = useMemo(() => Object.fromEntries((bang2?.nhom_hoan_thanh || []).map((g) => [g.nhom, g.n])), [bang2]);
 
   const chartData = useMemo(() => CHART_BUCKETS.map((c) => ({
     name: c.label, color: c.color,
@@ -350,7 +349,15 @@ export default function DashboardPage() {
   if (loading) return <div className="py-10 text-center text-ink-soft">Đang tải...</div>;
 
   const sumBy = (arr, map) => (arr || []).reduce((a, k) => a + (map[k] || 0), 0);
-  const cellMetrics = (c) => ({ nghen: sumBy(c.trams, nghenByTram), sap: sumBy(c.trams, sapByTram), homNay: sumBy(c.hn, homNayByNhom) });
+  // ✓ hôm nay = số PHẦN IN distinct đã xác nhận trong giai đoạn (không cộng dồn từng lượt checklist).
+  const homNayDistinct = (hn) => {
+    if (!hn?.length) return 0;
+    const set = new Set(hn);
+    const seen = new Set();
+    (htDetail || []).forEach((r) => { if (set.has(r.nhom)) seen.add(r.phan_in_id || r.doi_tuong); });
+    return seen.size;
+  };
+  const cellMetrics = (c) => ({ nghen: sumBy(c.trams, nghenByTram), sap: sumBy(c.trams, sapByTram), homNay: homNayDistinct(c.hn) });
   const sumSub = (subs, field) => (subs || []).reduce((a, k) => a + (stages?.stages?.[k]?.[field] || 0), 0);
   const openStage = (c) => setStageDetail({ label: c.label, trams: c.trams, hn: c.hn });
 

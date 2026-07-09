@@ -32,7 +32,11 @@ export default function GiaoHangPage() {
   const [sel, setSel] = useState(null);
   const [creating, setCreating] = useState(false);
   const [journey, setJourney] = useState(null); // { temId, maTem } — panel hành trình theo tem
-  const [ngay, setNgay] = useState('');
+  // Mặc định lọc theo NGÀY IN TEM = hôm nay (giờ máy = giờ VN).
+  const [ngay, setNgay] = useState(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -50,6 +54,7 @@ export default function GiaoHangPage() {
   useEffect(() => { load(); }, [load]);
 
   const selectedList = useMemo(() => Object.values(selected), [selected]);
+
   // Mỗi tem chọn = { row, qty } — qty = SL giao lần này (mặc định = còn giao). Giao TỪNG PHẦN nhiều lần.
   const toggle = (row) =>
     setSelected((s) => {

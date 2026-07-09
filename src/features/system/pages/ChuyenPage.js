@@ -12,7 +12,7 @@ import {
   listChuyen, createChuyen, updateChuyen, setChuyenActive, listLoaiChuyen, createLoaiChuyen,
 } from '../../../services/chuyenService';
 
-const empty = { maChuyen: '', tenChuyen: '', loaiChuyenId: '', dinhMucGio: '' };
+const empty = { maChuyen: '', tenChuyen: '', loaiChuyenId: '', dinhMucGio: '', soPass: '' };
 
 export default function ChuyenPage() {
   const { can } = usePermissions();
@@ -44,14 +44,14 @@ export default function ChuyenPage() {
   const openCreate = () => { setEditing(null); setForm(empty); setOpen(true); };
   const openEdit = (r) => {
     setEditing(r);
-    setForm({ maChuyen: r.ma_chuyen, tenChuyen: r.ten_chuyen, loaiChuyenId: r.loai_chuyen_id || '', dinhMucGio: r.dinh_muc_gio ?? '' });
+    setForm({ maChuyen: r.ma_chuyen, tenChuyen: r.ten_chuyen, loaiChuyenId: r.loai_chuyen_id || '', dinhMucGio: r.dinh_muc_gio ?? '', soPass: r.so_pass ?? '' });
     setOpen(true);
   };
 
   const save = async () => {
     setSaving(true);
     try {
-      const body = { ...form, dinhMucGio: form.dinhMucGio === '' ? null : Number(form.dinhMucGio) };
+      const body = { ...form, dinhMucGio: form.dinhMucGio === '' ? null : Number(form.dinhMucGio), soPass: form.soPass === '' ? null : Number(form.soPass) };
       if (editing) { await updateChuyen(editing.id, body); show('Đã cập nhật chuyền'); }
       else { await createChuyen(body); show('Đã thêm chuyền'); }
       setOpen(false); load();
@@ -77,6 +77,7 @@ export default function ChuyenPage() {
     { key: 'ten_chuyen', header: 'Tên chuyền', className: 'font-medium text-ink' },
     { key: 'loai_ten', header: 'Loại', render: (r) => r.loai_ten ? <Badge tone="default">{r.loai_ten}</Badge> : '—' },
     { key: 'dinh_muc_gio', header: 'Định mức (cái/giờ)', className: 'text-right tabular-nums', render: (r) => r.dinh_muc_gio ?? '—' },
+    { key: 'so_pass', header: 'Số pass', className: 'text-right tabular-nums', render: (r) => r.so_pass ?? '—' },
     { key: 'dang_hoat_dong', header: 'Trạng thái', render: (r) => r.dang_hoat_dong ? <Badge tone="success">Bật</Badge> : <Badge tone="danger">Tắt</Badge> },
     { key: 'actions', header: '', className: 'text-right', render: (r) => canManage && (
       <div className="flex justify-end gap-1.5">
@@ -116,9 +117,14 @@ export default function ChuyenPage() {
         <Field label="Tên chuyền" required>
           <Input value={form.tenChuyen} onChange={(e) => setForm({ ...form, tenChuyen: e.target.value })} />
         </Field>
-        <Field label="Định mức (cái/giờ)" hint="Dùng tính tốc độ/OEE ở màn Theo dõi chuyền">
-          <Input type="number" min="0" value={form.dinhMucGio} onChange={(e) => setForm({ ...form, dinhMucGio: e.target.value })} />
-        </Field>
+        <div className="grid grid-cols-2 gap-x-4">
+          <Field label="Định mức (cái/giờ)" hint="Dùng tính tốc độ/OEE ở màn Theo dõi chuyền">
+            <Input type="number" min="0" value={form.dinhMucGio} onChange={(e) => setForm({ ...form, dinhMucGio: e.target.value })} />
+          </Field>
+          <Field label="Số pass" hint="Số lần in/vòng — tính năng suất kế hoạch tự động">
+            <Input type="number" min="1" value={form.soPass} onChange={(e) => setForm({ ...form, soPass: e.target.value })} />
+          </Field>
+        </div>
       </Modal>
 
       <Modal open={loaiModal} onClose={() => setLoaiModal(false)} title="Thêm loại chuyền" size="sm"

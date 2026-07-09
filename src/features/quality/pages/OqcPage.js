@@ -31,7 +31,7 @@ export default function OqcPage() {
   const [search, setSearch] = useState('');
   const [ngay, setNgay] = useState('');
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ soLuongKiem: '', soLuongDat: '', soLuongLoi: '', ketQua: 'DAT', ownerChoGiaoId: '', truongHopGiaoId: '', lyDoChoGiao: '' });
+  const [form, setForm] = useState({ soLuongKiem: '', soLuongDat: '', ketQua: 'DAT', ownerChoGiaoId: '', truongHopGiaoId: '', lyDoChoGiao: '' });
   const [saving, setSaving] = useState(false);
   const [histOpen, setHistOpen] = useState(false);
   const [doneOpen, setDoneOpen] = useState(false);
@@ -61,24 +61,43 @@ export default function OqcPage() {
     return () => clearTimeout(t);
   }, [load]);
 
+  // row = display-row đã tách nguồn (có nguon + con_src + ma_tem_display).
   const open = (row) => {
     setEditing(row);
     setReturnMode(false);
     setReturnReason('');
-    const con = row.con_oqc ?? row.so_luong ?? '';
-    setForm({ soLuongKiem: String(con), soLuongDat: String(con), soLuongLoi: '', ketQua: 'DAT', ownerChoGiaoId: '', truongHopGiaoId: '', lyDoChoGiao: '' });
+    const con = row.con_src ?? row.con_oqc ?? row.so_luong ?? '';
+    setForm({ soLuongKiem: String(con), soLuongDat: String(con), ketQua: 'DAT', ownerChoGiaoId: '', truongHopGiaoId: '', lyDoChoGiao: '' });
   };
 
-  // Quét QR (ma_tem) → tra tem đang chờ OQC → mở modal nhập.
+  // Tách mỗi tem thành tối đa 2 dòng theo NGUỒN: KCS-đạt (tem 15-) & Sửa-đạt (tem 17-).
+  const displayRows = rows.flatMap((r) => {
+    const out = [];
+    const kcs = Number(r.con_oqc_kcs) || 0;
+    const sua = Number(r.con_oqc_sua) || 0;
+    if (kcs > 0) out.push({ ...r, _key: `${r.tem_id}-KCS`, nguon: 'KCS', con_src: kcs, ma_tem_display: `15-${r.ma_tem}` });
+    if (sua > 0) out.push({ ...r, _key: `${r.tem_id}-SUA`, nguon: 'SUA', con_src: sua, ma_tem_display: `17-${r.ma_tem}` });
+    // Dữ liệu cũ (chưa chạy mig 047 → 2 cột null): fallback 1 dòng gộp coi như nguồn KCS.
+    if (out.length === 0 && (Number(r.con_oqc) || 0) > 0) {
+      out.push({ ...r, _key: `${r.tem_id}-KCS`, nguon: 'KCS', con_src: Number(r.con_oqc), ma_tem_display: `15-${r.ma_tem}` });
+    }
+    return out;
+  });
+
+  // Quét QR (ma_tem) → tra tem đang chờ OQC → mở modal nhập (ưu tiên nguồn KCS nếu còn).
   const onScan = async (maTem) => {
     setScanOpen(false);
-    const code = baseMaTem(maTem); // QR có thể mã hóa '17-TEM...'; tách lấy mã gốc
+    const code = baseMaTem(maTem); // QR có thể mã hóa '15-/17-TEM...'; tách lấy mã gốc
     if (!code) return;
     try {
       const res = await listOqcCandidates({ search: code });
-      const row = (res.data || []).find((r) => (r.ma_tem || '').toLowerCase() === code.toLowerCase());
-      if (row) open(row);
-      else show(`Tem ${code} không có phần chờ OQC`, 'error');
+      const r = (res.data || []).find((x) => (x.ma_tem || '').toLowerCase() === code.toLowerCase());
+      if (!r) { show(`Tem ${code} không có phần chờ OQC`, 'error'); return; }
+      const kcs = Number(r.con_oqc_kcs) || 0;
+      const sua = Number(r.con_oqc_sua) || 0;
+      if (kcs > 0) open({ ...r, nguon: 'KCS', con_src: kcs, ma_tem_display: `15-${r.ma_tem}` });
+      else if (sua > 0) open({ ...r, nguon: 'SUA', con_src: sua, ma_tem_display: `17-${r.ma_tem}` });
+      else open({ ...r, nguon: 'KCS', con_src: Number(r.con_oqc) || 0, ma_tem_display: `15-${r.ma_tem}` });
     } catch (e) { show(e.message || 'Không tra được tem', 'error'); }
   };
 
@@ -100,13 +119,13 @@ export default function OqcPage() {
   const save = async () => {
     setSaving(true);
     try {
-      const r = await recordOqc(editing.tem_id, form);
+      const r = await recordOqc(editing.tem_id, { ...form, nguon: editing.nguon });
       const map = {
-        OQC_DAT: 'OQC đạt ✓ → sẵn sàng giao',
-        CHO_GIAO_NGOAI_LE: 'không đạt → CHO GIAO NGOẠI LỆ (có owner)',
-        GIU_OQC: 'không đạt → nằm lại OQC (chưa có owner cho giao)',
+        OQC_DAT: 'OQC đạt ✓ → TOÀN BỘ lô qua giao',
+        CHO_GIAO_NGOAI_LE: 'không đạt → CHO GIAO NGOẠI LỆ toàn bộ (có owner)',
+        GIU_OQC: 'không đạt → cả lô nằm lại OQC (chưa có owner cho giao)',
       };
-      show(`OQC ${editing.ma_tem}: ${map[r.data.next] || r.data.next}`, r.data.next === 'GIU_OQC' ? 'warning' : 'success');
+      show(`OQC ${editing.ma_tem_display || editing.ma_tem}: ${map[r.data.next] || r.data.next}`, r.data.next === 'GIU_OQC' ? 'warning' : 'success');
       setEditing(null);
       load();
     } catch (e) {
@@ -117,7 +136,12 @@ export default function OqcPage() {
   };
 
   const columns = [
-    { key: 'ma_tem', header: 'Tem', render: (r) => <Badge tone="info">{r.ma_tem}</Badge> },
+    { key: 'ma_tem', header: 'Tem', render: (r) => (
+      <div className="flex items-center gap-1.5">
+        <Badge tone={r.nguon === 'SUA' ? 'warning' : 'info'}>{r.ma_tem_display || r.ma_tem}</Badge>
+        <span className="text-[11px] text-ink-soft">{r.nguon === 'SUA' ? 'đã sửa' : 'từ KCS'}</span>
+      </div>
+    ) },
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
@@ -127,7 +151,7 @@ export default function OqcPage() {
     { key: 'chuyen', header: 'Chuyền', render: (r) => r.ten_chuyen || '—' },
     { key: 'nguoi_truoc', header: 'Người XN trạm trước', render: (r) => r.nguoi_truoc || '—' },
     { key: 'so_luong', header: 'SL in', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
-    { key: 'con_oqc', header: 'Còn OQC', className: 'text-right tabular-nums font-medium text-primary', render: (r) => fmtNum(r.con_oqc) },
+    { key: 'con_src', header: 'Còn OQC', className: 'text-right tabular-nums font-medium text-primary', render: (r) => fmtNum(r.con_src ?? r.con_oqc) },
     { key: 'actions', header: '', className: 'text-right', render: (r) =>
       canOqc && <Button className="px-3 py-1.5" onClick={() => open(r)}>Kiểm OQC</Button> },
   ];
@@ -145,19 +169,19 @@ export default function OqcPage() {
         </div>
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
-        <Badge tone="warning">{rows.length} tem chờ OQC</Badge>
+        <Badge tone="warning">{displayRows.length} dòng chờ OQC</Badge>
       </Toolbar>
 
       <OwnerHint tram="OQC" className="mb-3" />
 
-      <DataTable columns={columns} rows={rows} loading={loading} rowKey="tem_id"
+      <DataTable columns={columns} rows={displayRows} loading={loading} rowKey="_key"
         rowClassName={(r) => slaRowClass(evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status)}
         emptyText="Không có tem nào chờ OQC" />
 
       <SidePanel
         open={!!editing}
         onClose={() => setEditing(null)}
-        title={`OQC — ${editing?.ma_tem || ''}`}
+        title={`OQC — ${editing?.ma_tem_display || editing?.ma_tem || ''}`}
         footer={
           <>
             <Button variant="ghost" onClick={() => setEditing(null)}>Hủy</Button>
@@ -171,17 +195,21 @@ export default function OqcPage() {
       >
         <div className="mb-3 rounded-control bg-surface-muted px-3 py-2 text-sm text-ink-soft">
           {editing?.ma_lenh_san_xuat} · {editing?.phan_list} · SL in {fmtNum(editing?.so_luong)}
-          <span className="ml-1 font-semibold text-primary">· còn chờ OQC {fmtNum(editing?.con_oqc)}</span>
+          <span className="ml-1 font-semibold text-primary">· cả lô chờ OQC {fmtNum(editing?.con_src ?? editing?.con_oqc)}</span>
+          <span className={`ml-1 rounded px-1.5 py-0.5 text-[11px] font-semibold ${editing?.nguon === 'SUA' ? 'bg-amber-100 text-amber-700' : 'bg-sky-100 text-sky-700'}`}>
+            {editing?.nguon === 'SUA' ? 'Nguồn đã sửa (17-)' : 'Nguồn từ KCS (15-)'}
+          </span>
         </div>
-        <div className="grid grid-cols-3 gap-x-4">
-          <Field label="SL kiểm">
-            <Input type="number" min="0" value={form.soLuongKiem} onChange={(e) => setForm({ ...form, soLuongKiem: e.target.value })} />
+        <div className="mb-1 rounded-control border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/40 dark:text-sky-300">
+          Kiểm <b>bốc mẫu</b>: chọn <b>Đạt</b> → <b>toàn bộ {fmtNum(editing?.con_src ?? editing?.con_oqc)} pcs</b> của lô qua giao. Chọn <b>Không đạt</b> → cả lô không đạt.
+        </div>
+        <div className="grid grid-cols-2 gap-x-4">
+          <Field label="SL bốc mẫu" hint="Số lấy mẫu ra kiểm (SL đạt tự nhảy theo)">
+            <Input type="number" min="0" value={form.soLuongKiem}
+              onChange={(e) => setForm({ ...form, soLuongKiem: e.target.value, soLuongDat: e.target.value })} />
           </Field>
-          <Field label="SL đạt">
+          <Field label="SL đạt trong mẫu" hint="≤ SL bốc mẫu">
             <Input type="number" min="0" value={form.soLuongDat} onChange={(e) => setForm({ ...form, soLuongDat: e.target.value })} />
-          </Field>
-          <Field label="SL lỗi">
-            <Input type="number" min="0" value={form.soLuongLoi} onChange={(e) => setForm({ ...form, soLuongLoi: e.target.value })} />
           </Field>
         </div>
         <Field label="Kết quả">
@@ -230,7 +258,7 @@ export default function OqcPage() {
           </div>
         )}
 
-        <p className="text-xs text-ink-soft">Đạt → sẵn sàng giao. Không đạt: có owner + trường hợp + lý do → cho giao ngoại lệ; không có → nằm lại OQC.</p>
+        <p className="text-xs text-ink-soft">Đạt → toàn bộ lô qua giao. Không đạt: có owner + trường hợp + lý do → cho giao ngoại lệ toàn bộ; không có → cả lô nằm lại OQC.</p>
 
         {/* Trả về KCS (kèm lý do) */}
         <div className="mt-3 border-t border-line pt-3">

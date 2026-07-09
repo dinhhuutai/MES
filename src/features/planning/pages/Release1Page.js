@@ -55,6 +55,7 @@ function DataCells({ r }) {
       <td className={TD}><LoaiDotVaiBadge value={r.loai_dot_vai} /></td>
       <td className={`${TD} text-right tabular-nums`}>{fmtNum(r.so_luong_don_hang)}</td>
       <td className={`${TD} text-right tabular-nums`}>{fmtNum(r.so_luong_vai_ve)}</td>
+      <td className={`${TD} text-right tabular-nums font-medium text-primary`}>{fmtNum(r.con_release ?? r.so_luong_vai_ve)}</td>
       <td className={TD}>{fmtDate(r.ngay_vai_ve)}</td>
       <td className={TD}>{fmtDate(r.han_giao_hang)}</td>
     </>
@@ -136,7 +137,8 @@ export default function Release1Page() {
 
   const openDetail = (row) => {
     setDetail(row);
-    setForm({ chuyenId: chuyen[0]?.id || '', soLuongRelease: String(row.so_luong_vai_ve || ''), ngayKeHoach: dateOffsetStr(1) });
+    // Mặc định release phần CÒN LẠI (SL vải về − đã release); release theo số lượng, giữ phần còn.
+    setForm({ chuyenId: chuyen[0]?.id || '', soLuongRelease: String(row.con_release ?? row.so_luong_vai_ve ?? ''), ngayKeHoach: dateOffsetStr(1) });
   };
 
   // Release 1 phần in lẻ (từ side panel chi tiết)
@@ -190,7 +192,7 @@ export default function Release1Page() {
     } finally { setSaving(false); }
   };
 
-  const colCount = 13;
+  const colCount = 14;
 
   return (
     <div>
@@ -224,6 +226,7 @@ export default function Release1Page() {
                 <th className={TH}>Loại đợt vải</th>
                 <th className={`${TH} text-right`}>SLĐH</th>
                 <th className={`${TH} text-right`}>SLNV</th>
+                <th className={`${TH} text-right`}>Còn release</th>
                 <th className={TH}>Ngày nhận vải</th>
                 <th className={TH}>Hạn giao</th>
               </tr>
@@ -354,6 +357,8 @@ export default function Release1Page() {
               <Info label="Kích phim" value={detail.kich_phim} />
               <Info label="SL đơn hàng" value={fmtNum(detail.so_luong_don_hang)} />
               <Info label="SL nhận vải" value={fmtNum(detail.so_luong_vai_ve)} />
+              <Info label="Đã release" value={fmtNum(detail.da_release || 0)} />
+              <Info label="Còn release" value={fmtNum(detail.con_release ?? detail.so_luong_vai_ve)} />
               <Info label="Ngày nhận vải" value={fmtDate(detail.ngay_vai_ve)} />
               <Info label="Hạn giao" value={fmtDate(detail.han_giao_hang)} />
             </div>
@@ -362,8 +367,9 @@ export default function Release1Page() {
                 <ChuyenPicker chuyen={chuyen} value={form.chuyenId} onChange={(id) => setForm({ ...form, chuyenId: id })} />
               </Field>
               <div className="grid grid-cols-2 gap-x-4">
-                <Field label="Số lượng release">
-                  <Input type="number" value={form.soLuongRelease} onChange={(e) => setForm({ ...form, soLuongRelease: e.target.value })} />
+                <Field label="Số lượng release" hint={`Còn lại ${fmtNum(detail.con_release ?? detail.so_luong_vai_ve)} — release ít hơn thì đợt vẫn ở lại kế hoạch với phần còn`}>
+                  <Input type="number" min="1" max={detail.con_release ?? detail.so_luong_vai_ve}
+                    value={form.soLuongRelease} onChange={(e) => setForm({ ...form, soLuongRelease: e.target.value })} />
                 </Field>
                 <Field label="Ngày kế hoạch">
                   <Input type="date" value={form.ngayKeHoach} onChange={(e) => setForm({ ...form, ngayKeHoach: e.target.value })} />

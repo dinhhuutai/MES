@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import Toolbar from '../../../components/common/Toolbar';
 import OwnerHint from '../../../components/common/OwnerHint';
 import DataTable from '../../../components/common/DataTable';
@@ -24,6 +24,16 @@ import { evalSla, slaRowClass } from '../../../utils/sla';
 
 const empty = { soLuongDat: '', soLuongHu: '', soLuongSua: '', soLuongHuy: '', soLuongThieu: '', soLuongDu: '', soLuongMau: '' };
 
+const FILTER_FIELDS = [
+  { key: 'khach', label: 'Khách hàng' },
+  { key: 'don', label: 'Đơn hàng' },
+  { key: 'maHang', label: 'Mã hàng' },
+  { key: 'mauVai', label: 'Màu vải' },
+  { key: 'kichVai', label: 'Kích vải' },
+  { key: 'kichPhim', label: 'Kích phim' },
+];
+const FIELD_LABEL = { ...Object.fromEntries(FILTER_FIELDS.map((f) => [f.key, f.label])), ngay: 'Ngày in tem' };
+
 export default function KcsPage() {
   const { can } = usePermissions();
   const { toast, show } = useToast();
@@ -33,7 +43,8 @@ export default function KcsPage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [ngay, setNgay] = useState('');
+  const [filters, setFilters] = useState({});
+  const [showFilters, setShowFilters] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
@@ -48,17 +59,23 @@ export default function KcsPage() {
 
   const viewRows = onlyReturned ? rows.filter((r) => r.tra_ve_ly_do) : rows;
 
+  const filtersKey = useMemo(() => JSON.stringify(filters), [filters]);
+  const activeFilters = useMemo(() => Object.entries(filters).filter(([, v]) => v), [filters]);
+  const setField = (key, value) => setFilters((f) => ({ ...f, [key]: value }));
+  const clearFilters = () => setFilters({});
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await listKcsCandidates({ search, ngay: ngay || undefined });
+      const res = await listKcsCandidates({ search, ...filters });
       setRows(res.data);
     } catch (e) {
       show(e.message || 'Lỗi tải', 'error');
     } finally {
       setLoading(false);
     }
-  }, [search, ngay, show]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, filtersKey, show]);
 
   // In tem GIAO (KCS đã hoàn thành) — cấu trúc tem 1, SL IN = số lượng đã kiểm.
   const printKcsGiao = async (row) => {
@@ -143,14 +160,25 @@ export default function KcsPage() {
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
-    { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
-    { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
-    { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
+    { key: 'mau_kich', header: 'Màu · Kích (vải/phim)', render: (r) => (
+      <div className="leading-tight">
+        <div className="font-medium text-ink">{r.mau_vai || '—'}</div>
+        <div className="text-[10px] text-ink-soft">{[r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—'}</div>
+      </div>
+    ) },
     { key: 'ten_chuyen', header: 'Chuyền', render: (r) => r.ten_chuyen || '—' },
-    { key: 'ngay_in_tem', header: 'Giờ in tem', className: 'whitespace-nowrap tabular-nums', render: (r) => fmtDateTime(r.ngay_in_tem) },
-    { key: 'nguoi_truoc', header: 'Người XN trạm trước', render: (r) => r.nguoi_truoc || '—' },
-    { key: 'so_luong', header: 'SL in', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
-    { key: 'con_kcs', header: 'Còn kiểm', className: 'text-right tabular-nums font-medium text-primary', render: (r) => fmtNum(r.con_kcs) },
+    { key: 'nguoi_gio', header: 'Người XN · Giờ in tem', render: (r) => (
+      <div className="leading-tight">
+        <div className="text-ink">{r.nguoi_truoc || '—'}</div>
+        <div className="whitespace-nowrap text-[10px] tabular-nums text-ink-soft">{fmtDateTime(r.ngay_in_tem)}</div>
+      </div>
+    ) },
+    { key: 'con_sl', header: 'Còn kiểm · SL in', className: 'text-right tabular-nums', render: (r) => (
+      <div className="leading-tight">
+        <div className="font-medium text-primary">{fmtNum(r.con_kcs)}</div>
+        <div className="text-[10px] text-ink-soft">SL in {fmtNum(r.so_luong)}</div>
+      </div>
+    ) },
     { key: 'actions', header: '', className: 'text-right', render: (r) =>
       canKcs && (
         <div className="flex justify-end gap-2">
@@ -183,10 +211,12 @@ export default function KcsPage() {
         {canKcs && <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét QR</Button>}
         <div className="flex items-center gap-1.5 text-xs text-ink-soft">
           <span>Ngày in tem</span>
-          <input type="date" value={ngay} onChange={(e) => setNgay(e.target.value)}
+          <input type="date" value={filters.ngay || ''} onChange={(e) => setField('ngay', e.target.value)}
             className="h-9 rounded-input border border-line bg-surface px-2 text-sm" />
-          {ngay && <button type="button" onClick={() => setNgay('')} className="text-ink-soft hover:text-danger" aria-label="Xóa lọc ngày"><Icon name="x" size={14} /></button>}
+          {filters.ngay && <button type="button" onClick={() => setField('ngay', '')} className="text-ink-soft hover:text-danger" aria-label="Xóa lọc ngày"><Icon name="x" size={14} /></button>}
         </div>
+        <Button variant={showFilters || activeFilters.length ? 'secondary' : 'ghost'} icon="filter"
+          onClick={() => setShowFilters((v) => !v)}>Bộ lọc{activeFilters.length ? ` (${activeFilters.length})` : ''}</Button>
         <label className="flex items-center gap-1.5 text-xs text-ink-soft">
           <input type="checkbox" checked={onlyReturned} onChange={(e) => setOnlyReturned(e.target.checked)} />
           Chỉ hiện tem bị trả về
@@ -195,6 +225,40 @@ export default function KcsPage() {
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="warning">{rows.length} tem chờ kiểm</Badge>
       </Toolbar>
+
+      {showFilters && (
+        <div className="mb-3 card p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-ink">Lọc nhiều trường (kết hợp AND)</h3>
+            <Button variant="ghost" className="px-2.5 py-1 text-xs" onClick={clearFilters}
+              disabled={!activeFilters.length}>Xóa lọc</Button>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            {FILTER_FIELDS.map((f) => (
+              <div key={f.key}>
+                <label className="mb-1 block text-xs font-medium text-ink-soft">{f.label}</label>
+                <input value={filters[f.key] || ''} onChange={(e) => setField(f.key, e.target.value)}
+                  placeholder={`Lọc ${f.label.toLowerCase()}...`}
+                  className="h-10 w-full rounded-input border border-line bg-surface px-3 text-sm focus:border-primary focus:outline-none" />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {activeFilters.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          {activeFilters.map(([k, v]) => (
+            <span key={k} className="inline-flex items-center gap-1 rounded-full bg-primary-wash px-3 py-1 text-xs font-medium text-primary">
+              {FIELD_LABEL[k]}: {v}
+              <button onClick={() => setField(k, '')} className="ml-0.5 hover:text-danger" aria-label="Xóa">
+                <Icon name="x" size={12} />
+              </button>
+            </span>
+          ))}
+          <button onClick={clearFilters} className="text-xs font-medium text-ink-soft underline hover:text-danger">Xóa tất cả</button>
+        </div>
+      )}
 
       <OwnerHint tram="KIEM" className="mb-3" />
 

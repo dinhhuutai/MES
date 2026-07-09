@@ -9,16 +9,23 @@ export default function DataTable({ columns, rows, loading, rowKey = 'id', empty
   const showStt = typeof sttStart === 'number';
   const selCols = columns.filter((c) => c.selection);
   const restCols = columns.filter((c) => !c.selection);
+  // Cột thao tác (header rỗng) ở CUỐI → GHIM DÍNH bên phải để luôn bấm được dù bảng cuộn ngang.
+  const trailingActions = [];
+  for (let k = restCols.length - 1; k >= 0 && !restCols[k].header; k -= 1) trailingActions.unshift(restCols[k]);
+  const bodyCols = restCols.slice(0, restCols.length - trailingActions.length);
   const totalCols = columns.length + (showStt ? 1 : 0);
 
   const cellValue = (c, row) => (c.render ? c.render(row) : row[c.key]);
-  const renderHeader = (c) => (
-    <th key={c.key} className={`px-4 py-3 text-xs font-semibold uppercase tracking-wide text-ink-soft ${c.headerClassName || ''}`}>
+  // Padding/kích thước co theo bề rộng: laptop (md→xl) gọn để đỡ kéo ngang; chỉ màn RẤT rộng (2xl+) mới giãn.
+  const PAD_H = 'px-1.5 py-2 lg:px-2.5 2xl:px-4 2xl:py-3 text-[10px] lg:text-[11px] 2xl:text-xs font-semibold uppercase tracking-tight lg:tracking-wide text-ink-soft';
+  const PAD_C = 'px-1.5 py-1.5 lg:px-2.5 lg:py-2 2xl:px-4 2xl:py-3 align-middle';
+  const renderHeader = (c, sticky) => (
+    <th key={c.key} className={`${PAD_H} ${sticky ? 'sticky right-0 z-10 bg-surface-muted shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.15)]' : ''} ${c.headerClassName || ''}`}>
       {c.header}
     </th>
   );
-  const renderCell = (c, row) => (
-    <td key={c.key} className={`px-4 py-3 align-middle ${c.className || ''}`}>
+  const renderCell = (c, row, sticky) => (
+    <td key={c.key} className={`${PAD_C} ${sticky ? 'sticky right-0 z-10 bg-surface shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.15)]' : ''} ${c.className || ''}`}>
       {cellValue(c, row)}
     </td>
   );
@@ -28,14 +35,15 @@ export default function DataTable({ columns, rows, loading, rowKey = 'id', empty
       {/* ===== BẢNG (md trở lên) ===== */}
       <div className="hidden md:block card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-[11px] lg:text-[12px] 2xl:text-sm">
             <thead>
               <tr className="border-b border-line bg-surface-muted/60 text-left">
                 {selCols.map(renderHeader)}
                 {showStt && (
-                  <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wide text-ink-soft w-12 text-right">STT</th>
+                  <th className="px-1.5 py-2 lg:px-2.5 2xl:px-4 2xl:py-3 text-[10px] lg:text-[11px] 2xl:text-xs font-semibold uppercase tracking-tight lg:tracking-wide text-ink-soft w-10 text-right">STT</th>
                 )}
-                {restCols.map(renderHeader)}
+                {bodyCols.map((c) => renderHeader(c))}
+                {trailingActions.map((c) => renderHeader(c, true))}
               </tr>
             </thead>
             <tbody>
@@ -51,9 +59,10 @@ export default function DataTable({ columns, rows, loading, rowKey = 'id', empty
                     className={`border-b border-line/70 transition hover:bg-surface-muted/40 ${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : ''}`}>
                     {selCols.map((c) => renderCell(c, row))}
                     {showStt && (
-                      <td className="px-4 py-3 align-middle text-right tabular-nums text-ink-soft">{sttStart + i + 1}</td>
+                      <td className="px-1.5 py-1.5 lg:px-2.5 lg:py-2 2xl:px-4 2xl:py-3 align-middle text-right tabular-nums text-ink-soft">{sttStart + i + 1}</td>
                     )}
-                    {restCols.map((c) => renderCell(c, row))}
+                    {bodyCols.map((c) => renderCell(c, row))}
+                    {trailingActions.map((c) => renderCell(c, row, true))}
                   </tr>
                 ))
               )}

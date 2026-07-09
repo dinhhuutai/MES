@@ -4,6 +4,7 @@ import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import Toast from '../../../components/common/Toast';
 import Icon from '../../../components/common/Icon';
+import { Input } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import { autoPlanCandidates, createRelease1 } from '../../../services/planningService';
@@ -15,10 +16,10 @@ import { fmtNum, fmtDate } from '../../../utils/format';
 const FLOOR = {
   A: ['M7', 'M6', 'M5', 'M4', 'M3', 'M2', 'M1'],
   B_top: 'M8',
-  B: ['M1A-1B', 'M2A-2B', 'M3A-3B', 'M4A-4B', 'M5A-5B', 'M6A-6B', 'M7A-7B', 'M8A-8B'],
+  B: ['M1A-1B', 'M2A-2B', 'M3A-3B', 'M4A-4B', 'M5A-5B', 'M6A-6B', 'M7A-7B', 'M8A-8B', 'M9A-9B'],
   C: ['MRB1', 'MRB2', 'MRB3'],
-  D_top: ['M10B', 'M11B', 'M12B', 'M13B'],
-  D_bot: ['M10A', 'M11A', 'M12A', 'M13A'],
+  D_top: ['M10B', 'M11B', 'M12B', 'M13B', 'M14B'],
+  D_bot: ['M10A', 'M11A', 'M12A', 'M13A', 'M14A'],
 };
 
 const norm = (s) => String(s || '').trim().toUpperCase();
@@ -85,12 +86,17 @@ export default function KeHoachTuDongPage() {
   const canRelease = can('RELEASE1');
 
   const [chuyens, setChuyens] = useState([]);
-  const [items, setItems] = useState([]);
+  const [items, setItems] = useState([]);       // chưa lên KH (đợt chờ Release 1)
+  const [planned, setPlanned] = useState([]);   // đã lên KH (lệnh RELEASE_1/2 chưa chạy)
+  const [viewMode, setViewMode] = useState('chua'); // 'chua' | 'da' | 'all'
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(null); // chuyen_id đang chọn để lọc list bên phải
   const [busyId, setBusyId] = useState(null);
   const [busyChuyen, setBusyChuyen] = useState(null);
+  const [qtyMap, setQtyMap] = useState({}); // dot_vai_id -> SL release nhập (mặc định con_release)
+
+  const conOf = (it) => Number(it.con_release ?? it.so_luong_vai_ve) || 0;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -98,17 +104,27 @@ export default function KeHoachTuDongPage() {
       const res = await autoPlanCandidates({ search });
       setChuyens(res.data.chuyens || []);
       setItems(res.data.items || []);
+      setPlanned(res.data.planned || []);
     } catch (e) { show(e.message || 'Lỗi tải', 'error'); } finally { setLoading(false); }
   }, [search, show]);
 
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
 
+  // Danh sách hiển thị theo toggle: chưa lên KH / đã lên KH / tất cả.
+  const viewItems = useMemo(() => {
+    if (viewMode === 'chua') return items;
+    if (viewMode === 'da') return planned;
+    return [...items, ...planned];
+  }, [viewMode, items, planned]);
+
+  const keyOf = (it) => it.dot_vai_id || `L-${it.id}`;
+
   // Nhóm đợt theo chuyền được xếp (best_chuyen).
   const itemsByChuyen = useMemo(() => {
     const m = {};
-    items.forEach((it) => { const cid = it.best_chuyen && it.best_chuyen.chuyen_id; if (cid) (m[cid] = m[cid] || []).push(it); });
+    viewItems.forEach((it) => { const cid = it.best_chuyen && it.best_chuyen.chuyen_id; if (cid) (m[cid] = m[cid] || []).push(it); });
     return m;
-  }, [items]);
+  }, [viewItems]);
 
   // Gắn chuyền hệ thống vào ô sơ đồ theo tên (ma_chuyen hoặc ten_chuyen == mã ô).
   const chuyenByCode = useMemo(() => {
@@ -135,38 +151,46 @@ export default function KeHoachTuDongPage() {
   const unmapped = chuyens.filter((c) => !mappedIds.has(c.id));
 
   const selectedChuyen = chuyens.find((c) => c.id === selected) || null;
-  const backlog = selected ? (itemsByChuyen[selected] || []) : items;
+  const backlog = selected ? (itemsByChuyen[selected] || []) : viewItems;
+  const backlogReleasable = backlog.filter((it) => !it.planned); // chỉ đợt "chưa lên KH" mới release được
 
   const releaseOne = async (it) => {
     if (!canRelease) return;
+    const con = conOf(it);
+    const raw = qtyMap[it.dot_vai_id];
+    const qty = raw != null && raw !== '' ? Number(raw) : con;
+    if (!(qty > 0) || qty > con) { show(`SL release phải trong khoảng 1..${fmtNum(con)}`, 'error'); return; }
     setBusyId(it.dot_vai_id);
     try {
       await createRelease1({
         dotVaiIds: [it.dot_vai_id], chuyenId: it.best_chuyen.chuyen_id,
-        soLuongRelease: it.so_luong_vai_ve, ngayKeHoach: it.ngay_ke_hoach,
+        soLuongRelease: qty, ngayKeHoach: it.ngay_ke_hoach,
       });
-      setItems((prev) => prev.filter((x) => x.dot_vai_id !== it.dot_vai_id));
-      show(`Đã Release 1 — ${it.ma_phan} · ${it.ma_dot_vai}`);
+      setQtyMap((m) => { const n = { ...m }; delete n[it.dot_vai_id]; return n; });
+      show(qty < con
+        ? `Đã Release 1 ${fmtNum(qty)}/${fmtNum(con)} — ${it.ma_phan} · còn ${fmtNum(con - qty)}`
+        : `Đã Release 1 — ${it.ma_phan} · ${it.ma_dot_vai}`);
+      load(); // nạp lại để cập nhật phần còn lại (đợt ở lại nếu release chưa đủ)
     } catch (e) { show(e.message || 'Xác nhận thất bại', 'error'); } finally { setBusyId(null); }
   };
 
   const releaseChuyen = async (chuyenId, list) => {
     if (!canRelease || !list.length) return;
     setBusyChuyen(chuyenId);
-    let ok = 0; let fail = 0; const doneIds = [];
+    let ok = 0; let fail = 0;
     for (const it of list) {
       try {
         // eslint-disable-next-line no-await-in-loop
         await createRelease1({
           dotVaiIds: [it.dot_vai_id], chuyenId: it.best_chuyen.chuyen_id,
-          soLuongRelease: it.so_luong_vai_ve, ngayKeHoach: it.ngay_ke_hoach,
+          soLuongRelease: null, ngayKeHoach: it.ngay_ke_hoach, // release hết phần còn lại mỗi đợt
         });
-        ok += 1; doneIds.push(it.dot_vai_id);
+        ok += 1;
       } catch (e) { fail += 1; }
     }
-    setItems((prev) => prev.filter((x) => !doneIds.includes(x.dot_vai_id)));
     show(fail ? `Xác nhận ${ok} đợt, ${fail} lỗi` : `Đã Release 1 ${ok} đợt trên chuyền`, fail ? 'error' : 'success');
     setBusyChuyen(null);
+    load();
   };
 
   return (
@@ -174,12 +198,12 @@ export default function KeHoachTuDongPage() {
       <Toolbar title="Kế hoạch tự động"
         subtitle="Sơ đồ chuyền theo mặt bằng nhà máy — chọn 1 chuyền để lọc, xác nhận Release 1 ở danh sách bên phải"
         search={search} onSearch={setSearch} searchPlaceholder="Tìm code phần, mã hàng, màu/kích, đợt vải...">
-        <Badge tone="info">{items.length} đợt chờ · {chuyens.length} chuyền</Badge>
+        <Badge tone="info">{items.length} chưa · {planned.length} đã lên KH · {chuyens.length} chuyền</Badge>
       </Toolbar>
 
       <div className="mb-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
-        Thông số HSKT & số pass mỗi chuyền hiện là <b>dữ liệu tạm</b> (sẽ lấy từ ERP). Ô sơ đồ tô đậm = chuyền có đợt được xếp;
-        ô nét đứt = vị trí chuyền chưa cấu hình trong hệ thống.
+        Thông số HSKT hiện là <b>dữ liệu tạm</b> (sẽ lấy từ ERP); <b>số pass</b> cấu hình ở <b>Hệ thống → Chuyền sản xuất</b> (chưa đặt → dùng tạm).
+        Ô sơ đồ tô đậm = chuyền có đợt được xếp; ô nét đứt = vị trí chuyền chưa cấu hình trong hệ thống.
       </div>
 
       {loading ? (
@@ -215,29 +239,60 @@ export default function KeHoachTuDongPage() {
               <div className="flex items-center justify-between gap-2 border-b border-line px-3 py-2.5">
                 <div className="min-w-0">
                   <div className="truncate text-sm font-bold text-ink">
-                    {selectedChuyen ? (selectedChuyen.ten_chuyen || selectedChuyen.ma_chuyen) : 'Chờ Release 1'}
+                    {selectedChuyen ? (selectedChuyen.ten_chuyen || selectedChuyen.ma_chuyen) : 'Danh sách đợt vải'}
                   </div>
-                  <div className="text-[11px] text-ink-soft">{backlog.length} đợt chưa release đủ SL</div>
+                  <div className="text-[11px] text-ink-soft">{backlog.length} dòng</div>
                 </div>
                 {selectedChuyen && (
                   <Button variant="ghost" className="!px-2 !py-1 !text-xs" onClick={() => setSelected(null)}>Bỏ lọc</Button>
                 )}
               </div>
 
-              {canRelease && selectedChuyen && backlog.length > 0 && (
+              {/* Toggle: chưa lên KH (đang ở Release 1) / đã lên KH (đã XN Release 1 → chờ SX) / tất cả */}
+              <div className="flex gap-1 border-b border-line p-1.5">
+                {[['chua', `Chưa lên KH (${items.length})`], ['da', `Đã lên KH (${planned.length})`], ['all', 'Tất cả']].map(([k, label]) => (
+                  <button key={k} type="button" onClick={() => setViewMode(k)}
+                    className={`flex-1 rounded-[8px] px-2 py-1 text-[11px] font-semibold transition ${
+                      viewMode === k ? 'bg-primary-wash text-primary' : 'text-ink-soft hover:bg-surface-muted'
+                    }`}>{label}</button>
+                ))}
+              </div>
+
+              {canRelease && selectedChuyen && backlogReleasable.length > 0 && (
                 <div className="border-b border-line px-3 py-2">
                   <Button variant="primary" className="w-full !py-1.5 !text-xs" loading={busyChuyen === selected}
-                    onClick={() => releaseChuyen(selected, backlog)}>Xác nhận cả chuyền ({backlog.length})</Button>
+                    onClick={() => releaseChuyen(selected, backlogReleasable)}>Xác nhận cả chuyền ({backlogReleasable.length})</Button>
                 </div>
               )}
 
               <div className="flex-1 space-y-1.5 overflow-y-auto p-2.5" style={{ maxHeight: '68vh' }}>
                 {backlog.length === 0 ? (
-                  <div className="py-10 text-center text-xs text-ink-soft">Không có đợt vải nào chờ Release 1.</div>
+                  <div className="py-10 text-center text-xs text-ink-soft">Không có đợt vải nào.</div>
                 ) : backlog.map((it) => {
                   const bc = it.best_chuyen || {};
+                  // Hàng "đã lên KH" (đã tạo lệnh Release 1/2, chưa chạy) — chỉ hiển thị, không release lại.
+                  if (it.planned) {
+                    return (
+                      <div key={keyOf(it)} className="rounded-control border border-indigo-200 bg-indigo-50/40 p-2.5 dark:border-indigo-900/50 dark:bg-indigo-950/20">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-semibold text-ink">{it.ma_phan}{it.ten_khach_hang ? ` · ${it.ten_khach_hang}` : ''}</div>
+                          <div className="truncate text-xs text-ink-soft">{[it.ma_hang, it.mau_vai, it.kich_vai, it.kich_phim].filter(Boolean).join(' · ')}</div>
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-soft">
+                            <Badge tone="info">{it.ma_lenh_san_xuat}</Badge>
+                            <Badge tone={it.trang_thai === 'RELEASE_2' ? 'success' : 'warning'}>
+                              {it.trang_thai === 'RELEASE_2' ? 'Chờ sản xuất' : 'Đã Release 1'}
+                            </Badge>
+                            <span>SL {fmtNum(it.so_luong_release)}</span>
+                            {bc.ten_chuyen && <span>· {bc.ten_chuyen}</span>}
+                            {it.ngay_ke_hoach && <span className="inline-flex items-center gap-0.5"><Icon name="calendar-days" size={11} />{fmtDate(it.ngay_ke_hoach)}</span>}
+                            {it.han_giao_hang && <span>· hạn {fmtDate(it.han_giao_hang)}</span>}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
                   return (
-                    <div key={it.dot_vai_id} className="rounded-control border border-line p-2.5">
+                    <div key={keyOf(it)} className="rounded-control border border-line p-2.5">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <div className="truncate text-sm font-semibold text-ink">{it.ma_phan}{it.ten_khach_hang ? ` · ${it.ten_khach_hang}` : ''}</div>
@@ -245,6 +300,7 @@ export default function KeHoachTuDongPage() {
                           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-soft">
                             <Badge tone="info">{it.ma_dot_vai}</Badge>
                             <span>SL {fmtNum(it.so_luong_vai_ve)}</span>
+                            <span className="font-medium text-primary">còn {fmtNum(conOf(it))}</span>
                             {bc.ten_chuyen && <span>· {bc.ten_chuyen}</span>}
                             {it.ngay_ke_hoach && <span className="inline-flex items-center gap-0.5"><Icon name="calendar-days" size={11} />{fmtDate(it.ngay_ke_hoach)}</span>}
                             {it.han_giao_hang && <span>· hạn {fmtDate(it.han_giao_hang)}</span>}
@@ -252,8 +308,14 @@ export default function KeHoachTuDongPage() {
                           {it.tra_ve_ly_do && <div className="mt-1"><Badge tone="danger" title={it.tra_ve_ly_do}>Test Run trả về</Badge></div>}
                         </div>
                         {canRelease && (
-                          <Button variant="secondary" className="!px-3 !py-1.5 !text-xs shrink-0" loading={busyId === it.dot_vai_id}
-                            onClick={() => releaseOne(it)}>Xác nhận</Button>
+                          <div className="flex shrink-0 flex-col items-end gap-1">
+                            <Input type="number" min="1" max={conOf(it)}
+                              value={qtyMap[it.dot_vai_id] ?? String(conOf(it))}
+                              onChange={(e) => setQtyMap((m) => ({ ...m, [it.dot_vai_id]: e.target.value }))}
+                              className="!w-20 !py-1 text-right text-xs" title="SL release lần này" />
+                            <Button variant="secondary" className="!px-3 !py-1 !text-xs" loading={busyId === it.dot_vai_id}
+                              onClick={() => releaseOne(it)}>Xác nhận</Button>
+                          </div>
                         )}
                       </div>
                     </div>
