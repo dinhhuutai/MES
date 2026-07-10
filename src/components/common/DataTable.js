@@ -1,11 +1,23 @@
+import { useState, useEffect } from 'react';
 import Icon from './Icon';
+import Pagination from './Pagination';
 
 // columns: [{ key, header, render?(row), className?, headerClassName?, selection? }]
 //   - selection: true → cột chọn (checkbox); được render TRƯỚC cột STT.
 // sttStart: nếu là số → hiện cột "STT" bắt đầu từ sttStart+1 (truyền (page-1)*limit để liên tục giữa các trang).
 // rowClassName(row): trả class nền theo hàng (vd tô màu cảnh báo SLA).
+// pageSize: PHÂN TRANG CLIENT-SIDE (mặc định 20/trang). Đặt 0 nếu trang tự phân trang server (có <Pagination> riêng).
 // Responsive: md+ hiển thị dạng BẢNG; dưới md tự đổi sang dạng THẺ (card) cho mobile/tablet.
-export default function DataTable({ columns, rows, loading, rowKey = 'id', emptyText = 'Không có dữ liệu', onRowClick, sttStart, rowClassName }) {
+export default function DataTable({ columns, rows, loading, rowKey = 'id', emptyText = 'Không có dữ liệu', onRowClick, sttStart, rowClassName, pageSize = 20 }) {
+  const allRows = rows || [];
+  const clientPaged = pageSize > 0 && allRows.length > pageSize;
+  const [cpage, setCpage] = useState(1);
+  const totalPages = clientPaged ? Math.ceil(allRows.length / pageSize) : 1;
+  useEffect(() => { setCpage(1); }, [allRows.length]); // đổi số dòng (lọc/tải mới) → về trang 1
+  const safePage = Math.min(Math.max(cpage, 1), totalPages);
+  const viewRows = clientPaged ? allRows.slice((safePage - 1) * pageSize, safePage * pageSize) : allRows;
+  const sttBase = (typeof sttStart === 'number' ? sttStart : 0) + (clientPaged ? (safePage - 1) * pageSize : 0);
+
   const showStt = typeof sttStart === 'number';
   const selCols = columns.filter((c) => c.selection);
   const restCols = columns.filter((c) => !c.selection);
@@ -19,8 +31,10 @@ export default function DataTable({ columns, rows, loading, rowKey = 'id', empty
   // Padding/kích thước co theo bề rộng: laptop (md→xl) gọn để đỡ kéo ngang; chỉ màn RẤT rộng (2xl+) mới giãn.
   const PAD_H = 'px-1.5 py-2 lg:px-2.5 2xl:px-4 2xl:py-3 text-[10px] lg:text-[11px] 2xl:text-xs font-semibold uppercase tracking-tight lg:tracking-wide text-ink-soft';
   const PAD_C = 'px-1.5 py-1.5 lg:px-2.5 lg:py-2 2xl:px-4 2xl:py-3 align-middle';
+  // Header dính đỉnh (sticky top-0) để cuộn dọc trong bảng vẫn thấy tiêu đề.
+  // sticky (cột thao tác ghim phải) → thêm right-0 + z cao hơn để đè phần thân.
   const renderHeader = (c, sticky) => (
-    <th key={c.key} className={`${PAD_H} ${sticky ? 'sticky right-0 z-10 bg-surface-muted shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.15)]' : ''} ${c.headerClassName || ''}`}>
+    <th key={c.key} className={`${PAD_H} sticky top-0 bg-surface-muted ${sticky ? 'right-0 z-30 shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.15)]' : 'z-20'} ${c.headerClassName || ''}`}>
       {c.header}
     </th>
   );
@@ -34,13 +48,13 @@ export default function DataTable({ columns, rows, loading, rowKey = 'id', empty
     <div>
       {/* ===== BẢNG (md trở lên) ===== */}
       <div className="hidden md:block card overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[calc(100vh-13rem)]">
           <table className="w-full text-[11px] lg:text-[12px] 2xl:text-sm">
             <thead>
               <tr className="border-b border-line bg-surface-muted/60 text-left">
                 {selCols.map(renderHeader)}
                 {showStt && (
-                  <th className="px-1.5 py-2 lg:px-2.5 2xl:px-4 2xl:py-3 text-[10px] lg:text-[11px] 2xl:text-xs font-semibold uppercase tracking-tight lg:tracking-wide text-ink-soft w-10 text-right">STT</th>
+                  <th className="sticky top-0 z-20 bg-surface-muted px-1.5 py-2 lg:px-2.5 2xl:px-4 2xl:py-3 text-[10px] lg:text-[11px] 2xl:text-xs font-semibold uppercase tracking-tight lg:tracking-wide text-ink-soft w-10 text-right">STT</th>
                 )}
                 {bodyCols.map((c) => renderHeader(c))}
                 {trailingActions.map((c) => renderHeader(c, true))}
@@ -51,15 +65,15 @@ export default function DataTable({ columns, rows, loading, rowKey = 'id', empty
                 <tr><td colSpan={totalCols} className="px-4 py-12 text-center text-ink-soft">
                   <Icon name="loader" size={22} className="mx-auto animate-spin" />
                 </td></tr>
-              ) : rows.length === 0 ? (
+              ) : allRows.length === 0 ? (
                 <tr><td colSpan={totalCols} className="px-4 py-12 text-center text-ink-soft">{emptyText}</td></tr>
               ) : (
-                rows.map((row, i) => (
+                viewRows.map((row, i) => (
                   <tr key={row[rowKey]} onClick={onRowClick ? () => onRowClick(row) : undefined}
                     className={`border-b border-line/70 transition hover:bg-surface-muted/40 ${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : ''}`}>
                     {selCols.map((c) => renderCell(c, row))}
                     {showStt && (
-                      <td className="px-1.5 py-1.5 lg:px-2.5 lg:py-2 2xl:px-4 2xl:py-3 align-middle text-right tabular-nums text-ink-soft">{sttStart + i + 1}</td>
+                      <td className="px-1.5 py-1.5 lg:px-2.5 lg:py-2 2xl:px-4 2xl:py-3 align-middle text-right tabular-nums text-ink-soft">{sttBase + i + 1}</td>
                     )}
                     {bodyCols.map((c) => renderCell(c, row))}
                     {trailingActions.map((c) => renderCell(c, row, true))}
@@ -75,10 +89,10 @@ export default function DataTable({ columns, rows, loading, rowKey = 'id', empty
       <div className="space-y-2.5 md:hidden">
         {loading ? (
           <div className="card p-8 text-center text-ink-soft"><Icon name="loader" size={22} className="mx-auto animate-spin" /></div>
-        ) : rows.length === 0 ? (
+        ) : allRows.length === 0 ? (
           <div className="card p-8 text-center text-ink-soft">{emptyText}</div>
         ) : (
-          rows.map((row, i) => {
+          viewRows.map((row, i) => {
             // Cột không có tiêu đề (header rỗng) coi là "hành động" → xuống cuối, không nhãn.
             const labelCols = restCols.filter((c) => c.header);
             const actionCols = restCols.filter((c) => !c.header);
@@ -90,7 +104,7 @@ export default function DataTable({ columns, rows, loading, rowKey = 'id', empty
                     <div className="flex items-center gap-2">
                       {selCols.map((c) => <span key={c.key}>{cellValue(c, row)}</span>)}
                     </div>
-                    {showStt && <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs font-medium text-ink-soft">#{sttStart + i + 1}</span>}
+                    {showStt && <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs font-medium text-ink-soft">#{sttBase + i + 1}</span>}
                   </div>
                 )}
                 <div className="divide-y divide-line/60">
@@ -111,6 +125,10 @@ export default function DataTable({ columns, rows, loading, rowKey = 'id', empty
           })
         )}
       </div>
+
+      {clientPaged && (
+        <Pagination page={safePage} totalPages={totalPages} total={allRows.length} onPage={setCpage} />
+      )}
     </div>
   );
 }

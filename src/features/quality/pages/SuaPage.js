@@ -8,6 +8,7 @@ import SidePanel from '../../../components/common/SidePanel';
 import Toast from '../../../components/common/Toast';
 import Icon from '../../../components/common/Icon';
 import QrScanner from '../../../components/common/QrScanner';
+import DateRangePicker from '../../../components/common/DateRangePicker';
 import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
 import { Field, Input } from '../../../components/common/controls';
@@ -30,7 +31,11 @@ const FILTER_FIELDS = [
   { key: 'kichVai', label: 'Kích vải' },
   { key: 'kichPhim', label: 'Kích phim' },
 ];
-const FIELD_LABEL = { ...Object.fromEntries(FILTER_FIELDS.map((f) => [f.key, f.label])), ngay: 'Ngày in tem' };
+const FIELD_LABEL = { ...Object.fromEntries(FILTER_FIELDS.map((f) => [f.key, f.label])) };
+const todayStr = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
 export default function SuaPage() {
   const { can } = usePermissions();
@@ -42,6 +47,7 @@ export default function SuaPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState({});
+  const [range, setRange] = useState(() => ({ from: todayStr(), to: todayStr() }));
   const [showFilters, setShowFilters] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(empty);
@@ -51,12 +57,13 @@ export default function SuaPage() {
   const [scanOpen, setScanOpen] = useState(false);
 
   const filtersKey = useMemo(() => JSON.stringify(filters), [filters]);
+  const rangeKey = useMemo(() => `${range.from || ''}|${range.to || ''}`, [range]);
   const activeFilters = useMemo(() => Object.entries(filters).filter(([, v]) => v), [filters]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await listSuaCandidates({ search, ...filters });
+      const res = await listSuaCandidates({ search, ...filters, ngayTu: range.from || undefined, ngayDen: range.to || undefined });
       setRows(res.data);
     } catch (e) {
       show(e.message || 'Lỗi tải', 'error');
@@ -64,7 +71,7 @@ export default function SuaPage() {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, filtersKey, show]);
+  }, [search, filtersKey, rangeKey, show]);
 
   const setField = (key, value) => setFilters((f) => ({ ...f, [key]: value }));
   const clearFilters = () => setFilters({});
@@ -127,12 +134,19 @@ export default function SuaPage() {
 
   const columns = [
     { key: 'ma_tem', header: 'Tem', render: (r) => <Badge tone="info">{r.ma_tem}</Badge> },
-    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
-    { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
+    { key: 'khach_don', header: 'Khách hàng · Đơn hàng', render: (r) => (
+      <div className="leading-tight">
+        <div className="font-medium text-ink">{r.ten_khach_hang || '—'}</div>
+        <div className="text-[10px] text-ink-soft">{r.ma_don_hang || '—'}</div>
+      </div>
+    ) },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
-    { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
-    { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
-    { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
+    { key: 'mau_kich', header: 'Màu · Kích (vải/phim)', render: (r) => (
+      <div className="leading-tight">
+        <div className="text-ink">{r.mau_vai || '—'}</div>
+        <div className="text-[10px] text-ink-soft">{[r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—'}</div>
+      </div>
+    ) },
     { key: 'ten_chuyen', header: 'Chuyền', render: (r) => r.ten_chuyen || '—' },
     { key: 'ca', header: 'Ca SX', render: (r) => (r.ca ? <Badge tone="default">{r.ca}</Badge> : '—') },
     { key: 'nguoi_truoc', header: 'Người XN trạm trước', render: (r) => r.nguoi_truoc || '—' },
@@ -155,9 +169,8 @@ export default function SuaPage() {
         {canSua && <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét QR</Button>}
         <div className="flex items-center gap-1.5 text-xs text-ink-soft">
           <span>Ngày in tem</span>
-          <input type="date" value={filters.ngay || ''} onChange={(e) => setField('ngay', e.target.value)}
-            className="h-9 rounded-input border border-line bg-surface px-2 text-sm" />
-          {filters.ngay && <button type="button" onClick={() => setField('ngay', '')} className="text-ink-soft hover:text-danger" aria-label="Xóa lọc ngày"><Icon name="x" size={14} /></button>}
+          <div className="w-60"><DateRangePicker value={range} onChange={setRange} placeholder="Chọn khoảng ngày in tem" /></div>
+          {(range.from || range.to) && <button type="button" onClick={() => setRange({ from: '', to: '' })} className="text-ink-soft hover:text-danger" aria-label="Bỏ lọc ngày"><Icon name="x" size={14} /></button>}
         </div>
         <Button variant={showFilters || activeFilters.length ? 'secondary' : 'ghost'} icon="filter"
           onClick={() => setShowFilters((v) => !v)}>Bộ lọc{activeFilters.length ? ` (${activeFilters.length})` : ''}</Button>

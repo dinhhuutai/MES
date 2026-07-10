@@ -23,7 +23,7 @@ const LOAI_TONE = {
   'Bắt đầu SX': 'info', 'In tem': 'default', KCS: 'warning', Sửa: 'warning', OQC: 'success',
   'QC in-line': 'info', Giao: 'success',
 };
-const LIMIT = 50;
+const LIMIT = 20;
 
 export default function ActivityLogPage() {
   const { toast, show } = useToast();

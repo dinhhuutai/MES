@@ -235,7 +235,10 @@ export default function ReportGrid({
                   dd.dam ? 'font-semibold' : '',
                   dd.nghieng ? 'italic' : '',
                   dd.vien_dam ? 'border-2 border-ink/60' : '',
-                  ALIGN_CLS[dd.can_le] || (cell?.loai === 'so' || mode === 'view' ? 'text-right tabular-nums' : 'text-left'),
+                  // Mặc định: SỐ căn phải (tabular), CHỮ/còn lại căn TRÁI (kể cả chế độ Xem).
+                  ALIGN_CLS[dd.can_le]
+                    || ((cell?.loai === 'so' || (mode === 'view' && res && res.kieu !== 'text' && res.kieu !== 'bool' && !res.loi))
+                      ? 'text-right tabular-nums' : 'text-left'),
                   editable && mode === 'design' ? 'cursor-cell' : (mode === 'view' ? '' : 'cursor-pointer'),
                 ].filter(Boolean).join(' ');
 

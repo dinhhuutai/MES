@@ -13,6 +13,7 @@ import ReportGrid, { parseKey, cellKey } from '../components/ReportGrid';
 import { ColorPopover, BorderPopover } from '../components/formatControls';
 import ConditionalFormatModal from '../components/ConditionalFormatModal';
 import MetricPalette from '../components/MetricPalette';
+import MetricPickerModal from '../components/MetricPickerModal';
 import {
   getReport, getMetrics, updateReport, undoReport, renderReport, reportHistory,
 } from '../../../services/baoCaoService';
@@ -72,6 +73,7 @@ export default function ReportDesignerPage() {
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [catalogQ, setCatalogQ] = useState('');
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [metricPickOpen, setMetricPickOpen] = useState(false); // modal chọn chỉ số cho ô
   const [colorPop, setColorPop] = useState(null); // 'chu' | 'nen' | null
   const [borderPop, setBorderPop] = useState(false);
   const [cfOpen, setCfOpen] = useState(false);
@@ -377,9 +379,9 @@ export default function ReportDesignerPage() {
         {mode === 'view' && <Badge tone="info">Chế độ xem — hiển thị giá trị đã tính</Badge>}
       </div>
 
-      {/* Thanh công cụ định dạng (Google-Sheets-like) */}
+      {/* Thanh công cụ định dạng (Google-Sheets-like) — dính đỉnh khi cuộn */}
       {canDesign && mode === 'design' && (
-        <div className="mb-3 flex flex-wrap items-center gap-1.5 rounded-card border border-line bg-surface px-3 py-2">
+        <div className="sticky top-0 z-30 mb-3 flex flex-wrap items-center gap-1.5 rounded-card border border-line bg-surface px-3 py-2 shadow-card">
           <FmtBtn title="In đậm" onClick={() => applyFormat({ dam: !(cell?.dinh_dang?.dam) })} active={cell?.dinh_dang?.dam}><b>B</b></FmtBtn>
           <FmtBtn title="In nghiêng" onClick={() => applyFormat({ nghieng: !(cell?.dinh_dang?.nghieng) })} active={cell?.dinh_dang?.nghieng}><i>I</i></FmtBtn>
           <FmtBtn title="Gạch chân" onClick={() => applyFormat({ gach_chan: !(cell?.dinh_dang?.gach_chan) })} active={cell?.dinh_dang?.gach_chan}><span className="underline">U</span></FmtBtn>
@@ -496,13 +498,11 @@ export default function ReportDesignerPage() {
                   {cell?.loai === 'metric' && (
                     <>
                       <Field label="Chọn dữ liệu">
-                        <Select value={cell.metric || ''} onChange={(e) => patchCell(anchor, { loai: 'metric', metric: e.target.value })}>
-                          {Object.entries(metricGroups).map(([nhom, list]) => (
-                            <optgroup key={nhom} label={nhom}>
-                              {list.map((m) => <option key={m.ma} value={m.ma}>{m.ten}</option>)}
-                            </optgroup>
-                          ))}
-                        </Select>
+                        <button type="button" onClick={() => setMetricPickOpen(true)}
+                          className="flex w-full items-center justify-between gap-2 rounded-input border border-line bg-surface px-3 py-2 text-left text-sm hover:border-primary">
+                          <span className="min-w-0 truncate text-ink">{metricsByMa[cell.metric]?.ten || '— Bấm để chọn chỉ số —'}</span>
+                          <Icon name="chevron-down" size={16} className="shrink-0 text-ink-soft" />
+                        </button>
                       </Field>
                       {metricsByMa[cell.metric] && (() => {
                         const m = metricsByMa[cell.metric];
@@ -608,6 +608,10 @@ export default function ReportDesignerPage() {
           );
         })()}
       </Modal>
+
+      <MetricPickerModal open={metricPickOpen} metricGroups={metricGroups} current={cell?.metric}
+        onPick={(ma) => { if (anchor) patchCell(anchor, { loai: 'metric', metric: ma }); }}
+        onClose={() => setMetricPickOpen(false)} />
 
       <ConditionalFormatModal open={cfOpen} onClose={() => setCfOpen(false)}
         rules={grid.dinh_dang?.dieu_kien || []} selectionRange={selectionRange} onSave={saveDieuKien} />

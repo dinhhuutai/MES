@@ -17,6 +17,11 @@ export const release1Done = (date) => client.get('/planning/release1/done', { pa
 export const listReleaseSets = (params) => client.get('/planning/release1/sets', { params });
 export const releaseSet = (setId, body) => client.post(`/planning/release1/set/${setId}`, body);
 
+// Gộp số lượng đợt vải
+export const listGopCandidates = (params) => client.get('/planning/gop/candidates', { params });
+export const gopDotVai = (body) => client.post('/planning/gop', body);
+export const gopHistory = (date) => client.get('/planning/gop/history', { params: { date } });
+
 // Test Run
 export const listTestRunCandidates = (params) => client.get('/planning/test-run/candidates', { params });
 export const getLenhDetail = (id) => client.get(`/planning/lenh/${id}`);

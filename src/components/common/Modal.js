@@ -1,7 +1,7 @@
 import { Dialog } from '@headlessui/react';
 import Icon from './Icon';
 
-const SIZES = { sm: 'max-w-md', md: 'max-w-xl', lg: 'max-w-3xl' };
+const SIZES = { sm: 'max-w-md', md: 'max-w-xl', lg: 'max-w-3xl', xl: 'max-w-5xl' };
 
 export default function Modal({ open, onClose, title, children, footer, size = 'md' }) {
   return (

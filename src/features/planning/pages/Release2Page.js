@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
 import Badge from '../../../components/common/Badge';
@@ -7,6 +7,7 @@ import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import Toast from '../../../components/common/Toast';
 import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
+import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import useNghenMap from '../../../hooks/useNghenMap';
@@ -14,6 +15,13 @@ import { slaRowClass } from '../../../utils/sla';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 import { listRelease2Candidates, approveRelease2, approveRelease2Batch, planHistory, release2Done } from '../../../services/planningService';
 import { fmtNum, fmtDate } from '../../../utils/format';
+
+const FILTER_FIELDS = [
+  { key: 'codePhan', label: 'Code phần', col: 'ma_phan' }, { key: 'khach', label: 'Khách hàng', col: 'ten_khach_hang' },
+  { key: 'don', label: 'Đơn hàng', col: 'ma_don_hang' }, { key: 'maHang', label: 'Mã hàng', col: 'ma_hang' },
+  { key: 'mauVai', label: 'Màu vải', col: 'mau_vai' }, { key: 'kichVai', label: 'Kích vải', col: 'kich_vai' },
+  { key: 'kichPhim', label: 'Kích phim', col: 'kich_phim' },
+];
 
 export default function Release2Page() {
   const { can } = usePermissions();
@@ -29,11 +37,15 @@ export default function Release2Page() {
   const [histOpen, setHistOpen] = useState(false);
   const [doneOpen, setDoneOpen] = useState(false);
   const [selected, setSelected] = useState(() => new Set());
+  const [filters, setFilters] = useState({});
+  const [showFilters, setShowFilters] = useState(false);
+  const filtered = useMemo(() => filterRows(rows, filters, FILTER_FIELDS), [rows, filters]);
+  const activeCount = Object.values(filters).filter(Boolean).length;
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await listRelease2Candidates({ search, limit: 50 });
+      const res = await listRelease2Candidates({ search, limit: 500 });
       setRows(res.data.items);
       setSelected(new Set());
     } catch (e) {
@@ -85,17 +97,25 @@ export default function Release2Page() {
           onClick={(e) => e.stopPropagation()}
           onChange={() => toggleOne(r.id)} aria-label="Chọn lệnh" />
       ) }] : []),
-    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
-    { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
+    { key: 'khach_don', header: 'Khách hàng · Đơn hàng', render: (r) => (
+      <div className="leading-tight">
+        <div className="font-medium text-ink">{r.ten_khach_hang || '—'}</div>
+        <div className="text-[10px] text-ink-soft">{r.ma_don_hang || '—'}</div>
+      </div>
+    ) },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => (
       <div>{r.ma_hang || '—'}{r.so_dot_vai > 1 && <div className="mt-0.5"><Badge tone="warning">Gom set ({r.so_dot_vai} đợt)</Badge></div>}</div>
     ) },
-    { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
-    { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
-    { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
+    { key: 'mau_kich', header: 'Màu · Kích (vải/phim)', render: (r) => (
+      <div className="leading-tight">
+        <div className="text-ink">{r.mau_vai || '—'}</div>
+        <div className="text-[10px] text-ink-soft">{[r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—'}</div>
+      </div>
+    ) },
     { key: 'loai_dot_vai', header: 'Loại đợt vải', render: (r) => <LoaiDotVaiBadge value={r.loai_dot_vai} /> },
-    { key: 'so_luong_don_hang', header: 'SLĐH', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong_don_hang) },
-    { key: 'so_luong_vai_ve', header: 'SLNV', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong_vai_ve) },
+    { key: 'sl_vai_don', header: 'SL vải về / đơn', className: 'text-right tabular-nums whitespace-nowrap', render: (r) => (
+      <span><b className="text-ink">{fmtNum(r.so_luong_vai_ve)}</b><span className="text-ink-soft"> / {fmtNum(r.so_luong_don_hang)}</span></span>
+    ) },
     { key: 'ngay_vai_ve', header: 'Ngày nhận vải', render: (r) => fmtDate(r.ngay_vai_ve) },
     { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => fmtDate(r.han_giao_hang) },
     { key: 'chuyen', header: 'Chuyền', render: (r) => r.ten_chuyen || '—' },
@@ -113,12 +133,15 @@ export default function Release2Page() {
         {canApprove && selected.size > 0 && (
           <Button onClick={() => setConfirm({ batch: true })}>Duyệt Release 2 ({selected.size})</Button>
         )}
+        <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
-        <Badge tone="info">{rows.length} chờ duyệt</Badge>
+        <Badge tone="info">{filtered.length} chờ duyệt</Badge>
       </Toolbar>
 
-      <DataTable columns={columns} rows={rows} loading={loading} sttStart={0}
+      <FieldFilters fields={FILTER_FIELDS} values={filters} onField={(k, v) => setFilters((f) => ({ ...f, [k]: v }))} onClear={() => setFilters({})} open={showFilters} />
+
+      <DataTable columns={columns} rows={filtered} loading={loading} sttStart={0}
         rowClassName={(r) => slaRowClass(statusLenh(r.id))}
         emptyText="Không có lệnh nào chờ Release 2" />
 

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import Toolbar from '../../../components/common/Toolbar';
 import OwnerHint from '../../../components/common/OwnerHint';
 import DataTable from '../../../components/common/DataTable';
@@ -11,6 +11,8 @@ import DonePanel from '../../../components/common/DonePanel';
 import { Field, Input, Textarea } from '../../../components/common/controls';
 import SearchableSelect from '../../../components/common/SearchableSelect';
 import QrScanner from '../../../components/common/QrScanner';
+import DateRangePicker from '../../../components/common/DateRangePicker';
+import FieldFilters, { FilterToggle } from '../../../components/common/FieldFilters';
 import Icon from '../../../components/common/Icon';
 import useToast from '../../../hooks/useToast';
 import useNow from '../../../hooks/useNow';
@@ -19,6 +21,15 @@ import usePermissions from '../../../hooks/usePermissions';
 import { listOqcCandidates, recordOqc, oqcHistory, oqcDone, listGiaoDacBietActive, returnOqcToKcs } from '../../../services/qualityService';
 import { listUsers } from '../../../services/userService';
 import { fmtNum, baseMaTem } from '../../../utils/format';
+
+const todayStr = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+const FILTER_FIELDS = [
+  { key: 'khach', label: 'Khách hàng' }, { key: 'don', label: 'Đơn hàng' }, { key: 'maHang', label: 'Mã hàng' },
+  { key: 'mauVai', label: 'Màu vải' }, { key: 'kichVai', label: 'Kích vải' }, { key: 'kichPhim', label: 'Kích phim' },
+];
 
 export default function OqcPage() {
   const { can } = usePermissions();
@@ -29,7 +40,9 @@ export default function OqcPage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [ngay, setNgay] = useState('');
+  const [range, setRange] = useState(() => ({ from: todayStr(), to: todayStr() }));
+  const [filters, setFilters] = useState({});
+  const [showFilters, setShowFilters] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ soLuongKiem: '', soLuongDat: '', ketQua: 'DAT', ownerChoGiaoId: '', truongHopGiaoId: '', lyDoChoGiao: '' });
   const [saving, setSaving] = useState(false);
@@ -44,17 +57,24 @@ export default function OqcPage() {
   useEffect(() => { listUsers({ limit: 500 }).then((r) => setUsers(r.data.items || r.data || [])).catch(() => {}); }, []);
   useEffect(() => { listGiaoDacBietActive().then((r) => setTruongHopList(r.data || [])).catch(() => {}); }, []);
 
+  const rangeKey = useMemo(() => `${range.from || ''}|${range.to || ''}`, [range]);
+  const filtersKey = useMemo(() => JSON.stringify(filters), [filters]);
+  const activeCount = useMemo(() => Object.values(filters).filter(Boolean).length, [filters]);
+  const setField = (k, v) => setFilters((f) => ({ ...f, [k]: v }));
+  const clearFilters = () => setFilters({});
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await listOqcCandidates({ search, ngay: ngay || undefined });
+      const res = await listOqcCandidates({ search, ...filters, ngayTu: range.from || undefined, ngayDen: range.to || undefined });
       setRows(res.data);
     } catch (e) {
       show(e.message || 'Lỗi tải', 'error');
     } finally {
       setLoading(false);
     }
-  }, [search, ngay, show]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, filtersKey, rangeKey, show]);
 
   useEffect(() => {
     const t = setTimeout(load, 250);
@@ -142,12 +162,19 @@ export default function OqcPage() {
         <span className="text-[11px] text-ink-soft">{r.nguon === 'SUA' ? 'đã sửa' : 'từ KCS'}</span>
       </div>
     ) },
-    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
-    { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
+    { key: 'khach_don', header: 'Khách hàng · Đơn hàng', render: (r) => (
+      <div className="leading-tight">
+        <div className="font-medium text-ink">{r.ten_khach_hang || '—'}</div>
+        <div className="text-[10px] text-ink-soft">{r.ma_don_hang || '—'}</div>
+      </div>
+    ) },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
-    { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
-    { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
-    { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
+    { key: 'mau_kich', header: 'Màu · Kích (vải/phim)', render: (r) => (
+      <div className="leading-tight">
+        <div className="text-ink">{r.mau_vai || '—'}</div>
+        <div className="text-[10px] text-ink-soft">{[r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—'}</div>
+      </div>
+    ) },
     { key: 'chuyen', header: 'Chuyền', render: (r) => r.ten_chuyen || '—' },
     { key: 'nguoi_truoc', header: 'Người XN trạm trước', render: (r) => r.nguoi_truoc || '—' },
     { key: 'so_luong', header: 'SL in', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
@@ -163,14 +190,16 @@ export default function OqcPage() {
         {canOqc && <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét QR</Button>}
         <div className="flex items-center gap-1.5 text-xs text-ink-soft">
           <span>Ngày in tem</span>
-          <input type="date" value={ngay} onChange={(e) => setNgay(e.target.value)}
-            className="h-9 rounded-input border border-line bg-surface px-2 text-sm" />
-          {ngay && <button type="button" onClick={() => setNgay('')} className="text-ink-soft hover:text-danger" aria-label="Xóa lọc ngày"><Icon name="x" size={14} /></button>}
+          <div className="w-60"><DateRangePicker value={range} onChange={setRange} placeholder="Chọn khoảng ngày in tem" /></div>
+          {(range.from || range.to) && <button type="button" onClick={() => setRange({ from: '', to: '' })} className="text-ink-soft hover:text-danger" aria-label="Bỏ lọc ngày"><Icon name="x" size={14} /></button>}
         </div>
+        <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="warning">{displayRows.length} dòng chờ OQC</Badge>
       </Toolbar>
+
+      <FieldFilters fields={FILTER_FIELDS} values={filters} onField={setField} onClear={clearFilters} open={showFilters} />
 
       <OwnerHint tram="OQC" className="mb-3" />
 

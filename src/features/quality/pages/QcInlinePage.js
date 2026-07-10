@@ -1,6 +1,7 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
+import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import SidePanel from '../../../components/common/SidePanel';
@@ -16,6 +17,13 @@ import {
   listInlineCandidates, listInlineLoaiLoi, recordInline, inlineHistory, inlineDone,
 } from '../../../services/qualityService';
 import { fmtNum } from '../../../utils/format';
+
+const FILTER_FIELDS = [
+  { key: 'codePhan', label: 'Code phần', col: 'ma_phan' }, { key: 'khach', label: 'Khách hàng', col: 'ten_khach_hang' },
+  { key: 'don', label: 'Đơn hàng', col: 'ma_don_hang' }, { key: 'maHang', label: 'Mã hàng', col: 'ma_hang' },
+  { key: 'mauVai', label: 'Màu vải', col: 'mau_vai' }, { key: 'kichVai', label: 'Kích vải', col: 'kich_vai' },
+  { key: 'kichPhim', label: 'Kích phim', col: 'kich_phim' },
+];
 
 export default function QcInlinePage() {
   const { can } = usePermissions();
@@ -34,6 +42,10 @@ export default function QcInlinePage() {
   const [form, setForm] = useState({ soLuongMau: '', soLuongLoi: '', ketQua: 'DAT', nguyenNhan: '', khacPhuc: '' });
   const [loiSel, setLoiSel] = useState({}); // loaiLoiId -> soLuong (string), có mặt = đã chọn
   const [saving, setSaving] = useState(false);
+  const [filters, setFilters] = useState({});
+  const [showFilters, setShowFilters] = useState(false);
+  const filtered = useMemo(() => filterRows(rows, filters, FILTER_FIELDS), [rows, filters]);
+  const activeCount = Object.values(filters).filter(Boolean).length;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -92,11 +104,19 @@ export default function QcInlinePage() {
   const columns = [
     { key: 'ma_chuyen', header: 'Chuyền', render: (r) => <Badge tone="info">{r.ma_chuyen || '—'}</Badge> },
     { key: 'ma_phan', header: 'Code phần', className: 'font-medium text-ink', render: (r) => r.ma_phan || '—' },
-    { key: 'ten_khach_hang', header: 'Khách hàng', render: (r) => r.ten_khach_hang || '—' },
+    { key: 'khach_don', header: 'Khách hàng · Đơn hàng', render: (r) => (
+      <div className="leading-tight">
+        <div className="font-medium text-ink">{r.ten_khach_hang || '—'}</div>
+        <div className="text-[10px] text-ink-soft">{r.ma_don_hang || '—'}</div>
+      </div>
+    ) },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
-    { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
-    { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
-    { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
+    { key: 'mau_kich', header: 'Màu · Kích (vải/phim)', render: (r) => (
+      <div className="leading-tight">
+        <div className="text-ink">{r.mau_vai || '—'}</div>
+        <div className="text-[10px] text-ink-soft">{[r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—'}</div>
+      </div>
+    ) },
     { key: 'progress', header: 'Tiến độ', className: 'text-right tabular-nums', render: (r) => `${fmtNum(r.printed)} / ${fmtNum(r.target)}` },
     { key: 'so_lan_kiem', header: 'Lần kiểm', className: 'text-right', render: (r) => r.so_lan_kiem },
     { key: 'actions', header: '', className: 'text-right whitespace-nowrap', render: (r) =>
@@ -108,11 +128,14 @@ export default function QcInlinePage() {
       <Toolbar title="QC in line" subtitle="Kiểm chất lượng tại chuyền — phần in đang sản xuất"
         search={search} onSearch={setSearch} searchPlaceholder="Tìm code phần, mã hàng, màu/kích, mã lệnh/phiếu...">
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
+        <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
-        <Badge tone="info">{rows.length} đang chạy</Badge>
+        <Badge tone="info">{filtered.length} đang chạy</Badge>
       </Toolbar>
 
-      <DataTable columns={columns} rows={rows} loading={loading} rowKey="phieu_id" onRowClick={canQc ? open : undefined}
+      <FieldFilters fields={FILTER_FIELDS} values={filters} onField={(k, v) => setFilters((f) => ({ ...f, [k]: v }))} onClear={() => setFilters({})} open={showFilters} />
+
+      <DataTable columns={columns} rows={filtered} loading={loading} rowKey="phieu_id" onRowClick={canQc ? open : undefined}
         rowClassName={(r) => slaRowClass(statusLenh(r.lenh_id))}
         emptyText="Không có phần in nào đang sản xuất" />
 

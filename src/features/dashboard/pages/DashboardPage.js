@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList, Legend } from 'recharts';
 import Icon from '../../../components/common/Icon';
 import Badge from '../../../components/common/Badge';
 import Toast from '../../../components/common/Toast';
@@ -7,9 +7,69 @@ import SidePanel from '../../../components/common/SidePanel';
 import KcsBreakdown from '../../../components/common/KcsBreakdown';
 import useToast from '../../../hooks/useToast';
 import useSocketEvent from '../../../hooks/useSocketEvent';
-import { getActivity, getStageCounts, getBang2, getTinhTrangPhanIn, getHoanThanhHomNay } from '../../../services/dashboardService';
+import { getActivity, getStageCounts, getBang2, getTinhTrangPhanIn, getHoanThanhHomNay, getChartDetail } from '../../../services/dashboardService';
 import { fmtNum } from '../../../utils/format';
 import { fmtDur } from '../../../utils/sla';
+
+// Trạm cho các biểu đồ theo trạm (nghẽn / tổng chưa giao / gộp). keys = stage của stageCounts; trams = ma_tram (bản đồ nghẽn).
+const STATION_BUCKETS = [
+  { label: 'READY', keys: ['READY_KT', 'READY_QA'], trams: ['READY'], color: '#0058be' },
+  { label: 'Release 1', keys: ['RELEASE_1'], trams: [], color: '#6366f1' },
+  { label: 'Test Run', keys: ['TESTRUN_CNSP', 'TESTRUN_QA'], trams: ['TEST_RUN'], color: '#8b5cf6' },
+  { label: 'Release 2', keys: ['RELEASE_2'], trams: [], color: '#0ea5e9' },
+  { label: 'Sản xuất', keys: ['CHO_SAN_XUAT', 'SAN_XUAT', 'CHO_KHO', 'KCS', 'SUA'], trams: ['SAN_XUAT', 'CHO_KHO', 'KIEM', 'SUA'], color: '#f59e0b' },
+  { label: 'OQC', keys: ['OQC'], trams: ['OQC'], color: '#a855f7' },
+  { label: 'Giao', keys: ['DANG_GIAO'], trams: ['FINISH'], color: '#22c55e' }, // "chưa giao" = DANG_GIAO (loại DA_GIAO)
+];
+
+const NUM_LABEL = { fontSize: 11, fill: '#374151', fontWeight: 600 };
+const AXIS_TICK = { fontSize: 11, fill: '#6b7280' };
+
+// Card chứa 1 biểu đồ.
+function ChartCard({ title, children }) {
+  return (
+    <div className="card p-5">
+      <h3 className="mb-4 text-sm font-semibold text-ink">{title}</h3>
+      {children}
+    </div>
+  );
+}
+
+// Biểu đồ cột 1 chuỗi (có số trên đầu cột). data: [{name, value, color?}].
+function SingleBar({ data, height = 300, color = '#0058be', unit = '', angle = -20 }) {
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <BarChart data={data} margin={{ top: 20, right: 8, left: -16, bottom: 8 }}>
+        <XAxis dataKey="name" tick={AXIS_TICK} interval={0} angle={angle} textAnchor="end" height={62} />
+        <YAxis allowDecimals={false} tick={AXIS_TICK} />
+        <Tooltip formatter={(v) => [`${fmtNum(v)}${unit ? ` ${unit}` : ''}`, '']} />
+        <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+          {data.map((d, i) => <Cell key={i} fill={d.color || color} />)}
+          <LabelList dataKey="value" position="top" style={NUM_LABEL} formatter={fmtNum} />
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+// Biểu đồ cột nhiều chuỗi (mỗi nhóm N cột). series: [{key,label,color}].
+function GroupBar({ data, series, height = 320, unit = '' }) {
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <BarChart data={data} margin={{ top: 20, right: 8, left: -16, bottom: 8 }}>
+        <XAxis dataKey="name" tick={AXIS_TICK} interval={0} angle={-20} textAnchor="end" height={62} />
+        <YAxis allowDecimals={false} tick={AXIS_TICK} />
+        <Tooltip formatter={(v, n) => [`${fmtNum(v)}${unit ? ` ${unit}` : ''}`, n]} />
+        <Legend wrapperStyle={{ fontSize: 11 }} />
+        {series.map((s) => (
+          <Bar key={s.key} dataKey={s.key} name={s.label} fill={s.color} radius={[4, 4, 0, 0]}>
+            <LabelList dataKey={s.key} position="top" style={NUM_LABEL} formatter={fmtNum} />
+          </Bar>
+        ))}
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
 
 const fmtTime = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '');
 
@@ -321,17 +381,21 @@ export default function DashboardPage() {
   const [activity, setActivity] = useState([]);
   const [bang2, setBang2] = useState(null);
   const [htDetail, setHtDetail] = useState([]);
+  const [chartDetail, setChartDetail] = useState(null); // OQC + READY breakdown
   const [drill, setDrill] = useState(null);       // chip toàn cục
   const [stageDetail, setStageDetail] = useState(null); // ô giai đoạn
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const [sc, act, b2, ht] = await Promise.allSettled([getStageCounts(), getActivity(), getBang2(), getHoanThanhHomNay()]);
+    const [sc, act, b2, ht, cd] = await Promise.allSettled([
+      getStageCounts(), getActivity(), getBang2(), getHoanThanhHomNay(), getChartDetail(),
+    ]);
     if (sc.status === 'fulfilled') setStages(sc.value.data);
     else show(sc.reason?.message || 'Lỗi tải giai đoạn', 'error');
     if (act.status === 'fulfilled') setActivity(act.value.data);
     if (b2.status === 'fulfilled') setBang2(b2.value.data);
     if (ht.status === 'fulfilled') setHtDetail(ht.value.data);
+    if (cd.status === 'fulfilled') setChartDetail(cd.value.data);
     setLoading(false);
   }, [show]);
 
@@ -345,6 +409,66 @@ export default function DashboardPage() {
     name: c.label, color: c.color,
     value: c.keys.reduce((a, k) => a + (stages?.stages?.[k]?.phan_in || 0), 0),
   })), [stages]);
+
+  // Dữ liệu theo trạm: đang ở (stage hiện tại) · nghẽn (bản đồ nghẽn) · tổng chưa giao (lũy kế từ trạm này về sau).
+  const stationData = useMemo(() => {
+    const stageP = (keys) => keys.reduce((a, k) => a + (stages?.stages?.[k]?.phan_in || 0), 0);
+    const dangO = STATION_BUCKETS.map((b) => stageP(b.keys));
+    const nghen = STATION_BUCKETS.map((b) => b.trams.reduce((a, t) => a + (nghenByTram[t] || 0), 0));
+    const tong = dangO.map((_, i) => dangO.slice(i).reduce((a, b) => a + b, 0)); // funnel: chưa giao
+    return STATION_BUCKETS.map((b, i) => ({ name: b.label, color: b.color, dang_o: dangO[i], nghen: nghen[i], tong: tong[i] }));
+  }, [stages, nghenByTram]);
+
+  const prodData = useMemo(() => {
+    const p = (k) => stages?.stages?.[k]?.phan_in || 0;
+    return [
+      { name: 'Chờ chạy', value: p('CHO_SAN_XUAT'), color: '#0ea5e9' },
+      { name: 'Đang chạy', value: p('SAN_XUAT'), color: '#f59e0b' },
+      { name: 'Kiểm', value: p('KCS'), color: '#3b82f6' },
+      { name: 'Sửa', value: p('SUA'), color: '#f97316' },
+    ];
+  }, [stages]);
+
+  const oqcData = useMemo(() => {
+    const o = chartDetail?.oqc || {};
+    return [
+      { name: 'Tem KCS (chờ)', value: o.kcs_cho || 0, color: '#38bdf8' },
+      { name: 'KCS đã XN', value: o.kcs_dat || 0, color: '#0284c7' },
+      { name: 'Tem Sửa (chờ)', value: o.sua_cho || 0, color: '#fbbf24' },
+      { name: 'Sửa đã XN', value: o.sua_dat || 0, color: '#d97706' },
+      { name: 'Tổng (chờ)', value: o.tong_cho || 0, color: '#a78bfa' },
+      { name: 'Tổng đã XN', value: o.tong_dat || 0, color: '#7c3aed' },
+    ];
+  }, [chartDetail]);
+
+  // Đã xác nhận tại trạm: cột 1 = xác nhận HÔM NAY (htDetail theo nhóm checkpoint); cột 2 = đã xác nhận & CHƯA GIAO (BE).
+  const confirmStationData = useMemo(() => {
+    const CONFIRM_STATIONS = [
+      { label: 'READY', key: 'ready', hn: ['Khuôn', 'Film', 'Mực', 'QC xác nhận'] },
+      { label: 'Test Run', key: 'test', hn: ['CNSP xác nhận test', 'QA xác nhận test'] },
+      { label: 'KCS', key: 'kcs', hn: ['KCS'] },
+      { label: 'Sửa', key: 'sua', hn: ['Sửa'] },
+      { label: 'OQC', key: 'oqc', hn: ['OQC'] },
+      { label: 'Giao', key: 'giao', hn: ['Giao'] },
+    ];
+    const sc = chartDetail?.station_confirmed || {};
+    return CONFIRM_STATIONS.map((s) => {
+      const seen = new Set();
+      (htDetail || []).forEach((r) => { if (s.hn.includes(r.nhom)) seen.add(r.phan_in_id || r.doi_tuong); });
+      return { name: s.label, hom_nay: seen.size, chua_giao: sc[s.key] || 0 };
+    });
+  }, [chartDetail, htDetail]);
+
+  const readyData = useMemo(() => {
+    const r = chartDetail?.ready || {};
+    const tong = r.tong || 0;
+    return [
+      { name: 'Film', so_phan_in: tong, da_xn: r.FILM || 0 },
+      { name: 'Khuôn', so_phan_in: tong, da_xn: r.KHUON || 0 },
+      { name: 'Mực', so_phan_in: tong, da_xn: r.MUC || 0 },
+      { name: 'QA', so_phan_in: tong, da_xn: r.QA || 0 },
+    ];
+  }, [chartDetail]);
 
   if (loading) return <div className="py-10 text-center text-ink-soft">Đang tải...</div>;
 
@@ -420,24 +544,47 @@ export default function DashboardPage() {
         })}
       </div>
 
-      {/* Trái: biểu đồ phần in theo checkpoint · Phải: hoạt động gần đây */}
+      {/* Biểu đồ — 2 biểu đồ / hàng; "Hoạt động gần đây" đặt SAU CÙNG */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <div className="card p-5">
-          <h3 className="mb-4 text-sm font-semibold text-ink">Phần in theo checkpoint hiện tại</h3>
-          <ResponsiveContainer width="100%" height={360}>
-            <BarChart data={chartData} margin={{ top: 8, right: 8, left: -16, bottom: 8 }}>
-              <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#6b7280' }} interval={0} angle={-20} textAnchor="end" height={60} />
-              <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#6b7280' }} />
-              <Tooltip formatter={(v) => [`${fmtNum(v)} phần in`, '']} />
-              <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                {chartData.map((d, i) => <Cell key={i} fill={d.color} />)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        <ChartCard title="Phần in theo checkpoint hiện tại">
+          <SingleBar data={chartData} height={340} unit="phần in" />
+        </ChartCard>
 
-        <div className="card p-5">
-          <h3 className="mb-4 text-sm font-semibold text-ink">Hoạt động gần đây</h3>
+        <ChartCard title="Tổng · Đang ở · Nghẽn theo trạm">
+          <GroupBar data={stationData} unit="phần in" series={[
+            { key: 'tong', label: 'Tổng (chưa giao)', color: '#0058be' },
+            { key: 'dang_o', label: 'Đang ở', color: '#22c55e' },
+            { key: 'nghen', label: 'Nghẽn', color: '#ef4444' },
+          ]} />
+        </ChartCard>
+
+        <ChartCard title="Phần in đã xác nhận tại trạm">
+          <GroupBar data={confirmStationData} unit="phần in" series={[
+            { key: 'hom_nay', label: 'Đã XN hôm nay', color: '#22c55e' },
+            { key: 'chua_giao', label: 'Đã XN (chưa giao)', color: '#0058be' },
+          ]} />
+        </ChartCard>
+
+        <ChartCard title="Nghẽn theo trạm">
+          <SingleBar data={stationData.map((s) => ({ name: s.name, value: s.nghen }))} color="#ef4444" unit="phần in" />
+        </ChartCard>
+
+        <ChartCard title="Chi tiết Sản xuất (phần in)">
+          <SingleBar data={prodData} unit="phần in" angle={0} />
+        </ChartCard>
+
+        <ChartCard title="Chi tiết OQC (pcs)">
+          <SingleBar data={oqcData} unit="pcs" />
+        </ChartCard>
+
+        <ChartCard title="READY — số phần in & đã xác nhận">
+          <GroupBar data={readyData} unit="phần in" series={[
+            { key: 'so_phan_in', label: 'Số phần in (ở READY)', color: '#94a3b8' },
+            { key: 'da_xn', label: 'Đã xác nhận', color: '#0058be' },
+          ]} />
+        </ChartCard>
+
+        <ChartCard title="Hoạt động gần đây">
           <div className="max-h-[420px] space-y-3 overflow-y-auto pr-1">
             {activity.length === 0 && <p className="text-sm text-ink-soft">Chưa có hoạt động.</p>}
             {activity.map((a) => (
@@ -450,7 +597,7 @@ export default function DashboardPage() {
               </div>
             ))}
           </div>
-        </div>
+        </ChartCard>
       </div>
 
       {drill && bang2 && <Bang2Panel kind={drill} data={bang2} hoanThanhDetail={htDetail} onClose={() => setDrill(null)} />}

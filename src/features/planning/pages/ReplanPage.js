@@ -52,7 +52,7 @@ export default function ReplanPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await listReplanCandidates({ search, page, limit: 50 });
+      const res = await listReplanCandidates({ search, page, limit: 20 });
       setRows(res.data.items);
       setMeta(res.data.meta);
       setSelected(new Set());

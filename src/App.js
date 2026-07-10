@@ -33,6 +33,7 @@ import GomSetPage from './features/technical-ready/pages/GomSetPage';
 import KeHoachTuDongPage from './features/planning/pages/KeHoachTuDongPage';
 import CaiDatPage from './features/planning/pages/CaiDatPage';
 import Release1Page from './features/planning/pages/Release1Page';
+import GopDotVaiPage from './features/planning/pages/GopDotVaiPage';
 import Release2Page from './features/planning/pages/Release2Page';
 import ReplanPage from './features/planning/pages/ReplanPage';
 import TestRunPage from './features/planning/pages/TestRunPage';
@@ -66,6 +67,7 @@ const PAGES = {
   '/ke-hoach/release-1': <Release1Page />,
   '/ke-hoach/release-2': <Release2Page />,
   '/ke-hoach/lap-lai': <ReplanPage />,
+  '/ke-hoach/gop-dot-vai': <GopDotVaiPage />,
   '/chat-luong/test-run': <TestRunPage />,
   '/san-xuat/xac-nhan-chay': <XacNhanChayPage />,
   '/san-xuat/theo-doi-chuyen': <TheoDoiChuyenPage />,

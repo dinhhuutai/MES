@@ -14,7 +14,7 @@ import { fmtNum, fmtDate, fmtDateTime, fmtCurrency } from '../../../utils/format
 
 const LIMIT = 20;
 const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
-const TH = 'px-4 py-3 text-xs font-semibold uppercase tracking-wide text-ink-soft';
+const TH = 'sticky top-0 z-20 bg-surface-muted px-4 py-3 text-xs font-semibold uppercase tracking-wide text-ink-soft';
 const TD = 'px-4 py-3 align-top';
 
 // Giai đoạn dòng chảy (khớp stageCondition ở backend). 'ALL' = tất cả (backend coi mã lạ = không lọc giai đoạn).
@@ -314,7 +314,7 @@ export default function PhanInListPage() {
 
       {/* Bảng (md trở lên) */}
       <div className="hidden card overflow-hidden md:block">
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[calc(100vh-13rem)]">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-line bg-surface-muted/60 text-left">

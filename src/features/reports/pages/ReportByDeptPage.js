@@ -5,15 +5,17 @@ import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
 import SidePanel from '../../../components/common/SidePanel';
+import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import Toast from '../../../components/common/Toast';
 import SearchableSelect from '../../../components/common/SearchableSelect';
 import { Field, Textarea } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import ReportGrid from '../components/ReportGrid';
+import exportReportExcel from '../utils/exportReportExcel';
 import {
   listPhongBanApDung, listAllReports, deXuatApDung, duyetApDung, tuChoiApDung,
-  getPhongBanHienHanh,
+  getPhongBanHienHanh, huyApDungPhongBan,
 } from '../../../services/baoCaoService';
 import { fmtDate } from '../../../utils/format';
 
@@ -30,6 +32,8 @@ export default function ReportByDeptPage() {
   const [reject, setReject] = useState(null); // { id, lyDo }
   const [saving, setSaving] = useState(false);
   const [viewing, setViewing] = useState(null); // { ten, content }
+  const [huy, setHuy] = useState(null); // phòng ban đang gỡ báo cáo
+  const [exporting, setExporting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -73,6 +77,24 @@ export default function ReportByDeptPage() {
     } catch (e) { show(e.message || 'Lỗi xem', 'error'); }
   };
 
+  const doExcel = async (row) => {
+    setExporting(true);
+    try {
+      const res = await getPhongBanHienHanh(row.phong_ban_id);
+      if (!res.data) { show('Phòng ban chưa có báo cáo áp dụng', 'error'); return; }
+      await exportReportExcel(res.data, `${row.ten_phong_ban}-${res.data.ma_bao_cao || 'bao-cao'}`);
+    } catch (e) { show(e.message || 'Tải Excel thất bại', 'error'); }
+    finally { setExporting(false); }
+  };
+
+  const doHuy = async () => {
+    try {
+      await huyApDungPhongBan(huy.phong_ban_id);
+      show(`Đã gỡ báo cáo khỏi ${huy.ten_phong_ban}`);
+      setHuy(null); load();
+    } catch (e) { show(e.message || 'Gỡ thất bại', 'error'); }
+  };
+
   const columns = [
     { key: 'ten_phong_ban', header: 'Phòng ban', className: 'font-medium text-ink' },
     { key: 'bao_cao', header: 'Báo cáo áp dụng', render: (r) => r.hh_bao_cao_id
@@ -83,6 +105,8 @@ export default function ReportByDeptPage() {
     { key: 'actions', header: '', className: 'text-right', render: (r) => (
       <div className="flex justify-end gap-1.5">
         {r.hh_bao_cao_id && <Button variant="ghost" className="px-3 py-1.5" onClick={(e) => { e.stopPropagation(); doView(r); }}>Xem</Button>}
+        {r.hh_bao_cao_id && <Button variant="ghost" icon="download" className="px-3 py-1.5" disabled={exporting} onClick={(e) => { e.stopPropagation(); doExcel(r); }}>Excel</Button>}
+        {r.hh_bao_cao_id && canApprove && <Button variant="ghost" className="px-3 py-1.5 !text-danger" onClick={(e) => { e.stopPropagation(); setHuy(r); }}>Hủy</Button>}
         {canAssign && <Button className="px-3 py-1.5" onClick={(e) => { e.stopPropagation(); setPropose({ phongBanId: r.phong_ban_id, ten: r.ten_phong_ban, baoCaoId: '', ghiChu: '' }); }}>Đề xuất</Button>}
       </div>
     ) },
@@ -161,6 +185,11 @@ export default function ReportByDeptPage() {
             ketQua={viewing.content.ket_qua} mode="view" />
         )}
       </SidePanel>
+
+      <ConfirmDialog open={!!huy} onClose={() => setHuy(null)} onConfirm={doHuy}
+        title="Gỡ báo cáo khỏi phòng ban"
+        message={huy ? `Gỡ báo cáo "${huy.hh_ten || ''}" khỏi phòng ban ${huy.ten_phong_ban}? Phòng ban sẽ không còn báo cáo áp dụng.` : ''}
+        confirmText="Gỡ báo cáo" />
 
       <Toast toast={toast} />
     </div>

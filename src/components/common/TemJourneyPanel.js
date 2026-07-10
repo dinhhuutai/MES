@@ -16,7 +16,7 @@ const fmtTs = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '');
 
 // Panel "Hành trình theo tem": gộp mọi lần KCS / Sửa / OQC / Giao của 1 tem theo thời gian.
 // fetcher(temId) -> { data: { tem, events:[{loai,tg,nguoi,chi_tiet}] } }.
-export default function TemJourneyPanel({ temId, maTem, fetcher, onClose }) {
+export default function TemJourneyPanel({ temId, maTem, fetcher, onClose, side = 'right', footer, headerExtra }) {
   const { toast, show } = useToast();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -36,9 +36,10 @@ export default function TemJourneyPanel({ temId, maTem, fetcher, onClose }) {
   const events = data?.events || [];
 
   return (
-    <SidePanel open={!!temId} onClose={onClose} width="max-w-2xl"
+    <SidePanel open={!!temId} onClose={onClose} width="max-w-2xl" side={side} footer={footer}
       title={`Hành trình tem — ${maTem || tem?.ma_tem || ''}`}
       subtitle={tem ? `SL in ${fmtNum(tem.so_luong)}` : ''}>
+      {headerExtra}
       {tem && (
         <div className="mb-4 flex flex-wrap gap-2 text-xs">
           <Badge tone="info">Còn KCS {fmtNum(tem.con_kcs)}</Badge>

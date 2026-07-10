@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import Toolbar from '../../../components/common/Toolbar';
 import Pagination from '../../../components/common/Pagination';
+import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
@@ -36,25 +37,38 @@ function SelectAllCheckbox({ checked, indeterminate, onChange }) {
   );
 }
 
-const TH = 'px-4 py-3 text-xs font-semibold uppercase tracking-wide text-ink-soft';
+const TH = 'sticky top-0 z-20 bg-surface-muted px-4 py-3 text-xs font-semibold uppercase tracking-wide text-ink-soft';
 const TD = 'px-4 py-3 align-middle';
+
+const FILTER_FIELDS = [
+  { key: 'codePhan', label: 'Code phần', col: 'ma_phan' }, { key: 'khach', label: 'Khách hàng', col: 'ten_khach_hang' },
+  { key: 'don', label: 'Đơn hàng', col: 'ma_don_hang' }, { key: 'maHang', label: 'Mã hàng', col: 'ma_hang' },
+  { key: 'mauVai', label: 'Màu vải', col: 'mau_vai' }, { key: 'kichVai', label: 'Kích vải', col: 'kich_vai' },
+  { key: 'kichPhim', label: 'Kích phim', col: 'kich_phim' },
+];
 
 // Các ô dữ liệu chung cho cả row lẻ lẫn member của set.
 function DataCells({ r }) {
   return (
     <>
       <td className={`${TD} font-medium text-ink`}>
-        <div>{r.ten_khach_hang || '—'}</div>
+        <div className="leading-tight">
+          <div className="font-medium text-ink">{r.ten_khach_hang || '—'}</div>
+          <div className="text-[10px] text-ink-soft">{r.ma_don_hang || '—'}</div>
+        </div>
         {r.tra_ve_ly_do && <Badge tone="danger" className="mt-1" title={r.tra_ve_ly_do}>Bị QC trả về</Badge>}
       </td>
-      <td className={TD}>{r.ma_don_hang || '—'}</td>
       <td className={TD}>{r.ma_hang || '—'}</td>
-      <td className={TD}>{r.mau_vai || '—'}</td>
-      <td className={TD}>{r.kich_vai || '—'}</td>
-      <td className={TD}>{r.kich_phim || '—'}</td>
+      <td className={TD}>
+        <div className="leading-tight">
+          <div className="text-ink">{r.mau_vai || '—'}</div>
+          <div className="text-[10px] text-ink-soft">{[r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—'}</div>
+        </div>
+      </td>
       <td className={TD}><LoaiDotVaiBadge value={r.loai_dot_vai} /></td>
-      <td className={`${TD} text-right tabular-nums`}>{fmtNum(r.so_luong_don_hang)}</td>
-      <td className={`${TD} text-right tabular-nums`}>{fmtNum(r.so_luong_vai_ve)}</td>
+      <td className={`${TD} text-right tabular-nums whitespace-nowrap`}>
+        <b className="text-ink">{fmtNum(r.so_luong_vai_ve)}</b><span className="text-ink-soft"> / {fmtNum(r.so_luong_don_hang)}</span>
+      </td>
       <td className={`${TD} text-right tabular-nums font-medium text-primary`}>{fmtNum(r.con_release ?? r.so_luong_vai_ve)}</td>
       <td className={TD}>{fmtDate(r.ngay_vai_ve)}</td>
       <td className={TD}>{fmtDate(r.han_giao_hang)}</td>
@@ -77,6 +91,8 @@ export default function Release1Page() {
   const [histOpen, setHistOpen] = useState(false);
   const [doneOpen, setDoneOpen] = useState(false);
   const [onlyReturned, setOnlyReturned] = useState(false); // lọc đợt vải bị QC trả về
+  const [filters, setFilters] = useState({});
+  const [showFilters, setShowFilters] = useState(false);
 
   const [detail, setDetail] = useState(null);        // row lẻ đang xem
   const [form, setForm] = useState({ chuyenId: '', soLuongRelease: '', ngayKeHoach: '' });
@@ -88,7 +104,7 @@ export default function Release1Page() {
     setLoading(true);
     try {
       const [res, setRes] = await Promise.all([
-        listRelease1Candidates({ search, page, limit: 50 }),
+        listRelease1Candidates({ search, page, limit: 20 }),
         listReleaseSets({ search }),
       ]);
       setRows(res.data.items);
@@ -105,8 +121,9 @@ export default function Release1Page() {
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
 
   // Lọc "chỉ hiện phần bị trả về": ẩn set (đợt vải bị trả về nằm ở pool lẻ), chỉ hiện đợt vải lẻ bị trả về.
-  const viewSets = onlyReturned ? [] : sets;
-  const viewRows = onlyReturned ? rows.filter((r) => r.tra_ve_ly_do) : rows;
+  const activeCount = Object.values(filters).filter(Boolean).length;
+  const viewSets = (onlyReturned || activeCount > 0) ? [] : sets;
+  const viewRows = filterRows(onlyReturned ? rows.filter((r) => r.tra_ve_ly_do) : rows, filters, FILTER_FIELDS);
 
   const looseList = useMemo(() => Object.values(selected), [selected]);
   const selectedSetList = useMemo(() => sets.filter((s) => selectedSets.has(s.id)), [sets, selectedSets]);
@@ -192,7 +209,7 @@ export default function Release1Page() {
     } finally { setSaving(false); }
   };
 
-  const colCount = 14;
+  const colCount = 10;
 
   return (
     <div>
@@ -203,13 +220,16 @@ export default function Release1Page() {
           <input type="checkbox" checked={onlyReturned} onChange={(e) => setOnlyReturned(e.target.checked)} />
           Chỉ hiện phần bị trả về
         </label>
+        <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
-        <Badge tone="info">{meta.total} đợt vải · {sets.length} set</Badge>
+        <Badge tone="info">{activeCount ? `${viewRows.length}/` : ''}{meta.total} đợt vải · {sets.length} set</Badge>
       </Toolbar>
 
+      <FieldFilters fields={FILTER_FIELDS} values={filters} onField={(k, v) => setFilters((f) => ({ ...f, [k]: v }))} onClear={() => setFilters({})} open={showFilters} />
+
       <div className="card overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[calc(100vh-13rem)]">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-line bg-surface-muted/60 text-left">
@@ -217,15 +237,11 @@ export default function Release1Page() {
                   <SelectAllCheckbox checked={allChecked} indeterminate={!allChecked && someChecked} onChange={toggleAll} />
                 </th>
                 <th className={`${TH} w-12 text-right`}>STT</th>
-                <th className={TH}>Khách hàng</th>
-                <th className={TH}>Đơn hàng</th>
+                <th className={TH}>Khách hàng · Đơn hàng</th>
                 <th className={TH}>Mã hàng</th>
-                <th className={TH}>Màu vải</th>
-                <th className={TH}>Kích vải</th>
-                <th className={TH}>Kích phim</th>
+                <th className={TH}>Màu · Kích (vải/phim)</th>
                 <th className={TH}>Loại đợt vải</th>
-                <th className={`${TH} text-right`}>SLĐH</th>
-                <th className={`${TH} text-right`}>SLNV</th>
+                <th className={`${TH} text-right`}>SL vải về / đơn</th>
                 <th className={`${TH} text-right`}>Còn release</th>
                 <th className={TH}>Ngày nhận vải</th>
                 <th className={TH}>Hạn giao</th>

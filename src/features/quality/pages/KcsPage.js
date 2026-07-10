@@ -11,6 +11,7 @@ import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
 import TemJourneyPanel from '../../../components/common/TemJourneyPanel';
 import QrScanner from '../../../components/common/QrScanner';
+import DateRangePicker from '../../../components/common/DateRangePicker';
 import Icon from '../../../components/common/Icon';
 import { Field, Input } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
@@ -32,7 +33,11 @@ const FILTER_FIELDS = [
   { key: 'kichVai', label: 'Kích vải' },
   { key: 'kichPhim', label: 'Kích phim' },
 ];
-const FIELD_LABEL = { ...Object.fromEntries(FILTER_FIELDS.map((f) => [f.key, f.label])), ngay: 'Ngày in tem' };
+const FIELD_LABEL = { ...Object.fromEntries(FILTER_FIELDS.map((f) => [f.key, f.label])) };
+const todayStr = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
 export default function KcsPage() {
   const { can } = usePermissions();
@@ -44,6 +49,7 @@ export default function KcsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState({});
+  const [range, setRange] = useState(() => ({ from: todayStr(), to: todayStr() }));
   const [showFilters, setShowFilters] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(empty);
@@ -60,6 +66,7 @@ export default function KcsPage() {
   const viewRows = onlyReturned ? rows.filter((r) => r.tra_ve_ly_do) : rows;
 
   const filtersKey = useMemo(() => JSON.stringify(filters), [filters]);
+  const rangeKey = useMemo(() => `${range.from || ''}|${range.to || ''}`, [range]);
   const activeFilters = useMemo(() => Object.entries(filters).filter(([, v]) => v), [filters]);
   const setField = (key, value) => setFilters((f) => ({ ...f, [key]: value }));
   const clearFilters = () => setFilters({});
@@ -67,7 +74,7 @@ export default function KcsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await listKcsCandidates({ search, ...filters });
+      const res = await listKcsCandidates({ search, ...filters, ngayTu: range.from || undefined, ngayDen: range.to || undefined });
       setRows(res.data);
     } catch (e) {
       show(e.message || 'Lỗi tải', 'error');
@@ -75,7 +82,7 @@ export default function KcsPage() {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, filtersKey, show]);
+  }, [search, filtersKey, rangeKey, show]);
 
   // In tem GIAO (KCS đã hoàn thành) — cấu trúc tem 1, SL IN = số lượng đã kiểm.
   const printKcsGiao = async (row) => {
@@ -125,6 +132,7 @@ export default function KcsPage() {
       await redryTem(redry.tem_id, Number(redryMin) || 0);
       show(`Đã đưa tem ${redry.ma_tem} phơi lại ${redryMin} phút — hết giờ tự quay lại KCS`);
       setRedry(null);
+      setJourney(null);
       load();
     } catch (e) {
       show(e.message || 'Phơi lại thất bại', 'error');
@@ -181,13 +189,7 @@ export default function KcsPage() {
     ) },
     { key: 'actions', header: '', className: 'text-right', render: (r) =>
       canKcs && (
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" className="px-3 py-1.5"
-            onClick={(e) => { e.stopPropagation(); setJourney({ temId: r.tem_id, maTem: r.ma_tem }); }}>Hành trình</Button>
-          <Button variant="ghost" className="px-3 py-1.5"
-            onClick={(e) => { e.stopPropagation(); setRedry(r); setRedryMin('30'); }}>Phơi lại</Button>
-          <Button className="px-3 py-1.5" onClick={() => open(r)}>Kiểm KCS</Button>
-        </div>
+        <Button className="px-3 py-1.5" onClick={(e) => { e.stopPropagation(); open(r); }}>Kiểm KCS</Button>
       ) },
   ];
 
@@ -211,9 +213,8 @@ export default function KcsPage() {
         {canKcs && <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét QR</Button>}
         <div className="flex items-center gap-1.5 text-xs text-ink-soft">
           <span>Ngày in tem</span>
-          <input type="date" value={filters.ngay || ''} onChange={(e) => setField('ngay', e.target.value)}
-            className="h-9 rounded-input border border-line bg-surface px-2 text-sm" />
-          {filters.ngay && <button type="button" onClick={() => setField('ngay', '')} className="text-ink-soft hover:text-danger" aria-label="Xóa lọc ngày"><Icon name="x" size={14} /></button>}
+          <div className="w-60"><DateRangePicker value={range} onChange={setRange} placeholder="Chọn khoảng ngày in tem" /></div>
+          {(range.from || range.to) && <button type="button" onClick={() => setRange({ from: '', to: '' })} className="text-ink-soft hover:text-danger" aria-label="Bỏ lọc ngày"><Icon name="x" size={14} /></button>}
         </div>
         <Button variant={showFilters || activeFilters.length ? 'secondary' : 'ghost'} icon="filter"
           onClick={() => setShowFilters((v) => !v)}>Bộ lọc{activeFilters.length ? ` (${activeFilters.length})` : ''}</Button>
@@ -263,6 +264,7 @@ export default function KcsPage() {
       <OwnerHint tram="KIEM" className="mb-3" />
 
       <DataTable columns={columns} rows={viewRows} loading={loading} rowKey="tem_id"
+        onRowClick={(r) => setJourney({ temId: r.tem_id, maTem: r.ma_tem, row: r })}
         rowClassName={(r) => slaRowClass(evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status)}
         emptyText="Không có tem nào chờ KCS" />
 
@@ -321,7 +323,18 @@ export default function KcsPage() {
         title="Tem đã KCS" maHeader="Tem" fetcher={kcsDone} columns={doneColumns} />
       {journey && (
         <TemJourneyPanel temId={journey.temId} maTem={journey.maTem}
-          fetcher={getTemHanhTrinh} onClose={() => setJourney(null)} />
+          fetcher={getTemHanhTrinh} onClose={() => setJourney(null)} side="left"
+          footer={
+            <>
+              {canKcs && (
+                <Button variant="secondary" icon="clock"
+                  onClick={() => { setRedry(journey.row); setRedryMin('30'); }}>Phơi lại</Button>
+              )}
+              {canKcs && (
+                <Button onClick={() => { open(journey.row); setJourney(null); }}>Kiểm KCS</Button>
+              )}
+            </>
+          } />
       )}
 
       <QrScanner open={scanOpen} onClose={() => setScanOpen(false)} onResult={onScan} />

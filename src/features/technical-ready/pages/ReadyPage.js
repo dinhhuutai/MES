@@ -9,15 +9,23 @@ import Modal from '../../../components/common/Modal';
 import Toast from '../../../components/common/Toast';
 import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
+import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
 import { Field, Select } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import useNow from '../../../hooks/useNow';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 import {
-  listReadyCandidates, getReadyConfig, confirmReadyBulk, readyHistory, readyDone,
+  listReadyCandidates, getReadyConfig, confirmReadyBulk, readyHistory, readyDone, getReadyItemCounts,
 } from '../../../services/readyService';
 import ReadyPanel from '../components/ReadyPanel';
+
+const FILTER_FIELDS = [
+  { key: 'codePhan', label: 'Code phần', col: 'ma_phan' }, { key: 'khach', label: 'Khách hàng', col: 'ten_khach_hang' },
+  { key: 'don', label: 'Đơn hàng', col: 'ma_don_hang' }, { key: 'maHang', label: 'Mã hàng', col: 'ma_hang' },
+  { key: 'mauVai', label: 'Màu vải', col: 'mau_vai' }, { key: 'kichVai', label: 'Kích vải', col: 'kich_vai' },
+  { key: 'kichPhim', label: 'Kích phim', col: 'kich_phim' },
+];
 
 const STATUS = {
   CHUA: { tone: 'default', label: 'Chưa làm' },
@@ -54,17 +62,24 @@ export default function ReadyPage() {
   const [histOpen, setHistOpen] = useState(false);
   const [doneOpen, setDoneOpen] = useState(false);
   const [onlyReturned, setOnlyReturned] = useState(false); // lọc phần bị QC trả về
+  const [filters, setFilters] = useState({});
+  const [showFilters, setShowFilters] = useState(false);
+  const [counts, setCounts] = useState({ khuon: 0, film: 0, muc: 0 }); // chưa xác nhận từng mục (toàn hệ thống)
 
   const permItems = ITEMS.filter((it) => can(it.perm));
-  const viewRows = onlyReturned ? rows.filter((r) => r.tra_ve_ly_do) : rows;
+  const activeCount = Object.values(filters).filter(Boolean).length;
+  const viewRows = filterRows(onlyReturned ? rows.filter((r) => r.tra_ve_ly_do) : rows, filters, FILTER_FIELDS);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await listReadyCandidates({ search, page, limit: 20 });
+      // limit cao để lọc client-side trọn vẹn (dữ liệu READY nhỏ); phân trang tự ẩn khi 1 trang.
+      const res = await listReadyCandidates({ search, page, limit: 200 });
       setRows(res.data.items);
       setMeta(res.data.meta);
       setSelected(new Set());
+      // Số chưa xác nhận từng mục — TOÀN HỆ THỐNG (không theo trang/lọc hiện tại).
+      getReadyItemCounts().then((c) => setCounts(c.data)).catch(() => {});
     } catch (e) {
       show(e.message || 'Lỗi tải', 'error');
     } finally {
@@ -121,21 +136,29 @@ export default function ReadyPage() {
           onClick={(e) => e.stopPropagation()} onChange={() => toggleOne(r.id)} aria-label="Chọn" />
       ),
     }] : []),
-    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => (
+    { key: 'ma_phan', header: 'Code phần', className: 'font-medium text-ink', render: (r) => (
       <div>
-        <div>{r.ten_khach_hang}</div>
+        <div>{r.ma_phan || '—'}</div>
         {r.gom_set_list && <Badge tone="info" className="mt-1"><Icon name="git-branch" size={12} className="mr-1" />Gom set {r.gom_set_list}</Badge>}
         {r.tra_ve_ly_do && <Badge tone="danger" className="mt-1" title={r.tra_ve_ly_do}>Bị QC trả về</Badge>}
       </div>
     ) },
-    { key: 'ma_don_hang', header: 'Đơn hàng' },
+    { key: 'khach_don', header: 'Khách hàng · Đơn hàng', render: (r) => (
+      <div className="leading-tight">
+        <div className="font-medium text-ink">{r.ten_khach_hang || '—'}</div>
+        <div className="text-[10px] text-ink-soft">{r.ma_don_hang || '—'}</div>
+      </div>
+    ) },
     { key: 'ma_hang', header: 'Mã hàng' },
-    { key: 'mau_vai', header: 'Màu vải' },
-    { key: 'kich_vai', header: 'Kích vải' },
-    { key: 'kich_phim', header: 'Kích phim' },
-    { key: 'film_done', header: 'Film', className: 'text-center', render: (r) => DoneCell(r.film_done) },
-    { key: 'khuon_done', header: 'Khuôn', className: 'text-center', render: (r) => DoneCell(r.khuon_done) },
-    { key: 'muc_done', header: 'Mực', className: 'text-center', render: (r) => DoneCell(r.muc_done) },
+    { key: 'mau_kich', header: 'Màu · Kích (vải/phim)', render: (r) => (
+      <div className="leading-tight">
+        <div className="text-ink">{r.mau_vai || '—'}</div>
+        <div className="text-[10px] text-ink-soft">{[r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—'}</div>
+      </div>
+    ) },
+    { key: 'film_done', header: `Film${counts.film ? ` (${counts.film})` : ''}`, className: 'text-center', render: (r) => DoneCell(r.film_done) },
+    { key: 'khuon_done', header: `Khuôn${counts.khuon ? ` (${counts.khuon})` : ''}`, className: 'text-center', render: (r) => DoneCell(r.khuon_done) },
+    { key: 'muc_done', header: `Mực${counts.muc ? ` (${counts.muc})` : ''}`, className: 'text-center', render: (r) => DoneCell(r.muc_done) },
     { key: 'trang_thai_ready', header: 'Trạng thái', render: (r) => {
       const s = STATUS[r.trang_thai_ready] || STATUS.CHUA;
       return <Badge tone={s.tone}>{s.label}</Badge>;
@@ -154,12 +177,15 @@ export default function ReadyPage() {
           <input type="checkbox" checked={onlyReturned} onChange={(e) => setOnlyReturned(e.target.checked)} />
           Chỉ hiện phần bị trả về
         </label>
+        <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
-        <Badge tone="warning">{meta.total} chưa READY</Badge>
+        <Badge tone="warning">{activeCount ? `${viewRows.length}/` : ''}{meta.total} chưa READY</Badge>
       </Toolbar>
 
-      <DataTable columns={columns} rows={viewRows} loading={loading} onRowClick={(r) => setSel(r.id)} sttStart={(meta.page - 1) * 20}
+      <FieldFilters fields={FILTER_FIELDS} values={filters} onField={(k, v) => setFilters((f) => ({ ...f, [k]: v }))} onClear={() => setFilters({})} open={showFilters} />
+
+      <DataTable columns={columns} rows={viewRows} loading={loading} onRowClick={(r) => setSel(r.id)} sttStart={(meta.page - 1) * 200}
         rowClassName={(r) => slaRowClass(evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status)}
         emptyText="Tất cả phần in đã READY 🎉" />
       <Pagination page={meta.page} totalPages={meta.totalPages} total={meta.total} onPage={setPage} />

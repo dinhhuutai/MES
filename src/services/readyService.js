@@ -3,6 +3,8 @@ import client from './axiosClient';
 export const getReadyConfig = () => client.get('/ready/config');
 export const listReadyCandidates = (params) => client.get('/ready/candidates', { params });
 export const listReadyQcCandidates = (params) => client.get('/ready/qc-candidates', { params });
+// Đếm số phần in CHƯA xác nhận từng mục (KHUON/FILM/MUC) toàn hệ thống → { khuon, film, muc }.
+export const getReadyItemCounts = () => client.get('/ready/item-counts');
 export const getReadyDetail = (id) => client.get(`/ready/${id}`);
 // Xác nhận 1 mục kỹ thuật: ma ∈ KHUON|FILM|MUC|HSKT; value cho KHUON/FILM/MUC.
 export const confirmReadyItem = (id, ma, value) =>

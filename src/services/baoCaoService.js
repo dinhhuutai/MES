@@ -20,3 +20,4 @@ export const getPhongBanHienHanh = (phongBanId, params) => client.get(`/bao-cao/
 export const deXuatApDung = (phongBanId, body) => client.post(`/bao-cao/phong-ban/${phongBanId}/de-xuat`, body);
 export const duyetApDung = (id) => client.post(`/bao-cao/phong-ban-ap-dung/${id}/duyet`);
 export const tuChoiApDung = (id, lyDo) => client.post(`/bao-cao/phong-ban-ap-dung/${id}/tu-choi`, { lyDo });
+export const huyApDungPhongBan = (phongBanId) => client.post(`/bao-cao/phong-ban/${phongBanId}/huy-ap-dung`);

@@ -1,7 +1,8 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
 import Pagination from '../../../components/common/Pagination';
+import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
 import Badge from '../../../components/common/Badge';
 import Icon from '../../../components/common/Icon';
 import Button from '../../../components/common/Button';
@@ -25,6 +26,13 @@ const TECH_ITEMS = [
 ];
 
 const fmt = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '');
+
+const FILTER_FIELDS = [
+  { key: 'codePhan', label: 'Code phần', col: 'ma_phan' }, { key: 'khach', label: 'Khách hàng', col: 'ten_khach_hang' },
+  { key: 'don', label: 'Đơn hàng', col: 'ma_don_hang' }, { key: 'maHang', label: 'Mã hàng', col: 'ma_hang' },
+  { key: 'mauVai', label: 'Màu vải', col: 'mau_vai' }, { key: 'kichVai', label: 'Kích vải', col: 'kich_vai' },
+  { key: 'kichPhim', label: 'Kích phim', col: 'kich_phim' },
+];
 
 export default function ReadyQcPage() {
   const { can } = usePermissions();
@@ -50,11 +58,16 @@ export default function ReadyQcPage() {
   const [returnMode, setReturnMode] = useState(false);
   const [returnChecklists, setReturnChecklists] = useState(() => new Set());
   const [returnReason, setReturnReason] = useState('');
+  const [filters, setFilters] = useState({});
+  const [showFilters, setShowFilters] = useState(false);
+  const activeCount = Object.values(filters).filter(Boolean).length;
+  const filtered = useMemo(() => filterRows(rows, filters, FILTER_FIELDS), [rows, filters]);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await listReadyQcCandidates({ search, page, limit: 20 });
+      // load-all để lọc client trọn vẹn; DataTable tự phân trang 20/trang (dữ liệu nhỏ).
+      const res = await listReadyQcCandidates({ search, page, limit: 500 });
       setRows(res.data.items);
       setMeta(res.data.meta);
       setSelected(new Set());
@@ -163,17 +176,21 @@ export default function ReadyQcPage() {
           onClick={(e) => e.stopPropagation()}
           onChange={() => toggleOne(r.id)} aria-label="Chọn phần in" />
       ) },
-    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => (
-      <div>
-        <div>{r.ten_khach_hang}</div>
+    { key: 'ma_phan', header: 'Code phần', className: 'font-medium text-ink', render: (r) => r.ma_phan || '—' },
+    { key: 'khach_don', header: 'Khách hàng · Đơn hàng', render: (r) => (
+      <div className="leading-tight">
+        <div className="font-medium text-ink">{r.ten_khach_hang || '—'}</div>
+        <div className="text-[10px] text-ink-soft">{r.ma_don_hang || '—'}</div>
         {r.gom_set_list && <Badge tone="info" className="mt-1"><Icon name="git-branch" size={12} className="mr-1" />Gom set {r.gom_set_list}</Badge>}
       </div>
     ) },
-    { key: 'ma_don_hang', header: 'Đơn hàng' },
     { key: 'ma_hang', header: 'Mã hàng' },
-    { key: 'mau_vai', header: 'Màu vải' },
-    { key: 'kich_vai', header: 'Kích vải' },
-    { key: 'kich_phim', header: 'Kích phim' },
+    { key: 'mau_kich', header: 'Màu · Kích (vải/phim)', render: (r) => (
+      <div className="leading-tight">
+        <div className="text-ink">{r.mau_vai || '—'}</div>
+        <div className="text-[10px] text-ink-soft">{[r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—'}</div>
+      </div>
+    ) },
     { key: 'tech', header: 'Kỹ thuật', render: (r) => (
       <div className="flex flex-wrap items-center gap-1">
         {TECH_ITEMS.map((it) => {
@@ -192,12 +209,15 @@ export default function ReadyQcPage() {
         {canQC && selected.size > 0 && (
           <Button loading={batching} onClick={doBatch}>QC xác nhận ({selected.size})</Button>
         )}
+        <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
-        <Badge tone="warning">{meta.total} chờ QC</Badge>
+        <Badge tone="warning">{activeCount ? `${filtered.length}/` : ''}{meta.total} chờ QC</Badge>
       </Toolbar>
 
-      <DataTable columns={columns} rows={rows} loading={loading} onRowClick={(r) => open(r)} sttStart={(meta.page - 1) * 20}
+      <FieldFilters fields={FILTER_FIELDS} values={filters} onField={(k, v) => setFilters((f) => ({ ...f, [k]: v }))} onClear={() => setFilters({})} open={showFilters} />
+
+      <DataTable columns={columns} rows={filtered} loading={loading} onRowClick={(r) => open(r)} sttStart={0}
         rowClassName={(r) => slaRowClass(evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status)}
         emptyText="Không có phần in nào chờ QC" />
       <Pagination page={meta.page} totalPages={meta.totalPages} total={meta.total} onPage={setPage} />

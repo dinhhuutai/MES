@@ -8,7 +8,7 @@ import Toast from '../../../components/common/Toast';
 import { Input, Textarea, Select } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import { getRun, printTem, reprintTem, getTemLabel, getTemLogs, finishRun, stopLine, resumeLine, addVaiHuy, pauseLenhChay, listProductionCandidates, startProduction } from '../../../services/productionService';
+import { getRun, printTem, reprintTem, getTemLabel, getTemLogs, finishRun, stopLine, resumeLine, addVaiHuy, pauseLenhChay, listProductionCandidates, startProduction, vuotSanXuat } from '../../../services/productionService';
 import printTemLabel from '../utils/printTemLabel';
 import { fmtNum, fmtDate } from '../../../utils/format';
 
@@ -34,6 +34,7 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
   const [pauseOpen, setPauseOpen] = useState(false);   // modal ngừng lệnh chạy (in hàng gấp)
   const [swapList, setSwapList] = useState([]);        // phần in đang chờ sản xuất để hoán đổi
   const [swapLoading, setSwapLoading] = useState(false);
+  const [vuot, setVuot] = useState('');                // SL vượt sản xuất
 
   const phieu = data?.phieu;
   const running = phieu?.trang_thai === 'DANG_CHAY';
@@ -172,6 +173,25 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
       onChanged?.();
     } catch (e) {
       show(e.message || 'Ghi vải hủy thất bại', 'error');
+    } finally { setBusy(false); }
+  };
+
+  // Vượt sản xuất: cộng SL vượt vào release + trừ đợt vải chưa release cùng phần in.
+  const doVuot = async () => {
+    const qty = Number(vuot);
+    if (!(qty > 0)) { show('Nhập số lượng vượt', 'error'); return; }
+    setBusy(true);
+    try {
+      const res = await vuotSanXuat(phieu.id, qty);
+      const tru = res?.data?.so_luong_da_tru ?? 0;
+      show(`Đã vượt ${fmtNum(qty)} → release ${fmtNum(res?.data?.release_sau)}`
+        + (tru > 0 ? ` · trừ ${fmtNum(tru)} ở đợt chưa release` : ' · không có đợt chưa release để trừ'),
+        tru < qty ? 'warning' : 'success');
+      setVuot('');
+      await load();
+      onChanged?.();
+    } catch (e) {
+      show(e.message || 'Ghi nhận vượt sản xuất thất bại', 'error');
     } finally { setBusy(false); }
   };
 
@@ -416,6 +436,25 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
               <p className="text-sm text-ink-soft">Chưa in tem nào.</p>
             )}
           </section>
+
+          {/* Vượt sản xuất — cộng SL vượt vào release + trừ đợt vải chưa release cùng phần in */}
+          {canRun && phieu && (
+            <section className="border-t border-line pt-4">
+              <h3 className="mb-1 text-xs font-bold uppercase tracking-wide text-ink-soft">Vượt sản xuất</h3>
+              <p className="mb-2 text-xs text-ink-soft">
+                Ghi nhận SL đã sản xuất <b>vượt kế hoạch</b>: tự <b>cộng vào SL release</b> của lệnh và
+                <b> trừ dần ở đợt vải chưa release</b> của cùng phần in (đợt về 0 sẽ ẩn).
+              </p>
+              <div className="flex items-end gap-2">
+                <div className="flex-1">
+                  <label className="mb-1 block text-sm font-medium text-ink">SL sản xuất vượt kế hoạch</label>
+                  <Input type="number" min="1" value={vuot}
+                    onChange={(e) => setVuot(e.target.value)} placeholder="vd: 50" />
+                </div>
+                <Button onClick={doVuot} loading={busy} disabled={!(Number(vuot) > 0)}>Vượt kế hoạch</Button>
+              </div>
+            </section>
+          )}
         </div>
       )}
       {/* Ngừng lệnh chạy + hoán đổi phần in gấp hơn */}

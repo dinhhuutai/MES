@@ -37,6 +37,7 @@ export const MODULES = [
       { ten: 'Release 1', route: '/ke-hoach/release-1', perm: 'RELEASE1' },
       { ten: 'Release 2', route: '/ke-hoach/release-2', perm: 'RELEASE2' },
       { ten: 'Lập kế hoạch lại', route: '/ke-hoach/lap-lai', perm: 'RELEASE2' },
+      { ten: 'Gộp số lượng đợt vải', route: '/ke-hoach/gop-dot-vai', perm: 'RELEASE1' },
       { ten: 'Cài đặt', route: '/ke-hoach/cai-dat', perm: ['RELEASE1', 'RELEASE2'] },
     ],
   },

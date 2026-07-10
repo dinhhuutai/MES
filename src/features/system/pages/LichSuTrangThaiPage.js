@@ -133,7 +133,7 @@ function LenhCancelSection({ show }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await listCancelableLenh({ search, page, limit: 50 });
+      const res = await listCancelableLenh({ search, page, limit: 20 });
       setRows(res.data.items);
       setMeta(res.data.meta);
     } catch (e) {
@@ -273,7 +273,7 @@ function TemCancelSection({ show }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await listCancelableTem({ search, page, limit: 50 });
+      const res = await listCancelableTem({ search, page, limit: 20 });
       setRows(res.data.items);
       setMeta(res.data.meta);
     } catch (e) {

@@ -110,12 +110,19 @@ export default function GiaoHangPage() {
         className="h-4 w-4 rounded border-line text-primary focus:ring-primary" />
     ) },
     { key: 'ma_tem', header: 'Tem', render: (r) => <Badge tone="info">{r.ma_tem}</Badge> },
-    { key: 'khach_list', header: 'Khách hàng', className: 'font-medium text-ink' },
-    { key: 'don_list', header: 'Đơn hàng' },
+    { key: 'khach_don', header: 'Khách hàng · Đơn hàng', render: (r) => (
+      <div className="leading-tight">
+        <div className="font-medium text-ink">{r.khach_list || '—'}</div>
+        <div className="text-[10px] text-ink-soft">{r.don_list || '—'}</div>
+      </div>
+    ) },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
-    { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
-    { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
-    { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
+    { key: 'mau_kich', header: 'Màu · Kích (vải/phim)', render: (r) => (
+      <div className="leading-tight">
+        <div className="text-ink">{r.mau_vai || '—'}</div>
+        <div className="text-[10px] text-ink-soft">{[r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—'}</div>
+      </div>
+    ) },
     { key: 'nguoi_truoc', header: 'Người XN trạm trước', render: (r) => r.nguoi_truoc || '—' },
     { key: 'so_luong', header: 'SL in', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
     { key: 'con_giao', header: 'Còn giao', className: 'text-right tabular-nums font-medium text-primary', render: (r) => fmtNum(r.con_giao) },
@@ -134,8 +141,12 @@ export default function GiaoHangPage() {
 
   const histCols = [
     { key: 'ma_phieu_giao', header: 'Mã phiếu', render: (r) => <Badge tone="info">{r.ma_phieu_giao}</Badge> },
-    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink' },
-    { key: 'ma_don_hang', header: 'Đơn hàng' },
+    { key: 'khach_don', header: 'Khách hàng · Đơn hàng', render: (r) => (
+      <div className="leading-tight">
+        <div className="font-medium text-ink">{r.ten_khach_hang || '—'}</div>
+        <div className="text-[10px] text-ink-soft">{r.ma_don_hang || '—'}</div>
+      </div>
+    ) },
     { key: 'so_tem', header: 'Số tem', className: 'text-right' },
     { key: 'tong_sl', header: 'Tổng SL', className: 'text-right tabular-nums', render: (r) => fmtNum(r.tong_sl) },
     { key: 'ngay_giao', header: 'Ngày giao', render: (r) => fmtDate(r.ngay_giao) },
