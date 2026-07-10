@@ -81,6 +81,39 @@ function StagePcsNote({ maTram, sp }) {
 // Từ CHỜ KHÔ trở đi: quản lý theo tem → hiện mỗi tem 1 hàng + cột chất lượng.
 const TEM_ROW_STAGES = ['CHO_KHO', 'KCS', 'SUA', 'OQC', 'GIAO', 'DA_GIAO'];
 
+// Nhãn cột "SL" theo GIAI ĐOẠN (chip). OQC/Giao tách 2 dòng theo nguồn (tem 15-/17-).
+const STAGE_QTY_LABEL = {
+  CHO_KHO: 'SL in', KCS: 'SL in', SUA: 'Số lượng sửa',
+  OQC: 'SL đạt (KCS/Sửa)', GIAO: 'SL giao', DA_GIAO: 'SL giao',
+};
+// Trạng thái tem tương ứng từng chip — CHỈ hiện tem đang thực sự ở giai đoạn đó (khớp bộ lọc backend stageCond).
+const STAGE_TEM_STATUS = {
+  CHO_KHO: ['IN', 'DANG_PHOI'], KCS: ['DA_KHO'], SUA: ['CHO_SUA'],
+  OQC: ['CHO_OQC'], GIAO: ['OQC_DAT'], DA_GIAO: ['DA_GIAO'],
+};
+const N0 = (v) => Number(v) || 0;
+
+// Dựng danh sách dòng hiển thị của 1 tem theo giai đoạn: {key, prefix, ma, qty, tm}.
+//  - KCS/Chờ khô: SL in (so_luong), không tiền tố.
+//  - Sửa: tem 16-, SL = số lượng quyết định sửa.
+//  - OQC: tách nguồn 15- (đạt từ KCS) / 17- (đạt qua sửa), SL = phần chờ OQC của nguồn.
+//  - Giao/Đã giao: 15-/17- theo nguồn OQC đã qua, SL giao.
+function temDisplayRows(tm, stage) {
+  if (!tm) return [{ key: 'none', prefix: '', ma: null, qty: null, tm: null }];
+  const b = { tm };
+  if (stage === 'SUA') return [{ ...b, key: tm.tem_id, prefix: '16-', ma: `16-${tm.ma_tem}`, qty: N0(tm.sl_sua) }];
+  if (stage === 'OQC' || stage === 'GIAO' || stage === 'DA_GIAO') {
+    const kcsQty = stage === 'OQC' ? N0(tm.con_oqc_kcs) : N0(tm.giao_kcs);
+    const suaQty = stage === 'OQC' ? N0(tm.con_oqc_sua) : N0(tm.giao_sua);
+    const out = [];
+    if (kcsQty > 0) out.push({ ...b, key: `${tm.tem_id}-15`, prefix: '15-', ma: `15-${tm.ma_tem}`, qty: kcsQty });
+    if (suaQty > 0) out.push({ ...b, key: `${tm.tem_id}-17`, prefix: '17-', ma: `17-${tm.ma_tem}`, qty: suaQty });
+    if (out.length) return out;
+    return [{ ...b, key: tm.tem_id, prefix: '', ma: tm.ma_tem, qty: 0 }];
+  }
+  return [{ ...b, key: tm.tem_id, prefix: '', ma: tm.ma_tem, qty: N0(tm.so_luong) }];
+}
+
 // Số lượng theo tem, HỢP NHẤT theo phần in (dùng ở thẻ mobile).
 function TemSummary({ g }) {
   if (!g.pcs_in) return <span className="text-xs text-ink-soft">—</span>;
@@ -202,7 +235,8 @@ export default function PhanInListPage() {
   const sttStart = (meta.page - 1) * LIMIT;
   const showTemRows = TEM_ROW_STAGES.includes(stage); // tem/hàng + chất lượng
   const showPcsCol = stage === 'SAN_XUAT';             // chỉ thêm cột "SL đã in"
-  const COLS = 11 + (showTemRows ? 4 : 0) + (showPcsCol ? 1 : 0);
+  const showTemQuality = showTemRows && !['KCS', 'CHO_KHO'].includes(stage); // KCS/Chờ khô chưa có chất lượng → ẩn cột
+  const COLS = showTemRows ? (10 + (showTemQuality ? 1 : 0)) : (11 + (showPcsCol ? 1 : 0));
 
   return (
     <div>
@@ -285,25 +319,34 @@ export default function PhanInListPage() {
             <thead>
               <tr className="border-b border-line bg-surface-muted/60 text-left">
                 <th className={`${TH} w-12 text-right`}>STT</th>
-                <th className={TH}>Khách hàng</th>
-                <th className={TH}>Đơn hàng</th>
-                <th className={TH}>Mã hàng</th>
-                <th className={TH}>Màu vải</th>
-                <th className={TH}>Kích vải</th>
-                <th className={TH}>Kích phim</th>
-                <th className={`${TH} text-right border-r border-line/60`}>SL đơn hàng</th>
-                <th className={`${TH} text-right`}>SL vải về</th>
-                <th className={TH}>Ngày vải về</th>
-                <th className={TH}>Hạn giao</th>
-                {showTemRows && (
+                {showTemRows ? (
                   <>
+                    <th className={TH}>Khách hàng · Đơn hàng</th>
+                    <th className={TH}>Mã hàng</th>
+                    <th className={TH}>Màu · Kích (vải/phim)</th>
+                    <th className={`${TH} text-right border-r border-line/60`}>SL vải về / đơn</th>
+                    <th className={TH}>Ngày vải về</th>
+                    <th className={TH}>Hạn giao</th>
                     <th className={`${TH} border-l border-line/60`}>Mã tem</th>
-                    <th className={`${TH} text-right`}>SL pcs</th>
+                    <th className={`${TH} text-right`}>{STAGE_QTY_LABEL[stage] || 'SL'}</th>
                     <th className={TH}>Trạng thái</th>
-                    <th className={TH}>Chất lượng</th>
+                    {showTemQuality && <th className={TH}>Chất lượng</th>}
+                  </>
+                ) : (
+                  <>
+                    <th className={TH}>Khách hàng</th>
+                    <th className={TH}>Đơn hàng</th>
+                    <th className={TH}>Mã hàng</th>
+                    <th className={TH}>Màu vải</th>
+                    <th className={TH}>Kích vải</th>
+                    <th className={TH}>Kích phim</th>
+                    <th className={`${TH} text-right border-r border-line/60`}>SL đơn hàng</th>
+                    <th className={`${TH} text-right`}>SL vải về</th>
+                    <th className={TH}>Ngày vải về</th>
+                    <th className={TH}>Hạn giao</th>
+                    {showPcsCol && <th className={`${TH} text-right border-l border-line/60`}>SL đã in</th>}
                   </>
                 )}
-                {showPcsCol && <th className={`${TH} text-right border-l border-line/60`}>SL đã in</th>}
               </tr>
             </thead>
             <tbody>
@@ -336,29 +379,54 @@ export default function PhanInListPage() {
                     </>
                   );
 
-                  // Chế độ THEO TEM (từ chờ khô): STT → Hạn giao hợp nhất, mỗi tem 1 hàng.
+                  // Chế độ THEO TEM (từ chờ khô): cột trái GỘP + hợp nhất ô; mỗi tem tách 1-2 dòng theo nguồn.
                   if (showTemRows) {
-                    const tems = g.tems && g.tems.length ? g.tems : [null];
-                    const n = tems.length;
+                    // CHỈ hiện tem đang thực sự ở giai đoạn của chip (vd KCS chỉ tem 'DA_KHO', bỏ tem đã qua OQC).
+                    const stTems = (g.tems || []).filter((tm) => !STAGE_TEM_STATUS[stage] || STAGE_TEM_STATUS[stage].includes(tm.trang_thai));
+                    const srcTems = stTems.length ? stTems : [null];
+                    const drows = srcTems.flatMap((tm) => temDisplayRows(tm, stage));
+                    const n = drows.length || 1;
                     const agg = aggDotVai(g.dot_vai);
-                    return tems.map((tm, ti) => (
-                      <tr key={`${g.phan_in_id}-${tm?.tem_id || 'none'}`}
-                        onClick={() => openDetail(g.phan_in_id)}
-                        className={`cursor-pointer transition hover:bg-surface-muted/40 ${ti === n - 1 ? 'border-b border-line/70' : ''}`}>
-                        {ti === 0 && (
-                          <>
-                            {headCells(n)}
-                            <td rowSpan={n} className={`${TD} text-right tabular-nums`}>{fmtNum(agg.total)}</td>
-                            <td rowSpan={n} className={TD}>{fmtDate(agg.ngay)}</td>
-                            <td rowSpan={n} className={TD}>{fmtDate(agg.han)}</td>
-                          </>
-                        )}
-                        <td className={`${TD} border-l border-line/60 font-medium text-ink`}>{tm?.ma_tem || <span className="text-xs italic text-ink-soft">Chưa in tem</span>}</td>
-                        <td className={`${TD} text-right tabular-nums`}>{tm ? `${fmtNum(tm.so_luong)} pcs` : '—'}</td>
-                        <td className={TD}>{tm ? <Badge tone={(TEM_STATUS[tm.trang_thai] || {}).tone || 'default'}>{(TEM_STATUS[tm.trang_thai] || {}).label || tm.trang_thai}</Badge> : '—'}</td>
-                        <td className={TD}>{tm ? <TemQuality tm={tm} /> : '—'}</td>
-                      </tr>
-                    ));
+                    return drows.map((dr, ti) => {
+                      const tm = dr.tm;
+                      return (
+                        <tr key={`${g.phan_in_id}-${dr.key}`}
+                          onClick={() => openDetail(g.phan_in_id)}
+                          className={`cursor-pointer transition hover:bg-surface-muted/40 ${ti === n - 1 ? 'border-b border-line/70' : ''}`}>
+                          {ti === 0 && (
+                            <>
+                              <td rowSpan={n} className={`${TD} text-right tabular-nums text-ink-soft`}>{stt}</td>
+                              <td rowSpan={n} className={TD}>
+                                <div className="font-medium text-ink">{g.ten_khach_hang}</div>
+                                <div className="text-xs text-ink-soft">{g.ma_don_hang}{g.so_po ? ` · ${g.so_po}` : ''}</div>
+                              </td>
+                              <td rowSpan={n} className={TD}>
+                                <div className="text-ink">{g.ma_hang}</div>
+                                {g.so_dot > 1 && <div className="mt-1"><Badge tone="warning">{g.so_dot} đợt vải</Badge></div>}
+                              </td>
+                              <td rowSpan={n} className={TD}>
+                                <div className="text-ink">{g.mau_vai || '—'}</div>
+                                <div className="text-[10px] text-ink-soft">{[g.kich_vai, g.kich_phim].filter(Boolean).join(' · ') || '—'}</div>
+                              </td>
+                              <td rowSpan={n} className={`${TD} text-right tabular-nums border-r border-line/60`}>
+                                <div className="font-medium text-ink">{fmtNum(agg.total)}</div>
+                                <div className="text-[10px] text-ink-soft">đơn {fmtNum(g.so_luong_don_hang)}</div>
+                              </td>
+                              <td rowSpan={n} className={TD}>{fmtDate(agg.ngay)}</td>
+                              <td rowSpan={n} className={TD}>{fmtDate(agg.han)}</td>
+                            </>
+                          )}
+                          <td className={`${TD} border-l border-line/60 font-medium text-ink`}>
+                            {dr.ma
+                              ? <span className={dr.prefix ? (dr.prefix === '17-' ? 'text-amber-600' : 'text-primary') : ''}>{dr.ma}</span>
+                              : <span className="text-xs italic text-ink-soft">Chưa in tem</span>}
+                          </td>
+                          <td className={`${TD} text-right tabular-nums`}>{dr.qty != null ? fmtNum(dr.qty) : '—'}</td>
+                          <td className={TD}>{tm ? <Badge tone={(TEM_STATUS[tm.trang_thai] || {}).tone || 'default'}>{(TEM_STATUS[tm.trang_thai] || {}).label || tm.trang_thai}</Badge> : '—'}</td>
+                          {showTemQuality && <td className={TD}>{tm ? <TemQuality tm={tm} /> : '—'}</td>}
+                        </tr>
+                      );
+                    });
                   }
 
                   // Chế độ mặc định: mỗi đợt vải 1 hàng.

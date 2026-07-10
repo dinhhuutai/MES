@@ -8,7 +8,8 @@ export const attachStore = (s) => {
 
 const baseURL = (process.env.REACT_APP_BASE_URL || 'http://localhost:5000') + '/api';
 
-const client = axios.create({ baseURL, withCredentials: true });
+// timeout 45s: tránh treo vô hạn khi thiết bị mạng (IPS) reset query nặng → request báo lỗi thay vì "Đang tải" mãi.
+const client = axios.create({ baseURL, withCredentials: true, timeout: 45000 });
 
 // Gắn JWT từ store vào mỗi request.
 client.interceptors.request.use((config) => {

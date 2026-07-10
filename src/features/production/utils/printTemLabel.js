@@ -122,6 +122,8 @@ const SHEET_CSS = `
      trong hộp thoại in, hoặc chỉnh Horizontal Offset trong DRIVER máy in. */
   .sheet { display: flex; width: 110mm; height: 80mm; transform: translateX(${H_OFFSET_MM}mm); }
   .label { width: 55mm; height: 80mm; padding: 1mm 5mm 1mm 1mm; display: flex; flex-direction: column; overflow: hidden; }
+  /* Kéo tem PHẢI sang trái 4mm: thu hẹp khung tem TRÁI còn 51mm (lề phải 1mm) — nội dung vẫn 49mm, tem trái đứng yên. */
+  .label:first-child { width: 51mm; padding-right: 1mm; }
   table { width: 100%; border-collapse: collapse; table-layout: fixed; }
   td, th { border: 0.025mm solid #000; padding: 0.25mm 0.6mm; font-size: 2.2mm; line-height: 1.02;
            overflow: hidden; word-break: break-word; text-align: center; vertical-align: middle; }

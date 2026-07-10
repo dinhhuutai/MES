@@ -125,6 +125,7 @@ export const MODULES = [
       { ten: 'Đồng bộ ERP', route: '/he-thong/erp-sync', perm: 'ERP_SYNC' },
       { ten: 'Mẫu form (tem/phiếu)', route: '/he-thong/mau-form', perm: 'WORKFLOW_VIEW' },
       { ten: 'Người dùng online', route: '/he-thong/online', perm: 'PRESENCE_VIEW' },
+      { ten: 'Nhật ký thao tác', route: '/he-thong/nhat-ky', perm: 'PRESENCE_VIEW' },
     ],
   },
 ];

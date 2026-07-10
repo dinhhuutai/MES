@@ -12,11 +12,27 @@ import {
   listTemSanSang, createGiaoHang, listGiaoHang,
 } from '../../../services/deliveryService';
 import { Input } from '../../../components/common/controls';
+import DateRangePicker from '../../../components/common/DateRangePicker';
 import { fmtNum, fmtDate } from '../../../utils/format';
 import GiaoHangPanel from '../components/GiaoHangPanel';
 import TemJourneyPanel from '../../../components/common/TemJourneyPanel';
 import Icon from '../../../components/common/Icon';
 import { getTemHanhTrinh } from '../../../services/qualityService';
+
+const todayStr = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+const FILTER_FIELDS = [
+  { key: 'tem', label: 'Mã tem' },
+  { key: 'khach', label: 'Khách hàng' },
+  { key: 'don', label: 'Đơn hàng' },
+  { key: 'maHang', label: 'Mã hàng' },
+  { key: 'mauVai', label: 'Màu vải' },
+  { key: 'kichVai', label: 'Kích vải' },
+  { key: 'kichPhim', label: 'Kích phim' },
+];
+const FIELD_LABEL = { ...Object.fromEntries(FILTER_FIELDS.map((f) => [f.key, f.label])), ngayTu: 'Từ ngày', ngayDen: 'Đến ngày' };
 
 export default function GiaoHangPage() {
   const { can } = usePermissions();
@@ -32,16 +48,22 @@ export default function GiaoHangPage() {
   const [sel, setSel] = useState(null);
   const [creating, setCreating] = useState(false);
   const [journey, setJourney] = useState(null); // { temId, maTem } — panel hành trình theo tem
-  // Mặc định lọc theo NGÀY IN TEM = hôm nay (giờ máy = giờ VN).
-  const [ngay, setNgay] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  });
+  // Mặc định lọc KHOẢNG ngày in tem = hôm nay → hôm nay (giờ máy = giờ VN).
+  const [range, setRange] = useState(() => ({ from: todayStr(), to: todayStr() }));
+  const [filters, setFilters] = useState({});
+  const [showFilters, setShowFilters] = useState(false);
+
+  const rangeKey = useMemo(() => `${range.from || ''}|${range.to || ''}`, [range]);
+  const filtersKey = useMemo(() => JSON.stringify(filters), [filters]);
+  const activeFilters = useMemo(() => Object.entries(filters).filter(([, v]) => v), [filters]);
+  const setField = (key, value) => setFilters((f) => ({ ...f, [key]: value }));
+  const clearFilters = () => setFilters({});
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [t, h] = await Promise.all([listTemSanSang({ ngay: ngay || undefined }), listGiaoHang({})]);
+      const params = { ...filters, ngayTu: range.from || undefined, ngayDen: range.to || undefined };
+      const [t, h] = await Promise.all([listTemSanSang(params), listGiaoHang({})]);
       setTems(t.data);
       setHistory(h.data);
     } catch (e) {
@@ -49,7 +71,8 @@ export default function GiaoHangPage() {
     } finally {
       setLoading(false);
     }
-  }, [ngay, show]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rangeKey, filtersKey, show]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -135,12 +158,46 @@ export default function GiaoHangPage() {
 
       {tab === 'tao' ? (
         <>
-          <div className="mb-3 flex items-center gap-1.5 text-xs text-ink-soft">
-            <span>Lọc theo ngày in tem</span>
-            <input type="date" value={ngay} onChange={(e) => setNgay(e.target.value)}
-              className="h-9 rounded-input border border-line bg-surface px-2 text-sm" />
-            {ngay && <button type="button" onClick={() => setNgay('')} className="text-ink-soft hover:text-danger" aria-label="Xóa lọc ngày"><Icon name="x" size={14} /></button>}
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5 text-xs text-ink-soft">
+              <span>Ngày in tem</span>
+              <div className="w-64"><DateRangePicker value={range} onChange={setRange} placeholder="Chọn khoảng ngày in tem" /></div>
+              {(range.from || range.to) && <button type="button" onClick={() => setRange({ from: '', to: '' })} className="text-ink-soft hover:text-danger" aria-label="Bỏ lọc ngày"><Icon name="x" size={14} /></button>}
+            </div>
+            <Button variant={showFilters || activeFilters.length ? 'secondary' : 'ghost'} icon="filter"
+              onClick={() => setShowFilters((v) => !v)}>Bộ lọc{activeFilters.length ? ` (${activeFilters.length})` : ''}</Button>
           </div>
+
+          {showFilters && (
+            <div className="mb-3 card p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-ink">Lọc nhiều trường (kết hợp AND)</h3>
+                <Button variant="ghost" className="px-2.5 py-1 text-xs" onClick={clearFilters} disabled={!activeFilters.length}>Xóa lọc</Button>
+              </div>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+                {FILTER_FIELDS.map((f) => (
+                  <div key={f.key}>
+                    <label className="mb-1 block text-xs font-medium text-ink-soft">{f.label}</label>
+                    <input value={filters[f.key] || ''} onChange={(e) => setField(f.key, e.target.value)}
+                      placeholder={`Lọc ${f.label.toLowerCase()}...`}
+                      className="h-10 w-full rounded-input border border-line bg-surface px-3 text-sm focus:border-primary focus:outline-none" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeFilters.length > 0 && (
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              {activeFilters.map(([k, v]) => (
+                <span key={k} className="inline-flex items-center gap-1 rounded-full bg-primary-wash px-3 py-1 text-xs font-medium text-primary">
+                  {FIELD_LABEL[k]}: {v}
+                  <button onClick={() => setField(k, '')} className="ml-0.5 hover:text-danger" aria-label="Xóa"><Icon name="x" size={12} /></button>
+                </span>
+              ))}
+              <button onClick={clearFilters} className="text-xs font-medium text-ink-soft underline hover:text-danger">Xóa tất cả</button>
+            </div>
+          )}
           <DataTable columns={temCols} rows={tems} loading={loading} rowKey="tem_id" sttStart={0}
             rowClassName={(r) => slaRowClass(evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status)}
             emptyText="Không có tem OQC đạt nào chờ giao" />
