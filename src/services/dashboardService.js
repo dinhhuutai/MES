@@ -4,6 +4,7 @@ export const getSummary = () => client.get('/dashboard/summary');
 export const getActivity = () => client.get('/dashboard/activity');
 export const getStageCounts = () => client.get('/dashboard/stage-counts');
 export const getChartDetail = () => client.get('/dashboard/chart-detail');
+export const getDieuPhoi = () => client.get('/dashboard/dieu-phoi');
 export const getBang2 = () => client.get('/dashboard/bang-2');
 export const getNghenMap = () => client.get('/dashboard/nghen-map');
 export const getHoanThanhHomNay = () => client.get('/dashboard/hoan-thanh-hom-nay');

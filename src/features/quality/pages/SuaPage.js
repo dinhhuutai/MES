@@ -32,10 +32,6 @@ const FILTER_FIELDS = [
   { key: 'kichPhim', label: 'Kích phim' },
 ];
 const FIELD_LABEL = { ...Object.fromEntries(FILTER_FIELDS.map((f) => [f.key, f.label])) };
-const todayStr = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
 
 export default function SuaPage() {
   const { can } = usePermissions();
@@ -47,7 +43,7 @@ export default function SuaPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState({});
-  const [range, setRange] = useState(() => ({ from: todayStr(), to: todayStr() }));
+  const [range, setRange] = useState(() => ({ from: '', to: '' }));
   const [showFilters, setShowFilters] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(empty);

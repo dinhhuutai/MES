@@ -7,7 +7,7 @@ import SidePanel from '../../../components/common/SidePanel';
 import KcsBreakdown from '../../../components/common/KcsBreakdown';
 import useToast from '../../../hooks/useToast';
 import useSocketEvent from '../../../hooks/useSocketEvent';
-import { getActivity, getStageCounts, getBang2, getTinhTrangPhanIn, getHoanThanhHomNay, getChartDetail } from '../../../services/dashboardService';
+import { getActivity, getStageCounts, getBang2, getTinhTrangPhanIn, getHoanThanhHomNay, getChartDetail, getDieuPhoi } from '../../../services/dashboardService';
 import { fmtNum } from '../../../utils/format';
 import { fmtDur } from '../../../utils/sla';
 
@@ -52,17 +52,19 @@ function SingleBar({ data, height = 300, color = '#0058be', unit = '', angle = -
   );
 }
 
-// Biểu đồ cột nhiều chuỗi (mỗi nhóm N cột). series: [{key,label,color}].
-function GroupBar({ data, series, height = 320, unit = '' }) {
+// Biểu đồ cột nhiều chuỗi (mỗi nhóm N cột). series: [{key,label,color}]. onBarClick(datum) để drill.
+function GroupBar({ data, series, height = 320, unit = '', onBarClick }) {
+  const click = onBarClick ? (d) => onBarClick(d?.payload || d) : undefined;
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} margin={{ top: 20, right: 8, left: -16, bottom: 8 }}>
         <XAxis dataKey="name" tick={AXIS_TICK} interval={0} angle={-20} textAnchor="end" height={62} />
         <YAxis allowDecimals={false} tick={AXIS_TICK} />
-        <Tooltip formatter={(v, n) => [`${fmtNum(v)}${unit ? ` ${unit}` : ''}`, n]} />
+        <Tooltip formatter={(v, n) => [`${fmtNum(v)}${unit ? ` ${unit}` : ''}`, n]} cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
         <Legend wrapperStyle={{ fontSize: 11 }} />
         {series.map((s) => (
-          <Bar key={s.key} dataKey={s.key} name={s.label} fill={s.color} radius={[4, 4, 0, 0]}>
+          <Bar key={s.key} dataKey={s.key} name={s.label} fill={s.color} radius={[4, 4, 0, 0]}
+            onClick={click} cursor={onBarClick ? 'pointer' : undefined}>
             <LabelList dataKey={s.key} position="top" style={NUM_LABEL} formatter={fmtNum} />
           </Bar>
         ))}
@@ -112,16 +114,6 @@ const STAGE_CELLS = [
   { key: 'OQC', label: 'OQC', trams: ['OQC'], hn: ['OQC'] },
   { key: 'DANG_GIAO', label: 'Đang chờ giao', trams: ['FINISH'] },
   { key: 'DA_GIAO', label: 'Đã giao', hn: ['Giao'] },
-];
-
-const CHART_BUCKETS = [
-  { label: 'READY', keys: ['READY_KT', 'READY_QA'], color: '#0058be' },
-  { label: 'RELEASE 1', keys: ['RELEASE_1'], color: '#6366f1' },
-  { label: 'TEST RUN', keys: ['TESTRUN_CNSP', 'TESTRUN_QA'], color: '#8b5cf6' },
-  { label: 'RELEASE 2', keys: ['RELEASE_2'], color: '#0ea5e9' },
-  { label: 'SẢN XUẤT', keys: ['CHO_SAN_XUAT', 'SAN_XUAT', 'CHO_KHO', 'KCS', 'SUA'], color: '#f59e0b' },
-  { label: 'OQC', keys: ['OQC'], color: '#a855f7' },
-  { label: 'GIAO', keys: ['DANG_GIAO', 'DA_GIAO'], color: '#22c55e' },
 ];
 
 function CellBadges({ nghen, sap, homNay }) {
@@ -212,13 +204,33 @@ function PhanInRow({ p, tone, onClick }) {
 }
 
 // Panel chi tiết 1 giai đoạn (bấm ô Tổng quan / Chi tiết giai đoạn).
-function StageDetailPanel({ stage, bang2, hoanThanhDetail, onClose }) {
+function StageDetailPanel({ stage, bang2, hoanThanhDetail, chartDetail, onClose }) {
   const [phanIn, setPhanIn] = useState(null);
   const collect = (groups) => (groups || []).filter((g) => stage.trams?.includes(g.ma_tram)).flatMap((g) => g.phan_ins || []);
   const nghen = collect(bang2?.nhom_nghen);
   const sap = collect(bang2?.nhom_sap);
   const homNay = (hoanThanhDetail || []).filter((r) => stage.hn?.includes(r.nhom));
   const empty = nghen.length === 0 && sap.length === 0 && homNay.length === 0;
+
+  // Chi tiết OQC / READY (đưa vào drill thay vì để ngoài dashboard chính).
+  const isOqc = stage.label === 'OQC';
+  const isReady = /READY/i.test(stage.label);
+  const o = chartDetail?.oqc || {};
+  const rd = chartDetail?.ready || {};
+  const oqcChart = [
+    { name: 'Tem KCS (chờ)', value: o.kcs_cho || 0, color: '#38bdf8' },
+    { name: 'KCS đã XN', value: o.kcs_dat || 0, color: '#0284c7' },
+    { name: 'Tem Sửa (chờ)', value: o.sua_cho || 0, color: '#fbbf24' },
+    { name: 'Sửa đã XN', value: o.sua_dat || 0, color: '#d97706' },
+    { name: 'Tổng (chờ)', value: o.tong_cho || 0, color: '#a78bfa' },
+    { name: 'Tổng đã XN', value: o.tong_dat || 0, color: '#7c3aed' },
+  ];
+  const readyChart = [
+    { name: 'Film', so_phan_in: rd.tong || 0, da_xn: rd.FILM || 0 },
+    { name: 'Khuôn', so_phan_in: rd.tong || 0, da_xn: rd.KHUON || 0 },
+    { name: 'Mực', so_phan_in: rd.tong || 0, da_xn: rd.MUC || 0 },
+    { name: 'QA', so_phan_in: rd.tong || 0, da_xn: rd.QA || 0 },
+  ];
 
   return (
     <SidePanel open onClose={onClose} width="max-w-2xl"
@@ -233,6 +245,21 @@ function StageDetailPanel({ stage, bang2, hoanThanhDetail, onClose }) {
         </>
       ) : (
         <div className="space-y-4">
+          {isOqc && (
+            <div className="rounded-control border border-line p-2">
+              <div className="mb-1 text-xs font-bold uppercase tracking-wide text-ink-soft">Chi tiết OQC (pcs) — nguồn KCS / Sửa</div>
+              <SingleBar data={oqcChart} height={240} unit="pcs" />
+            </div>
+          )}
+          {isReady && (
+            <div className="rounded-control border border-line p-2">
+              <div className="mb-1 text-xs font-bold uppercase tracking-wide text-ink-soft">READY — số phần in & đã xác nhận từng mục</div>
+              <GroupBar data={readyChart} height={240} unit="phần in" series={[
+                { key: 'so_phan_in', label: 'Số phần in (ở READY)', color: '#94a3b8' },
+                { key: 'da_xn', label: 'Đã xác nhận', color: '#0058be' },
+              ]} />
+            </div>
+          )}
           {nghen.length > 0 && (
             <div>
               <div className="mb-1.5 text-xs font-bold uppercase tracking-wide text-danger">Đang nghẽn ({nghen.length})</div>
@@ -270,7 +297,7 @@ function StageDetailPanel({ stage, bang2, hoanThanhDetail, onClose }) {
               </div>
             </div>
           )}
-          {empty && <p className="text-sm text-ink-soft">Giai đoạn này chưa có phần in nghẽn/sắp nghẽn hay xác nhận hôm nay.</p>}
+          {empty && !isOqc && !isReady && <p className="text-sm text-ink-soft">Giai đoạn này chưa có phần in nghẽn/sắp nghẽn hay xác nhận hôm nay.</p>}
         </div>
       )}
     </SidePanel>
@@ -375,6 +402,80 @@ function Bang2Panel({ kind, data, hoanThanhDetail, onClose }) {
   );
 }
 
+// Panel Trễ hạn giao: nhóm theo trạm đang kẹt → phần in (đã trễ N ngày / hạn giao) → hành trình.
+function TreHanPanel({ data, initKind, initTram, onClose }) {
+  const [kind, setKind] = useState(initKind || 'qua'); // qua | sap
+  const [tram, setTram] = useState(initTram || null);
+  const [phanIn, setPhanIn] = useState(null);
+  const byTram = data?.by_tram || [];
+  const kindOf = (p) => p.kind;
+  const groups = byTram
+    .map((g) => ({ ...g, list: (g.phan_ins || []).filter((p) => kindOf(p) === kind) }))
+    .filter((g) => g.list.length);
+  const curGroup = tram ? groups.find((g) => g.ma_tram === tram) : null;
+
+  let title = kind === 'qua' ? 'Trễ hạn giao (đã quá hạn)' : 'Sắp đến hạn giao';
+  let back = null;
+  if (phanIn) { title = `Phần in ${phanIn.ma_phan}`; back = () => setPhanIn(null); }
+  else if (curGroup) { title = curGroup.ten_tram || curGroup.ma_tram; back = () => setTram(null); }
+
+  const Row = (p) => (
+    <button key={p.phan_in_id} type="button" onClick={() => setPhanIn({ id: p.phan_in_id, ma_phan: p.ma_phan })}
+      className="flex w-full items-center justify-between gap-2 rounded-control border border-line px-3 py-2 text-left hover:shadow-card">
+      <div className="min-w-0">
+        <div className="truncate text-sm font-medium text-ink">{p.ma_phan}{p.ten_khach_hang ? ` · ${p.ten_khach_hang}` : ''}</div>
+        <div className="truncate text-xs text-ink-soft">{[p.ma_hang, p.mau_vai, p.kich_vai, p.kich_phim].filter(Boolean).join(' · ')}</div>
+      </div>
+      <div className="shrink-0 text-right text-xs tabular-nums">
+        {p.kind === 'qua'
+          ? <span className="font-semibold text-rose-600">Trễ {fmtNum(p.tre_ngay)} ngày</span>
+          : <span className="font-semibold text-amber-600">Hạn {p.han_giao_hang ? new Date(p.han_giao_hang).toLocaleDateString('vi-VN') : '—'}</span>}
+        <div className="text-ink-soft">{p.han_giao_hang ? new Date(p.han_giao_hang).toLocaleDateString('vi-VN') : ''}</div>
+      </div>
+    </button>
+  );
+
+  return (
+    <SidePanel open onClose={onClose} title={title} width="max-w-2xl"
+      subtitle={back ? undefined : 'Theo trạm đang kẹt — ưu tiên đẩy hàng'}>
+      {!phanIn && (
+        <div className="mb-3 flex gap-1.5">
+          <button type="button" onClick={() => { setKind('qua'); setTram(null); }}
+            className={`rounded-full px-3 py-1 text-xs font-semibold ${kind === 'qua' ? 'bg-rose-600 text-white' : 'bg-rose-100 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300'}`}>
+            Đã trễ ({fmtNum(data?.qua_han || 0)})
+          </button>
+          <button type="button" onClick={() => { setKind('sap'); setTram(null); }}
+            className={`rounded-full px-3 py-1 text-xs font-semibold ${kind === 'sap' ? 'bg-amber-500 text-white' : 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'}`}>
+            Sắp đến hạn ({fmtNum(data?.sap_han || 0)})
+          </button>
+        </div>
+      )}
+      {back && (
+        <button type="button" onClick={back} className="mb-3 inline-flex items-center gap-1 text-xs text-primary hover:underline">
+          <Icon name="chevron-left" size={14} /> Quay lại
+        </button>
+      )}
+      {phanIn ? <PhanInJourney id={phanIn.id} />
+        : curGroup ? <div className="space-y-1.5">{curGroup.list.map(Row)}</div>
+        : groups.length === 0 ? <p className="text-sm text-ink-soft">Không có phần in {kind === 'qua' ? 'trễ hạn' : 'sắp đến hạn'}.</p>
+        : (
+          <div className="space-y-2">
+            {groups.map((g) => (
+              <button key={g.ma_tram} type="button" onClick={() => setTram(g.ma_tram)}
+                className="flex w-full items-center justify-between rounded-control border border-line px-3 py-2.5 text-left hover:shadow-card">
+                <div className="text-sm font-medium text-ink">{g.ten_tram || g.ma_tram}</div>
+                <div className="flex items-center gap-2">
+                  <Badge tone={kind === 'qua' ? 'danger' : 'warning'}>{fmtNum(g.list.length)} phần in</Badge>
+                  <Icon name="chevron-right" size={16} className="text-ink-soft" />
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+    </SidePanel>
+  );
+}
+
 export default function DashboardPage() {
   const { toast, show } = useToast();
   const [stages, setStages] = useState(null);
@@ -382,13 +483,15 @@ export default function DashboardPage() {
   const [bang2, setBang2] = useState(null);
   const [htDetail, setHtDetail] = useState([]);
   const [chartDetail, setChartDetail] = useState(null); // OQC + READY breakdown
+  const [dieuPhoi, setDieuPhoi] = useState(null); // trễ hạn + chờ duyệt + chuyền
   const [drill, setDrill] = useState(null);       // chip toàn cục
+  const [treHan, setTreHan] = useState(null);     // panel trễ hạn giao
   const [stageDetail, setStageDetail] = useState(null); // ô giai đoạn
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const [sc, act, b2, ht, cd] = await Promise.allSettled([
-      getStageCounts(), getActivity(), getBang2(), getHoanThanhHomNay(), getChartDetail(),
+    const [sc, act, b2, ht, cd, dp] = await Promise.allSettled([
+      getStageCounts(), getActivity(), getBang2(), getHoanThanhHomNay(), getChartDetail(), getDieuPhoi(),
     ]);
     if (sc.status === 'fulfilled') setStages(sc.value.data);
     else show(sc.reason?.message || 'Lỗi tải giai đoạn', 'error');
@@ -396,6 +499,7 @@ export default function DashboardPage() {
     if (b2.status === 'fulfilled') setBang2(b2.value.data);
     if (ht.status === 'fulfilled') setHtDetail(ht.value.data);
     if (cd.status === 'fulfilled') setChartDetail(cd.value.data);
+    if (dp.status === 'fulfilled') setDieuPhoi(dp.value.data);
     setLoading(false);
   }, [show]);
 
@@ -405,70 +509,52 @@ export default function DashboardPage() {
   const nghenByTram = useMemo(() => Object.fromEntries((bang2?.nhom_nghen || []).map((g) => [g.ma_tram, g.count])), [bang2]);
   const sapByTram = useMemo(() => Object.fromEntries((bang2?.nhom_sap || []).map((g) => [g.ma_tram, g.count])), [bang2]);
 
-  const chartData = useMemo(() => CHART_BUCKETS.map((c) => ({
-    name: c.label, color: c.color,
-    value: c.keys.reduce((a, k) => a + (stages?.stages?.[k]?.phan_in || 0), 0),
-  })), [stages]);
-
-  // Dữ liệu theo trạm: đang ở (stage hiện tại) · nghẽn (bản đồ nghẽn) · tổng chưa giao (lũy kế từ trạm này về sau).
-  const stationData = useMemo(() => {
-    const stageP = (keys) => keys.reduce((a, k) => a + (stages?.stages?.[k]?.phan_in || 0), 0);
-    const dangO = STATION_BUCKETS.map((b) => stageP(b.keys));
-    const nghen = STATION_BUCKETS.map((b) => b.trams.reduce((a, t) => a + (nghenByTram[t] || 0), 0));
-    const tong = dangO.map((_, i) => dangO.slice(i).reduce((a, b) => a + b, 0)); // funnel: chưa giao
-    return STATION_BUCKETS.map((b, i) => ({ name: b.label, color: b.color, dang_o: dangO[i], nghen: nghen[i], tong: tong[i] }));
-  }, [stages, nghenByTram]);
-
-  const prodData = useMemo(() => {
-    const p = (k) => stages?.stages?.[k]?.phan_in || 0;
-    return [
-      { name: 'Chờ chạy', value: p('CHO_SAN_XUAT'), color: '#0ea5e9' },
-      { name: 'Đang chạy', value: p('SAN_XUAT'), color: '#f59e0b' },
-      { name: 'Kiểm', value: p('KCS'), color: '#3b82f6' },
-      { name: 'Sửa', value: p('SUA'), color: '#f97316' },
-    ];
-  }, [stages]);
-
-  const oqcData = useMemo(() => {
-    const o = chartDetail?.oqc || {};
-    return [
-      { name: 'Tem KCS (chờ)', value: o.kcs_cho || 0, color: '#38bdf8' },
-      { name: 'KCS đã XN', value: o.kcs_dat || 0, color: '#0284c7' },
-      { name: 'Tem Sửa (chờ)', value: o.sua_cho || 0, color: '#fbbf24' },
-      { name: 'Sửa đã XN', value: o.sua_dat || 0, color: '#d97706' },
-      { name: 'Tổng (chờ)', value: o.tong_cho || 0, color: '#a78bfa' },
-      { name: 'Tổng đã XN', value: o.tong_dat || 0, color: '#7c3aed' },
-    ];
-  }, [chartDetail]);
-
-  // Đã xác nhận tại trạm: cột 1 = xác nhận HÔM NAY (htDetail theo nhóm checkpoint); cột 2 = đã xác nhận & CHƯA GIAO (BE).
+  // Đã xác nhận tại trạm: cột 1 = số phần in HOÀN TẤT trạm hôm nay (qua trạm sau) — chỉ đếm CHECKLIST CUỐI
+  //   (READY→QC xác nhận, Test Run→QA; KCS/Sửa/OQC/Giao mỗi lần xác nhận là đã đẩy tem qua trạm sau).
+  //   cột 2 = đã xác nhận tại trạm & phần in CHƯA GIAO (BE).
   const confirmStationData = useMemo(() => {
+    // 7 trạm KHỚP với "Tổng quan giai đoạn". hn = mốc "chuyển đi" hôm nay (checklist cuối / sự kiện qua trạm).
     const CONFIRM_STATIONS = [
-      { label: 'READY', key: 'ready', hn: ['Khuôn', 'Film', 'Mực', 'QC xác nhận'] },
-      { label: 'Test Run', key: 'test', hn: ['CNSP xác nhận test', 'QA xác nhận test'] },
-      { label: 'KCS', key: 'kcs', hn: ['KCS'] },
-      { label: 'Sửa', key: 'sua', hn: ['Sửa'] },
-      { label: 'OQC', key: 'oqc', hn: ['OQC'] },
-      { label: 'Giao', key: 'giao', hn: ['Giao'] },
+      { label: 'READY', key: 'ready', hn: ['QC xác nhận'], keys: ['READY_KT', 'READY_QA'] },
+      { label: 'Release 1', key: 'release_1', hn: ['Release 1'], keys: ['RELEASE_1'] },
+      { label: 'Test Run', key: 'test', hn: ['QA xác nhận test'], keys: ['TESTRUN_CNSP', 'TESTRUN_QA'] },
+      { label: 'Release 2', key: 'release_2', hn: ['Release 2'], keys: ['RELEASE_2'] },
+      { label: 'Sản xuất', key: 'san_xuat', hn: ['KCS', 'Sửa'], keys: ['CHO_SAN_XUAT', 'SAN_XUAT', 'CHO_KHO', 'KCS', 'SUA'] },
+      { label: 'OQC', key: 'oqc', hn: ['OQC'], keys: ['OQC'] },
+      { label: 'Giao', key: 'giao', hn: ['Giao'], keys: ['DANG_GIAO'] },
     ];
     const sc = chartDetail?.station_confirmed || {};
     return CONFIRM_STATIONS.map((s) => {
       const seen = new Set();
       (htDetail || []).forEach((r) => { if (s.hn.includes(r.nhom)) seen.add(r.phan_in_id || r.doi_tuong); });
-      return { name: s.label, hom_nay: seen.size, chua_giao: sc[s.key] || 0 };
+      const dang_o = s.keys.reduce((a, k) => a + (stages?.stages?.[k]?.phan_in || 0), 0);
+      return { name: s.label, dang_o, hom_nay: seen.size, chua_giao: sc[s.key] || 0 };
     });
-  }, [chartDetail, htDetail]);
+  }, [chartDetail, htDetail, stages]);
 
-  const readyData = useMemo(() => {
-    const r = chartDetail?.ready || {};
-    const tong = r.tong || 0;
+  // Nghẽn & Sắp nghẽn theo trạm (từ bản đồ nghẽn của bang-2).
+  const nghenSapData = useMemo(() => STATION_BUCKETS.map((b) => ({
+    name: b.label,
+    nghen: b.trams.reduce((a, t) => a + (nghenByTram[t] || 0), 0),
+    sap: b.trams.reduce((a, t) => a + (sapByTram[t] || 0), 0),
+  })), [nghenByTram, sapByTram]);
+
+  // Tải sản xuất (WIP) — phần in đang ở từng khâu sản xuất.
+  const wipData = useMemo(() => {
+    const p = (k) => stages?.stages?.[k]?.phan_in || 0;
     return [
-      { name: 'Film', so_phan_in: tong, da_xn: r.FILM || 0 },
-      { name: 'Khuôn', so_phan_in: tong, da_xn: r.KHUON || 0 },
-      { name: 'Mực', so_phan_in: tong, da_xn: r.MUC || 0 },
-      { name: 'QA', so_phan_in: tong, da_xn: r.QA || 0 },
+      { name: 'Chờ chạy', value: p('CHO_SAN_XUAT'), color: '#0ea5e9' },
+      { name: 'Đang chạy', value: p('SAN_XUAT'), color: '#f59e0b' },
+      { name: 'Chờ khô', value: p('CHO_KHO'), color: '#64748b' },
+      { name: 'Kiểm', value: p('KCS'), color: '#3b82f6' },
+      { name: 'Sửa', value: p('SUA'), color: '#f97316' },
     ];
-  }, [chartDetail]);
+  }, [stages]);
+
+  // Trễ hạn giao theo trạm (BE /dieu-phoi).
+  const treHanData = useMemo(() => (dieuPhoi?.tre_han?.by_tram || []).map((g) => ({
+    name: g.ten_tram || g.ma_tram, ma_tram: g.ma_tram, qua_han: g.qua_han, sap_han: g.sap_han,
+  })), [dieuPhoi]);
 
   if (loading) return <div className="py-10 text-center text-ink-soft">Đang tải...</div>;
 
@@ -495,14 +581,52 @@ export default function DashboardPage() {
         <Badge tone="success"><span className="mr-1.5 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-500" />Realtime</Badge>
       </div>
 
+      {/* ===== DẢI KPI ĐIỀU PHỐI (bấm để xem chi tiết) ===== */}
+      {(() => {
+        const release2 = stages?.stages?.RELEASE_2?.phan_in || 0;
+        const cd = dieuPhoi?.cho_duyet || {};
+        const choDuyet = release2 + (cd.qc_tra_ve || 0) + (cd.oqc_khong_dat || 0);
+        const ch = dieuPhoi?.chuyen || {};
+        const KpiCard = ({ tone, icon, label, value, sub, onClick }) => {
+          const T = {
+            rose: 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-300',
+            amber: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300',
+            violet: 'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900/50 dark:bg-violet-950/30 dark:text-violet-300',
+            sky: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/50 dark:bg-sky-950/30 dark:text-sky-300',
+            emerald: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300',
+          }[tone];
+          return (
+            <button type="button" onClick={onClick} disabled={!onClick}
+              className={`flex min-w-0 flex-1 items-center gap-2.5 rounded-card border px-3 py-2.5 text-left transition ${T} ${onClick ? 'hover:brightness-95' : 'cursor-default'}`}>
+              <span className="text-lg">{icon}</span>
+              <div className="min-w-0">
+                <div className="text-xl font-bold tabular-nums leading-none">{value}</div>
+                <div className="mt-0.5 truncate text-[11px] font-medium opacity-90">{label}</div>
+                {sub && <div className="truncate text-[10px] opacity-80">{sub}</div>}
+              </div>
+            </button>
+          );
+        };
+        return (
+          <div className="mb-5 flex flex-wrap gap-2.5">
+            <KpiCard tone="rose" icon="🔴" label="Trễ hạn giao" value={fmtNum(dieuPhoi?.tre_han?.qua_han || 0)}
+              sub="đã quá hạn, chưa giao" onClick={() => setTreHan({ kind: 'qua' })} />
+            <KpiCard tone="amber" icon="🟡" label="Sắp đến hạn" value={fmtNum(dieuPhoi?.tre_han?.sap_han || 0)}
+              sub="hôm nay & ngày mai" onClick={() => setTreHan({ kind: 'sap' })} />
+            <KpiCard tone="rose" icon="⚠" label="Nghẽn (quá SLA)" value={fmtNum(bang2?.nghen || 0)} onClick={() => setDrill('NGHEN')} />
+            <KpiCard tone="amber" icon="⏳" label="Sắp nghẽn" value={fmtNum(bang2?.sap_nghen || 0)} onClick={() => setDrill('SAP_NGHEN')} />
+            <KpiCard tone="violet" icon="📝" label="Chờ duyệt / xử lý" value={fmtNum(choDuyet)}
+              sub={`Release 2: ${fmtNum(release2)} · QC trả về: ${fmtNum(cd.qc_tra_ve || 0)} · OQC lỗi: ${fmtNum(cd.oqc_khong_dat || 0)}`} />
+            <KpiCard tone="sky" icon="🏭" label="Chuyền đang chạy" value={`${fmtNum(ch.dang_chay || 0)}/${fmtNum(ch.tong || 0)}`}
+              sub={`Rảnh: ${fmtNum(ch.ranh || 0)} chuyền`} />
+            <KpiCard tone="emerald" icon="✅" label="Hoàn tất hôm nay" value={fmtNum(bang2?.hoan_thanh_hom_nay || 0)} onClick={() => setDrill('hoan_thanh')} />
+          </div>
+        );
+      })()}
+
       {/* Tầng 1 — tổng quan giai đoạn */}
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Tổng quan giai đoạn</span>
-        <div className="flex flex-wrap gap-1.5">
-          <button type="button" onClick={() => setDrill('hoan_thanh')} className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700 hover:brightness-95 dark:bg-emerald-950/40 dark:text-emerald-300">✓ Hôm nay {fmtNum(bang2?.hoan_thanh_hom_nay || 0)}</button>
-          <button type="button" onClick={() => setDrill('SAP_NGHEN')} className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700 hover:brightness-95 dark:bg-amber-950/40 dark:text-amber-300">⏳ Sắp nghẽn {fmtNum(bang2?.sap_nghen || 0)}</button>
-          <button type="button" onClick={() => setDrill('NGHEN')} className="rounded-full bg-rose-100 px-2.5 py-1 text-xs font-semibold text-rose-700 hover:brightness-95 dark:bg-rose-950/40 dark:text-rose-300">⚠ Nghẽn {fmtNum(bang2?.nghen || 0)}</button>
-        </div>
       </div>
       <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
         {TIER1_CELLS.map((c) => {
@@ -544,43 +668,38 @@ export default function DashboardPage() {
         })}
       </div>
 
-      {/* Biểu đồ — 2 biểu đồ / hàng; "Hoạt động gần đây" đặt SAU CÙNG */}
+      {/* ===== BẢNG ĐIỀU PHỐI — 4 biểu đồ hành động (2/hàng); Hoạt động gần đây cuối cùng ===== */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <ChartCard title="Phần in theo checkpoint hiện tại">
-          <SingleBar data={chartData} height={340} unit="phần in" />
-        </ChartCard>
-
-        <ChartCard title="Tổng · Đang ở · Nghẽn theo trạm">
-          <GroupBar data={stationData} unit="phần in" series={[
-            { key: 'tong', label: 'Tổng (chưa giao)', color: '#0058be' },
-            { key: 'dang_o', label: 'Đang ở', color: '#22c55e' },
-            { key: 'nghen', label: 'Nghẽn', color: '#ef4444' },
+        <ChartCard title="Nghẽn & Sắp nghẽn theo trạm  ·  bấm cột để xem chi tiết">
+          <GroupBar data={nghenSapData} unit="phần in" onBarClick={() => setDrill('NGHEN')} series={[
+            { key: 'nghen', label: 'Nghẽn (quá SLA)', color: '#ef4444' },
+            { key: 'sap', label: 'Sắp nghẽn', color: '#f59e0b' },
           ]} />
         </ChartCard>
 
-        <ChartCard title="Phần in đã xác nhận tại trạm">
+        <ChartCard title="Trễ hạn giao theo trạm đang kẹt  ·  bấm cột để xem đơn">
+          <GroupBar data={treHanData} unit="phần in"
+            onBarClick={(d) => setTreHan({ kind: 'qua', maTram: d?.ma_tram })} series={[
+              { key: 'qua_han', label: 'Đã trễ hạn', color: '#e11d48' },
+              { key: 'sap_han', label: 'Sắp đến hạn', color: '#f59e0b' },
+            ]} />
+        </ChartCard>
+
+        <ChartCard title="Tải sản xuất — phần in đang ở từng khâu">
+          <SingleBar data={wipData} unit="phần in" angle={0} />
+        </ChartCard>
+
+        <ChartCard title="Nhịp độ hôm nay theo trạm">
           <GroupBar data={confirmStationData} unit="phần in" series={[
-            { key: 'hom_nay', label: 'Đã XN hôm nay', color: '#22c55e' },
-            { key: 'chua_giao', label: 'Đã XN (chưa giao)', color: '#0058be' },
+            { key: 'hom_nay', label: 'Hoàn tất hôm nay', color: '#22c55e' },
+            { key: 'chua_giao', label: 'Đã qua, chưa giao', color: '#0058be' },
           ]} />
         </ChartCard>
 
-        <ChartCard title="Nghẽn theo trạm">
-          <SingleBar data={stationData.map((s) => ({ name: s.name, value: s.nghen }))} color="#ef4444" unit="phần in" />
-        </ChartCard>
-
-        <ChartCard title="Chi tiết Sản xuất (phần in)">
-          <SingleBar data={prodData} unit="phần in" angle={0} />
-        </ChartCard>
-
-        <ChartCard title="Chi tiết OQC (pcs)">
-          <SingleBar data={oqcData} unit="pcs" />
-        </ChartCard>
-
-        <ChartCard title="READY — số phần in & đã xác nhận">
-          <GroupBar data={readyData} unit="phần in" series={[
-            { key: 'so_phan_in', label: 'Số phần in (ở READY)', color: '#94a3b8' },
-            { key: 'da_xn', label: 'Đã xác nhận', color: '#0058be' },
+        <ChartCard title="Đang ở trạm vs Đã chuyển đi hôm nay">
+          <GroupBar data={confirmStationData} unit="phần in" series={[
+            { key: 'dang_o', label: 'Đang ở trạm', color: '#0058be' },
+            { key: 'hom_nay', label: 'Đã chuyển đi hôm nay', color: '#22c55e' },
           ]} />
         </ChartCard>
 
@@ -601,7 +720,8 @@ export default function DashboardPage() {
       </div>
 
       {drill && bang2 && <Bang2Panel kind={drill} data={bang2} hoanThanhDetail={htDetail} onClose={() => setDrill(null)} />}
-      {stageDetail && <StageDetailPanel stage={stageDetail} bang2={bang2} hoanThanhDetail={htDetail} onClose={() => setStageDetail(null)} />}
+      {stageDetail && <StageDetailPanel stage={stageDetail} bang2={bang2} hoanThanhDetail={htDetail} chartDetail={chartDetail} onClose={() => setStageDetail(null)} />}
+      {treHan && dieuPhoi && <TreHanPanel data={dieuPhoi.tre_han} initKind={treHan.kind} initTram={treHan.maTram} onClose={() => setTreHan(null)} />}
       <Toast toast={toast} />
     </div>
   );

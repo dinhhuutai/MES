@@ -22,10 +22,6 @@ import { listOqcCandidates, recordOqc, oqcHistory, oqcDone, listGiaoDacBietActiv
 import { listUsers } from '../../../services/userService';
 import { fmtNum, baseMaTem } from '../../../utils/format';
 
-const todayStr = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
 const FILTER_FIELDS = [
   { key: 'khach', label: 'Khách hàng' }, { key: 'don', label: 'Đơn hàng' }, { key: 'maHang', label: 'Mã hàng' },
   { key: 'mauVai', label: 'Màu vải' }, { key: 'kichVai', label: 'Kích vải' }, { key: 'kichPhim', label: 'Kích phim' },
@@ -40,7 +36,7 @@ export default function OqcPage() {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [range, setRange] = useState(() => ({ from: todayStr(), to: todayStr() }));
+  const [range, setRange] = useState(() => ({ from: '', to: '' }));
   const [filters, setFilters] = useState({});
   const [showFilters, setShowFilters] = useState(false);
   const [editing, setEditing] = useState(null);

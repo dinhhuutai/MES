@@ -19,10 +19,6 @@ import TemJourneyPanel from '../../../components/common/TemJourneyPanel';
 import Icon from '../../../components/common/Icon';
 import { getTemHanhTrinh } from '../../../services/qualityService';
 
-const todayStr = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
 const FILTER_FIELDS = [
   { key: 'tem', label: 'Mã tem' },
   { key: 'khach', label: 'Khách hàng' },
@@ -49,7 +45,7 @@ export default function GiaoHangPage() {
   const [creating, setCreating] = useState(false);
   const [journey, setJourney] = useState(null); // { temId, maTem } — panel hành trình theo tem
   // Mặc định lọc KHOẢNG ngày in tem = hôm nay → hôm nay (giờ máy = giờ VN).
-  const [range, setRange] = useState(() => ({ from: todayStr(), to: todayStr() }));
+  const [range, setRange] = useState(() => ({ from: '', to: '' }));
   const [filters, setFilters] = useState({});
   const [showFilters, setShowFilters] = useState(false);
 
