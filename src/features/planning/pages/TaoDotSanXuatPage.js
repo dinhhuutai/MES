@@ -193,7 +193,9 @@ export default function TaoDotSanXuatPage() {
               <ChuyenPicker chuyen={chuyen} value={chuyenId} onChange={setChuyenId} />
             </Field>
             <Field label="Ngày kế hoạch (tùy chọn)">
-              <Input type="date" value={ngayKeHoach} onChange={(e) => setNgayKeHoach(e.target.value)} />
+              <Input type="date" value={ngayKeHoach} onChange={(e) => setNgayKeHoach(e.target.value)}
+                className="cursor-pointer"
+                onClick={(e) => { try { e.target.showPicker?.(); } catch { /* trình duyệt không hỗ trợ showPicker */ } }} />
             </Field>
             <Button className="w-full" onClick={submit} loading={busy}
               disabled={!canRelease || basket.length === 0 || !chuyenId || !!overRow}>

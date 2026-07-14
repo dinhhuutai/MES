@@ -4,6 +4,7 @@ import Pagination from '../../../components/common/Pagination';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import SidePanel from '../../../components/common/SidePanel';
+import Modal from '../../../components/common/Modal';
 import Toast from '../../../components/common/Toast';
 import Icon from '../../../components/common/Icon';
 import DateRangePicker from '../../../components/common/DateRangePicker';
@@ -157,6 +158,23 @@ function aggDotVai(dotVai = []) {
   return { total, ngay: ngay[0] || null, han: han[0] || null };
 }
 
+// Số liệu TỔNG HỢP 1 phần in cho chế độ "Tất cả" (1 dòng): tổng đợt vải + tổng các đợt sản xuất.
+function aggSxRow(g) {
+  const dv = g.dot_vai || [];
+  const sx = g.dot_san_xuat || [];
+  const hanVai = dv.reduce((mn, d) => (d.han_giao_hang && (!mn || new Date(d.han_giao_hang) < new Date(mn)) ? d.han_giao_hang : mn), null);
+  const sum = (k) => sx.reduce((s, x) => s + (x[k] || 0), 0);
+  return {
+    soDotVai: dv.length,
+    tongVai: dv.reduce((s, d) => s + (d.so_luong_vai_ve || 0), 0),
+    ngayVai: dv.length ? dv[0].ngay_vai_ve : null,
+    hanVai,
+    soDotSx: sx.length,
+    slIn: sum('sl_in'), slKcsDat: sum('sl_kcs_dat'), slSua: sum('sl_sua'), slSuaDat: sum('sl_sua_dat'), slGiao: sum('sl_giao'),
+    oqcDat: sx.filter((x) => x.tt_oqc === 'DAT').length,
+  };
+}
+
 export default function PhanInListPage() {
   const { toast, show } = useToast();
   const [rows, setRows] = useState([]);
@@ -170,6 +188,7 @@ export default function PhanInListPage() {
   const [sort, setSort] = useState({ key: '', dir: '' }); // sắp xếp cột (màn "Tất cả")
   const [menuKey, setMenuKey] = useState(null); // header đang mở menu sắp xếp
   const [exporting, setExporting] = useState(false);
+  const [detailModal, setDetailModal] = useState(null); // phần in đang mở modal chi tiết theo đợt
 
   const [detail, setDetail] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -196,15 +215,15 @@ export default function PhanInListPage() {
   // Chọn kiểu sắp xếp cho 1 cột: '' = mặc định, 'asc' = tăng, 'desc' = giảm.
   const applySort = (key, dir) => { setSort(dir ? { key, dir } : { key: '', dir: '' }); setPage(1); setMenuKey(null); };
 
-  // Xuất Excel: tải TOÀN BỘ danh sách đang lọc (mọi trang) + đúng thứ tự sắp xếp, dựng workbook giống bảng.
-  const doExport = async () => {
+  // Xuất Excel: tải TOÀN BỘ danh sách đang lọc (mọi trang) + đúng thứ tự sắp xếp. 2 chế độ: 'tong' | 'chi_tiet'.
+  const doExport = async (mode) => {
     setExporting(true);
     try {
       const res = await listVaiVe({ search, stage, ...filters, page: 1, limit: 100000, sortKey: sort.key, sortDir: sort.dir });
       const items = res.data.items || [];
       if (!items.length) { show('Không có dữ liệu để xuất', 'error'); return; }
-      await exportPhanInVaiVeExcel(items);
-      show(`Đã xuất ${items.length} phần in ra Excel`);
+      await exportPhanInVaiVeExcel(items, `danh-sach-phan-in-${mode === 'tong' ? 'tong-hop' : 'chi-tiet'}`, mode);
+      show(`Đã xuất ${items.length} phần in ra Excel (${mode === 'tong' ? 'tổng hợp' : 'chi tiết'})`);
     } catch (e) {
       show(e.message || 'Xuất Excel thất bại', 'error');
     } finally {
@@ -286,7 +305,7 @@ export default function PhanInListPage() {
   const showPcsCol = stage === 'SAN_XUAT';             // chỉ thêm cột "SL đã in"
   const showSxCols = !stage || stage === 'ALL';        // "Tất cả": thêm khối cột theo ĐỢT SẢN XUẤT
   const showTemQuality = showTemRows && !['KCS', 'CHO_KHO'].includes(stage); // KCS/Chờ khô chưa có chất lượng → ẩn cột
-  const COLS = showTemRows ? (10 + (showTemQuality ? 1 : 0)) : (11 + (showPcsCol ? 1 : 0) + (showSxCols ? 8 : 0));
+  const COLS = showTemRows ? (10 + (showTemQuality ? 1 : 0)) : (11 + (showPcsCol ? 1 : 0) + (showSxCols ? 9 : 0));
 
   return (
     <div>
@@ -298,9 +317,14 @@ export default function PhanInListPage() {
           Bộ lọc{activeFilters.length ? ` (${activeFilters.length})` : ''}
         </Button>
         {stage === 'ALL' && (
-          <Button variant="ghost" icon="file-spreadsheet" loading={exporting} onClick={doExport}>
-            Xuất Excel
-          </Button>
+          <>
+            <Button variant="ghost" icon="file-spreadsheet" loading={exporting} onClick={() => doExport('tong')}>
+              Excel (tổng)
+            </Button>
+            <Button variant="ghost" icon="file-spreadsheet" loading={exporting} onClick={() => doExport('chi_tiet')}>
+              Excel (chi tiết)
+            </Button>
+          </>
         )}
         <Badge tone="default">Tổng {meta.total}</Badge>
       </Toolbar>
@@ -411,6 +435,7 @@ export default function PhanInListPage() {
                         <th className={TH}>OQC xác nhận</th>
                         <th className={TH}>TT OQC</th>
                         <th className={`${TH} text-right`}>SL giao</th>
+                        <th className={`${TH} text-center`}>Chi tiết</th>
                       </>
                     )}
                   </>
@@ -497,42 +522,35 @@ export default function PhanInListPage() {
                     });
                   }
 
-                  // Chế độ "Tất cả": HÀNG = max(số đợt vải, số đợt SX). Khối trái tách theo TỪNG ĐỢT VẢI
-                  // (SL/ngày/hạn riêng), khối phải tách theo TỪNG ĐỢT SX — hai danh sách độc lập cạnh nhau.
+                  // Chế độ "Tất cả": 1 DÒNG / phần in — số liệu TỔNG HỢP. Bấm "Chi tiết" mở modal xem theo từng đợt.
                   if (showSxCols) {
-                    const dvList = g.dot_vai && g.dot_vai.length ? g.dot_vai : [];
-                    const sxList = g.dot_san_xuat && g.dot_san_xuat.length ? g.dot_san_xuat : [];
-                    const R = Math.max(dvList.length, sxList.length, 1);
-                    const lines = Array.from({ length: R }, (_, i) => ({ d: dvList[i] || null, s: sxList[i] || null }));
-                    return lines.map((ln, si) => {
-                      const s = ln.s; const d = ln.d;
-                      return (
-                        <tr key={`${g.phan_in_id}-r${si}`}
-                          onClick={() => openDetail(g.phan_in_id)}
-                          className={`cursor-pointer transition hover:bg-surface-muted/40 ${si === R - 1 ? 'border-b border-line/70' : ''}`}>
-                          {si === 0 && headCells(R)}
-                          {/* Khối đợt vải — mỗi đợt vải một hàng */}
-                          <td className={`${TD} text-right tabular-nums`}>
-                            {d ? fmtNum(d.so_luong_vai_ve)
-                              : (si === 0 && dvList.length === 0 ? <span className="text-xs italic text-ink-soft">Chưa có vải về</span> : '')}
-                          </td>
-                          <td className={TD}>{d ? fmtDate(d.ngay_vai_ve) : ''}</td>
-                          <td className={TD}>{d ? fmtDate(d.han_giao_hang) : ''}</td>
-                          {/* Khối đợt sản xuất — mỗi đợt SX một hàng */}
-                          <td className={`${TD} border-l border-line/60 font-medium text-ink`}>
-                            {s ? <span>{s.ma_lenh_san_xuat}{s.giai_doan === 'EP_UI' && <Badge tone="info">Ép ủi</Badge>}</span>
-                              : (si === 0 && sxList.length === 0 ? <span className="text-xs italic text-ink-soft">Chưa có đợt SX</span> : '')}
-                          </td>
-                          <td className={`${TD} text-right tabular-nums`}>{s ? fmtNum(s.sl_in) : '—'}</td>
-                          <td className={`${TD} text-right tabular-nums`}>{s ? fmtNum(s.sl_kcs_dat) : '—'}</td>
-                          <td className={`${TD} text-right tabular-nums`}>{s ? fmtNum(s.sl_sua) : '—'}</td>
-                          <td className={`${TD} text-right tabular-nums`}>{s ? fmtNum(s.sl_sua_dat) : '—'}</td>
-                          <td className={TD}>{s?.tg_oqc ? fmtDateTime(s.tg_oqc) : '—'}</td>
-                          <td className={TD}>{s?.tt_oqc ? <Badge tone={s.tt_oqc === 'DAT' ? 'success' : 'danger'}>{s.tt_oqc === 'DAT' ? 'Đạt' : 'Không đạt'}</Badge> : '—'}</td>
-                          <td className={`${TD} text-right tabular-nums`}>{s ? fmtNum(s.sl_giao) : '—'}</td>
-                        </tr>
-                      );
-                    });
+                    const a = aggSxRow(g);
+                    return (
+                      <tr key={g.phan_in_id}
+                        onClick={() => openDetail(g.phan_in_id)}
+                        className="cursor-pointer border-b border-line/70 transition hover:bg-surface-muted/40">
+                        {headCells(1)}
+                        <td className={`${TD} text-right tabular-nums`}>
+                          {a.soDotVai > 0 ? fmtNum(a.tongVai) : <span className="text-xs italic text-ink-soft">Chưa có vải về</span>}
+                        </td>
+                        <td className={TD}>{fmtDate(a.ngayVai)}</td>
+                        <td className={TD}>{fmtDate(a.hanVai)}</td>
+                        <td className={`${TD} border-l border-line/60 font-medium text-ink`}>
+                          {a.soDotSx > 0 ? <Badge tone="info">{a.soDotSx} đợt SX</Badge> : <span className="text-xs italic text-ink-soft">Chưa có đợt SX</span>}
+                        </td>
+                        <td className={`${TD} text-right tabular-nums`}>{a.soDotSx ? fmtNum(a.slIn) : '—'}</td>
+                        <td className={`${TD} text-right tabular-nums`}>{a.soDotSx ? fmtNum(a.slKcsDat) : '—'}</td>
+                        <td className={`${TD} text-right tabular-nums`}>{a.soDotSx ? fmtNum(a.slSua) : '—'}</td>
+                        <td className={`${TD} text-right tabular-nums`}>{a.soDotSx ? fmtNum(a.slSuaDat) : '—'}</td>
+                        <td className={TD}>—</td>
+                        <td className={TD}>{a.soDotSx ? <span className="text-xs text-ink-soft">{a.oqcDat}/{a.soDotSx} đạt</span> : '—'}</td>
+                        <td className={`${TD} text-right tabular-nums`}>{a.soDotSx ? fmtNum(a.slGiao) : '—'}</td>
+                        <td className={`${TD} text-center`}>
+                          <Button variant="ghost" className="!px-2.5 !py-1 !text-xs"
+                            onClick={(e) => { e.stopPropagation(); setDetailModal(g); }}>Chi tiết</Button>
+                        </td>
+                      </tr>
+                    );
                   }
 
                   // Chế độ mặc định (các chip non-tem khác): mỗi đợt vải 1 hàng.
@@ -722,6 +740,15 @@ export default function PhanInListPage() {
                           {t.moc.so_luong > 1 ? ` · ${t.moc.so_luong} lần` : ''}
                         </div>
                       )}
+                      {t.qty && t.qty.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1.5 pl-8">
+                          {t.qty.map((qq) => (
+                            <span key={qq.label} className="rounded bg-surface-muted px-1.5 py-0.5 text-[11px] text-ink-soft">
+                              {qq.label}: <b className="text-ink">{fmtNum(qq.value)}</b>
+                            </span>
+                          ))}
+                        </div>
+                      )}
                       {withPcs && <StagePcsNote maTram={t.ma_tram} sp={detail.stage_pcs} />}
                     </div>
                     {i < arr.length - 1 && (
@@ -731,14 +758,15 @@ export default function PhanInListPage() {
                 );
                 return (
                   <div className="space-y-4">
-                    {ready && (
-                      <div>
-                        <div className="mb-1 text-xs font-semibold text-ink-soft">Chuẩn bị kỹ thuật (READY) — dùng chung mọi đợt SX</div>
-                        <ol>{renderNode(ready, 0, [ready], single)}</ol>
-                      </div>
-                    )}
                     {journeys.length === 0 ? (
-                      <p className="text-sm text-ink-soft">Chưa có đợt sản xuất nào (phần in đang ở READY/chờ release).</p>
+                      ready ? (
+                        <div>
+                          <div className="mb-1 text-xs font-semibold text-ink-soft">Chuẩn bị kỹ thuật (READY)</div>
+                          <ol>{renderNode(ready, 0, [ready], single)}</ol>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-ink-soft">Chưa có đợt sản xuất nào (phần in đang ở READY/chờ release).</p>
+                      )
                     ) : journeys.map((j, ji) => (
                       <div key={j.lenh_id} className="rounded-control border border-line/70 bg-surface-muted/30 p-2.5">
                         <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -769,6 +797,64 @@ export default function PhanInListPage() {
           </div>
         )}
       </SidePanel>
+
+      {/* Modal chi tiết theo ĐỢT (mở từ nút "Chi tiết" ở chế độ Tất cả) */}
+      {detailModal && (
+        <Modal open onClose={() => setDetailModal(null)} size="xl"
+          title={`Chi tiết phần in ${detailModal.ma_phan} — theo từng đợt`}>
+          {(() => {
+            const dvList = detailModal.dot_vai || [];
+            const sxList = detailModal.dot_san_xuat || [];
+            const R = Math.max(dvList.length, sxList.length, 1);
+            const lines = Array.from({ length: R }, (_, i) => ({ d: dvList[i] || null, s: sxList[i] || null }));
+            const th = 'px-3 py-2 text-left text-xs font-semibold text-ink-soft';
+            const td = 'px-3 py-1.5';
+            return (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-line bg-surface-muted/60">
+                      <th className={`${th} text-right`}>SL vải về</th>
+                      <th className={th}>Ngày vải về</th>
+                      <th className={th}>Hạn giao</th>
+                      <th className={`${th} border-l border-line/60`}>Đợt SX</th>
+                      <th className={`${th} text-right`}>SL in</th>
+                      <th className={`${th} text-right`}>Kiểm đạt</th>
+                      <th className={`${th} text-right`}>Sửa</th>
+                      <th className={`${th} text-right`}>Sửa đạt</th>
+                      <th className={th}>OQC xác nhận</th>
+                      <th className={th}>TT OQC</th>
+                      <th className={`${th} text-right`}>SL giao</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {lines.map((ln, i) => {
+                      const d = ln.d; const s = ln.s;
+                      return (
+                        <tr key={i} className="border-b border-line/60">
+                          <td className={`${td} text-right tabular-nums`}>{d ? fmtNum(d.so_luong_vai_ve) : ''}</td>
+                          <td className={td}>{d ? fmtDate(d.ngay_vai_ve) : ''}</td>
+                          <td className={td}>{d ? fmtDate(d.han_giao_hang) : ''}</td>
+                          <td className={`${td} border-l border-line/60 font-medium text-ink`}>
+                            {s ? <span>{s.ma_lenh_san_xuat}{s.giai_doan === 'EP_UI' && <Badge tone="info">Ép ủi</Badge>}</span> : ''}
+                          </td>
+                          <td className={`${td} text-right tabular-nums`}>{s ? fmtNum(s.sl_in) : ''}</td>
+                          <td className={`${td} text-right tabular-nums`}>{s ? fmtNum(s.sl_kcs_dat) : ''}</td>
+                          <td className={`${td} text-right tabular-nums`}>{s ? fmtNum(s.sl_sua) : ''}</td>
+                          <td className={`${td} text-right tabular-nums`}>{s ? fmtNum(s.sl_sua_dat) : ''}</td>
+                          <td className={td}>{s?.tg_oqc ? fmtDateTime(s.tg_oqc) : ''}</td>
+                          <td className={td}>{s?.tt_oqc ? <Badge tone={s.tt_oqc === 'DAT' ? 'success' : 'danger'}>{s.tt_oqc === 'DAT' ? 'Đạt' : 'Không đạt'}</Badge> : ''}</td>
+                          <td className={`${td} text-right tabular-nums`}>{s ? fmtNum(s.sl_giao) : ''}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
+        </Modal>
+      )}
 
       <Toast toast={toast} />
     </div>

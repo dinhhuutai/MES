@@ -16,7 +16,7 @@ const fmtDate = (d) => { if (!d) return ''; const x = new Date(d); return Number
 const fmtDateTime = (d) => { if (!d) return ''; const x = new Date(d); return Number.isNaN(x) ? '' : `${pad(x.getDate())}/${pad(x.getMonth() + 1)}/${x.getFullYear()} ${pad(x.getHours())}:${pad(x.getMinutes())}`; };
 const ttOqc = (v) => (v === 'DAT' ? 'Đạt' : v === 'KHONG_DAT' ? 'Không đạt' : '');
 
-export default async function exportPhanInVaiVeExcel(rows, fileName = 'danh-sach-phan-in-vai-ve') {
+export default async function exportPhanInVaiVeExcel(rows, fileName = 'danh-sach-phan-in-vai-ve', mode = 'chi_tiet') {
   const ExcelJS = (await import('exceljs')).default || (await import('exceljs'));
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Phần in vải về');
@@ -35,11 +35,36 @@ export default async function exportPhanInVaiVeExcel(rows, fileName = 'danh-sach
     cell.border = border;
   });
 
+  const alignRow = (row) => row.eachCell({ includeEmpty: true }, (cell, col) => {
+    cell.border = border;
+    const numCol = [1, 8, 9, 13, 14, 15, 16, 19].includes(col);
+    cell.alignment = { vertical: 'middle', horizontal: numCol ? 'right' : 'left', wrapText: false };
+  });
+
   let stt = 0;
   for (const g of rows) {
     stt += 1;
     const dv = (g.dot_vai && g.dot_vai.length) ? g.dot_vai : [];
     const sx = (g.dot_san_xuat && g.dot_san_xuat.length) ? g.dot_san_xuat : [];
+    const donHangTong = g.ma_don_hang ? `${g.ma_don_hang}${g.so_po ? ` (${g.so_po})` : ''}` : '';
+
+    // ---- Chế độ TỔNG: 1 dòng / phần in (số liệu cộng dồn) ----
+    if (mode === 'tong') {
+      const sum = (k) => sx.reduce((acc, x) => acc + (x[k] || 0), 0);
+      const tongVai = dv.reduce((acc, d) => acc + (d.so_luong_vai_ve || 0), 0);
+      const ngay = dv.map((d) => d.ngay_vai_ve).filter(Boolean).sort()[0];
+      const han = dv.map((d) => d.han_giao_hang).filter(Boolean).sort()[0];
+      alignRow(ws.addRow([
+        stt, g.ten_khach_hang || '', donHangTong, g.ma_hang || '', g.mau_vai || '', g.kich_vai || '', g.kich_phim || '',
+        g.so_luong_don_hang ?? '', tongVai, fmtDate(ngay), fmtDate(han),
+        sx.length ? `${sx.length} đợt SX` : '', sx.length ? sum('sl_in') : '', sx.length ? sum('sl_kcs_dat') : '',
+        sx.length ? sum('sl_sua') : '', sx.length ? sum('sl_sua_dat') : '', '',
+        sx.length ? `${sx.filter((x) => x.tt_oqc === 'DAT').length}/${sx.length} đạt` : '', sx.length ? sum('sl_giao') : '',
+      ]));
+      continue;
+    }
+
+    // ---- Chế độ CHI TIẾT: max(số đợt vải, số đợt SX) hàng + gộp ô định danh ----
     const R = Math.max(dv.length, sx.length, 1);
     const startRow = ws.rowCount + 1;
 

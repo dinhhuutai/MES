@@ -34,6 +34,7 @@ export const cancelCNSP = (id) => client.post(`/planning/test-run/${id}/cancel-c
 export const cancelQA = (id) => client.post(`/planning/test-run/${id}/cancel-qa`);
 // Test Run QC trả về Release 1 (hủy lệnh + lý do)
 export const returnTestRunToRelease1 = (id, body) => client.post(`/planning/test-run/${id}/tra-ve-release1`, body);
+export const skipTestRun = (id) => client.post(`/planning/test-run/${id}/skip`);
 export const confirmCNSPBatch = (lenhIds) => client.post('/planning/test-run/cnsp-confirm-batch', { lenhIds });
 export const confirmQABatch = (lenhIds, payload = {}) => client.post('/planning/test-run/qa-confirm-batch', { lenhIds, ...payload });
 export const testRunHistory = (date) => client.get('/planning/test-run/history', { params: { date } });

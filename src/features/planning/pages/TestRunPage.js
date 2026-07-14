@@ -116,7 +116,6 @@ export default function TestRunPage() {
     { key: 'loai_dot_vai', header: 'Loại đợt vải', render: (r) => <LoaiDotVaiBadge value={r.loai_dot_vai} /> },
     { key: 'chuyen', header: 'Chuyền', render: (r) => r.ten_chuyen || '—' },
     { key: 'so_lan_test', header: 'Lần test', className: 'text-right tabular-nums', render: (r) => r.so_lan_test },
-    { key: 'cnsp_done', header: 'CNSP', render: (r) => r.cnsp_done ? <Badge tone="success">✓</Badge> : <Badge tone="warning">Chờ</Badge> },
     { key: 'qa_done', header: 'QA', render: (r) => r.qa_done ? <Badge tone="success">✓</Badge> : <Badge tone="warning">Chờ</Badge> },
   ];
 

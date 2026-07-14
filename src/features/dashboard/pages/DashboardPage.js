@@ -604,6 +604,35 @@ export default function DashboardPage() {
     }));
   }, [confirmStationData, nghenSapData]);
 
+  // Chi tiết READY: Film/Khuôn/Mực — 3 cột Tổng (ở READY) / Đã xác nhận / Nghẽn (giống biểu đồ tiến độ).
+  const readySubData = useMemo(() => {
+    const rd = chartDetail?.ready || {};
+    const tong = rd.tong || 0;
+    const nghen = nghenByTram.READY || 0;
+    return [
+      { name: 'Film', tong, da_xong: rd.FILM || 0, nghen },
+      { name: 'Khuôn', tong, da_xong: rd.KHUON || 0, nghen },
+      { name: 'Mực', tong, da_xong: rd.MUC || 0, nghen },
+    ];
+  }, [chartDetail, nghenByTram]);
+
+  // Chi tiết Sản xuất: Chờ SX/Sản xuất/KCS/Sửa — Đã xong = phần in đã qua giai đoạn (đang ở giai đoạn sau).
+  const sanXuatSubData = useMemo(() => {
+    const p = (k) => stages?.stages?.[k]?.phan_in || 0;
+    const FLOW = ['CHO_SAN_XUAT', 'SAN_XUAT', 'CHO_KHO', 'KCS', 'SUA', 'OQC', 'DANG_GIAO', 'DA_GIAO'];
+    const downstream = (k) => { const i = FLOW.indexOf(k); return i < 0 ? 0 : FLOW.slice(i + 1).reduce((a, x) => a + p(x), 0); };
+    const items = [
+      { name: 'Chờ sản xuất', key: 'CHO_SAN_XUAT', tram: null },
+      { name: 'Sản xuất', key: 'SAN_XUAT', tram: 'SAN_XUAT' },
+      { name: 'KCS', key: 'KCS', tram: 'KIEM' },
+      { name: 'Sửa', key: 'SUA', tram: 'SUA' },
+    ];
+    return items.map((it) => {
+      const dangO = p(it.key); const daXong = downstream(it.key);
+      return { name: it.name, tong: dangO + daXong, da_xong: daXong, nghen: it.tram ? (nghenByTram[it.tram] || 0) : 0 };
+    });
+  }, [stages, nghenByTram]);
+
   // Tải sản xuất (WIP) — phần in đang ở từng khâu sản xuất.
   const wipData = useMemo(() => {
     const p = (k) => stages?.stages?.[k]?.phan_in || 0;
@@ -731,6 +760,29 @@ export default function DashboardPage() {
             </button>
           );
         })}
+      </div>
+
+      {/* ===== CHI TIẾT 2 CHECKPOINT: READY & SẢN XUẤT — mỗi mục 3 cột Tổng/Đã xong/Nghẽn (đường vàng = tổng phần in) ===== */}
+      <div className="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <ChartCard title={`Chi tiết READY (Film / Khuôn / Mực) · đường vàng = tổng phần in (${fmtNum(tongPhanIn)})`}>
+          <GroupBar data={readySubData} unit="phần in" height={320}
+            refLine={{ value: tongPhanIn, label: `Tổng ${fmtNum(tongPhanIn)}` }}
+            series={[
+              { key: 'tong', label: 'Tổng (ở READY)', color: '#94a3b8' },
+              { key: 'da_xong', label: 'Đã xác nhận', color: '#22c55e' },
+              { key: 'nghen', label: 'Nghẽn', color: '#ef4444' },
+            ]} />
+        </ChartCard>
+
+        <ChartCard title={`Chi tiết Sản xuất (Chờ SX / Sản xuất / KCS / Sửa) · đường vàng = tổng phần in (${fmtNum(tongPhanIn)})`}>
+          <GroupBar data={sanXuatSubData} unit="phần in" height={320}
+            refLine={{ value: tongPhanIn, label: `Tổng ${fmtNum(tongPhanIn)}` }}
+            series={[
+              { key: 'tong', label: 'Tổng (đã xong + đang ở)', color: '#94a3b8' },
+              { key: 'da_xong', label: 'Đã xong (đã qua giai đoạn)', color: '#22c55e' },
+              { key: 'nghen', label: 'Nghẽn', color: '#ef4444' },
+            ]} />
+        </ChartCard>
       </div>
 
       {/* ===== BẢNG ĐIỀU PHỐI — 4 biểu đồ hành động (2/hàng); Hoạt động gần đây cuối cùng ===== */}

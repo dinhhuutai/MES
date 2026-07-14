@@ -6,7 +6,7 @@ import Toast from '../../../components/common/Toast';
 import { Input, Textarea, Field, Select } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import { getLenhDetail, recordTestRun, confirmQA, cancelQA, returnTestRunToRelease1 } from '../../../services/planningService';
+import { getLenhDetail, recordTestRun, confirmQA, cancelQA, returnTestRunToRelease1, skipTestRun } from '../../../services/planningService';
 import { fmtNum } from '../../../utils/format';
 
 const fmt = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '');
@@ -103,6 +103,21 @@ export default function TestRunPanel({ lenhId, onClose, onChanged }) {
     }
   };
 
+  // Không test run → bỏ Test Run, duyệt thẳng Release 2 (đợt SX vào chờ sản xuất).
+  const doSkip = async () => {
+    setBusy('skip');
+    try {
+      await skipTestRun(lenhId);
+      show('Đã bỏ Test Run — đợt sản xuất vào danh sách chờ sản xuất');
+      onChanged?.();
+      onClose?.();
+    } catch (e) {
+      show(e.message || 'Bỏ Test Run thất bại', 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+
   // Trả về Release 1 → hủy lệnh, đợt vải về pool Release 1 (kèm lý do bắt buộc).
   const doReturn = async () => {
     if (!returnReason.trim()) { show('Nhập lý do trả về Release 1', 'error'); return; }
@@ -130,6 +145,9 @@ export default function TestRunPanel({ lenhId, onClose, onChanged }) {
           <Button variant="danger" onClick={doCancel} loading={busy === 'cancel'}>Hủy xác nhận QA</Button>
         ) : (
           <>
+            <Button variant="secondary" onClick={doSkip} loading={busy === 'skip'} disabled={busy === 'pass' || busy === 'fail'}>
+              Không test run
+            </Button>
             <Button variant="danger" onClick={doFail} loading={busy === 'fail'} disabled={busy === 'pass'}>
               Xác nhận test lỗi
             </Button>
@@ -144,29 +162,6 @@ export default function TestRunPanel({ lenhId, onClose, onChanged }) {
         <div className="py-10 text-center text-ink-soft">Đang tải...</div>
       ) : (
         <div className="space-y-5">
-          <section className="grid grid-cols-2 gap-2">
-            <div className="rounded-control border border-line p-3">
-              <div className="text-xs text-ink-soft">CNSP (kỹ thuật)</div>
-              {state.cnsp_done ? <Badge tone="success">Đã xác nhận</Badge> : <Badge tone="warning">Chờ</Badge>}
-              {state.cnsp_done && (state.cnsp_nguoi || state.cnsp_tg) && (
-                <div className="mt-1 text-xs text-ink-soft">
-                  {state.cnsp_nguoi ? <div className="font-medium text-ink">{state.cnsp_nguoi}</div> : null}
-                  {state.cnsp_tg ? <div>{fmt(state.cnsp_tg)}</div> : null}
-                </div>
-              )}
-            </div>
-            <div className="rounded-control border border-line p-3">
-              <div className="text-xs text-ink-soft">QA (chất lượng)</div>
-              {state.qa_done ? <Badge tone="success">Đã xác nhận</Badge> : <Badge tone="warning">Chờ</Badge>}
-              {state.qa_done && (state.qa_nguoi || state.qa_tg) && (
-                <div className="mt-1 text-xs text-ink-soft">
-                  {state.qa_nguoi ? <div className="font-medium text-ink">{state.qa_nguoi}</div> : null}
-                  {state.qa_tg ? <div>{fmt(state.qa_tg)}</div> : null}
-                </div>
-              )}
-            </div>
-          </section>
-
           {done && (
             <div className="rounded-control border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
               QA đã xác nhận đạt{state.cnsp_done ? ' — đủ điều kiện chờ Kế hoạch duyệt Release 2.' : ' — còn chờ CNSP (kỹ thuật) xác nhận.'}

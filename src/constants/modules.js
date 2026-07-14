@@ -50,7 +50,6 @@ export const MODULES = [
     mau: 'bg-emerald-50 text-emerald-600',
     children: [
       { ten: 'Xác nhận chạy', route: '/san-xuat/xac-nhan-chay', perm: 'PROD_RUN' },
-      { ten: 'Chạy đặc biệt (bỏ Test Run)', route: '/san-xuat/chay-dac-biet', perm: 'PROD_RUN' },
       { ten: 'Theo dõi chuyền', route: '/san-xuat/theo-doi-chuyen', perm: 'PROD_MONITOR' },
       { ten: 'Tình trạng xe phơi', route: '/san-xuat/xe-phoi', perm: 'XEPHOI' },
       { ten: 'KCS', route: '/san-xuat/kcs', perm: 'KCS' },

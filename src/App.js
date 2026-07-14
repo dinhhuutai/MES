@@ -28,7 +28,6 @@ import ActivityLogPage from './features/system/pages/ActivityLogPage';
 import FormTemplatesPage from './features/system/pages/FormTemplatesPage';
 import PhanInListPage from './features/orders/pages/PhanInListPage';
 import ReadyPage from './features/technical-ready/pages/ReadyPage';
-import ChayDacBietPage from './features/production/pages/ChayDacBietPage';
 import GomSetPage from './features/technical-ready/pages/GomSetPage';
 import KeHoachTuDongPage from './features/planning/pages/KeHoachTuDongPage';
 import TaoDotSanXuatPage from './features/planning/pages/TaoDotSanXuatPage';
@@ -69,7 +68,6 @@ const PAGES = {
   '/ke-hoach/lap-lai': <ReplanPage />,
   '/chat-luong/test-run': <TestRunPage />,
   '/san-xuat/xac-nhan-chay': <XacNhanChayPage />,
-  '/san-xuat/chay-dac-biet': <ChayDacBietPage />,
   '/san-xuat/theo-doi-chuyen': <TheoDoiChuyenPage />,
   '/san-xuat/xe-phoi': <XePhoiPage />,
   '/san-xuat/kcs': <KcsPage />,

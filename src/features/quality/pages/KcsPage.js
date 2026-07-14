@@ -67,15 +67,15 @@ export default function KcsPage() {
   const setField = (key, value) => setFilters((f) => ({ ...f, [key]: value }));
   const clearFilters = () => setFilters({});
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const res = await listKcsCandidates({ search, ...filters, ngayTu: range.from || undefined, ngayDen: range.to || undefined });
       setRows(res.data);
     } catch (e) {
-      show(e.message || 'Lỗi tải', 'error');
+      if (!silent) show(e.message || 'Lỗi tải', 'error');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, filtersKey, rangeKey, show]);
@@ -104,6 +104,12 @@ export default function KcsPage() {
   useEffect(() => {
     const t = setTimeout(load, 250);
     return () => clearTimeout(t);
+  }, [load]);
+
+  // Tự làm mới ngầm mỗi 30s: tem phơi xong (BE tự chuyển sang chờ KCS) sẽ hiện lên mà không cần bấm.
+  useEffect(() => {
+    const id = setInterval(() => load(true), 30000);
+    return () => clearInterval(id);
   }, [load]);
 
   // Prefill SL đạt = SL còn cần kiểm (con_kcs). Kiểm từng phần nhiều lần.
