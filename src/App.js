@@ -28,12 +28,12 @@ import ActivityLogPage from './features/system/pages/ActivityLogPage';
 import FormTemplatesPage from './features/system/pages/FormTemplatesPage';
 import PhanInListPage from './features/orders/pages/PhanInListPage';
 import ReadyPage from './features/technical-ready/pages/ReadyPage';
-import TestRunCnspPage from './features/technical-ready/pages/TestRunCnspPage';
+import ChayDacBietPage from './features/production/pages/ChayDacBietPage';
 import GomSetPage from './features/technical-ready/pages/GomSetPage';
 import KeHoachTuDongPage from './features/planning/pages/KeHoachTuDongPage';
+import TaoDotSanXuatPage from './features/planning/pages/TaoDotSanXuatPage';
 import CaiDatPage from './features/planning/pages/CaiDatPage';
 import Release1Page from './features/planning/pages/Release1Page';
-import GopDotVaiPage from './features/planning/pages/GopDotVaiPage';
 import Release2Page from './features/planning/pages/Release2Page';
 import ReplanPage from './features/planning/pages/ReplanPage';
 import TestRunPage from './features/planning/pages/TestRunPage';
@@ -61,15 +61,15 @@ const PAGES = {
   '/don-hang/phan-in': <PhanInListPage />,
   '/ky-thuat/ready': <ReadyPage />,
   '/ky-thuat/gom-set': <GomSetPage />,
-  '/ky-thuat/test-run-cnsp': <TestRunCnspPage />,
+  '/ke-hoach/tao-dot-san-xuat': <TaoDotSanXuatPage />,
   '/ke-hoach/tu-dong': <KeHoachTuDongPage />,
   '/ke-hoach/cai-dat': <CaiDatPage />,
   '/ke-hoach/release-1': <Release1Page />,
   '/ke-hoach/release-2': <Release2Page />,
   '/ke-hoach/lap-lai': <ReplanPage />,
-  '/ke-hoach/gop-dot-vai': <GopDotVaiPage />,
   '/chat-luong/test-run': <TestRunPage />,
   '/san-xuat/xac-nhan-chay': <XacNhanChayPage />,
+  '/san-xuat/chay-dac-biet': <ChayDacBietPage />,
   '/san-xuat/theo-doi-chuyen': <TheoDoiChuyenPage />,
   '/san-xuat/xe-phoi': <XePhoiPage />,
   '/san-xuat/kcs': <KcsPage />,

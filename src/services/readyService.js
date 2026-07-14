@@ -21,6 +21,10 @@ export const returnReadyToTech = (id, body) => client.post(`/ready/${id}/tra-ve`
 export const cancelReadyItem = (id, ma) => client.post(`/ready/${id}/huy`, { ma });
 // Lịch sử trạng thái (xác nhận READY đang hiệu lực) theo ngày — cho trang Hệ thống.
 export const listConfirmHistory = (params) => client.get('/ready/lich-su-xac-nhan', { params });
+
+// "Mở READY" (admin): phần in đi tắt READY (đợt mới tự vào Release 1) → ép quay lại READY.
+export const listReopenReadyCandidates = (params) => client.get('/ready/reopen/candidates', { params });
+export const reopenReady = (phanInId) => client.post(`/ready/reopen/${phanInId}`);
 // QC xác nhận hàng loạt nhiều phần in.
 export const confirmReadyQcBatch = (phanInIds) =>
   client.post('/ready/qc-confirm-batch', { phanInIds });

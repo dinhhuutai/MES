@@ -10,6 +10,7 @@ import DateRangePicker from '../../../components/common/DateRangePicker';
 import KcsBreakdown from '../../../components/common/KcsBreakdown';
 import useToast from '../../../hooks/useToast';
 import { listVaiVe, getPhanIn, setChoKho } from '../../../services/orderService';
+import exportPhanInVaiVeExcel from '../utils/exportPhanInVaiVeExcel';
 import { fmtNum, fmtDate, fmtDateTime, fmtCurrency } from '../../../utils/format';
 
 const LIMIT = 20;
@@ -166,6 +167,9 @@ export default function PhanInListPage() {
   const [filters, setFilters] = useState({});
   const [showFilters, setShowFilters] = useState(false);
   const [page, setPage] = useState(1);
+  const [sort, setSort] = useState({ key: '', dir: '' }); // sắp xếp cột (màn "Tất cả")
+  const [menuKey, setMenuKey] = useState(null); // header đang mở menu sắp xếp
+  const [exporting, setExporting] = useState(false);
 
   const [detail, setDetail] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
@@ -178,7 +182,7 @@ export default function PhanInListPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await listVaiVe({ search, stage, ...filters, page, limit: LIMIT });
+      const res = await listVaiVe({ search, stage, ...filters, page, limit: LIMIT, sortKey: sort.key, sortDir: sort.dir });
       setRows(res.data.items);
       setMeta(res.data.meta);
     } catch (e) {
@@ -187,7 +191,52 @@ export default function PhanInListPage() {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, stage, filtersKey, page, show]);
+  }, [search, stage, filtersKey, page, sort.key, sort.dir, show]);
+
+  // Chọn kiểu sắp xếp cho 1 cột: '' = mặc định, 'asc' = tăng, 'desc' = giảm.
+  const applySort = (key, dir) => { setSort(dir ? { key, dir } : { key: '', dir: '' }); setPage(1); setMenuKey(null); };
+
+  // Xuất Excel: tải TOÀN BỘ danh sách đang lọc (mọi trang) + đúng thứ tự sắp xếp, dựng workbook giống bảng.
+  const doExport = async () => {
+    setExporting(true);
+    try {
+      const res = await listVaiVe({ search, stage, ...filters, page: 1, limit: 100000, sortKey: sort.key, sortDir: sort.dir });
+      const items = res.data.items || [];
+      if (!items.length) { show('Không có dữ liệu để xuất', 'error'); return; }
+      await exportPhanInVaiVeExcel(items);
+      show(`Đã xuất ${items.length} phần in ra Excel`);
+    } catch (e) {
+      show(e.message || 'Xuất Excel thất bại', 'error');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // Header có icon sắp xếp + menu 3 lựa chọn (double-click để mở). key null = cột không sắp xếp được.
+  const sortTh = (label, key, cls = '') => {
+    if (!key) return <th className={`${TH} ${cls}`}>{label}</th>;
+    const curDir = sort.key === key ? sort.dir : '';
+    const icon = curDir === 'asc' ? 'chevron-up' : curDir === 'desc' ? 'chevron-down' : 'chevrons-up-down';
+    return (
+      <th className={`${TH} ${cls} relative select-none`} onDoubleClick={() => setMenuKey(menuKey === key ? null : key)}
+        title="Double-click để sắp xếp">
+        <div className="flex cursor-pointer items-center gap-1" onClick={() => setMenuKey(menuKey === key ? null : key)}>
+          <span>{label}</span>
+          <Icon name={icon} size={13} className={curDir ? 'text-primary' : 'text-ink-soft/50'} />
+        </div>
+        {menuKey === key && (
+          <div className="absolute left-0 top-full z-30 mt-1 w-36 rounded-control border border-line bg-surface py-1 text-xs font-normal shadow-lg">
+            {[['', 'Mặc định'], ['asc', 'Tăng dần'], ['desc', 'Giảm dần']].map(([d, lb]) => (
+              <button key={d || 'def'} onClick={() => applySort(key, d)}
+                className={`block w-full px-3 py-1.5 text-left hover:bg-surface-muted ${curDir === d ? 'font-semibold text-primary' : 'text-ink'}`}>
+                {lb}
+              </button>
+            ))}
+          </div>
+        )}
+      </th>
+    );
+  };
 
   const setField = (key, value) => { setFilters((f) => ({ ...f, [key]: value })); setPage(1); };
   const clearFilters = () => { setFilters({}); setPage(1); };
@@ -235,8 +284,9 @@ export default function PhanInListPage() {
   const sttStart = (meta.page - 1) * LIMIT;
   const showTemRows = TEM_ROW_STAGES.includes(stage); // tem/hàng + chất lượng
   const showPcsCol = stage === 'SAN_XUAT';             // chỉ thêm cột "SL đã in"
+  const showSxCols = !stage || stage === 'ALL';        // "Tất cả": thêm khối cột theo ĐỢT SẢN XUẤT
   const showTemQuality = showTemRows && !['KCS', 'CHO_KHO'].includes(stage); // KCS/Chờ khô chưa có chất lượng → ẩn cột
-  const COLS = showTemRows ? (10 + (showTemQuality ? 1 : 0)) : (11 + (showPcsCol ? 1 : 0));
+  const COLS = showTemRows ? (10 + (showTemQuality ? 1 : 0)) : (11 + (showPcsCol ? 1 : 0) + (showSxCols ? 8 : 0));
 
   return (
     <div>
@@ -247,6 +297,11 @@ export default function PhanInListPage() {
           onClick={() => setShowFilters((s) => !s)}>
           Bộ lọc{activeFilters.length ? ` (${activeFilters.length})` : ''}
         </Button>
+        {stage === 'ALL' && (
+          <Button variant="ghost" icon="file-spreadsheet" loading={exporting} onClick={doExport}>
+            Xuất Excel
+          </Button>
+        )}
         <Badge tone="default">Tổng {meta.total}</Badge>
       </Toolbar>
 
@@ -313,6 +368,7 @@ export default function PhanInListPage() {
       )}
 
       {/* Bảng (md trở lên) */}
+      {menuKey && <div className="fixed inset-0 z-20" onClick={() => setMenuKey(null)} />}
       <div className="hidden card overflow-hidden md:block">
         <div className="overflow-auto max-h-[calc(100vh-13rem)]">
           <table className="w-full text-sm">
@@ -334,17 +390,29 @@ export default function PhanInListPage() {
                   </>
                 ) : (
                   <>
-                    <th className={TH}>Khách hàng</th>
-                    <th className={TH}>Đơn hàng</th>
-                    <th className={TH}>Mã hàng</th>
-                    <th className={TH}>Màu vải</th>
-                    <th className={TH}>Kích vải</th>
-                    <th className={TH}>Kích phim</th>
-                    <th className={`${TH} text-right border-r border-line/60`}>SL đơn hàng</th>
-                    <th className={`${TH} text-right`}>SL vải về</th>
-                    <th className={TH}>Ngày vải về</th>
-                    <th className={TH}>Hạn giao</th>
+                    {sortTh('Khách hàng', 'khach')}
+                    {sortTh('Đơn hàng', 'don')}
+                    {sortTh('Mã hàng', 'maHang')}
+                    {sortTh('Màu vải', 'mauVai')}
+                    {sortTh('Kích vải', 'kichVai')}
+                    {sortTh('Kích phim', 'kichPhim')}
+                    {sortTh('SL đơn hàng', 'slDon', 'text-right border-r border-line/60')}
+                    {sortTh('SL vải về', 'slVai', 'text-right')}
+                    {sortTh('Ngày vải về', 'ngayVai')}
+                    {sortTh('Hạn giao', 'hanGiao')}
                     {showPcsCol && <th className={`${TH} text-right border-l border-line/60`}>SL đã in</th>}
+                    {showSxCols && (
+                      <>
+                        <th className={`${TH} border-l border-line/60`}>Đợt SX</th>
+                        {sortTh('SL in', 'slIn', 'text-right')}
+                        {sortTh('Kiểm đạt', 'kiemDat', 'text-right')}
+                        {sortTh('Sửa', 'sua', 'text-right')}
+                        {sortTh('Sửa đạt', 'suaDat', 'text-right')}
+                        <th className={TH}>OQC xác nhận</th>
+                        <th className={TH}>TT OQC</th>
+                        <th className={`${TH} text-right`}>SL giao</th>
+                      </>
+                    )}
                   </>
                 )}
               </tr>
@@ -406,7 +474,7 @@ export default function PhanInListPage() {
                               </td>
                               <td rowSpan={n} className={TD}>
                                 <div className="text-ink">{g.mau_vai || '—'}</div>
-                                <div className="text-[10px] text-ink-soft">{[g.kich_vai, g.kich_phim].filter(Boolean).join(' · ') || '—'}</div>
+                                <div className="text-xs text-ink-soft">{[g.kich_vai, g.kich_phim].filter(Boolean).join(' · ') || '—'}</div>
                               </td>
                               <td rowSpan={n} className={`${TD} text-right tabular-nums border-r border-line/60`}>
                                 <div className="font-medium text-ink">{fmtNum(agg.total)}</div>
@@ -429,7 +497,45 @@ export default function PhanInListPage() {
                     });
                   }
 
-                  // Chế độ mặc định: mỗi đợt vải 1 hàng.
+                  // Chế độ "Tất cả": HÀNG = max(số đợt vải, số đợt SX). Khối trái tách theo TỪNG ĐỢT VẢI
+                  // (SL/ngày/hạn riêng), khối phải tách theo TỪNG ĐỢT SX — hai danh sách độc lập cạnh nhau.
+                  if (showSxCols) {
+                    const dvList = g.dot_vai && g.dot_vai.length ? g.dot_vai : [];
+                    const sxList = g.dot_san_xuat && g.dot_san_xuat.length ? g.dot_san_xuat : [];
+                    const R = Math.max(dvList.length, sxList.length, 1);
+                    const lines = Array.from({ length: R }, (_, i) => ({ d: dvList[i] || null, s: sxList[i] || null }));
+                    return lines.map((ln, si) => {
+                      const s = ln.s; const d = ln.d;
+                      return (
+                        <tr key={`${g.phan_in_id}-r${si}`}
+                          onClick={() => openDetail(g.phan_in_id)}
+                          className={`cursor-pointer transition hover:bg-surface-muted/40 ${si === R - 1 ? 'border-b border-line/70' : ''}`}>
+                          {si === 0 && headCells(R)}
+                          {/* Khối đợt vải — mỗi đợt vải một hàng */}
+                          <td className={`${TD} text-right tabular-nums`}>
+                            {d ? fmtNum(d.so_luong_vai_ve)
+                              : (si === 0 && dvList.length === 0 ? <span className="text-xs italic text-ink-soft">Chưa có vải về</span> : '')}
+                          </td>
+                          <td className={TD}>{d ? fmtDate(d.ngay_vai_ve) : ''}</td>
+                          <td className={TD}>{d ? fmtDate(d.han_giao_hang) : ''}</td>
+                          {/* Khối đợt sản xuất — mỗi đợt SX một hàng */}
+                          <td className={`${TD} border-l border-line/60 font-medium text-ink`}>
+                            {s ? <span>{s.ma_lenh_san_xuat}{s.giai_doan === 'EP_UI' && <Badge tone="info">Ép ủi</Badge>}</span>
+                              : (si === 0 && sxList.length === 0 ? <span className="text-xs italic text-ink-soft">Chưa có đợt SX</span> : '')}
+                          </td>
+                          <td className={`${TD} text-right tabular-nums`}>{s ? fmtNum(s.sl_in) : '—'}</td>
+                          <td className={`${TD} text-right tabular-nums`}>{s ? fmtNum(s.sl_kcs_dat) : '—'}</td>
+                          <td className={`${TD} text-right tabular-nums`}>{s ? fmtNum(s.sl_sua) : '—'}</td>
+                          <td className={`${TD} text-right tabular-nums`}>{s ? fmtNum(s.sl_sua_dat) : '—'}</td>
+                          <td className={TD}>{s?.tg_oqc ? fmtDateTime(s.tg_oqc) : '—'}</td>
+                          <td className={TD}>{s?.tt_oqc ? <Badge tone={s.tt_oqc === 'DAT' ? 'success' : 'danger'}>{s.tt_oqc === 'DAT' ? 'Đạt' : 'Không đạt'}</Badge> : '—'}</td>
+                          <td className={`${TD} text-right tabular-nums`}>{s ? fmtNum(s.sl_giao) : '—'}</td>
+                        </tr>
+                      );
+                    });
+                  }
+
+                  // Chế độ mặc định (các chip non-tem khác): mỗi đợt vải 1 hàng.
                   const dots = g.dot_vai && g.dot_vai.length ? g.dot_vai : [null];
                   const n = dots.length;
                   return dots.map((dv, di) => (
@@ -580,59 +686,85 @@ export default function PhanInListPage() {
 
             <section className="border-t border-line pt-4">
               <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-ink-soft">
-                Hành trình qua các checkpoint
+                Hành trình theo đợt sản xuất
               </h3>
-              {detail.timeline?.length ? (
-                <ol>
-                  {detail.timeline.map((t, i) => (
-                    <li key={t.ma_tram}>
-                      <div className="rounded-control border border-line p-3">
-                        <div className="flex items-center gap-2">
-                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-wash text-[11px] font-bold text-primary">{i + 1}</span>
-                          <span className="text-sm font-semibold text-ink">{t.ten_tram}</span>
-                        </div>
-
-                        {t.checklists.length > 0 && (
-                          <div className="mt-2 space-y-1.5 pl-8">
-                            {t.checklists.map((c) => (
-                              <div key={c.ma_checkpoint} className="text-xs">
-                                <div className="flex flex-wrap items-center gap-x-1.5">
-                                  <span className="font-medium text-ink">{c.ten_checkpoint}</span>
-                                  {c.gia_tri_text && <span className="text-ink-soft">· {c.gia_tri_text}</span>}
-                                </div>
-                                <div className="text-ink-soft">{fmtDateTime(c.tg)} · {c.nguoi || '—'}</div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {t.moc && (
-                          <div className="mt-2 pl-8 text-xs text-ink-soft">
-                            {fmtDateTime(t.moc.tg)} · {t.moc.nguoi || '—'}
-                            {t.moc.so_luong > 1 ? ` · ${t.moc.so_luong} lần` : ''}
-                          </div>
-                        )}
-
-                        <StagePcsNote maTram={t.ma_tram} sp={detail.stage_pcs} />
-
-                        {t.ma_tram === 'KIEM' && detail.kcs_by_dot?.dot?.length > 0 && (
-                          <div className="mt-1 pl-8">
-                            <KcsBreakdown data={detail.kcs_by_dot} />
-                          </div>
-                        )}
+              {(() => {
+                const tl = detail.timeline || {};
+                const ready = tl.ready;
+                const journeys = tl.journeys || [];
+                const single = journeys.length === 1; // pcs mức phần in chỉ khớp khi có đúng 1 đợt SX
+                if (!ready && journeys.length === 0) {
+                  return <p className="text-sm text-ink-soft">Phần in chưa đi qua checkpoint nào có xác nhận.</p>;
+                }
+                const renderNode = (t, i, arr, withPcs) => (
+                  <li key={t.ma_tram}>
+                    <div className="rounded-control border border-line p-3">
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-wash text-[11px] font-bold text-primary">{i + 1}</span>
+                        <span className="text-sm font-semibold text-ink">{t.ten_tram}</span>
                       </div>
-
-                      {i < detail.timeline.length - 1 && (
-                        <div className="flex justify-center py-1 text-ink-soft">
-                          <Icon name="arrow-down" size={16} />
+                      {t.checklists.length > 0 && (
+                        <div className="mt-2 space-y-1.5 pl-8">
+                          {t.checklists.map((c) => (
+                            <div key={c.ma_checkpoint} className="text-xs">
+                              <div className="flex flex-wrap items-center gap-x-1.5">
+                                <span className="font-medium text-ink">{c.ten_checkpoint}</span>
+                                {c.gia_tri_text && <span className="text-ink-soft">· {c.gia_tri_text}</span>}
+                              </div>
+                              <div className="text-ink-soft">{fmtDateTime(c.tg)} · {c.nguoi || '—'}</div>
+                            </div>
+                          ))}
                         </div>
                       )}
-                    </li>
-                  ))}
-                </ol>
-              ) : (
-                <p className="text-sm text-ink-soft">Phần in chưa đi qua checkpoint nào có xác nhận.</p>
-              )}
+                      {t.moc && (
+                        <div className="mt-2 pl-8 text-xs text-ink-soft">
+                          {fmtDateTime(t.moc.tg)} · {t.moc.nguoi || '—'}
+                          {t.moc.so_luong > 1 ? ` · ${t.moc.so_luong} lần` : ''}
+                        </div>
+                      )}
+                      {withPcs && <StagePcsNote maTram={t.ma_tram} sp={detail.stage_pcs} />}
+                    </div>
+                    {i < arr.length - 1 && (
+                      <div className="flex justify-center py-1 text-ink-soft"><Icon name="arrow-down" size={16} /></div>
+                    )}
+                  </li>
+                );
+                return (
+                  <div className="space-y-4">
+                    {ready && (
+                      <div>
+                        <div className="mb-1 text-xs font-semibold text-ink-soft">Chuẩn bị kỹ thuật (READY) — dùng chung mọi đợt SX</div>
+                        <ol>{renderNode(ready, 0, [ready], single)}</ol>
+                      </div>
+                    )}
+                    {journeys.length === 0 ? (
+                      <p className="text-sm text-ink-soft">Chưa có đợt sản xuất nào (phần in đang ở READY/chờ release).</p>
+                    ) : journeys.map((j, ji) => (
+                      <div key={j.lenh_id} className="rounded-control border border-line/70 bg-surface-muted/30 p-2.5">
+                        <div className="mb-2 flex flex-wrap items-center gap-2">
+                          <Badge tone="info">Đợt SX {ji + 1}/{journeys.length}</Badge>
+                          <span className="text-sm font-semibold text-ink">{j.ma_lenh_san_xuat}</span>
+                          {j.giai_doan === 'EP_UI' && <Badge tone="warning">Ép ủi</Badge>}
+                          {j.dot_vai?.length > 0 && (
+                            <span className="text-xs text-ink-soft">vải: {j.dot_vai.map((d) => d.ma_dot_vai).join(', ')}</span>
+                          )}
+                        </div>
+                        {j.trams.length ? (
+                          <ol>{j.trams.map((t, i) => renderNode(t, i, j.trams, single))}</ol>
+                        ) : (
+                          <p className="pl-1 text-xs text-ink-soft">Đợt SX vừa tạo — chưa đi qua checkpoint nào.</p>
+                        )}
+                      </div>
+                    ))}
+                    {detail.kcs_by_dot?.dot?.length > 0 && (
+                      <div className="rounded-control border border-line p-3">
+                        <div className="mb-1 text-xs font-semibold text-ink-soft">KCS theo đợt vải (tổng hợp phần in)</div>
+                        <KcsBreakdown data={detail.kcs_by_dot} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </section>
           </div>
         )}

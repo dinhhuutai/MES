@@ -19,6 +19,11 @@ const ITEMS = [
   { ma: 'MUC', label: 'Mực', perm: 'READY_MUC', hasOptions: true },
 ];
 
+// Ràng buộc thứ tự: mục KEY chỉ xác nhận được khi mục phụ thuộc (VALUE) đã xác nhận.
+// Hiện tại: chưa xác nhận Film thì không xác nhận Khuôn.
+const REQUIRES = { KHUON: 'FILM' };
+const labelOf = (ma) => ITEMS.find((i) => i.ma === ma)?.label || ma;
+
 const fmt = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '');
 
 export default function ReadyPanel({ phanInId, onClose, onChanged }) {
@@ -70,11 +75,18 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
     }
   };
 
-  // Mục đủ điều kiện xác nhận hàng loạt: có quyền + chưa done + (option đã chọn giá trị).
-  const eligible = state.qc_done ? [] : ITEMS.filter((it) => {
+  // Mục đủ điều kiện xác nhận: có quyền + chưa done + mục phụ thuộc đã done (Film trước Khuôn).
+  const depMet = (ma) => { const d = REQUIRES[ma]; return !d || state[`${d.toLowerCase()}_done`]; };
+  // Mục đủ điều kiện xác nhận hàng loạt: thêm điều kiện có chọn giá trị (option).
+  const eligibleBase = state.qc_done ? [] : ITEMS.filter((it) => {
     const done = state[`${it.ma.toLowerCase()}_done`];
     if (done || !can(it.perm)) return false;
     return it.hasOptions ? !!sel[it.ma] : true;
+  });
+  // Loại mục phụ thuộc chưa thỏa (vd Khuôn khi Film chưa done và cũng không nằm trong lô) → backend chặn.
+  const eligible = eligibleBase.filter((it) => {
+    const d = REQUIRES[it.ma];
+    return !d || state[`${d.toLowerCase()}_done`] || eligibleBase.some((x) => x.ma === d);
   });
 
   const doConfirmAll = async () => {
@@ -97,7 +109,8 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
   const renderItem = (item) => {
     const cp = byMa[item.ma];
     const done = state[`${item.ma.toLowerCase()}_done`];
-    const editable = !done && !state.qc_done && can(item.perm);
+    const blockedByDep = !done && !depMet(item.ma); // vd Khuôn khi chưa xác nhận Film
+    const editable = !done && !state.qc_done && can(item.perm) && !blockedByDep;
     // SLA checklist: đếm từ thời điểm phần in vào trạm READY.
     const sla = (!done && cp?.thoi_gian_quy_dinh_phut)
       ? evalSla(detail?.ready_tg_vao, cp.thoi_gian_quy_dinh_phut, cp.canh_bao_truoc_phut, now)
@@ -146,7 +159,9 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
           </div>
         ) : (
           <div className="text-xs text-ink-soft">
-            {can(item.perm) ? 'Chưa thực hiện.' : 'Bạn không có quyền xác nhận mục này.'}
+            {blockedByDep
+              ? `Cần xác nhận ${labelOf(REQUIRES[item.ma])} trước khi xác nhận ${item.label}.`
+              : can(item.perm) ? 'Chưa thực hiện.' : 'Bạn không có quyền xác nhận mục này.'}
           </div>
         )}
       </div>

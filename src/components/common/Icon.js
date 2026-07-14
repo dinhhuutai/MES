@@ -16,6 +16,9 @@ import {
   User,
   ChevronRight,
   ChevronLeft,
+  ChevronUp,
+  ChevronDown,
+  ChevronsUpDown,
   Bell,
   Eye,
   EyeOff,
@@ -91,6 +94,9 @@ const MAP = {
   'file-spreadsheet': FileSpreadsheet,
   'scan-line': ScanLine,
   'qr-code': QrCode,
+  'chevron-up': ChevronUp,
+  'chevron-down': ChevronDown,
+  'chevrons-up-down': ChevronsUpDown,
 };
 
 export default function Icon({ name, size = 20, className = '' }) {

@@ -114,7 +114,7 @@ export default function GopDotVaiPage() {
 
   return (
     <div>
-      <Toolbar title="Gộp số lượng đợt vải" subtitle="Gộp nhiều đợt vải của cùng phần in để release 1 lần"
+      <Toolbar title="Gộp số lượng đợt vải" subtitle="GỘP ĐỢT = gộp nhiều đợt vải của CÙNG một phần in (khác đợt) để release 1 lần. ≠ Gom set (nhiều phần in khác nhau, cùng màu)."
         search={search} onSearch={setSearch} searchPlaceholder="Tìm code phần, khách, mã hàng, màu/kích...">
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử gộp</Button>
         <Badge tone="info">{groups.length} phần in gộp được</Badge>

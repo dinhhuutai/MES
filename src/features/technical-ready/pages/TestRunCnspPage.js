@@ -3,6 +3,7 @@ import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
 import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
 import Badge from '../../../components/common/Badge';
+import GomBadge from '../../../components/common/GomBadge';
 import Button from '../../../components/common/Button';
 import SidePanel from '../../../components/common/SidePanel';
 import Toast from '../../../components/common/Toast';
@@ -148,21 +149,14 @@ export default function TestRunCnspPage() {
           onClick={(e) => e.stopPropagation()}
           onChange={() => toggleOne(r.id)} aria-label="Chọn lệnh" />
       ) },
-    { key: 'khach_don', header: 'Khách hàng · Đơn hàng', render: (r) => (
-      <div className="leading-tight">
-        <div className="font-medium text-ink">{r.ten_khach_hang || '—'}</div>
-        <div className="text-[10px] text-ink-soft">{r.ma_don_hang || '—'}</div>
-      </div>
-    ) },
+    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
+    { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => (
-      <div>{r.ma_hang || '—'}{r.so_dot_vai > 1 && <div className="mt-0.5"><Badge tone="warning">Gom set ({r.so_dot_vai} đợt)</Badge></div>}</div>
+      <div>{r.ma_hang || '—'}{r.so_dot_vai > 1 && <div className="mt-0.5"><GomBadge soDotVai={r.so_dot_vai} soPhanIn={r.so_phan_in} /></div>}</div>
     ) },
-    { key: 'mau_kich', header: 'Màu · Kích (vải/phim)', render: (r) => (
-      <div className="leading-tight">
-        <div className="text-ink">{r.mau_vai || '—'}</div>
-        <div className="text-[10px] text-ink-soft">{[r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—'}</div>
-      </div>
-    ) },
+    { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
+    { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
+    { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
     { key: 'chuyen', header: 'Chuyền', render: (r) => r.ten_chuyen || '—' },
     { key: 'so_lan_test', header: 'Lần test', className: 'text-right tabular-nums', render: (r) => r.so_lan_test },
     { key: 'cnsp_done', header: 'CNSP', render: (r) => r.cnsp_done ? <Badge tone="success">✓</Badge> : <Badge tone="warning">Chờ</Badge> },

@@ -160,7 +160,7 @@ export default function TheoDoiChuyenPage() {
 
             {/* Lệnh + tiến độ */}
             <div className="mb-5">
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-soft">Lệnh sản xuất</div>
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-soft">Đợt sản xuất</div>
               <div className="mt-1 text-2xl font-bold text-ink">
                 {r.ma_lenh_san_xuat} · {r.ma_hang || r.ma_phan || r.phan_list || '—'}
               </div>

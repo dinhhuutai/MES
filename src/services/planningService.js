@@ -12,6 +12,8 @@ export const autoPlanCandidates = (params) => client.get('/planning/auto-plan/ca
 // Release 1
 export const listRelease1Candidates = (params) => client.get('/planning/release1/candidates', { params });
 export const createRelease1 = (body) => client.post('/planning/release1', body);
+// Tạo đợt sản xuất (gộp/tách nhiều đợt vải + SL từng đợt) — màn "Tạo đợt sản xuất"
+export const createDotSanXuat = (body) => client.post('/planning/dot-san-xuat', body);
 export const release1History = (date) => client.get('/planning/release1/history', { params: { date } });
 export const release1Done = (date) => client.get('/planning/release1/done', { params: { date } });
 export const listReleaseSets = (params) => client.get('/planning/release1/sets', { params });
@@ -27,13 +29,13 @@ export const listTestRunCandidates = (params) => client.get('/planning/test-run/
 export const getLenhDetail = (id) => client.get(`/planning/lenh/${id}`);
 export const recordTestRun = (id, body) => client.post(`/planning/test-run/${id}/run`, body);
 export const confirmCNSP = (id) => client.post(`/planning/test-run/${id}/confirm-cnsp`);
-export const confirmQA = (id, soLuong) => client.post(`/planning/test-run/${id}/confirm-qa`, { soLuong });
+export const confirmQA = (id, payload = {}) => client.post(`/planning/test-run/${id}/confirm-qa`, payload);
 export const cancelCNSP = (id) => client.post(`/planning/test-run/${id}/cancel-cnsp`);
 export const cancelQA = (id) => client.post(`/planning/test-run/${id}/cancel-qa`);
 // Test Run QC trả về Release 1 (hủy lệnh + lý do)
 export const returnTestRunToRelease1 = (id, body) => client.post(`/planning/test-run/${id}/tra-ve-release1`, body);
 export const confirmCNSPBatch = (lenhIds) => client.post('/planning/test-run/cnsp-confirm-batch', { lenhIds });
-export const confirmQABatch = (lenhIds) => client.post('/planning/test-run/qa-confirm-batch', { lenhIds });
+export const confirmQABatch = (lenhIds, payload = {}) => client.post('/planning/test-run/qa-confirm-batch', { lenhIds, ...payload });
 export const testRunHistory = (date) => client.get('/planning/test-run/history', { params: { date } });
 export const testCnspDone = (date) => client.get('/planning/test-run/cnsp-done', { params: { date } });
 export const testQaDone = (date) => client.get('/planning/test-run/qa-done', { params: { date } });

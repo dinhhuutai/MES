@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
 import Badge from '../../../components/common/Badge';
+import GomBadge from '../../../components/common/GomBadge';
 import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
 import Toast from '../../../components/common/Toast';
@@ -102,7 +103,8 @@ export default function XacNhanChayPage() {
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => (
       <div>
         <div className="text-ink">{r.ma_hang || '—'}</div>
-        {r.so_dot_vai > 1 && <Badge tone="warning">Gom set ({r.so_dot_vai} đợt)</Badge>}
+        {r.giai_doan === 'EP_UI' && <Badge tone="info">Ép ủi (in kiếng)</Badge>}
+        <GomBadge soDotVai={r.so_dot_vai} soPhanIn={r.so_phan_in} />
         {Number(r.da_in_truoc) > 0 && (
           <div className="mt-0.5">
             <Badge tone="warning">

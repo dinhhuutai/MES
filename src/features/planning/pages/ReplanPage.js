@@ -138,7 +138,7 @@ export default function ReplanPage() {
           onClick={(e) => e.stopPropagation()}
           onChange={() => toggleOne(r.id)} aria-label="Chọn lệnh" />
       ) }] : []),
-    { key: 'ma_lenh_san_xuat', header: 'Mã lệnh', render: (r) => <Badge tone="info">{r.ma_lenh_san_xuat}</Badge> },
+    { key: 'ma_lenh_san_xuat', header: 'Mã đợt SX', render: (r) => <Badge tone="info">{r.ma_lenh_san_xuat}</Badge> },
     { key: 'giai_doan', header: 'Giai đoạn', render: (r) => (
       r.trang_thai === 'RELEASE_1'
         ? <Badge tone="warning">Test Run</Badge>

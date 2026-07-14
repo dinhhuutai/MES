@@ -19,6 +19,7 @@ import {
   listReadyCandidates, getReadyConfig, confirmReadyBulk, readyHistory, readyDone, getReadyItemCounts,
 } from '../../../services/readyService';
 import ReadyPanel from '../components/ReadyPanel';
+import LoaiDotVaiBadge from '../../planning/components/LoaiDotVaiBadge';
 
 const FILTER_FIELDS = [
   { key: 'codePhan', label: 'Code phần', col: 'ma_phan' }, { key: 'khach', label: 'Khách hàng', col: 'ten_khach_hang' },
@@ -139,23 +140,17 @@ export default function ReadyPage() {
     { key: 'ma_phan', header: 'Code phần', className: 'font-medium text-ink', render: (r) => (
       <div>
         <div>{r.ma_phan || '—'}</div>
-        {r.gom_set_list && <Badge tone="info" className="mt-1"><Icon name="git-branch" size={12} className="mr-1" />Gom set {r.gom_set_list}</Badge>}
+        {r.gom_set_list && <Badge tone="info" className="mt-1" title="Gom set: phần in này được gom in chung với các phần in KHÁC (cùng màu). ≠ Gộp đợt (cùng phần in, khác đợt)."><Icon name="git-branch" size={12} className="mr-1" />Gom set {r.gom_set_list}</Badge>}
         {r.tra_ve_ly_do && <Badge tone="danger" className="mt-1" title={r.tra_ve_ly_do}>Bị QC trả về</Badge>}
       </div>
     ) },
-    { key: 'khach_don', header: 'Khách hàng · Đơn hàng', render: (r) => (
-      <div className="leading-tight">
-        <div className="font-medium text-ink">{r.ten_khach_hang || '—'}</div>
-        <div className="text-[10px] text-ink-soft">{r.ma_don_hang || '—'}</div>
-      </div>
-    ) },
+    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
+    { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng' },
-    { key: 'mau_kich', header: 'Màu · Kích (vải/phim)', render: (r) => (
-      <div className="leading-tight">
-        <div className="text-ink">{r.mau_vai || '—'}</div>
-        <div className="text-[10px] text-ink-soft">{[r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—'}</div>
-      </div>
-    ) },
+    { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
+    { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
+    { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
+    { key: 'loai_dot_vai', header: 'Loại đợt vải', render: (r) => <LoaiDotVaiBadge value={r.loai_dot_vai} /> },
     { key: 'film_done', header: `Film${counts.film ? ` (${counts.film})` : ''}`, className: 'text-center', render: (r) => DoneCell(r.film_done) },
     { key: 'khuon_done', header: `Khuôn${counts.khuon ? ` (${counts.khuon})` : ''}`, className: 'text-center', render: (r) => DoneCell(r.khuon_done) },
     { key: 'muc_done', header: `Mực${counts.muc ? ` (${counts.muc})` : ''}`, className: 'text-center', render: (r) => DoneCell(r.muc_done) },

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList, Legend } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList, Legend, ReferenceLine } from 'recharts';
 import Icon from '../../../components/common/Icon';
 import Badge from '../../../components/common/Badge';
 import Toast from '../../../components/common/Toast';
@@ -52,8 +52,29 @@ function SingleBar({ data, height = 300, color = '#0058be', unit = '', angle = -
   );
 }
 
+// Biểu đồ cột 1 chuỗi + đường ngang vàng (tổng phần in).
+function SingleBarRef({ data, refValue, height = 300, color = '#22c55e', unit = '' }) {
+  return (
+    <ResponsiveContainer width="100%" height={height}>
+      <BarChart data={data} margin={{ top: 20, right: 8, left: -16, bottom: 8 }}>
+        <XAxis dataKey="name" tick={AXIS_TICK} interval={0} angle={-20} textAnchor="end" height={62} />
+        <YAxis allowDecimals={false} tick={AXIS_TICK} />
+        <Tooltip formatter={(v) => [`${fmtNum(v)}${unit ? ` ${unit}` : ''}`, '']} />
+        {refValue != null && (
+          <ReferenceLine y={refValue} stroke="#f59e0b" strokeWidth={2}
+            label={{ value: `Tổng ${fmtNum(refValue)}`, position: 'right', fill: '#b45309', fontSize: 11, fontWeight: 700 }} />
+        )}
+        <Bar dataKey="value" fill={color} radius={[6, 6, 0, 0]}>
+          <LabelList dataKey="value" position="top" style={NUM_LABEL} formatter={fmtNum} />
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
 // Biểu đồ cột nhiều chuỗi (mỗi nhóm N cột). series: [{key,label,color}]. onBarClick(datum) để drill.
-function GroupBar({ data, series, height = 320, unit = '', onBarClick }) {
+// refLine: { value, label } → vẽ đường ngang (vd tổng phần in — màu vàng).
+function GroupBar({ data, series, height = 320, unit = '', onBarClick, refLine }) {
   const click = onBarClick ? (d) => onBarClick(d?.payload || d) : undefined;
   return (
     <ResponsiveContainer width="100%" height={height}>
@@ -62,6 +83,10 @@ function GroupBar({ data, series, height = 320, unit = '', onBarClick }) {
         <YAxis allowDecimals={false} tick={AXIS_TICK} />
         <Tooltip formatter={(v, n) => [`${fmtNum(v)}${unit ? ` ${unit}` : ''}`, n]} cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
         <Legend wrapperStyle={{ fontSize: 11 }} />
+        {refLine != null && (
+          <ReferenceLine y={refLine.value} stroke="#f59e0b" strokeWidth={2}
+            label={{ value: refLine.label ?? refLine.value, position: 'right', fill: '#b45309', fontSize: 11, fontWeight: 700 }} />
+        )}
         {series.map((s) => (
           <Bar key={s.key} dataKey={s.key} name={s.label} fill={s.color} radius={[4, 4, 0, 0]}
             onClick={click} cursor={onBarClick ? 'pointer' : undefined}>
@@ -74,6 +99,67 @@ function GroupBar({ data, series, height = 320, unit = '', onBarClick }) {
 }
 
 const fmtTime = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '');
+
+// Gộp các lượt xác nhận HÔM NAY theo PHẦN IN (1 phần in nhiều checklist/tem → 1 dòng, gộp các mục xác nhận).
+function groupConfirm(rows) {
+  const map = new Map();
+  (rows || []).forEach((r) => {
+    const key = r.phan_in_id || r.doi_tuong;
+    let g = map.get(key);
+    if (!g) {
+      g = { key, phan_in_id: r.phan_in_id, ma_phan: r.ma_phan, doi_tuong: r.doi_tuong,
+        mau_vai: r.mau_vai, ma_hang: r.ma_hang, dois: new Set(), items: [], tg: r.tg };
+      map.set(key, g);
+    }
+    if (!g.ma_phan && r.ma_phan) g.ma_phan = r.ma_phan;
+    if (r.doi_tuong) g.dois.add(r.doi_tuong); // mã đối tượng (LSX ở Test Run / tem ở KCS-OQC…)
+    if (r.tg && (!g.tg || r.tg > g.tg)) g.tg = r.tg;
+    g.items.push({ nhom: r.nhom, nguoi: r.nguoi, tg: r.tg }); // từng lượt xác nhận (checklist/tem) + giờ riêng
+  });
+  const out = [...map.values()];
+  out.forEach((g) => { g.n = g.items.length; g.items.sort((a, b) => (a.tg > b.tg ? 1 : -1)); });
+  return out.sort((a, b) => (b.tg > a.tg ? 1 : -1));
+}
+
+// Danh sách "đã xác nhận hôm nay" đã gộp theo phần in. onPick(phanIn) khi bấm (nếu có phan_in_id).
+function ConfirmList({ rows, onPick }) {
+  const groups = groupConfirm(rows);
+  return (
+    <div className="space-y-1.5">
+      {groups.map((g) => {
+        const label = g.ma_phan || g.doi_tuong || '—';
+        // Mã đối tượng khác code phần (LSX ở Test Run / mã tem ở KCS-OQC…).
+        const maList = [...(g.dois || [])].filter((d) => d && d !== g.ma_phan);
+        const subLine = [g.ma_hang, ...maList].filter(Boolean).join(' · ');
+        const clickable = !!g.phan_in_id;
+        const inner = (
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start justify-between gap-2">
+              <div className="text-sm font-medium text-ink">{label}{g.mau_vai ? ` · ${g.mau_vai}` : ''}</div>
+              {g.n > 1 && <span className="shrink-0 rounded bg-emerald-100 px-1.5 text-[10px] font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">{g.n} xác nhận</span>}
+            </div>
+            {subLine && <div className="font-mono text-[11px] text-ink-soft">{subLine}</div>}
+            {/* Từng lượt xác nhận (checklist/tem) — mỗi dòng có giờ riêng */}
+            <div className="mt-1 space-y-0.5 border-t border-line/50 pt-1">
+              {g.items.map((it, i) => (
+                <div key={i} className="flex items-start justify-between gap-2 text-xs">
+                  <span className="break-words text-ink">{it.nhom || '—'}{it.nguoi ? ` · ${it.nguoi}` : ''}</span>
+                  <span className="shrink-0 tabular-nums text-ink-soft">{fmtTime(it.tg)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+        return clickable ? (
+          <button key={g.key} type="button" onClick={() => onPick && onPick({ id: g.phan_in_id, ma_phan: g.ma_phan })}
+            className="block w-full rounded-control border border-line px-3 py-2 text-left hover:shadow-card">{inner}</button>
+        ) : (
+          <div key={g.key} className="rounded-control border border-line px-3 py-2">{inner}</div>
+        );
+      })}
+    </div>
+  );
+}
 
 const LOAI_CLS = {
   'Xác nhận': 'bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300',
@@ -275,26 +361,7 @@ function StageDetailPanel({ stage, bang2, hoanThanhDetail, chartDetail, onClose 
           {homNay.length > 0 && (
             <div>
               <div className="mb-1.5 text-xs font-bold uppercase tracking-wide text-emerald-600">Đã xác nhận hôm nay ({new Set(homNay.map((r) => r.phan_in_id || r.doi_tuong)).size})</div>
-              <div className="space-y-1.5">
-                {homNay.map((r, i) => {
-                  const clickable = !!r.phan_in_id;
-                  const inner = (
-                    <>
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-medium text-ink">{r.doi_tuong}{r.mau_vai ? ` · ${r.mau_vai}` : ''}</div>
-                        <div className="truncate text-xs text-ink-soft">{r.nhom}{r.ma_hang ? ` · ${r.ma_hang}` : ''} · {r.nguoi || '—'}</div>
-                      </div>
-                      <div className="shrink-0 text-xs text-ink-soft tabular-nums">{fmtTime(r.tg)}</div>
-                    </>
-                  );
-                  return clickable ? (
-                    <button key={i} type="button" onClick={() => setPhanIn({ id: r.phan_in_id, ma_phan: r.ma_phan })}
-                      className="flex w-full items-center justify-between gap-2 rounded-control border border-line px-3 py-2 text-left hover:shadow-card">{inner}</button>
-                  ) : (
-                    <div key={i} className="flex items-center justify-between gap-2 rounded-control border border-line px-3 py-2">{inner}</div>
-                  );
-                })}
-              </div>
+              <ConfirmList rows={homNay} onPick={setPhanIn} />
             </div>
           )}
           {empty && !isOqc && !isReady && <p className="text-sm text-ink-soft">Giai đoạn này chưa có phần in nghẽn/sắp nghẽn hay xác nhận hôm nay.</p>}
@@ -329,28 +396,7 @@ function Bang2Panel({ kind, data, hoanThanhDetail, onClose }) {
         </button>
       )}
       {phanIn ? <PhanInJourney id={phanIn.id} />
-        : isHT && htGroup ? (
-          <div className="space-y-1.5">
-            {htItems.map((r, i) => {
-              const clickable = !!r.phan_in_id;
-              const inner = (
-                <>
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium text-ink">{r.doi_tuong}{r.mau_vai ? ` · ${r.mau_vai}` : ''}</div>
-                    <div className="truncate text-xs text-ink-soft">{r.ma_hang ? `${r.ma_hang} · ` : ''}{r.nguoi || '—'}</div>
-                  </div>
-                  <div className="shrink-0 text-xs text-ink-soft tabular-nums">{fmtTime(r.tg)}</div>
-                </>
-              );
-              return clickable ? (
-                <button key={i} type="button" onClick={() => setPhanIn({ id: r.phan_in_id, ma_phan: r.ma_phan })}
-                  className="flex w-full items-center justify-between gap-2 rounded-control border border-line px-3 py-2 text-left hover:shadow-card">{inner}</button>
-              ) : (
-                <div key={i} className="flex items-center justify-between gap-2 rounded-control border border-line px-3 py-2">{inner}</div>
-              );
-            })}
-          </div>
-        )
+        : isHT && htGroup ? <ConfirmList rows={htItems} onPick={setPhanIn} />
         : isHT ? (
           <div className="space-y-2">
             {(data.nhom_hoan_thanh || []).length === 0 && <p className="text-sm text-ink-soft">Hôm nay chưa có xác nhận nào.</p>}
@@ -539,6 +585,25 @@ export default function DashboardPage() {
     sap: b.trams.reduce((a, t) => a + (sapByTram[t] || 0), 0),
   })), [nghenByTram, sapByTram]);
 
+  // Tổng số phần in đang theo dõi (= Σ phần in mọi giai đoạn) → đường vàng của biểu đồ tiến độ.
+  const tongPhanIn = useMemo(() => {
+    const s = stages?.stages || {};
+    return Object.values(s).reduce((a, v) => a + (v?.phan_in || 0), 0);
+  }, [stages]);
+
+  // Biểu đồ "Tiến độ phần in theo checkpoint" (điểm 17): mỗi checkpoint 3 cột Tổng / Đã xong / Nghẽn.
+  //  Đã xong = phần in đã qua trạm & chưa giao (station_confirmed); Đang ở = stageCounts; Tổng = đã xong + đang ở.
+  const checkpointProgressData = useMemo(() => {
+    const nghenMap = Object.fromEntries(nghenSapData.map((x) => [x.name, x.nghen]));
+    return confirmStationData.map((c) => ({
+      name: c.name,
+      da_xong: c.chua_giao,
+      dang_o: c.dang_o,
+      tong: c.chua_giao + c.dang_o,
+      nghen: nghenMap[c.name] || 0,
+    }));
+  }, [confirmStationData, nghenSapData]);
+
   // Tải sản xuất (WIP) — phần in đang ở từng khâu sản xuất.
   const wipData = useMemo(() => {
     const p = (k) => stages?.stages?.[k]?.phan_in || 0;
@@ -670,6 +735,22 @@ export default function DashboardPage() {
 
       {/* ===== BẢNG ĐIỀU PHỐI — 4 biểu đồ hành động (2/hàng); Hoạt động gần đây cuối cùng ===== */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <ChartCard title={`Tiến độ phần in theo checkpoint  ·  đường vàng = tổng phần in (${fmtNum(tongPhanIn)})`}>
+          <GroupBar data={checkpointProgressData} unit="phần in" height={340}
+            refLine={{ value: tongPhanIn, label: `Tổng ${fmtNum(tongPhanIn)}` }}
+            onBarClick={(d) => { const b = STATION_BUCKETS.find((x) => x.label === d?.name); if (b) setStageDetail({ label: b.label, trams: b.trams, hn: [] }); }}
+            series={[
+              { key: 'tong', label: 'Tổng (đã xong + đang ở)', color: '#94a3b8' },
+              { key: 'da_xong', label: 'Đã xong', color: '#22c55e' },
+              { key: 'nghen', label: 'Nghẽn', color: '#ef4444' },
+            ]} />
+        </ChartCard>
+
+        <ChartCard title={`Phần in đã xong theo checkpoint  ·  đường vàng = tổng phần in (${fmtNum(tongPhanIn)})`}>
+          <SingleBarRef data={checkpointProgressData.map((d) => ({ name: d.name, value: d.da_xong }))}
+            refValue={tongPhanIn} unit="phần in" />
+        </ChartCard>
+
         <ChartCard title="Nghẽn & Sắp nghẽn theo trạm  ·  bấm cột để xem chi tiết">
           <GroupBar data={nghenSapData} unit="phần in" onBarClick={() => setDrill('NGHEN')} series={[
             { key: 'nghen', label: 'Nghẽn (quá SLA)', color: '#ef4444' },

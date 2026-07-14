@@ -45,6 +45,10 @@ export const vuotSanXuat = (phieuId, soLuong) => client.post(`/production/phieu/
 export const listUndoStartCandidates = () => client.get('/production/huy-chay/candidates');
 export const undoStartProduction = (phieuId) => client.post(`/production/huy-chay/${phieuId}`);
 
+// Chạy đặc biệt (bỏ Test Run) — cùng danh sách Test Run, chạy thẳng đợt còn RELEASE_1
+export const listChayDacBietCandidates = (params) => client.get('/production/chay-dac-biet/candidates', { params });
+export const chayDacBiet = (lenhId, body) => client.post(`/production/chay-dac-biet/${lenhId}`, body);
+
 // Chờ khô
 export const listDrying = (params) => client.get('/production/drying', { params });
 export const confirmDry = (temId) => client.post(`/production/drying/${temId}/confirm`);

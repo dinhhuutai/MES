@@ -3,6 +3,8 @@ import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
 import Pagination from '../../../components/common/Pagination';
 import Badge from '../../../components/common/Badge';
+import GomBadge from '../../../components/common/GomBadge';
+import Icon from '../../../components/common/Icon';
 import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
@@ -10,7 +12,8 @@ import Toast from '../../../components/common/Toast';
 import { Field, Textarea } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import { listConfirmHistory, cancelReadyItem } from '../../../services/readyService';
+import { listConfirmHistory, cancelReadyItem, listReopenReadyCandidates, reopenReady } from '../../../services/readyService';
+import { searchPhanInForCancel, huyPhanIn } from '../../../services/orderService';
 import { listCancelableLenh, cancelLenh } from '../../../services/planningService';
 import { listCancelableTem, cancelPrintTem, listCloseCandidates, closeProduction, listReopenCandidates, reopenProduction, listUndoStartCandidates, undoStartProduction } from '../../../services/productionService';
 import { listCancelKcs, cancelKcs, listCancelSua, cancelSua, listCancelOqc, cancelOqc } from '../../../services/qualityService';
@@ -182,7 +185,7 @@ function LenhCancelSection({ show }) {
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => (
-      <div>{r.ma_hang || '—'}{r.so_dot_vai > 1 && <div className="mt-0.5"><Badge tone="warning">Gom set ({r.so_dot_vai} đợt)</Badge></div>}</div>
+      <div>{r.ma_hang || '—'}{r.so_dot_vai > 1 && <div className="mt-0.5"><GomBadge soDotVai={r.so_dot_vai} soPhanIn={r.so_phan_in} /></div>}</div>
     ) },
     { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
     { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
@@ -739,12 +742,196 @@ function QcCancelSection({ show, kind }) {
 }
 
 // ─── Trang gộp: Hủy lệnh xác nhận ───────────────────────────────────────────
+// ─── Tab: Mở READY — phần in đi tắt READY (đợt mới tự vào Release 1) → ép quay lại READY ───
+function ReopenReadySection({ show }) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [confirm, setConfirm] = useState(null); // phần in cần mở lại READY
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listReopenReadyCandidates({ search });
+      setRows(res.data);
+    } catch (e) {
+      show(e.message || 'Lỗi tải', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [search, show]);
+
+  useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
+
+  const doReopen = async () => {
+    setBusy(true);
+    try {
+      await reopenReady(confirm.phan_in_id);
+      show(`Đã mở lại READY cho phần in ${confirm.ma_phan} — quay lại Chuẩn bị kỹ thuật để xác nhận Khuôn/Film/Mực + QC.`);
+      setConfirm(null);
+      load();
+    } catch (e) {
+      show(e.message || 'Mở lại READY thất bại', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const columns = [
+    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
+    { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
+    { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
+    { key: 'ma_phan', header: 'Code phần', className: 'font-medium text-ink', render: (r) => r.ma_phan || '—' },
+    { key: 'mau_vai', header: 'Màu · Kích', render: (r) => [r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—' },
+    { key: 'lenh_da_co', header: 'Đợt SX đã có', render: (r) => <span className="text-xs text-ink-soft">{r.lenh_da_co || '—'}</span> },
+    { key: 'dot_moi', header: 'Đợt vải mới (chưa release)', render: (r) => (
+      <div className="flex items-center gap-1.5">
+        <Badge tone="warning">{r.so_dot_moi} đợt</Badge>
+        <span className="text-xs text-ink-soft">{r.dot_moi || '—'}</span>
+      </div>
+    ) },
+    { key: 'actions', header: '', className: 'text-right', render: (r) =>
+      <Button variant="danger" className="px-3 py-1.5" onClick={(e) => { e.stopPropagation(); setConfirm(r); }}>
+        Mở lại READY
+      </Button> },
+  ];
+
+  return (
+    <div>
+      <Toolbar title="Mở READY"
+        subtitle="Phần in đã qua READY + có đợt SX trước, nay có đợt vải MỚI tự vào Release 1 (không qua READY). Ép quay lại READY khi cần làm lại kỹ thuật/QC."
+        search={search} onSearch={setSearch} searchPlaceholder="Tìm code phần, mã hàng, màu...">
+        <Badge tone="default">{rows.length} phần in</Badge>
+      </Toolbar>
+
+      <DataTable columns={columns} rows={rows} loading={loading} rowKey="phan_in_id"
+        emptyText="Không có phần in nào đi tắt READY" />
+
+      <ConfirmDialog
+        open={!!confirm}
+        onClose={() => setConfirm(null)}
+        onConfirm={doReopen}
+        loading={busy}
+        title="Mở lại READY"
+        message={confirm
+          ? `Mở lại READY cho phần in ${confirm.ma_phan} (${confirm.so_dot_moi} đợt vải mới)? Hệ sẽ HỦY xác nhận READY (Khuôn/Film/Mực/QC) và đánh dấu các đợt mới phải làm lại READY/Test Run. Đợt đã sản xuất trước KHÔNG bị ảnh hưởng.`
+          : ''}
+        confirmText="Mở lại READY"
+        variant="danger"
+      />
+    </div>
+  );
+}
+
+// ─── Tab: Hủy phần in (xóa mềm) — nhập/tìm code phần, chọn nhiều rồi hủy ───────
+function PhanInCancelSection({ show }) {
+  const [q, setQ] = useState('');
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [selected, setSelected] = useState(() => new Map()); // id -> row (giữ qua nhiều lần tìm)
+  const [lyDo, setLyDo] = useState('');
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await searchPhanInForCancel(q);
+      setResults(res.data);
+    } catch (e) {
+      show(e.message || 'Lỗi tìm kiếm', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [q, show]);
+  useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t); }, [load]);
+
+  const toggle = (row) => setSelected((m) => {
+    const next = new Map(m);
+    if (next.has(row.phan_in_id)) next.delete(row.phan_in_id); else next.set(row.phan_in_id, row);
+    return next;
+  });
+  const selArr = [...selected.values()];
+
+  const doHuy = async () => {
+    setBusy(true);
+    try {
+      const res = await huyPhanIn(selArr.map((r) => r.phan_in_id), lyDo.trim() || null);
+      show(`Đã hủy (xóa mềm) ${res.data.count} phần in`);
+      setSelected(new Map()); setLyDo(''); setConfirm(false);
+      load();
+    } catch (e) {
+      show(e.message || 'Hủy thất bại', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const columns = [
+    { key: 'sel', className: 'w-10', render: (r) => (
+      <input type="checkbox" checked={selected.has(r.phan_in_id)}
+        onClick={(e) => e.stopPropagation()} onChange={() => toggle(r)} aria-label="Chọn phần in" />
+    ) },
+    { key: 'ma_phan', header: 'Code phần', className: 'font-medium text-ink', render: (r) => r.ma_phan },
+    { key: 'ten_khach_hang', header: 'Khách hàng', render: (r) => r.ten_khach_hang || '—' },
+    { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
+    { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
+    { key: 'mau_vai', header: 'Màu · Kích', render: (r) => [r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—' },
+    { key: 'so_dot_vai', header: 'Đợt vải', className: 'text-right tabular-nums', render: (r) => r.so_dot_vai },
+    { key: 'da_san_xuat', header: 'SX', render: (r) => (r.da_san_xuat ? <Badge tone="warning">Đã có SX</Badge> : <Badge tone="default">Chưa</Badge>) },
+  ];
+
+  return (
+    <div>
+      <Toolbar title="Hủy phần in (xóa mềm)"
+        subtitle="Tìm theo code phần / mã hàng / màu / khách → chọn nhiều → hủy. Xóa mềm phần in + đợt vải/lệnh/tem liên quan (ẩn khỏi hệ thống, không xóa cứng)."
+        search={q} onSearch={setQ} searchPlaceholder="Nhập/tìm code phần, mã hàng, màu, khách...">
+        <Badge tone="default">{results.length} kết quả</Badge>
+      </Toolbar>
+
+      {selArr.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-card border border-line bg-surface p-3">
+          <span className="text-xs font-semibold text-ink-soft">Đã chọn {selArr.length}:</span>
+          {selArr.map((r) => (
+            <span key={r.phan_in_id} className="inline-flex items-center gap-1 rounded-full bg-primary-wash px-3 py-1 text-xs font-medium text-primary">
+              {r.ma_phan}
+              <button onClick={() => toggle(r)} className="ml-0.5 hover:text-danger" aria-label="Bỏ chọn"><Icon name="x" size={12} /></button>
+            </span>
+          ))}
+          <div className="ml-auto flex items-center gap-2">
+            <input value={lyDo} onChange={(e) => setLyDo(e.target.value)} placeholder="Lý do (tùy chọn)"
+              className="h-9 w-52 rounded-input border border-line px-3 text-sm focus:border-primary focus:outline-none" />
+            <Button variant="danger" onClick={() => setConfirm(true)}>Hủy {selArr.length} phần in</Button>
+          </div>
+        </div>
+      )}
+
+      <DataTable columns={columns} rows={results} loading={loading} rowKey="phan_in_id"
+        onRowClick={(r) => toggle(r)} emptyText="Không tìm thấy phần in còn hoạt động" />
+
+      <ConfirmDialog
+        open={confirm}
+        onClose={() => setConfirm(false)}
+        onConfirm={doHuy}
+        loading={busy}
+        title="Hủy phần in (xóa mềm)"
+        message={`Xóa mềm ${selArr.length} phần in: ${selArr.map((r) => r.ma_phan).join(', ')}? Toàn bộ đợt vải, lệnh sản xuất, tem liên quan sẽ bị ẩn khỏi hệ thống (không xóa cứng — có thể khôi phục ở DB nếu cần).`}
+        confirmText="Hủy phần in"
+        variant="danger"
+      />
+    </div>
+  );
+}
+
 export default function LichSuTrangThaiPage() {
   const { can } = usePermissions();
   const { toast, show } = useToast();
 
   const tabs = [
     can('READY_CANCEL') && { key: 'ready', label: 'Hủy xác nhận READY' },
+    can('READY_CANCEL') && { key: 'moready', label: 'Mở READY' },
+    can('READY_CANCEL') && { key: 'huyphanin', label: 'Hủy phần in' },
     (can('RELEASE1') || can('RELEASE2')) && { key: 'lenh', label: 'Hủy lệnh sản xuất' },
     can('PROD_RUN') && { key: 'tem', label: 'Hủy lệnh in tem' },
     can('PROD_RUN') && { key: 'dong', label: 'Đóng lệnh sản xuất' },
@@ -775,6 +962,8 @@ export default function LichSuTrangThaiPage() {
       )}
 
       {tab === 'ready' && <ReadyCancelSection show={show} />}
+      {tab === 'moready' && <ReopenReadySection show={show} />}
+      {tab === 'huyphanin' && <PhanInCancelSection show={show} />}
       {tab === 'lenh' && <LenhCancelSection show={show} />}
       {tab === 'tem' && <TemCancelSection show={show} />}
       {tab === 'dong' && <CloseProductionSection show={show} />}

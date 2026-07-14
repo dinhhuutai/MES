@@ -167,7 +167,7 @@ export default function GomSetPage() {
 
   return (
     <div>
-      <Toolbar title="Gom set" subtitle="Gom đợt vải của các phần in để in chung 1 lần (tối ưu khung in, đỡ setup nhiều lần)">
+      <Toolbar title="Gom set" subtitle="GOM SET = gộp đợt vải của các PHẦN IN KHÁC NHAU (cùng màu) để in chung 1 lần (tối ưu khung in). ≠ Gộp đợt (cùng 1 phần in, khác đợt).">
         <div className="flex rounded-control border border-line p-0.5">
           <button onClick={() => setView('create')}
             className={`rounded-[10px] px-3 py-1.5 text-sm font-medium ${view === 'create' ? 'bg-primary text-white' : 'text-ink-soft'}`}>

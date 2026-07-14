@@ -22,7 +22,7 @@ export const MODULES = [
     children: [
       { ten: 'Xác nhận READY', route: '/ky-thuat/ready', perm: 'READY_VIEW' },
       { ten: 'Gom set', route: '/ky-thuat/gom-set', perm: 'READY_GOMSET' },
-      { ten: 'Test Run - CNSP', route: '/ky-thuat/test-run-cnsp', perm: 'TESTRUN_CNSP' },
+      // Test Run - CNSP đã GỘP về màn Test Run QA (điểm 11) — bỏ menu.
     ],
   },
   {
@@ -33,11 +33,11 @@ export const MODULES = [
     perm: 'RELEASE1',
     mau: 'bg-violet-50 text-violet-600',
     children: [
+      { ten: 'Tạo đợt sản xuất', route: '/ke-hoach/tao-dot-san-xuat', perm: 'RELEASE1' },
       { ten: 'Kế hoạch tự động', route: '/ke-hoach/tu-dong', perm: 'RELEASE1' },
       { ten: 'Release 1', route: '/ke-hoach/release-1', perm: 'RELEASE1' },
       { ten: 'Release 2', route: '/ke-hoach/release-2', perm: 'RELEASE2' },
       { ten: 'Lập kế hoạch lại', route: '/ke-hoach/lap-lai', perm: 'RELEASE2' },
-      { ten: 'Gộp số lượng đợt vải', route: '/ke-hoach/gop-dot-vai', perm: 'RELEASE1' },
       { ten: 'Cài đặt', route: '/ke-hoach/cai-dat', perm: ['RELEASE1', 'RELEASE2'] },
     ],
   },
@@ -50,6 +50,7 @@ export const MODULES = [
     mau: 'bg-emerald-50 text-emerald-600',
     children: [
       { ten: 'Xác nhận chạy', route: '/san-xuat/xac-nhan-chay', perm: 'PROD_RUN' },
+      { ten: 'Chạy đặc biệt (bỏ Test Run)', route: '/san-xuat/chay-dac-biet', perm: 'PROD_RUN' },
       { ten: 'Theo dõi chuyền', route: '/san-xuat/theo-doi-chuyen', perm: 'PROD_MONITOR' },
       { ten: 'Tình trạng xe phơi', route: '/san-xuat/xe-phoi', perm: 'XEPHOI' },
       { ten: 'KCS', route: '/san-xuat/kcs', perm: 'KCS' },

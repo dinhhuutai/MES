@@ -54,7 +54,7 @@ function DataCells({ r }) {
       <td className={`${TD} font-medium text-ink`}>
         <div className="leading-tight">
           <div className="font-medium text-ink">{r.ten_khach_hang || '—'}</div>
-          <div className="text-[10px] text-ink-soft">{r.ma_don_hang || '—'}</div>
+          <div className="text-xs text-ink-soft">{r.ma_don_hang || '—'}</div>
         </div>
         {r.tra_ve_ly_do && <Badge tone="danger" className="mt-1" title={r.tra_ve_ly_do}>Bị QC trả về</Badge>}
       </td>
@@ -62,7 +62,7 @@ function DataCells({ r }) {
       <td className={TD}>
         <div className="leading-tight">
           <div className="text-ink">{r.mau_vai || '—'}</div>
-          <div className="text-[10px] text-ink-soft">{[r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—'}</div>
+          <div className="text-xs text-ink-soft">{[r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—'}</div>
         </div>
       </td>
       <td className={TD}><LoaiDotVaiBadge value={r.loai_dot_vai} /></td>

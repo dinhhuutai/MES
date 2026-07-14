@@ -3,7 +3,7 @@ import SidePanel from '../../../components/common/SidePanel';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import Toast from '../../../components/common/Toast';
-import { Input, Textarea, Field } from '../../../components/common/controls';
+import { Input, Textarea, Field, Select } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import { getLenhDetail, recordTestRun, confirmQA, cancelQA, returnTestRunToRelease1 } from '../../../services/planningService';
@@ -26,6 +26,9 @@ export default function TestRunPanel({ lenhId, onClose, onChanged }) {
   const [busy, setBusy] = useState(null); // 'fail' | 'pass' | 'return'
   const [soLuong, setSoLuong] = useState('');
   const [lyDo, setLyDo] = useState('');
+  const [nguoiTest, setNguoiTest] = useState('');
+  const [loaiTest, setLoaiTest] = useState('TEST_RUN');
+  const [ghiChuQA, setGhiChuQA] = useState('');
   const [returnMode, setReturnMode] = useState(false);
   const [returnReason, setReturnReason] = useState('');
 
@@ -80,11 +83,17 @@ export default function TestRunPanel({ lenhId, onClose, onChanged }) {
 
   // Xác nhận đạt → QA xác nhận đạt = tính 1 LẦN TEST (đạt), kèm số lượng nếu nhập → qua checkpoint tiếp theo.
   const doPass = async () => {
+    if (!nguoiTest.trim()) { show('Bắt buộc nhập người test khi xác nhận đạt', 'error'); return; }
     setBusy('pass');
     try {
-      await confirmQA(lenhId, soLuong ? Number(soLuong) : null);
+      await confirmQA(lenhId, {
+        soLuong: soLuong ? Number(soLuong) : null,
+        nguoiTest: nguoiTest.trim() || null,
+        loaiTest,
+        ghiChu: ghiChuQA.trim() || null,
+      });
       show('QA xác nhận đạt — chuyển bước tiếp theo');
-      setSoLuong(''); setLyDo('');
+      setSoLuong(''); setLyDo(''); setNguoiTest(''); setGhiChuQA(''); setLoaiTest('TEST_RUN');
       await load();
       onChanged?.();
     } catch (e) {
@@ -124,7 +133,7 @@ export default function TestRunPanel({ lenhId, onClose, onChanged }) {
             <Button variant="danger" onClick={doFail} loading={busy === 'fail'} disabled={busy === 'pass'}>
               Xác nhận test lỗi
             </Button>
-            <Button onClick={doPass} loading={busy === 'pass'} disabled={busy === 'fail'}>
+            <Button onClick={doPass} loading={busy === 'pass'} disabled={busy === 'fail' || !nguoiTest.trim()}>
               QA xác nhận đạt
             </Button>
           </>
@@ -225,8 +234,23 @@ export default function TestRunPanel({ lenhId, onClose, onChanged }) {
 
           {canQA && !done && (
             <section className="space-y-3 border-t border-line pt-4">
-              <Field label="Số lượng test">
-                <Input type="number" value={soLuong} onChange={(e) => setSoLuong(e.target.value)} placeholder="vd: 50" />
+              <div className="grid grid-cols-2 gap-2">
+                <Field label="Số lượng test">
+                  <Input type="number" value={soLuong} onChange={(e) => setSoLuong(e.target.value)} placeholder="vd: 50" />
+                </Field>
+                <Field label="Loại">
+                  <Select value={loaiTest} onChange={(e) => setLoaiTest(e.target.value)}>
+                    <option value="TEST_RUN">Test Run</option>
+                    <option value="DAP_PHAN">Đập phấn</option>
+                  </Select>
+                </Field>
+              </div>
+              <Field label="Người test" required>
+                <Input value={nguoiTest} onChange={(e) => setNguoiTest(e.target.value)} placeholder="Tên người thực hiện test (= CNSP kỹ thuật)"
+                  className={!nguoiTest.trim() ? 'border-danger' : ''} />
+              </Field>
+              <Field label="Ghi chú">
+                <Textarea rows={2} value={ghiChuQA} onChange={(e) => setGhiChuQA(e.target.value)} placeholder="Ghi chú khi QA xác nhận đạt (tùy chọn)" />
               </Field>
               <Field label="Lý do lỗi (nếu test lỗi)">
                 <Textarea rows={2} value={lyDo} onChange={(e) => setLyDo(e.target.value)}

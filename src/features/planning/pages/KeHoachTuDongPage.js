@@ -7,7 +7,7 @@ import Icon from '../../../components/common/Icon';
 import { Input } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import { autoPlanCandidates, createRelease1 } from '../../../services/planningService';
+import { autoPlanCandidates, createDotSanXuat } from '../../../services/planningService';
 import { fmtNum, fmtDate } from '../../../utils/format';
 
 // Sơ đồ mặt bằng chuyền theo file PDF nhà máy. 'h' = thanh ngang, 'v' = thanh dọc.
@@ -162,9 +162,9 @@ export default function KeHoachTuDongPage() {
     if (!(qty > 0) || qty > con) { show(`SL release phải trong khoảng 1..${fmtNum(con)}`, 'error'); return; }
     setBusyId(it.dot_vai_id);
     try {
-      await createRelease1({
-        dotVaiIds: [it.dot_vai_id], chuyenId: it.best_chuyen.chuyen_id,
-        soLuongRelease: qty, ngayKeHoach: it.ngay_ke_hoach,
+      await createDotSanXuat({
+        items: [{ dotVaiId: it.dot_vai_id, soLuong: qty }],
+        chuyenId: it.best_chuyen.chuyen_id, ngayKeHoach: it.ngay_ke_hoach,
       });
       setQtyMap((m) => { const n = { ...m }; delete n[it.dot_vai_id]; return n; });
       show(qty < con
@@ -181,9 +181,9 @@ export default function KeHoachTuDongPage() {
     for (const it of list) {
       try {
         // eslint-disable-next-line no-await-in-loop
-        await createRelease1({
-          dotVaiIds: [it.dot_vai_id], chuyenId: it.best_chuyen.chuyen_id,
-          soLuongRelease: null, ngayKeHoach: it.ngay_ke_hoach, // release hết phần còn lại mỗi đợt
+        await createDotSanXuat({
+          items: [{ dotVaiId: it.dot_vai_id, soLuong: conOf(it) }], // release hết phần còn lại mỗi đợt
+          chuyenId: it.best_chuyen.chuyen_id, ngayKeHoach: it.ngay_ke_hoach,
         });
         ok += 1;
       } catch (e) { fail += 1; }

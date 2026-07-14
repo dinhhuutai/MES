@@ -6,6 +6,8 @@ import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import Toast from '../../../components/common/Toast';
 import HistoryPanel from '../../../components/common/HistoryPanel';
+import { Input } from '../../../components/common/controls';
+import GomBadge from '../../../components/common/GomBadge';
 import DonePanel from '../../../components/common/DonePanel';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
@@ -13,6 +15,7 @@ import useNghenMap from '../../../hooks/useNghenMap';
 import { slaRowClass } from '../../../utils/sla';
 import { listTestRunCandidates, testRunHistory, confirmQABatch, testQaDone } from '../../../services/planningService';
 import TestRunPanel from '../components/TestRunPanel';
+import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 
 const FILTER_FIELDS = [
   { key: 'codePhan', label: 'Code phần', col: 'ma_phan' }, { key: 'khach', label: 'Khách hàng', col: 'ten_khach_hang' },
@@ -35,6 +38,7 @@ export default function TestRunPage() {
   const [doneOpen, setDoneOpen] = useState(false);
   const [selected, setSelected] = useState(() => new Set());
   const [batching, setBatching] = useState(false);
+  const [nguoiTestBatch, setNguoiTestBatch] = useState('');
   const [filters, setFilters] = useState({});
   const [showFilters, setShowFilters] = useState(false);
   const filtered = useMemo(() => filterRows(rows, filters, FILTER_FIELDS), [rows, filters]);
@@ -70,12 +74,14 @@ export default function TestRunPage() {
   const toggleAll = () => setSelected(() => (allChecked ? new Set() : new Set(selRows.map((r) => r.id))));
 
   const doBatch = async () => {
+    if (!nguoiTestBatch.trim()) { show('Bắt buộc nhập người test khi QA xác nhận đạt', 'error'); return; }
     setBatching(true);
     try {
-      const res = await confirmQABatch([...selected]);
+      const res = await confirmQABatch([...selected], { nguoiTest: nguoiTestBatch.trim() });
       const { okCount, failedCount } = res.data;
       show(failedCount ? `QA xác nhận ${okCount} lệnh, ${failedCount} lỗi` : `Đã QA xác nhận đạt ${okCount} lệnh`,
         failedCount ? 'error' : 'success');
+      setNguoiTestBatch('');
       load();
     } catch (e) {
       show(e.message || 'Xác nhận thất bại', 'error');
@@ -95,18 +101,19 @@ export default function TestRunPage() {
     { key: 'khach_don', header: 'Khách hàng · Đơn hàng', render: (r) => (
       <div className="leading-tight">
         <div className="font-medium text-ink">{r.ten_khach_hang || '—'}</div>
-        <div className="text-[10px] text-ink-soft">{r.ma_don_hang || '—'}</div>
+        <div className="text-xs text-ink-soft">{r.ma_don_hang || '—'}</div>
       </div>
     ) },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => (
-      <div>{r.ma_hang || '—'}{r.so_dot_vai > 1 && <div className="mt-0.5"><Badge tone="warning">Gom set ({r.so_dot_vai} đợt)</Badge></div>}</div>
+      <div>{r.ma_hang || '—'}{r.so_dot_vai > 1 && <div className="mt-0.5"><GomBadge soDotVai={r.so_dot_vai} soPhanIn={r.so_phan_in} /></div>}</div>
     ) },
     { key: 'mau_kich', header: 'Màu · Kích (vải/phim)', render: (r) => (
       <div className="leading-tight">
         <div className="text-ink">{r.mau_vai || '—'}</div>
-        <div className="text-[10px] text-ink-soft">{[r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—'}</div>
+        <div className="text-xs text-ink-soft">{[r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—'}</div>
       </div>
     ) },
+    { key: 'loai_dot_vai', header: 'Loại đợt vải', render: (r) => <LoaiDotVaiBadge value={r.loai_dot_vai} /> },
     { key: 'chuyen', header: 'Chuyền', render: (r) => r.ten_chuyen || '—' },
     { key: 'so_lan_test', header: 'Lần test', className: 'text-right tabular-nums', render: (r) => r.so_lan_test },
     { key: 'cnsp_done', header: 'CNSP', render: (r) => r.cnsp_done ? <Badge tone="success">✓</Badge> : <Badge tone="warning">Chờ</Badge> },
@@ -118,7 +125,14 @@ export default function TestRunPage() {
       <Toolbar title="Test Run - QA" subtitle="QA nhập số lượng test, xác nhận đạt hoặc ghi nhận test lỗi"
         search={search} onSearch={setSearch} searchPlaceholder="Tìm mã lệnh, code phần, mã hàng, màu/kích...">
         {canQA && selected.size > 0 && (
-          <Button loading={batching} onClick={doBatch}>QA xác nhận đạt ({selected.size})</Button>
+          <div className="flex items-center gap-2">
+            <Input value={nguoiTestBatch} onChange={(e) => setNguoiTestBatch(e.target.value)}
+              placeholder="Người test (bắt buộc)"
+              className={`!w-44 ${!nguoiTestBatch.trim() ? 'border-danger' : ''}`} />
+            <Button loading={batching} onClick={doBatch} disabled={!nguoiTestBatch.trim()}>
+              QA xác nhận đạt ({selected.size})
+            </Button>
+          </div>
         )}
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
