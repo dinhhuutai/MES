@@ -15,8 +15,9 @@ import { fmtNum, fmtDate } from '../../../utils/format';
 
 const norm = (s) => (s || '').trim().toLowerCase();
 
-// Màn "Tạo đợt sản xuất": chọn nhiều đợt vải CÙNG MÀU (gộp) hoặc 1 đợt nhập một phần (tách),
+// Màn "Tạo đợt sản xuất": chọn nhiều đợt vải CÙNG PHẦN IN (code phần) để gộp, hoặc 1 đợt nhập một phần (tách),
 // nhập SL từng đợt (≤ còn đưa), rồi Xác nhận → tạo 1 đợt SX (lenh_san_xuat) + so_luong junction.
+// Gom nhiều PHẦN IN khác nhau (cùng màu) là việc của Gom set ở READY — KHÔNG làm ở đây.
 export default function TaoDotSanXuatPage() {
   const { can } = usePermissions();
   const { toast, show } = useToast();
@@ -48,14 +49,15 @@ export default function TaoDotSanXuatPage() {
   useEffect(() => { listChuyen().then((r) => setChuyen(r.data || [])).catch(() => {}); }, []);
 
   const basketIds = useMemo(() => new Set(basket.map((b) => b.dot_vai_id)), [basket]);
-  const basketMau = basket.length ? norm(basket[0].mau_vai) : null;
+  const basketPin = basket.length ? basket[0].phan_in_id : null;
 
-  // Đợt bên trái: chưa trong giỏ; nếu giỏ đã có màu → chỉ cho thêm đợt CÙNG MÀU.
+  // Đợt bên trái: chưa trong giỏ; nếu giỏ đã có phần in → CHỈ cho thêm đợt CÙNG PHẦN IN (code phần).
   const leftRows = rows.filter((r) => !basketIds.has(r.dot_vai_id));
 
+  const MIXED_MSG = 'Chỉ gộp các đợt vải CÙNG PHẦN IN (code phần). Muốn gom nhiều phần in cùng màu → dùng Gom set ở READY.';
   const addToBasket = (r) => {
-    if (basketMau && norm(r.mau_vai) !== basketMau) {
-      show('Chỉ gộp các đợt vải CÙNG MÀU vào một đợt sản xuất', 'error');
+    if (basketPin && r.phan_in_id !== basketPin) {
+      show(MIXED_MSG, 'error');
       return;
     }
     setBasket((b) => [...b, { ...r, soLuong: r.con_release }]);
@@ -72,7 +74,7 @@ export default function TaoDotSanXuatPage() {
     const found = rows.find((r) => norm(r.ma_dot_vai) === norm(c) || String(r.dot_vai_id) === c || norm(r.dot_vai_id) === norm(c));
     if (!found) { show(`Không thấy đợt vải "${c}" đủ điều kiện tạo đợt SX — xem danh sách bên trái`, 'error'); return; }
     if (basketIds.has(found.dot_vai_id)) { show(`Đợt ${found.ma_dot_vai} đã ở trong đợt đang soạn`, 'info'); return; }
-    if (basketMau && norm(found.mau_vai) !== basketMau) { show('Chỉ gộp các đợt vải CÙNG MÀU vào một đợt sản xuất', 'error'); return; }
+    if (basketPin && found.phan_in_id !== basketPin) { show(MIXED_MSG, 'error'); return; }
     addToBasket(found);
     show(`Đã thêm đợt ${found.ma_dot_vai} vào đợt đang soạn`);
   };
@@ -106,7 +108,7 @@ export default function TaoDotSanXuatPage() {
 
   return (
     <div>
-      <Toolbar title="Tạo đợt sản xuất" subtitle="Gộp nhiều đợt vải cùng màu / tách một đợt, nhập SL từng đợt rồi đưa xuống sản xuất"
+      <Toolbar title="Tạo đợt sản xuất" subtitle="Gộp nhiều đợt vải CÙNG PHẦN IN (code phần) / tách một đợt, nhập SL từng đợt rồi đưa xuống sản xuất. (Gom nhiều phần in cùng màu → Gom set ở READY.)"
         search={search} onSearch={setSearch} searchPlaceholder="Tìm/nhập ID hoặc mã đợt vải, code phần, mã hàng, màu/kích...">
         <Button variant="secondary" icon="qr-code" onClick={() => setScanOpen(true)}>Quét QR đợt vải</Button>
         <Badge tone="info">{leftRows.length} đợt vải</Badge>
@@ -116,7 +118,7 @@ export default function TaoDotSanXuatPage() {
         {/* TRÁI: đợt vải đủ điều kiện */}
         <div className="rounded-card border border-line bg-surface p-3">
           <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-soft">
-            Đợt vải đủ điều kiện{basketMau ? ` · lọc màu "${basket[0].mau_vai}"` : ''}
+            Đợt vải đủ điều kiện{basketPin ? ` · lọc phần in "${basket[0].ma_phan}"` : ''}
           </h3>
           {loading ? (
             <div className="py-10 text-center text-ink-soft">Đang tải...</div>
@@ -125,7 +127,7 @@ export default function TaoDotSanXuatPage() {
           ) : (
             <div className="max-h-[calc(100vh-15rem)] space-y-1.5 overflow-auto">
               {leftRows.map((r) => {
-                const disabled = basketMau && norm(r.mau_vai) !== basketMau;
+                const disabled = basketPin && r.phan_in_id !== basketPin;
                 return (
                   <button key={r.dot_vai_id} type="button" disabled={disabled} onClick={() => addToBasket(r)}
                     className={`flex w-full items-center justify-between rounded-control border px-3 py-2 text-left text-sm ${disabled ? 'cursor-not-allowed border-line opacity-40' : 'border-line hover:border-primary hover:bg-primary/5'}`}>
