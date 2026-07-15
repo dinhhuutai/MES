@@ -58,15 +58,17 @@ function SingleBarRef({ data, refValue, height = 300, color = '#22c55e', unit = 
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} margin={{ top: 20, right: 8, left: -16, bottom: 8 }}>
         <XAxis dataKey="name" tick={AXIS_TICK} interval={0} angle={-20} textAnchor="end" height={62} />
-        <YAxis allowDecimals={false} tick={AXIS_TICK} />
+        {/* Ép trần trục Y ≥ giá trị đường vàng để đường luôn nằm trong miền vẽ (không bị cắt). */}
+        <YAxis allowDecimals={false} tick={AXIS_TICK}
+          domain={[0, refValue != null ? (dataMax) => Math.max(dataMax, refValue) : 'auto']} />
         <Tooltip formatter={(v) => [`${fmtNum(v)}${unit ? ` ${unit}` : ''}`, '']} />
-        {refValue != null && (
-          <ReferenceLine y={refValue} stroke="#f59e0b" strokeWidth={2}
-            label={{ value: `Tổng ${fmtNum(refValue)}`, position: 'right', fill: '#b45309', fontSize: 11, fontWeight: 700 }} />
-        )}
         <Bar dataKey="value" fill={color} radius={[6, 6, 0, 0]}>
           <LabelList dataKey="value" position="top" style={NUM_LABEL} formatter={fmtNum} />
         </Bar>
+        {refValue != null && (
+          <ReferenceLine y={refValue} stroke="#f59e0b" strokeWidth={2} ifOverflow="extendDomain"
+            label={{ value: `Tổng ${fmtNum(refValue)}`, position: 'right', fill: '#b45309', fontSize: 11, fontWeight: 700 }} />
+        )}
       </BarChart>
     </ResponsiveContainer>
   );
@@ -80,19 +82,22 @@ function GroupBar({ data, series, height = 320, unit = '', onBarClick, refLine }
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} margin={{ top: 20, right: 8, left: -16, bottom: 8 }}>
         <XAxis dataKey="name" tick={AXIS_TICK} interval={0} angle={-20} textAnchor="end" height={62} />
-        <YAxis allowDecimals={false} tick={AXIS_TICK} />
+        {/* Ép trần trục Y ≥ giá trị đường vàng để đường luôn nằm trong miền vẽ (không bị cắt). */}
+        <YAxis allowDecimals={false} tick={AXIS_TICK}
+          domain={[0, refLine != null ? (dataMax) => Math.max(dataMax, refLine.value) : 'auto']} />
         <Tooltip formatter={(v, n) => [`${fmtNum(v)}${unit ? ` ${unit}` : ''}`, n]} cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
         <Legend wrapperStyle={{ fontSize: 11 }} />
-        {refLine != null && (
-          <ReferenceLine y={refLine.value} stroke="#f59e0b" strokeWidth={2}
-            label={{ value: refLine.label ?? refLine.value, position: 'right', fill: '#b45309', fontSize: 11, fontWeight: 700 }} />
-        )}
         {series.map((s) => (
           <Bar key={s.key} dataKey={s.key} name={s.label} fill={s.color} radius={[4, 4, 0, 0]}
             onClick={click} cursor={onBarClick ? 'pointer' : undefined}>
             <LabelList dataKey={s.key} position="top" style={NUM_LABEL} formatter={fmtNum} />
           </Bar>
         ))}
+        {/* Đường tham chiếu vẽ SAU các cột → luôn nổi trên (không bị cột che). */}
+        {refLine != null && (
+          <ReferenceLine y={refLine.value} stroke="#f59e0b" strokeWidth={2} ifOverflow="extendDomain"
+            label={{ value: refLine.label ?? refLine.value, position: 'right', fill: '#b45309', fontSize: 11, fontWeight: 700 }} />
+        )}
       </BarChart>
     </ResponsiveContainer>
   );

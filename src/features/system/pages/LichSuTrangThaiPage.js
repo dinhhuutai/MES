@@ -13,7 +13,7 @@ import { Field, Textarea } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import { listConfirmHistory, cancelReadyItem, listReopenReadyCandidates, reopenReady } from '../../../services/readyService';
-import { searchPhanInForCancel, huyPhanIn } from '../../../services/orderService';
+import { searchPhanInForCancel, huyPhanIn, listDeletedPhanIn, moPhanIn } from '../../../services/orderService';
 import { listCancelableLenh, cancelLenh } from '../../../services/planningService';
 import { listCancelableTem, cancelPrintTem, listCloseCandidates, closeProduction, listReopenCandidates, reopenProduction, listUndoStartCandidates, undoStartProduction } from '../../../services/productionService';
 import { listCancelKcs, cancelKcs, listCancelSua, cancelSua, listCancelOqc, cancelOqc } from '../../../services/qualityService';
@@ -824,9 +824,34 @@ function ReopenReadySection({ show }) {
   );
 }
 
+// Chip lọc theo TRẠM HIỆN TẠI (dominant stage) — khớp chip màn "Danh sách phần in vải về".
+const HUY_STAGES = [
+  { code: '', label: 'Tất cả' },
+  { code: 'READY', label: 'READY' },
+  { code: 'RELEASE_1', label: 'Release 1' },
+  { code: 'TEST_RUN', label: 'Test Run' },
+  { code: 'RELEASE_2', label: 'Release 2' },
+  { code: 'CHO_SAN_XUAT', label: 'Chờ sản xuất' },
+  { code: 'SAN_XUAT', label: 'Đang sản xuất' },
+  { code: 'CHO_KHO', label: 'Chờ khô' },
+  { code: 'KCS', label: 'KCS' },
+  { code: 'SUA', label: 'Sửa' },
+  { code: 'OQC', label: 'OQC' },
+  { code: 'GIAO', label: 'Đang giao' },
+  { code: 'DA_GIAO', label: 'Đã giao' },
+];
+// Nhãn hiển thị stage nội bộ (giai_doan trả về từ backend) → tiếng Việt.
+const STAGE_LABEL = {
+  READY_KT: 'READY (Kỹ thuật)', READY_QA: 'READY (QA)', RELEASE_1: 'Release 1',
+  TESTRUN_CNSP: 'Test Run (CNSP)', TESTRUN_QA: 'Test Run (QA)', RELEASE_2: 'Release 2',
+  CHO_SAN_XUAT: 'Chờ sản xuất', SAN_XUAT: 'Đang sản xuất', CHO_KHO: 'Chờ khô',
+  KCS: 'KCS', SUA: 'Sửa', OQC: 'OQC', DANG_GIAO: 'Đang giao', DA_GIAO: 'Đã giao',
+};
+
 // ─── Tab: Hủy phần in (xóa mềm) — nhập/tìm code phần, chọn nhiều rồi hủy ───────
 function PhanInCancelSection({ show }) {
   const [q, setQ] = useState('');
+  const [stage, setStage] = useState(''); // lọc theo trạm hiện tại
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState(() => new Map()); // id -> row (giữ qua nhiều lần tìm)
@@ -837,14 +862,14 @@ function PhanInCancelSection({ show }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await searchPhanInForCancel(q);
+      const res = await searchPhanInForCancel(q, stage);
       setResults(res.data);
     } catch (e) {
       show(e.message || 'Lỗi tìm kiếm', 'error');
     } finally {
       setLoading(false);
     }
-  }, [q, show]);
+  }, [q, stage, show]);
   useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t); }, [load]);
 
   const toggle = (row) => setSelected((m) => {
@@ -878,6 +903,7 @@ function PhanInCancelSection({ show }) {
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
     { key: 'mau_vai', header: 'Màu · Kích', render: (r) => [r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—' },
+    { key: 'giai_doan', header: 'Trạm hiện tại', render: (r) => <Badge tone="info">{STAGE_LABEL[r.giai_doan] || r.giai_doan || '—'}</Badge> },
     { key: 'so_dot_vai', header: 'Đợt vải', className: 'text-right tabular-nums', render: (r) => r.so_dot_vai },
     { key: 'da_san_xuat', header: 'SX', render: (r) => (r.da_san_xuat ? <Badge tone="warning">Đã có SX</Badge> : <Badge tone="default">Chưa</Badge>) },
   ];
@@ -889,6 +915,18 @@ function PhanInCancelSection({ show }) {
         search={q} onSearch={setQ} searchPlaceholder="Nhập/tìm code phần, mã hàng, màu, khách...">
         <Badge tone="default">{results.length} kết quả</Badge>
       </Toolbar>
+
+      {/* Lọc theo TRẠM HIỆN TẠI (giai đoạn dominant của phần in) */}
+      <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1">
+        {HUY_STAGES.map((s) => (
+          <button key={s.code || 'all'} onClick={() => setStage(s.code)}
+            className={`shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-medium transition ${
+              stage === s.code ? 'border-primary bg-primary text-white' : 'border-line text-ink-soft hover:bg-surface-muted'
+            }`}>
+            {s.label}
+          </button>
+        ))}
+      </div>
 
       {selArr.length > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-2 rounded-card border border-line bg-surface p-3">
@@ -924,6 +962,110 @@ function PhanInCancelSection({ show }) {
   );
 }
 
+// ─── Tab: Mở phần in (khôi phục xóa mềm) — danh sách phần in đã hủy, mở lại nhiều cái ───
+function PhanInReopenSection({ show }) {
+  const [q, setQ] = useState('');
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState(() => new Map());
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listDeletedPhanIn(q);
+      setRows(res.data);
+    } catch (e) {
+      show(e.message || 'Lỗi tải', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [q, show]);
+  useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t); }, [load]);
+
+  const toggle = (row) => setSelected((m) => {
+    const next = new Map(m);
+    if (next.has(row.phan_in_id)) next.delete(row.phan_in_id); else next.set(row.phan_in_id, row);
+    return next;
+  });
+  const selArr = [...selected.values()];
+
+  const doReopen = async () => {
+    setBusy(true);
+    try {
+      const res = await moPhanIn(selArr.map((r) => r.phan_in_id));
+      show(`Đã mở lại ${res.data.count} phần in`);
+      setSelected(new Map()); setConfirm(false);
+      load();
+    } catch (e) {
+      show(e.message || 'Mở lại thất bại', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const columns = [
+    { key: 'sel', className: 'w-10', render: (r) => (
+      <input type="checkbox" checked={selected.has(r.phan_in_id)}
+        onClick={(e) => e.stopPropagation()} onChange={() => toggle(r)} aria-label="Chọn phần in" />
+    ) },
+    { key: 'ma_phan', header: 'Code phần', className: 'font-medium text-ink', render: (r) => r.ma_phan },
+    { key: 'ten_khach_hang', header: 'Khách hàng', render: (r) => r.ten_khach_hang || '—' },
+    { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
+    { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
+    { key: 'mau_vai', header: 'Màu · Kích', render: (r) => [r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—' },
+    { key: 'so_dot_vai', header: 'Đợt vải', className: 'text-right tabular-nums', render: (r) => r.so_dot_vai },
+    { key: 'tg_huy', header: 'Hủy lúc', className: 'whitespace-nowrap', render: (r) => (
+      <div>
+        <div>{fmtTime(r.tg_huy)}</div>
+        <div className="text-xs text-ink-soft">{r.nguoi_huy || '—'}{r.ly_do ? ` · ${r.ly_do}` : ''}</div>
+      </div>
+    ) },
+    { key: 'co_snapshot', header: 'Khôi phục', render: (r) => (r.co_snapshot
+      ? <Badge tone="success">Trọn vẹn</Badge>
+      : <Badge tone="warning" title="Phần in xóa trước khi hỗ trợ snapshot — chỉ khôi phục phần in + đợt vải">Một phần</Badge>) },
+  ];
+
+  return (
+    <div>
+      <Toolbar title="Mở phần in (khôi phục đã hủy)"
+        subtitle="Danh sách phần in đã hủy (xóa mềm). Chọn để mở lại — khôi phục phần in, đợt vải, lệnh, tem về đúng trạng thái trước khi hủy."
+        search={q} onSearch={setQ} searchPlaceholder="Tìm code phần, mã hàng, màu, khách...">
+        <Badge tone="default">{rows.length} đã hủy</Badge>
+      </Toolbar>
+
+      {selArr.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-card border border-line bg-surface p-3">
+          <span className="text-xs font-semibold text-ink-soft">Đã chọn {selArr.length}:</span>
+          {selArr.map((r) => (
+            <span key={r.phan_in_id} className="inline-flex items-center gap-1 rounded-full bg-primary-wash px-3 py-1 text-xs font-medium text-primary">
+              {r.ma_phan}
+              <button onClick={() => toggle(r)} className="ml-0.5 hover:text-danger" aria-label="Bỏ chọn"><Icon name="x" size={12} /></button>
+            </span>
+          ))}
+          <div className="ml-auto">
+            <Button onClick={() => setConfirm(true)}>Mở lại {selArr.length} phần in</Button>
+          </div>
+        </div>
+      )}
+
+      <DataTable columns={columns} rows={rows} loading={loading} rowKey="phan_in_id"
+        onRowClick={(r) => toggle(r)} emptyText="Không có phần in nào đã hủy" />
+
+      <ConfirmDialog
+        open={confirm}
+        onClose={() => setConfirm(false)}
+        onConfirm={doReopen}
+        loading={busy}
+        title="Mở lại phần in"
+        message={`Khôi phục ${selArr.length} phần in: ${selArr.map((r) => r.ma_phan).join(', ')}? Phần in + đợt vải + lệnh + tem sẽ trở lại đúng trạng thái trước khi hủy.`}
+        confirmText="Mở lại phần in"
+      />
+    </div>
+  );
+}
+
 export default function LichSuTrangThaiPage() {
   const { can } = usePermissions();
   const { toast, show } = useToast();
@@ -932,6 +1074,7 @@ export default function LichSuTrangThaiPage() {
     can('READY_CANCEL') && { key: 'ready', label: 'Hủy xác nhận READY' },
     can('READY_CANCEL') && { key: 'moready', label: 'Mở READY' },
     can('READY_CANCEL') && { key: 'huyphanin', label: 'Hủy phần in' },
+    can('READY_CANCEL') && { key: 'mophanin', label: 'Mở phần in' },
     (can('RELEASE1') || can('RELEASE2')) && { key: 'lenh', label: 'Hủy lệnh sản xuất' },
     can('PROD_RUN') && { key: 'tem', label: 'Hủy lệnh in tem' },
     can('PROD_RUN') && { key: 'dong', label: 'Đóng lệnh sản xuất' },
@@ -964,6 +1107,7 @@ export default function LichSuTrangThaiPage() {
       {tab === 'ready' && <ReadyCancelSection show={show} />}
       {tab === 'moready' && <ReopenReadySection show={show} />}
       {tab === 'huyphanin' && <PhanInCancelSection show={show} />}
+      {tab === 'mophanin' && <PhanInReopenSection show={show} />}
       {tab === 'lenh' && <LenhCancelSection show={show} />}
       {tab === 'tem' && <TemCancelSection show={show} />}
       {tab === 'dong' && <CloseProductionSection show={show} />}

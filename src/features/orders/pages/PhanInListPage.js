@@ -158,19 +158,26 @@ function aggDotVai(dotVai = []) {
   return { total, ngay: ngay[0] || null, han: han[0] || null };
 }
 
-// Số liệu TỔNG HỢP 1 phần in cho chế độ "Tất cả" (1 dòng): tổng đợt vải + tổng các đợt sản xuất.
+// % 1 chữ số thập phân (đạt/kiểm...). den ≤ 0 → '0%'.
+const pctStr = (num, den) => (den > 0 ? `${Math.round((num / den) * 1000) / 10}%` : '0%');
+
+// Số liệu TỔNG HỢP 1 phần in cho chế độ tổng hợp (1 dòng): tổng đợt vải + tổng các đợt sản xuất.
 function aggSxRow(g) {
   const dv = g.dot_vai || [];
   const sx = g.dot_san_xuat || [];
   const hanVai = dv.reduce((mn, d) => (d.han_giao_hang && (!mn || new Date(d.han_giao_hang) < new Date(mn)) ? d.han_giao_hang : mn), null);
   const sum = (k) => sx.reduce((s, x) => s + (x[k] || 0), 0);
+  const slIn = sum('sl_in'); const slKcsDat = sum('sl_kcs_dat'); const slSuaDat = sum('sl_sua_dat');
+  // Số lượng hủy = hủy tại KCS + hủy khi sửa; % sau kiểm = đạt/in; % sau sửa = (đạt + sửa đạt)/in.
+  const tongHuy = sum('sl_kcs_huy') + sum('sl_sua_huy');
   return {
     soDotVai: dv.length,
     tongVai: dv.reduce((s, d) => s + (d.so_luong_vai_ve || 0), 0),
     ngayVai: dv.length ? dv[0].ngay_vai_ve : null,
     hanVai,
     soDotSx: sx.length,
-    slIn: sum('sl_in'), slKcsDat: sum('sl_kcs_dat'), slSua: sum('sl_sua'), slSuaDat: sum('sl_sua_dat'), slGiao: sum('sl_giao'),
+    slIn, slKcsDat, slSua: sum('sl_sua'), slSuaDat, slGiao: sum('sl_giao'),
+    tongHuy, pctKiem: pctStr(slKcsDat, slIn), pctSua: pctStr(slKcsDat + slSuaDat, slIn),
     oqcDat: sx.filter((x) => x.tt_oqc === 'DAT').length,
   };
 }
@@ -303,9 +310,11 @@ export default function PhanInListPage() {
   const sttStart = (meta.page - 1) * LIMIT;
   const showTemRows = TEM_ROW_STAGES.includes(stage); // tem/hàng + chất lượng
   const showPcsCol = stage === 'SAN_XUAT';             // chỉ thêm cột "SL đã in"
-  const showSxCols = !stage || stage === 'ALL';        // "Tất cả": thêm khối cột theo ĐỢT SẢN XUẤT
+  // Chế độ TỔNG HỢP (1 dòng/phần in + nút Chi tiết): "Tất cả" + các chip tiền sản xuất.
+  const AGG_STAGES = ['ALL', 'READY', 'RELEASE_1', 'TEST_RUN', 'RELEASE_2'];
+  const showSxCols = !stage || AGG_STAGES.includes(stage);
   const showTemQuality = showTemRows && !['KCS', 'CHO_KHO'].includes(stage); // KCS/Chờ khô chưa có chất lượng → ẩn cột
-  const COLS = showTemRows ? (10 + (showTemQuality ? 1 : 0)) : (11 + (showPcsCol ? 1 : 0) + (showSxCols ? 9 : 0));
+  const COLS = showTemRows ? (10 + (showTemQuality ? 1 : 0)) : (11 + (showPcsCol ? 1 : 0) + (showSxCols ? 12 : 0));
 
   return (
     <div>
@@ -432,6 +441,9 @@ export default function PhanInListPage() {
                         {sortTh('Kiểm đạt', 'kiemDat', 'text-right')}
                         {sortTh('Sửa', 'sua', 'text-right')}
                         {sortTh('Sửa đạt', 'suaDat', 'text-right')}
+                        <th className={`${TH} text-right`}>Hủy</th>
+                        <th className={`${TH} text-right`}>% sau kiểm</th>
+                        <th className={`${TH} text-right`}>% sau sửa</th>
                         <th className={TH}>OQC xác nhận</th>
                         <th className={TH}>TT OQC</th>
                         <th className={`${TH} text-right`}>SL giao</th>
@@ -514,7 +526,7 @@ export default function PhanInListPage() {
                               ? <span className={dr.prefix ? (dr.prefix === '17-' ? 'text-amber-600' : 'text-primary') : ''}>{dr.ma}</span>
                               : <span className="text-xs italic text-ink-soft">Chưa in tem</span>}
                           </td>
-                          <td className={`${TD} text-right tabular-nums`}>{dr.qty != null ? fmtNum(dr.qty) : '—'}</td>
+                          <td className={`${TD} text-right tabular-nums`}>{fmtNum(dr.qty || 0)}</td>
                           <td className={TD}>{tm ? <Badge tone={(TEM_STATUS[tm.trang_thai] || {}).tone || 'default'}>{(TEM_STATUS[tm.trang_thai] || {}).label || tm.trang_thai}</Badge> : '—'}</td>
                           {showTemQuality && <td className={TD}>{tm ? <TemQuality tm={tm} /> : '—'}</td>}
                         </tr>
@@ -538,13 +550,16 @@ export default function PhanInListPage() {
                         <td className={`${TD} border-l border-line/60 font-medium text-ink`}>
                           {a.soDotSx > 0 ? <Badge tone="info">{a.soDotSx} đợt SX</Badge> : <span className="text-xs italic text-ink-soft">Chưa có đợt SX</span>}
                         </td>
-                        <td className={`${TD} text-right tabular-nums`}>{a.soDotSx ? fmtNum(a.slIn) : '—'}</td>
-                        <td className={`${TD} text-right tabular-nums`}>{a.soDotSx ? fmtNum(a.slKcsDat) : '—'}</td>
-                        <td className={`${TD} text-right tabular-nums`}>{a.soDotSx ? fmtNum(a.slSua) : '—'}</td>
-                        <td className={`${TD} text-right tabular-nums`}>{a.soDotSx ? fmtNum(a.slSuaDat) : '—'}</td>
+                        <td className={`${TD} text-right tabular-nums`}>{fmtNum(a.slIn)}</td>
+                        <td className={`${TD} text-right tabular-nums`}>{fmtNum(a.slKcsDat)}</td>
+                        <td className={`${TD} text-right tabular-nums`}>{fmtNum(a.slSua)}</td>
+                        <td className={`${TD} text-right tabular-nums`}>{fmtNum(a.slSuaDat)}</td>
+                        <td className={`${TD} text-right tabular-nums text-rose-600`}>{fmtNum(a.tongHuy)}</td>
+                        <td className={`${TD} text-right tabular-nums`}>{a.pctKiem}</td>
+                        <td className={`${TD} text-right tabular-nums`}>{a.pctSua}</td>
                         <td className={TD}>—</td>
                         <td className={TD}>{a.soDotSx ? <span className="text-xs text-ink-soft">{a.oqcDat}/{a.soDotSx} đạt</span> : '—'}</td>
-                        <td className={`${TD} text-right tabular-nums`}>{a.soDotSx ? fmtNum(a.slGiao) : '—'}</td>
+                        <td className={`${TD} text-right tabular-nums`}>{fmtNum(a.slGiao)}</td>
                         <td className={`${TD} text-center`}>
                           <Button variant="ghost" className="!px-2.5 !py-1 !text-xs"
                             onClick={(e) => { e.stopPropagation(); setDetailModal(g); }}>Chi tiết</Button>
@@ -822,6 +837,9 @@ export default function PhanInListPage() {
                       <th className={`${th} text-right`}>Kiểm đạt</th>
                       <th className={`${th} text-right`}>Sửa</th>
                       <th className={`${th} text-right`}>Sửa đạt</th>
+                      <th className={`${th} text-right`}>Hủy</th>
+                      <th className={`${th} text-right`}>% sau kiểm</th>
+                      <th className={`${th} text-right`}>% sau sửa</th>
                       <th className={th}>OQC xác nhận</th>
                       <th className={th}>TT OQC</th>
                       <th className={`${th} text-right`}>SL giao</th>
@@ -842,6 +860,9 @@ export default function PhanInListPage() {
                           <td className={`${td} text-right tabular-nums`}>{s ? fmtNum(s.sl_kcs_dat) : ''}</td>
                           <td className={`${td} text-right tabular-nums`}>{s ? fmtNum(s.sl_sua) : ''}</td>
                           <td className={`${td} text-right tabular-nums`}>{s ? fmtNum(s.sl_sua_dat) : ''}</td>
+                          <td className={`${td} text-right tabular-nums text-rose-600`}>{s ? fmtNum((s.sl_kcs_huy || 0) + (s.sl_sua_huy || 0)) : ''}</td>
+                          <td className={`${td} text-right tabular-nums`}>{s ? pctStr(s.sl_kcs_dat, s.sl_in) : ''}</td>
+                          <td className={`${td} text-right tabular-nums`}>{s ? pctStr((s.sl_kcs_dat || 0) + (s.sl_sua_dat || 0), s.sl_in) : ''}</td>
                           <td className={td}>{s?.tg_oqc ? fmtDateTime(s.tg_oqc) : ''}</td>
                           <td className={td}>{s?.tt_oqc ? <Badge tone={s.tt_oqc === 'DAT' ? 'success' : 'danger'}>{s.tt_oqc === 'DAT' ? 'Đạt' : 'Không đạt'}</Badge> : ''}</td>
                           <td className={`${td} text-right tabular-nums`}>{s ? fmtNum(s.sl_giao) : ''}</td>

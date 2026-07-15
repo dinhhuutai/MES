@@ -7,5 +7,7 @@ export const setLoiNhuan = (id, loiNhuan) => client.patch(`/phan-in/${id}/loi-nh
 export const setChoKho = (id, phut) => client.patch(`/phan-in/${id}/cho-kho`, { phut });
 export const profitHistory = (date) => client.get('/phan-in/profit-history', { params: { date } });
 // Hủy phần in (xóa mềm): tìm kiếm theo code phần rồi hủy nhiều phần in cùng lúc.
-export const searchPhanInForCancel = (q) => client.get('/phan-in/huy/search', { params: { q } });
+export const searchPhanInForCancel = (q, stage) => client.get('/phan-in/huy/search', { params: { q, stage } });
 export const huyPhanIn = (phanInIds, lyDo) => client.post('/phan-in/huy', { phanInIds, lyDo });
+export const listDeletedPhanIn = (q) => client.get('/phan-in/mo/deleted', { params: { q } });
+export const moPhanIn = (phanInIds) => client.post('/phan-in/mo', { phanInIds });

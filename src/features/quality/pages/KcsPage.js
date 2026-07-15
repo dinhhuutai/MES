@@ -3,6 +3,7 @@ import Toolbar from '../../../components/common/Toolbar';
 import OwnerHint from '../../../components/common/OwnerHint';
 import DataTable from '../../../components/common/DataTable';
 import Badge from '../../../components/common/Badge';
+import TraVeBadge from '../../../components/common/TraVeBadge';
 import Button from '../../../components/common/Button';
 import SidePanel from '../../../components/common/SidePanel';
 import Modal from '../../../components/common/Modal';
@@ -164,7 +165,7 @@ export default function KcsPage() {
     { key: 'ma_tem', header: 'Tem', render: (r) => (
       <div>
         <Badge tone="info">{r.ma_tem}</Badge>
-        {r.tra_ve_ly_do && <div className="mt-1"><Badge tone="danger" title={r.tra_ve_ly_do}>Bị OQC trả về</Badge></div>}
+        {(r.tra_ve || r.tra_ve_ly_do) && <div className="mt-1"><TraVeBadge data={r.tra_ve || r.tra_ve_ly_do} label="Bị OQC trả về" nguon="OQC" /></div>}
       </div>
     ) },
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },

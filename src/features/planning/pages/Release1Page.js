@@ -3,6 +3,7 @@ import Toolbar from '../../../components/common/Toolbar';
 import Pagination from '../../../components/common/Pagination';
 import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
 import Badge from '../../../components/common/Badge';
+import TraVeBadge from '../../../components/common/TraVeBadge';
 import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
 import SidePanel from '../../../components/common/SidePanel';
@@ -56,7 +57,7 @@ function DataCells({ r }) {
           <div className="font-medium text-ink">{r.ten_khach_hang || '—'}</div>
           <div className="text-xs text-ink-soft">{r.ma_don_hang || '—'}</div>
         </div>
-        {r.tra_ve_ly_do && <Badge tone="danger" className="mt-1" title={r.tra_ve_ly_do}>Bị QC trả về</Badge>}
+        {(r.tra_ve || r.tra_ve_ly_do) && <div className="mt-1"><TraVeBadge data={r.tra_ve || r.tra_ve_ly_do} label="Bị Test Run trả về" nguon="Test Run (QA)" /></div>}
       </td>
       <td className={TD}>{r.ma_hang || '—'}</td>
       <td className={TD}>

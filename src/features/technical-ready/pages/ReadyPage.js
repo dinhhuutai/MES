@@ -15,6 +15,7 @@ import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import useNow from '../../../hooks/useNow';
 import { evalSla, slaRowClass } from '../../../utils/sla';
+import TraVeBadge from '../../../components/common/TraVeBadge';
 import {
   listReadyCandidates, getReadyConfig, confirmReadyBulk, readyHistory, readyDone, getReadyItemCounts,
 } from '../../../services/readyService';
@@ -141,7 +142,7 @@ export default function ReadyPage() {
       <div>
         <div>{r.ma_phan || '—'}</div>
         {r.gom_set_list && <Badge tone="info" className="mt-1" title="Gom set: phần in này được gom in chung với các phần in KHÁC (cùng màu). ≠ Gộp đợt (cùng phần in, khác đợt)."><Icon name="git-branch" size={12} className="mr-1" />Gom set {r.gom_set_list}</Badge>}
-        {r.tra_ve_ly_do && <Badge tone="danger" className="mt-1" title={r.tra_ve_ly_do}>Bị QC trả về</Badge>}
+        {(r.tra_ve || r.tra_ve_ly_do) && <div className="mt-1"><TraVeBadge data={r.tra_ve || r.tra_ve_ly_do} label="Bị QC trả về" nguon="QC" /></div>}
       </div>
     ) },
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
