@@ -82,7 +82,8 @@ export default function GiaoHangPanel({ giaoHangId, onClose, onChanged }) {
             <div className="space-y-1.5">
               {gh.tems.map((t) => (
                 <div key={t.id} className="flex items-center justify-between gap-2 rounded-control border border-line px-3 py-2 text-sm">
-                  <span className="font-medium text-ink">{t.ma_tem}</span>
+                  <span className="font-medium text-ink">{(t.nguon === 'SUA' ? '17-' : t.nguon === 'KCS' ? '15-' : '') + t.ma_tem}</span>
+                  {t.nguon && <Badge tone={t.nguon === 'SUA' ? 'warning' : 'info'}>{t.nguon === 'SUA' ? 'Sửa' : 'KCS'}</Badge>}
                   <span className="text-ink-soft">{t.ma_lenh_san_xuat}</span>
                   <span className="ml-auto tabular-nums">{fmtNum(t.so_luong_giao)}</span>
                   <button type="button" onClick={() => setJourney({ temId: t.tem_id, maTem: t.ma_tem })}

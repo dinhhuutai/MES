@@ -87,7 +87,9 @@ export default function SuaPage() {
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
     { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
-    { key: 'so_luong', header: 'Sửa đạt', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
+    { key: 'so_luong_kiem', header: 'SL sửa', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong_kiem) },
+    { key: 'so_luong', header: 'Sửa đạt', className: 'text-right tabular-nums text-emerald-600', render: (r) => fmtNum(r.so_luong) },
+    { key: 'so_luong_sua_huy', header: 'Sửa hủy', className: 'text-right tabular-nums text-rose-600', render: (r) => fmtNum(r.so_luong_sua_huy) },
     { key: 'tg', header: 'Giờ', className: 'whitespace-nowrap tabular-nums', render: (r) => (r.tg ? new Date(r.tg).toLocaleTimeString('vi-VN') : '') },
     { key: 'in_tem', header: '', className: 'text-right', render: (r) => (
       r.tem_id ? <Button variant="secondary" className="!px-3 !py-1.5 !text-xs" onClick={() => printOqc(r)}>In tem</Button> : null

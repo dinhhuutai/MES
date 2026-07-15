@@ -725,17 +725,41 @@ export default function PhanInListPage() {
                 const tl = detail.timeline || {};
                 const ready = tl.ready;
                 const journeys = tl.journeys || [];
+                const pending = tl.pending; // đợt vải chưa release (chưa có LSX) → hiện READY ngay
                 const single = journeys.length === 1; // pcs mức phần in chỉ khớp khi có đúng 1 đợt SX
-                if (!ready && journeys.length === 0) {
+                if (!ready && journeys.length === 0 && !pending) {
                   return <p className="text-sm text-ink-soft">Phần in chưa đi qua checkpoint nào có xác nhận.</p>;
                 }
-                const renderNode = (t, i, arr, withPcs) => (
+                // Gộp/tách của 1 đợt SX từ danh sách đợt vải: ≥2 đợt vải = Gộp; 1 đợt nhưng đưa vào SX < SL vải về = Tách.
+                const composeInfo = (dv) => {
+                  const list = dv || [];
+                  if (list.length >= 2) return { label: `Gộp ${list.length} đợt vải`, tone: 'warning' };
+                  const d0 = list[0];
+                  if (d0 && d0.so_luong != null && d0.so_luong_vai_ve != null && d0.so_luong < d0.so_luong_vai_ve) {
+                    return { label: 'Tách (một phần đợt vải)', tone: 'info' };
+                  }
+                  return null;
+                };
+                const renderNode = (t, i, arr, withPcs, journey) => (
                   <li key={t.ma_tram}>
                     <div className="rounded-control border border-line p-3">
                       <div className="flex items-center gap-2">
                         <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-wash text-[11px] font-bold text-primary">{i + 1}</span>
                         <span className="text-sm font-semibold text-ink">{t.ten_tram}</span>
                       </div>
+                      {t.ma_tram === 'RELEASE_1' && journey?.dot_vai?.length > 0 && (
+                        <div className="mt-2 pl-8">
+                          {(() => { const ci = composeInfo(journey.dot_vai); return ci ? <Badge tone={ci.tone}>{ci.label}</Badge> : null; })()}
+                          <div className="mt-1 space-y-0.5">
+                            {journey.dot_vai.map((d) => (
+                              <div key={d.ma_dot_vai} className="text-[11px] text-ink-soft">
+                                <b className="text-ink">{d.ma_dot_vai}</b> · vải về {fmtNum(d.so_luong_vai_ve)}
+                                {d.so_luong != null && d.so_luong !== d.so_luong_vai_ve ? ` · đưa vào SX ${fmtNum(d.so_luong)}` : ''}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       {t.checklists.length > 0 && (
                         <div className="mt-2 space-y-1.5 pl-8">
                           {t.checklists.map((c) => (
@@ -771,9 +795,24 @@ export default function PhanInListPage() {
                     )}
                   </li>
                 );
+                const pendingBlock = pending && (
+                  <div className="rounded-control border border-dashed border-line bg-surface-muted/20 p-2.5">
+                    <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <Badge tone="default">Đợt vải chờ release</Badge>
+                      {pending.dot_vai?.length > 0 && (
+                        <span className="text-xs text-ink-soft">vải: {pending.dot_vai.map((d) => d.ma_dot_vai).join(', ')}</span>
+                      )}
+                    </div>
+                    {pending.trams?.length ? (
+                      <ol>{pending.trams.map((t, i) => renderNode(t, i, pending.trams, false))}</ol>
+                    ) : (
+                      <p className="pl-1 text-xs text-ink-soft">Đợt vải chờ release — chưa xác nhận READY.</p>
+                    )}
+                  </div>
+                );
                 return (
                   <div className="space-y-4">
-                    {journeys.length === 0 ? (
+                    {journeys.length === 0 && !pending ? (
                       ready ? (
                         <div>
                           <div className="mb-1 text-xs font-semibold text-ink-soft">Chuẩn bị kỹ thuật (READY)</div>
@@ -782,23 +821,28 @@ export default function PhanInListPage() {
                       ) : (
                         <p className="text-sm text-ink-soft">Chưa có đợt sản xuất nào (phần in đang ở READY/chờ release).</p>
                       )
-                    ) : journeys.map((j, ji) => (
-                      <div key={j.lenh_id} className="rounded-control border border-line/70 bg-surface-muted/30 p-2.5">
-                        <div className="mb-2 flex flex-wrap items-center gap-2">
-                          <Badge tone="info">Đợt SX {ji + 1}/{journeys.length}</Badge>
-                          <span className="text-sm font-semibold text-ink">{j.ma_lenh_san_xuat}</span>
-                          {j.giai_doan === 'EP_UI' && <Badge tone="warning">Ép ủi</Badge>}
-                          {j.dot_vai?.length > 0 && (
-                            <span className="text-xs text-ink-soft">vải: {j.dot_vai.map((d) => d.ma_dot_vai).join(', ')}</span>
-                          )}
-                        </div>
-                        {j.trams.length ? (
-                          <ol>{j.trams.map((t, i) => renderNode(t, i, j.trams, single))}</ol>
-                        ) : (
-                          <p className="pl-1 text-xs text-ink-soft">Đợt SX vừa tạo — chưa đi qua checkpoint nào.</p>
-                        )}
-                      </div>
-                    ))}
+                    ) : (
+                      <>
+                        {journeys.map((j, ji) => (
+                          <div key={j.lenh_id} className="rounded-control border border-line/70 bg-surface-muted/30 p-2.5">
+                            <div className="mb-2 flex flex-wrap items-center gap-2">
+                              <Badge tone="info">Đợt SX {ji + 1}/{journeys.length}</Badge>
+                              <span className="text-sm font-semibold text-ink">{j.ma_lenh_san_xuat}</span>
+                              {j.giai_doan === 'EP_UI' && <Badge tone="warning">Ép ủi</Badge>}
+                              {j.dot_vai?.length > 0 && (
+                                <span className="text-xs text-ink-soft">vải: {j.dot_vai.map((d) => d.ma_dot_vai).join(', ')}</span>
+                              )}
+                            </div>
+                            {j.trams.length ? (
+                              <ol>{j.trams.map((t, i) => renderNode(t, i, j.trams, single, j))}</ol>
+                            ) : (
+                              <p className="pl-1 text-xs text-ink-soft">Đợt SX vừa tạo — chưa đi qua checkpoint nào.</p>
+                            )}
+                          </div>
+                        ))}
+                        {pendingBlock}
+                      </>
+                    )}
                     {detail.kcs_by_dot?.dot?.length > 0 && (
                       <div className="rounded-control border border-line p-3">
                         <div className="mb-1 text-xs font-semibold text-ink-soft">KCS theo đợt vải (tổng hợp phần in)</div>
@@ -820,15 +864,25 @@ export default function PhanInListPage() {
           {(() => {
             const dvList = detailModal.dot_vai || [];
             const sxList = detailModal.dot_san_xuat || [];
-            const R = Math.max(dvList.length, sxList.length, 1);
-            const lines = Array.from({ length: R }, (_, i) => ({ d: dvList[i] || null, s: sxList[i] || null }));
             const th = 'px-3 py-2 text-left text-xs font-semibold text-ink-soft';
-            const td = 'px-3 py-1.5';
+            const td = 'px-3 py-1.5 align-top';
+            // Đợt vải đã đưa vào 1 đợt SX nào đó → phần CHƯA release hiện thành hàng riêng bên dưới.
+            const usedMa = new Set(sxList.flatMap((s) => (s.dot_vai_list || []).map((x) => x.ma_dot_vai)));
+            const unreleased = dvList.filter((d) => !usedMa.has(d.ma_dot_vai));
+            // Gộp (≥2 đợt vải) hay Tách (1 đợt nhưng đưa vào SX < SL vải về).
+            const composeBadge = (s) => {
+              const n = s.so_dot_vai || (s.dot_vai_list || []).length;
+              if (n >= 2) return <Badge tone="warning">Gộp {n} đợt</Badge>;
+              const d0 = (s.dot_vai_list || [])[0];
+              if (d0 && d0.so_luong != null && d0.so_luong_vai_ve != null && d0.so_luong < d0.so_luong_vai_ve) return <Badge tone="info">Tách</Badge>;
+              return null;
+            };
             return (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-line bg-surface-muted/60">
+                      <th className={th}>Đợt vải</th>
                       <th className={`${th} text-right`}>SL vải về</th>
                       <th className={th}>Ngày vải về</th>
                       <th className={th}>Hạn giao</th>
@@ -846,29 +900,52 @@ export default function PhanInListPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {lines.map((ln, i) => {
-                      const d = ln.d; const s = ln.s;
+                    {/* Mỗi ĐỢT SX = 1 hàng; các đợt vải của nó xếp chồng trong 4 cột trái (hợp nhất hàng theo đợt SX). */}
+                    {sxList.map((s, i) => {
+                      const dl = (s.dot_vai_list && s.dot_vai_list.length) ? s.dot_vai_list
+                        : [{ ma_dot_vai: s.ma_dot_vai, so_luong_vai_ve: null, ngay_vai_ve: s.ngay_vai_ve, han_giao_hang: s.han_giao_hang }];
                       return (
-                        <tr key={i} className="border-b border-line/60">
-                          <td className={`${td} text-right tabular-nums`}>{d ? fmtNum(d.so_luong_vai_ve) : ''}</td>
-                          <td className={td}>{d ? fmtDate(d.ngay_vai_ve) : ''}</td>
-                          <td className={td}>{d ? fmtDate(d.han_giao_hang) : ''}</td>
+                        <tr key={`sx-${i}`} className="border-b border-line/60">
+                          <td className={`${td} text-xs`}>{dl.map((x, k) => (
+                            <div key={k}><b className="text-ink">{x.ma_dot_vai}</b>
+                              {x.so_luong != null && x.so_luong !== x.so_luong_vai_ve ? <span className="text-ink-soft"> (vào SX {fmtNum(x.so_luong)})</span> : ''}</div>
+                          ))}</td>
+                          <td className={`${td} text-right tabular-nums text-xs`}>{dl.map((x, k) => <div key={k}>{x.so_luong_vai_ve != null ? fmtNum(x.so_luong_vai_ve) : '—'}</div>)}</td>
+                          <td className={`${td} text-xs`}>{dl.map((x, k) => <div key={k}>{fmtDate(x.ngay_vai_ve)}</div>)}</td>
+                          <td className={`${td} text-xs`}>{dl.map((x, k) => <div key={k}>{fmtDate(x.han_giao_hang)}</div>)}</td>
                           <td className={`${td} border-l border-line/60 font-medium text-ink`}>
-                            {s ? <span>{s.ma_lenh_san_xuat}{s.giai_doan === 'EP_UI' && <Badge tone="info">Ép ủi</Badge>}</span> : ''}
+                            <div className="flex flex-wrap items-center gap-1">
+                              <span>{s.ma_lenh_san_xuat}</span>
+                              {s.giai_doan === 'EP_UI' && <Badge tone="info">Ép ủi</Badge>}
+                              {composeBadge(s)}
+                            </div>
                           </td>
-                          <td className={`${td} text-right tabular-nums`}>{s ? fmtNum(s.sl_in) : ''}</td>
-                          <td className={`${td} text-right tabular-nums`}>{s ? fmtNum(s.sl_kcs_dat) : ''}</td>
-                          <td className={`${td} text-right tabular-nums`}>{s ? fmtNum(s.sl_sua) : ''}</td>
-                          <td className={`${td} text-right tabular-nums`}>{s ? fmtNum(s.sl_sua_dat) : ''}</td>
-                          <td className={`${td} text-right tabular-nums text-rose-600`}>{s ? fmtNum((s.sl_kcs_huy || 0) + (s.sl_sua_huy || 0)) : ''}</td>
-                          <td className={`${td} text-right tabular-nums`}>{s ? pctStr(s.sl_kcs_dat, s.sl_in) : ''}</td>
-                          <td className={`${td} text-right tabular-nums`}>{s ? pctStr((s.sl_kcs_dat || 0) + (s.sl_sua_dat || 0), s.sl_in) : ''}</td>
-                          <td className={td}>{s?.tg_oqc ? fmtDateTime(s.tg_oqc) : ''}</td>
-                          <td className={td}>{s?.tt_oqc ? <Badge tone={s.tt_oqc === 'DAT' ? 'success' : 'danger'}>{s.tt_oqc === 'DAT' ? 'Đạt' : 'Không đạt'}</Badge> : ''}</td>
-                          <td className={`${td} text-right tabular-nums`}>{s ? fmtNum(s.sl_giao) : ''}</td>
+                          <td className={`${td} text-right tabular-nums`}>{fmtNum(s.sl_in)}</td>
+                          <td className={`${td} text-right tabular-nums`}>{fmtNum(s.sl_kcs_dat)}</td>
+                          <td className={`${td} text-right tabular-nums`}>{fmtNum(s.sl_sua)}</td>
+                          <td className={`${td} text-right tabular-nums`}>{fmtNum(s.sl_sua_dat)}</td>
+                          <td className={`${td} text-right tabular-nums text-rose-600`}>{fmtNum((s.sl_kcs_huy || 0) + (s.sl_sua_huy || 0))}</td>
+                          <td className={`${td} text-right tabular-nums`}>{pctStr(s.sl_kcs_dat, s.sl_in)}</td>
+                          <td className={`${td} text-right tabular-nums`}>{pctStr((s.sl_kcs_dat || 0) + (s.sl_sua_dat || 0), s.sl_in)}</td>
+                          <td className={`${td} text-xs`}>{s.tg_oqc ? fmtDateTime(s.tg_oqc) : ''}</td>
+                          <td className={td}>{s.tt_oqc ? <Badge tone={s.tt_oqc === 'DAT' ? 'success' : 'danger'}>{s.tt_oqc === 'DAT' ? 'Đạt' : 'Không đạt'}</Badge> : ''}</td>
+                          <td className={`${td} text-right tabular-nums`}>{fmtNum(s.sl_giao)}</td>
                         </tr>
                       );
                     })}
+                    {/* Đợt vải CHƯA release (chưa vào đợt SX nào) */}
+                    {unreleased.map((d, i) => (
+                      <tr key={`dv-${i}`} className="border-b border-line/60 bg-surface-muted/20">
+                        <td className={`${td} text-xs`}><b className="text-ink">{d.ma_dot_vai}</b></td>
+                        <td className={`${td} text-right tabular-nums text-xs`}>{fmtNum(d.so_luong_vai_ve)}</td>
+                        <td className={`${td} text-xs`}>{fmtDate(d.ngay_vai_ve)}</td>
+                        <td className={`${td} text-xs`}>{fmtDate(d.han_giao_hang)}</td>
+                        <td className={`${td} border-l border-line/60 text-xs italic text-ink-soft`} colSpan={11}>Chưa release (chưa có đợt SX)</td>
+                      </tr>
+                    ))}
+                    {sxList.length === 0 && unreleased.length === 0 && (
+                      <tr><td colSpan={15} className="px-3 py-6 text-center text-ink-soft">Chưa có dữ liệu.</td></tr>
+                    )}
                   </tbody>
                 </table>
               </div>

@@ -15,6 +15,15 @@ import { fmtNum, fmtDate } from '../../../utils/format';
 
 const norm = (s) => (s || '').trim().toLowerCase();
 
+// Ngày mai (giờ máy) dạng YYYY-MM-DD — mặc định cho ô "Ngày kế hoạch".
+const tomorrowStr = () => {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${m}-${day}`;
+};
+
 // Màn "Tạo đợt sản xuất": chọn nhiều đợt vải CÙNG PHẦN IN (code phần) để gộp, hoặc 1 đợt nhập một phần (tách),
 // nhập SL từng đợt (≤ còn đưa), rồi Xác nhận → tạo 1 đợt SX (lenh_san_xuat) + so_luong junction.
 // Gom nhiều PHẦN IN khác nhau (cùng màu) là việc của Gom set ở READY — KHÔNG làm ở đây.
@@ -29,7 +38,7 @@ export default function TaoDotSanXuatPage() {
   const [search, setSearch] = useState('');
   const [basket, setBasket] = useState([]); // [{ dot_vai_id, soLuong, ...row }]
   const [chuyenId, setChuyenId] = useState('');
-  const [ngayKeHoach, setNgayKeHoach] = useState('');
+  const [ngayKeHoach, setNgayKeHoach] = useState(tomorrowStr());
   const [busy, setBusy] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
 
@@ -97,7 +106,7 @@ export default function TaoDotSanXuatPage() {
       });
       const skip = res.data?.skipped_test;
       show(skip ? 'Đã tạo đợt sản xuất — bỏ Test Run (vào thẳng Release 2)' : 'Đã tạo đợt sản xuất — chờ Test Run');
-      setBasket([]); setChuyenId(''); setNgayKeHoach('');
+      setBasket([]); setChuyenId(''); setNgayKeHoach(tomorrowStr());
       load();
     } catch (e) {
       show(e.message || 'Tạo đợt sản xuất thất bại', 'error');

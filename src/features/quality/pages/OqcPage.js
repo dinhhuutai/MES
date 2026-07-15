@@ -309,7 +309,21 @@ export default function OqcPage() {
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}
         title="Lịch sử OQC" fetcher={oqcHistory} />
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
-        title="Tem đã OQC" maHeader="Tem" fetcher={oqcDone} />
+        title="Tem đã OQC" maHeader="Tem" fetcher={oqcDone}
+        columns={[
+          { key: 'ma', header: 'Tem', className: 'whitespace-nowrap', render: (r) => <Badge tone={r.nguon === 'SUA' ? 'warning' : 'info'}>{(r.nguon === 'SUA' ? '17-' : '15-') + (r.ma || '')}</Badge> },
+          { key: 'nguon', header: 'Nguồn', render: (r) => (r.nguon === 'SUA' ? 'Sửa' : 'KCS') },
+          { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
+          { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
+          { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
+          { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
+          { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
+          { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
+          { key: 'so_luong', header: 'SL đạt', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
+          { key: 'sl_qua_giao', header: 'SL qua giao', className: 'text-right tabular-nums font-medium text-primary', render: (r) => fmtNum(r.sl_qua_giao) },
+          { key: 'tg', header: 'Giờ HT', className: 'whitespace-nowrap tabular-nums', render: (r) => (r.tg ? new Date(r.tg).toLocaleTimeString('vi-VN') : '') },
+          { key: 'nguoi', header: 'Người', render: (r) => r.nguoi || '—' },
+        ]} />
 
       <QrScanner open={scanOpen} onClose={() => setScanOpen(false)} onResult={onScan} />
 

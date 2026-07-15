@@ -6,7 +6,7 @@ import Icon from '../../../components/common/Icon';
 import Toast from '../../../components/common/Toast';
 import { Field, Input, Select, inputClass } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
-import { searchKhach, searchDon, searchMaHang, listLoaiDotVai, createManualChain } from '../../../services/manualEntryService';
+import { searchKhach, searchDon, searchMaHang, searchPhanIn, listLoaiDotVai, createManualChain } from '../../../services/manualEntryService';
 
 // Ô tìm-chọn "có sẵn" (server-search, debounce). onSelect(item|null). resetKey đổi → nạp lại.
 function AsyncPicker({ fetcher, resetKey, selected, onSelect, placeholder, renderLabel, disabled }) {
@@ -79,10 +79,24 @@ function LevelTabs({ mode, onMode, existingDisabled }) {
 
 const emptyDot = () => ({ ma_dot_vai: '', so_luong_vai_ve: '', ngay_vai_ve: '', han_giao_hang: '', loai_dot_vai_id: '' });
 
+// Đặt NGOÀI component: nếu định nghĩa trong ManualEntryPage, mỗi lần gõ (setState → re-render)
+// sẽ tạo hàm Section mới → React remount cả section → input MẤT FOCUS sau 1 ký tự.
+function Section({ n, title, children }) {
+  return (
+    <section className="card p-4">
+      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-ink">
+        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-wash text-xs font-bold text-primary">{n}</span>
+        {title}
+      </h3>
+      {children}
+    </section>
+  );
+}
+
 export default function ManualEntryPage() {
   const { toast, show } = useToast();
-  const [mode, setMode] = useState({ khach: 'new', don: 'new', maHang: 'new' });
-  const [sel, setSel] = useState({ khach: null, don: null, maHang: null });
+  const [mode, setMode] = useState({ khach: 'new', don: 'new', maHang: 'new', phanIn: 'new' });
+  const [sel, setSel] = useState({ khach: null, don: null, maHang: null, phanIn: null });
   const [khach, setKhach] = useState({ ma_khach_hang: '', ten_khach_hang: '' });
   const [don, setDon] = useState({ ma_don_hang: '', so_po: '', ten_don_hang: '', ngay_dat_hang: '' });
   const [maHang, setMaHang] = useState({ ma_hang: '', ten_ma_hang: '' });
@@ -93,10 +107,11 @@ export default function ManualEntryPage() {
 
   useEffect(() => { listLoaiDotVai().then((r) => setLoaiList(r.data || [])).catch(() => {}); }, []);
 
-  // Cấp cha "tạo mới" → cấp con buộc "tạo mới" (không thể chọn đơn/mã hàng có sẵn khi khách/đơn là mới).
-  const parentNew = { don: mode.khach === 'new' || !sel.khach, maHang: mode.don === 'new' || !sel.don };
+  // Cấp cha "tạo mới" → cấp con buộc "tạo mới" (không thể chọn đơn/mã hàng/phần in có sẵn khi cấp cha là mới).
+  const parentNew = { don: mode.khach === 'new' || !sel.khach, maHang: mode.don === 'new' || !sel.don, phanIn: mode.maHang === 'new' || !sel.maHang };
   useEffect(() => { if (parentNew.don && mode.don === 'existing') { setMode((m) => ({ ...m, don: 'new' })); setSel((s) => ({ ...s, don: null })); } }, [parentNew.don, mode.don]);
   useEffect(() => { if (parentNew.maHang && mode.maHang === 'existing') { setMode((m) => ({ ...m, maHang: 'new' })); setSel((s) => ({ ...s, maHang: null })); } }, [parentNew.maHang, mode.maHang]);
+  useEffect(() => { if (parentNew.phanIn && mode.phanIn === 'existing') { setMode((m) => ({ ...m, phanIn: 'new' })); setSel((s) => ({ ...s, phanIn: null })); } }, [parentNew.phanIn, mode.phanIn]);
 
   const setDot = (i, k, v) => setDots((ds) => ds.map((d, j) => (j === i ? { ...d, [k]: v } : d)));
   const addDot = () => setDots((ds) => [...ds, emptyDot()]);
@@ -104,10 +119,11 @@ export default function ManualEntryPage() {
 
   const donFetcher = useCallback((q) => searchDon(sel.khach?.id || '', q), [sel.khach]);
   const maHangFetcher = useCallback((q) => searchMaHang(sel.don?.id || '', q), [sel.don]);
+  const phanInFetcher = useCallback((q) => searchPhanIn(sel.maHang?.id || '', q), [sel.maHang]);
 
   const reset = () => {
-    setMode({ khach: 'new', don: 'new', maHang: 'new' });
-    setSel({ khach: null, don: null, maHang: null });
+    setMode({ khach: 'new', don: 'new', maHang: 'new', phanIn: 'new' });
+    setSel({ khach: null, don: null, maHang: null, phanIn: null });
     setKhach({ ma_khach_hang: '', ten_khach_hang: '' });
     setDon({ ma_don_hang: '', so_po: '', ten_don_hang: '', ngay_dat_hang: '' });
     setMaHang({ ma_hang: '', ten_ma_hang: '' });
@@ -115,16 +131,25 @@ export default function ManualEntryPage() {
     setDots([emptyDot()]);
   };
 
+  const phanInExisting = mode.phanIn === 'existing';
+
   const submit = async () => {
     // Validate FE nhẹ.
-    if (mode.khach === 'existing' && !sel.khach) { show('Chọn khách hàng có sẵn hoặc chuyển sang Tạo mới', 'error'); return; }
-    if (mode.khach === 'new' && !khach.ten_khach_hang.trim()) { show('Nhập tên khách hàng mới', 'error'); return; }
-    if (mode.don === 'existing' && !sel.don) { show('Chọn đơn hàng có sẵn hoặc chuyển sang Tạo mới', 'error'); return; }
-    if (mode.maHang === 'existing' && !sel.maHang) { show('Chọn mã hàng có sẵn hoặc chuyển sang Tạo mới', 'error'); return; }
     if (dots.some((d) => d.so_luong_vai_ve === '' || Number(d.so_luong_vai_ve) < 0)) { show('Mỗi đợt vải cần SL vải về ≥ 0', 'error'); return; }
 
     const num = (v) => (v === '' || v == null ? null : Number(v));
-    const payload = {
+    // Chọn phần in CÓ SẴN → chỉ thêm đợt vải vào phần in đó (backend bỏ qua khách/đơn/mã hàng).
+    if (phanInExisting) {
+      if (!sel.phanIn) { show('Chọn phần in có sẵn hoặc chuyển sang Tạo mới', 'error'); return; }
+    } else {
+      if (mode.khach === 'existing' && !sel.khach) { show('Chọn khách hàng có sẵn hoặc chuyển sang Tạo mới', 'error'); return; }
+      if (mode.khach === 'new' && !khach.ten_khach_hang.trim()) { show('Nhập tên khách hàng mới', 'error'); return; }
+      if (mode.don === 'existing' && !sel.don) { show('Chọn đơn hàng có sẵn hoặc chuyển sang Tạo mới', 'error'); return; }
+      if (mode.maHang === 'existing' && !sel.maHang) { show('Chọn mã hàng có sẵn hoặc chuyển sang Tạo mới', 'error'); return; }
+    }
+
+    const dotVai = dots.map((d) => ({ ma_dot_vai: d.ma_dot_vai.trim() || null, so_luong_vai_ve: num(d.so_luong_vai_ve) ?? 0, ngay_vai_ve: d.ngay_vai_ve || null, han_giao_hang: d.han_giao_hang || null, loai_dot_vai_id: d.loai_dot_vai_id || null }));
+    const payload = phanInExisting ? { phanIn: { id: sel.phanIn.id }, dotVai } : {
       khach: mode.khach === 'existing' ? { id: sel.khach.id } : { ma_khach_hang: khach.ma_khach_hang.trim() || null, ten_khach_hang: khach.ten_khach_hang.trim() },
       don: mode.don === 'existing' ? { id: sel.don.id } : { ma_don_hang: don.ma_don_hang.trim() || null, so_po: don.so_po.trim() || null, ten_don_hang: don.ten_don_hang.trim() || null, ngay_dat_hang: don.ngay_dat_hang || null },
       maHang: mode.maHang === 'existing' ? { id: sel.maHang.id } : { ma_hang: maHang.ma_hang.trim() || null, ten_ma_hang: maHang.ten_ma_hang.trim() || null },
@@ -134,7 +159,7 @@ export default function ManualEntryPage() {
         mau_in: phanIn.mau_in.trim() || null, so_luong_don_hang: num(phanIn.so_luong_don_hang), la_in_kieng: phanIn.la_in_kieng,
         thoi_gian_cho_kho_phut: num(phanIn.thoi_gian_cho_kho_phut),
       },
-      dotVai: dots.map((d) => ({ ma_dot_vai: d.ma_dot_vai.trim() || null, so_luong_vai_ve: num(d.so_luong_vai_ve) ?? 0, ngay_vai_ve: d.ngay_vai_ve || null, han_giao_hang: d.han_giao_hang || null, loai_dot_vai_id: d.loai_dot_vai_id || null })),
+      dotVai,
     };
 
     setSaving(true);
@@ -149,21 +174,11 @@ export default function ManualEntryPage() {
     }
   };
 
-  const Section = ({ n, title, children }) => (
-    <section className="card p-4">
-      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-ink">
-        <span className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-wash text-xs font-bold text-primary">{n}</span>
-        {title}
-      </h3>
-      {children}
-    </section>
-  );
-
   return (
     <div>
       <Toolbar title="Nhập tay đơn hàng → đợt vải" subtitle="Tạo thủ công chuỗi Khách hàng → Đơn hàng → Mã hàng → Phần in → Đợt vải (thay ERP). Mỗi cấp chọn có sẵn hoặc tạo mới; để trống mã = tự sinh.">
         <Button variant="ghost" onClick={reset}>Làm mới</Button>
-        <Button icon="plus" loading={saving} onClick={submit}>Tạo phần in + đợt vải</Button>
+        <Button icon="plus" loading={saving} onClick={submit}>{phanInExisting ? 'Thêm đợt vải vào phần in' : 'Tạo phần in + đợt vải'}</Button>
       </Toolbar>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -212,7 +227,15 @@ export default function ManualEntryPage() {
         </Section>
 
         {/* 4. Phần in */}
-        <Section n={4} title="Phần in (tạo mới)">
+        <Section n={4} title="Phần in">
+          <LevelTabs mode={mode.phanIn} existingDisabled={parentNew.phanIn} onMode={(m) => { setMode((s) => ({ ...s, phanIn: m })); if (m === 'new') setSel((s) => ({ ...s, phanIn: null })); }} />
+          {parentNew.phanIn && (
+            <p className="mb-2 text-xs text-ink-soft">Chọn <b>Mã hàng có sẵn</b> ở trên để có thể chọn phần in có sẵn của mã hàng đó.</p>
+          )}
+          {phanInExisting ? (
+            <AsyncPicker fetcher={phanInFetcher} resetKey={sel.maHang?.id} selected={sel.phanIn} onSelect={(o) => setSel((s) => ({ ...s, phanIn: o }))}
+              placeholder="Tìm code phần / màu / kích..." renderLabel={(o) => `${o.ma_phan}${[o.mau_vai, o.kich_vai, o.kich_phim].filter(Boolean).length ? ` · ${[o.mau_vai, o.kich_vai, o.kich_phim].filter(Boolean).join(' · ')}` : ''}`} />
+          ) : (
           <div className="grid grid-cols-2 gap-3">
             <Field label="Code phần" hint="trống = tự sinh"><Input value={phanIn.ma_phan} onChange={(e) => setPhanIn((s) => ({ ...s, ma_phan: e.target.value }))} placeholder="tự sinh" /></Field>
             <Field label="SL đơn hàng"><Input type="number" min="0" value={phanIn.so_luong_don_hang} onChange={(e) => setPhanIn((s) => ({ ...s, so_luong_don_hang: e.target.value }))} /></Field>
@@ -228,6 +251,7 @@ export default function ManualEntryPage() {
               In kiếng (tạo thêm đợt ép ủi khi lên KH)
             </label>
           </div>
+          )}
         </Section>
       </div>
 
@@ -263,7 +287,7 @@ export default function ManualEntryPage() {
       </section>
 
       <div className="mt-4 flex justify-end">
-        <Button icon="plus" loading={saving} onClick={submit}>Tạo phần in + đợt vải</Button>
+        <Button icon="plus" loading={saving} onClick={submit}>{phanInExisting ? 'Thêm đợt vải vào phần in' : 'Tạo phần in + đợt vải'}</Button>
       </div>
 
       <Toast toast={toast} />
