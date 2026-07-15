@@ -26,6 +26,7 @@ import ErpSyncPage from './features/system/pages/ErpSyncPage';
 import OnlineUsersPage from './features/system/pages/OnlineUsersPage';
 import ActivityLogPage from './features/system/pages/ActivityLogPage';
 import FormTemplatesPage from './features/system/pages/FormTemplatesPage';
+import ManualEntryPage from './features/system/pages/ManualEntryPage';
 import PhanInListPage from './features/orders/pages/PhanInListPage';
 import ReadyPage from './features/technical-ready/pages/ReadyPage';
 import GomSetPage from './features/technical-ready/pages/GomSetPage';
@@ -95,6 +96,7 @@ const PAGES = {
   '/he-thong/trang-thai': <TrangThaiPage />,
   '/he-thong/lich-su-trang-thai': <LichSuTrangThaiPage />,
   '/he-thong/erp-sync': <ErpSyncPage />,
+  '/he-thong/nhap-tay': <ManualEntryPage />,
   '/he-thong/online': <OnlineUsersPage />,
   '/he-thong/nhat-ky': <ActivityLogPage />,
   '/he-thong/mau-form': <FormTemplatesPage />,

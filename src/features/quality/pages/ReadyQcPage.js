@@ -205,7 +205,7 @@ export default function ReadyQcPage() {
 
   return (
     <div>
-      <Toolbar title="QC chuẩn bị kỹ thuật" subtitle="Phần in đã đủ 3 mục kỹ thuật — chờ QC xác nhận"
+      <Toolbar title="QC chuẩn bị kỹ thuật" subtitle="Toàn bộ phần in ở READY — QC xác nhận khi đủ Khuôn/Film/Mực (SLA nghẽn QC chỉ tính sau khi kỹ thuật đủ 3 mục)"
         search={search} onSearch={(v) => { setSearch(v); setPage(1); }}
         searchPlaceholder="Tìm code phần, mã hàng, màu/kích vải, kích phim...">
         {canQC && selected.size > 0 && (
@@ -214,14 +214,14 @@ export default function ReadyQcPage() {
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
-        <Badge tone="warning">{activeCount ? `${filtered.length}/` : ''}{meta.total} chờ QC</Badge>
+        <Badge tone="warning">{readyRows.length} đủ 3 mục · {meta.total} ở READY</Badge>
       </Toolbar>
 
       <FieldFilters fields={FILTER_FIELDS} values={filters} onField={(k, v) => setFilters((f) => ({ ...f, [k]: v }))} onClear={() => setFilters({})} open={showFilters} />
 
       <DataTable columns={columns} rows={filtered} loading={loading} onRowClick={(r) => open(r)} sttStart={0}
         rowClassName={(r) => slaRowClass(evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status)}
-        emptyText="Không có phần in nào chờ QC" />
+        emptyText="Không có phần in nào ở READY" />
       <Pagination page={meta.page} totalPages={meta.totalPages} total={meta.total} onPage={setPage} />
 
       <SidePanel

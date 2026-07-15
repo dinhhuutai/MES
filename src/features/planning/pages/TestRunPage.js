@@ -41,8 +41,13 @@ export default function TestRunPage() {
   const [nguoiTestBatch, setNguoiTestBatch] = useState('');
   const [filters, setFilters] = useState({});
   const [showFilters, setShowFilters] = useState(false);
-  const filtered = useMemo(() => filterRows(rows, filters, FILTER_FIELDS), [rows, filters]);
+  const [onlyPending, setOnlyPending] = useState(true); // mặc định chỉ hiện lệnh CHƯA QA xong (khớp Test Run ở dashboard)
+  const filtered = useMemo(() => {
+    const base = onlyPending ? rows.filter((r) => !r.qa_done) : rows;
+    return filterRows(base, filters, FILTER_FIELDS);
+  }, [rows, filters, onlyPending]);
   const activeCount = Object.values(filters).filter(Boolean).length;
+  const doneCount = useMemo(() => rows.filter((r) => r.qa_done).length, [rows]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -133,6 +138,10 @@ export default function TestRunPage() {
             </Button>
           </div>
         )}
+        <label className="flex cursor-pointer items-center gap-1.5 text-xs font-medium text-ink-soft">
+          <input type="checkbox" checked={onlyPending} onChange={(e) => setOnlyPending(e.target.checked)} />
+          Chỉ chờ QA{doneCount ? ` (ẩn ${doneCount} đã xong)` : ''}
+        </label>
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
