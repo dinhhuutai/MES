@@ -8,6 +8,7 @@ import { Field, Input } from '../../../components/common/controls';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import QrScanner from '../../../components/common/QrScanner';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
+import ReleaseListModal from '../components/ReleaseListModal';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import { listRelease1Candidates, createDotSanXuat, listChuyen } from '../../../services/planningService';
@@ -39,8 +40,11 @@ export default function TaoDotSanXuatPage() {
   const [basket, setBasket] = useState([]); // [{ dot_vai_id, soLuong, ...row }]
   const [chuyenId, setChuyenId] = useState('');
   const [ngayKeHoach, setNgayKeHoach] = useState(tomorrowStr());
+  const [gioBd, setGioBd] = useState('');
+  const [gioKt, setGioKt] = useState('');
   const [busy, setBusy] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
+  const [releaseOpen, setReleaseOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -98,15 +102,18 @@ export default function TaoDotSanXuatPage() {
     if (basket.length === 0) { show('Chọn ít nhất một đợt vải', 'error'); return; }
     if (!chuyenId) { show('Chọn chuyền sản xuất', 'error'); return; }
     if (overRow) { show(`SL đợt ${overRow.ma_dot_vai} không hợp lệ (0 < SL ≤ ${overRow.con_release})`, 'error'); return; }
+    // Giờ BD/KT (HH:MM) ghép với ngày kế hoạch → timestamp (giờ máy). Bỏ trống nếu chưa chọn ngày/giờ.
+    const mkTs = (gio) => (ngayKeHoach && gio ? `${ngayKeHoach}T${gio}:00` : null);
     setBusy(true);
     try {
       const res = await createDotSanXuat({
         items: basket.map((b) => ({ dotVaiId: b.dot_vai_id, soLuong: Number(b.soLuong) })),
         chuyenId, ngayKeHoach: ngayKeHoach || null,
+        tgBdKh: mkTs(gioBd), tgKtKh: mkTs(gioKt),
       });
       const skip = res.data?.skipped_test;
       show(skip ? 'Đã tạo đợt sản xuất — bỏ Test Run (vào thẳng Release 2)' : 'Đã tạo đợt sản xuất — chờ Test Run');
-      setBasket([]); setChuyenId(''); setNgayKeHoach(tomorrowStr());
+      setBasket([]); setChuyenId(''); setNgayKeHoach(tomorrowStr()); setGioBd(''); setGioKt('');
       load();
     } catch (e) {
       show(e.message || 'Tạo đợt sản xuất thất bại', 'error');
@@ -117,8 +124,14 @@ export default function TaoDotSanXuatPage() {
 
   return (
     <div>
-      <Toolbar title="Tạo đợt sản xuất" subtitle="Gộp nhiều đợt vải CÙNG PHẦN IN (code phần) / tách một đợt, nhập SL từng đợt rồi đưa xuống sản xuất. (Gom nhiều phần in cùng màu → Gom set ở READY.)"
-        search={search} onSearch={setSearch} searchPlaceholder="Tìm/nhập ID hoặc mã đợt vải, code phần, mã hàng, màu/kích...">
+      <Toolbar title="Tạo đợt sản xuất" subtitle="Gộp nhiều đợt vải CÙNG PHẦN IN (code phần) / tách một đợt, nhập SL từng đợt rồi đưa xuống sản xuất. (Gom nhiều phần in cùng màu → Gom set ở READY.)">
+        <Button variant="secondary" icon="list" onClick={() => setReleaseOpen(true)}>Danh sách release</Button>
+        <div className="relative w-full sm:w-64">
+          <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)}
+            placeholder="Tìm code phần, mã hàng, màu/kích..."
+            className="h-10 w-full rounded-control border border-line pl-9 pr-3 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10" />
+        </div>
         <Button variant="secondary" icon="qr-code" onClick={() => setScanOpen(true)}>Quét QR đợt vải</Button>
         <Badge tone="info">{leftRows.length} đợt vải</Badge>
       </Toolbar>
@@ -139,17 +152,26 @@ export default function TaoDotSanXuatPage() {
                 const disabled = basketPin && r.phan_in_id !== basketPin;
                 return (
                   <button key={r.dot_vai_id} type="button" disabled={disabled} onClick={() => addToBasket(r)}
-                    className={`flex w-full items-center justify-between rounded-control border px-3 py-2 text-left text-sm ${disabled ? 'cursor-not-allowed border-line opacity-40' : 'border-line hover:border-primary hover:bg-primary/5'}`}>
-                    <div className="leading-tight">
-                      <div className="font-medium text-ink">{r.ma_phan} · <span className="text-ink-soft">{r.mau_vai}</span></div>
-                      <div className="text-xs text-ink-soft">
-                        {r.ten_khach_hang} · {r.ma_hang} · {r.ma_dot_vai} · <LoaiDotVaiBadge value={r.loai_dot_vai} />
-                        {r.han_giao_hang ? ` · hạn ${fmtDate(r.han_giao_hang)}` : ''}
+                    className={`flex w-full items-start justify-between gap-2 rounded-control border px-3 py-2 text-left text-sm ${disabled ? 'cursor-not-allowed border-line opacity-40' : 'border-line hover:border-primary hover:bg-primary/5'}`}>
+                    <div className="min-w-0 leading-tight">
+                      {/* Hàng 1: code phần · khách hàng · đơn hàng */}
+                      <div className="truncate font-medium text-ink">
+                        {r.ma_phan} · <span className="font-normal text-ink-soft">{r.ten_khach_hang}</span> · <span className="font-normal text-ink-soft">{r.ma_don_hang}</span>
+                      </div>
+                      {/* Hàng 2: mã hàng */}
+                      <div className="truncate text-xs text-ink-soft">{r.ma_hang}</div>
+                      {/* Hàng 3: màu vải · kích vải · kích phim · loại đợt vải · hạn giao */}
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-ink-soft">
+                        <span>{[r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—'}</span>
+                        <LoaiDotVaiBadge value={r.loai_dot_vai} />
+                        {r.han_giao_hang ? <span>· hạn {fmtDate(r.han_giao_hang)}</span> : null}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 text-right">
-                      <span className="tabular-nums text-ink">còn {fmtNum(r.con_release)}</span>
-                      <Icon name="plus" className="h-4 w-4 text-primary" />
+                    {/* Góc phải: SLĐH / còn (+ SL nhận nếu đã tách đợt) */}
+                    <div className="shrink-0 text-right text-xs leading-tight">
+                      <div className="tabular-nums text-ink">ĐH {fmtNum(r.so_luong_don_hang)} / còn <b className="text-primary">{fmtNum(r.con_release)}</b></div>
+                      {r.da_release > 0 && <div className="tabular-nums text-ink-soft">nhận {fmtNum(r.so_luong_vai_ve)}</div>}
+                      <Icon name="plus" className="ml-auto mt-1 h-4 w-4 text-primary" />
                     </div>
                   </button>
                 );
@@ -170,8 +192,9 @@ export default function TaoDotSanXuatPage() {
                 return (
                   <div key={b.dot_vai_id} className="flex items-center gap-2 rounded-control border border-line px-3 py-2 text-sm">
                     <div className="min-w-0 flex-1 leading-tight">
-                      <div className="truncate font-medium text-ink">{b.ma_phan} · {b.ma_dot_vai}</div>
-                      <div className="text-xs text-ink-soft">còn đưa {fmtNum(b.con_release)}{b.han_giao_hang ? ` · hạn ${fmtDate(b.han_giao_hang)}` : ''}</div>
+                      <div className="truncate font-medium text-ink">{b.ma_phan} · <span className="font-normal text-ink-soft">{b.ten_khach_hang}</span> · <span className="font-normal text-ink-soft">{b.ma_don_hang}</span></div>
+                      <div className="truncate text-xs text-ink-soft">{b.ma_hang}</div>
+                      <div className="truncate text-xs text-ink-soft">{[b.mau_vai, b.kich_vai, b.kich_phim].filter(Boolean).join(' · ') || '—'}{b.loai_dot_vai ? ` · ${b.loai_dot_vai}` : ''}{b.han_giao_hang ? ` · hạn ${fmtDate(b.han_giao_hang)}` : ''} · còn đưa {fmtNum(b.con_release)}</div>
                     </div>
                     <Input type="number" value={b.soLuong} onChange={(e) => setQty(b.dot_vai_id, e.target.value)}
                       className={`!w-24 shrink-0 text-right ${over ? 'border-danger' : ''}`} />
@@ -208,6 +231,18 @@ export default function TaoDotSanXuatPage() {
                 className="cursor-pointer"
                 onClick={(e) => { try { e.target.showPicker?.(); } catch { /* trình duyệt không hỗ trợ showPicker */ } }} />
             </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Giờ bắt đầu (tùy chọn)">
+                <Input type="time" value={gioBd} onChange={(e) => setGioBd(e.target.value)}
+                  className="cursor-pointer"
+                  onClick={(e) => { try { e.target.showPicker?.(); } catch { /* bỏ qua */ } }} />
+              </Field>
+              <Field label="Giờ kết thúc (tùy chọn)">
+                <Input type="time" value={gioKt} onChange={(e) => setGioKt(e.target.value)}
+                  className="cursor-pointer"
+                  onClick={(e) => { try { e.target.showPicker?.(); } catch { /* bỏ qua */ } }} />
+              </Field>
+            </div>
             <Button className="w-full" onClick={submit} loading={busy}
               disabled={!canRelease || basket.length === 0 || !chuyenId || !!overRow}>
               Xác nhận &amp; đưa xuống sản xuất
@@ -217,6 +252,7 @@ export default function TaoDotSanXuatPage() {
       </div>
 
       <QrScanner open={scanOpen} onClose={() => setScanOpen(false)} onResult={handleScan} title="Quét QR đợt vải" />
+      <ReleaseListModal open={releaseOpen} onClose={() => setReleaseOpen(false)} />
       <Toast toast={toast} />
     </div>
   );

@@ -15,6 +15,8 @@ export const createRelease1 = (body) => client.post('/planning/release1', body);
 // Tạo đợt sản xuất (gộp/tách nhiều đợt vải + SL từng đợt) — màn "Tạo đợt sản xuất"
 export const createDotSanXuat = (body) => client.post('/planning/dot-san-xuat', body);
 export const release1History = (date) => client.get('/planning/release1/history', { params: { date } });
+// Danh sách release theo ngày kế hoạch (modal/report + Excel/In)
+export const getReleaseList = (date) => client.get('/planning/release-list', { params: { date } });
 export const release1Done = (date) => client.get('/planning/release1/done', { params: { date } });
 export const listReleaseSets = (params) => client.get('/planning/release1/sets', { params });
 export const releaseSet = (setId, body) => client.post(`/planning/release1/set/${setId}`, body);

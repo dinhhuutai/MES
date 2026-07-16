@@ -718,11 +718,14 @@ export default function DashboardPage() {
   const readySubData = useMemo(() => {
     const rd = chartDetail?.ready || {};
     const tong = rd.tong || 0;
-    const nghen = nghenByTram.READY || 0;
+    const totalNghen = nghenByTram.READY || 0;
+    // Nghẽn THEO TỪNG CHECKLIST = số phần in NGHẼN nhưng CHƯA xác nhận mục đó (mục đã xác nhận không tính nghẽn).
+    // Giới hạn theo "chưa xác nhận" của từng mục (tong − đã xác nhận), thay vì áp tổng nghẽn READY cho cả 3.
+    const nghenFor = (dat) => Math.min(totalNghen, Math.max(0, tong - (dat || 0)));
     return [
-      { name: 'Film', tong, da_xong: rd.FILM || 0, nghen },
-      { name: 'Khuôn', tong, da_xong: rd.KHUON || 0, nghen },
-      { name: 'Mực', tong, da_xong: rd.MUC || 0, nghen },
+      { name: 'Film', tong, da_xong: rd.FILM || 0, nghen: nghenFor(rd.FILM) },
+      { name: 'Khuôn', tong, da_xong: rd.KHUON || 0, nghen: nghenFor(rd.KHUON) },
+      { name: 'Mực', tong, da_xong: rd.MUC || 0, nghen: nghenFor(rd.MUC) },
     ];
   }, [chartDetail, nghenByTram]);
 
