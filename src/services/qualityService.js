@@ -2,6 +2,7 @@ import client from './axiosClient';
 
 export const listKcsCandidates = (params) => client.get('/quality/kcs/candidates', { params });
 export const recordKcs = (temId, body) => client.post(`/quality/kcs/${temId}`, body);
+export const gopTem = (body) => client.post('/quality/kcs/gop-tem', body);
 export const getTemHanhTrinh = (temId) => client.get(`/quality/tem/${temId}/hanh-trinh`);
 export const kcsHistory = (date) => client.get('/quality/kcs/history', { params: { date } });
 export const kcsDone = (date) => client.get('/quality/kcs/done', { params: { date } });

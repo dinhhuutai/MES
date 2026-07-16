@@ -16,6 +16,9 @@ import { slaRowClass } from '../../../utils/sla';
 import { listTestRunCandidates, testRunHistory, confirmQABatch, testQaDone } from '../../../services/planningService';
 import TestRunPanel from '../components/TestRunPanel';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
+import HanGiaoCell from '../../../components/common/HanGiaoCell';
+import QrScanner from '../../../components/common/QrScanner';
+import { baseMaTem } from '../../../utils/format';
 
 const FILTER_FIELDS = [
   { key: 'codePhan', label: 'Code phần', col: 'ma_phan' }, { key: 'khach', label: 'Khách hàng', col: 'ten_khach_hang' },
@@ -41,6 +44,7 @@ export default function TestRunPage() {
   const [nguoiTestBatch, setNguoiTestBatch] = useState('');
   const [filters, setFilters] = useState({});
   const [showFilters, setShowFilters] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
   const [onlyPending, setOnlyPending] = useState(true); // mặc định chỉ hiện lệnh CHƯA QA xong (khớp Test Run ở dashboard)
   const filtered = useMemo(() => {
     const base = onlyPending ? rows.filter((r) => !r.qa_done) : rows;
@@ -66,6 +70,18 @@ export default function TestRunPage() {
     const t = setTimeout(load, 250);
     return () => clearTimeout(t);
   }, [load]);
+
+  // Quét QR = CODE PHẦN → tìm lệnh Test Run của phần in đó (ưu tiên lệnh chưa QA) → mở SidePanel xác nhận.
+  const onScan = (code) => {
+    setScanOpen(false);
+    const c = baseMaTem((code || '').trim()); // QR có thể chứa tiền tố → lấy phần gốc
+    if (!c) return;
+    const norm = (s) => (s || '').toLowerCase().replace(/\s+/g, '');
+    const match = rows.filter((r) => norm(r.ma_phan) === norm(c) || norm(r.ma_phan).includes(norm(c)));
+    if (match.length === 0) { show(`Không thấy lệnh Test Run cho code phần "${c}"`, 'error'); return; }
+    const pick = match.find((r) => !r.qa_done) || match[0]; // ưu tiên lệnh chưa QA xong
+    setSel(pick.id);
+  };
 
   // Chỉ chọn được lệnh chưa QA đạt.
   const selectable = (r) => !r.qa_done;
@@ -119,6 +135,7 @@ export default function TestRunPage() {
       </div>
     ) },
     { key: 'loai_dot_vai', header: 'Loại đợt vải', render: (r) => <LoaiDotVaiBadge value={r.loai_dot_vai} /> },
+    { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => <HanGiaoCell value={r.han_giao_hang} /> },
     { key: 'chuyen', header: 'Chuyền', render: (r) => r.ten_chuyen || '—' },
     { key: 'so_lan_test', header: 'Lần test', className: 'text-right tabular-nums', render: (r) => r.so_lan_test },
     { key: 'qa_done', header: 'QA', render: (r) => r.qa_done ? <Badge tone="success">✓</Badge> : <Badge tone="warning">Chờ</Badge> },
@@ -128,6 +145,7 @@ export default function TestRunPage() {
     <div>
       <Toolbar title="Test Run - QA" subtitle="QA nhập số lượng test, xác nhận đạt hoặc ghi nhận test lỗi"
         search={search} onSearch={setSearch} searchPlaceholder="Tìm mã lệnh, code phần, mã hàng, màu/kích...">
+        {canQA && <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét QR code phần</Button>}
         {canQA && selected.size > 0 && (
           <div className="flex items-center gap-2">
             <Input value={nguoiTestBatch} onChange={(e) => setNguoiTestBatch(e.target.value)}
@@ -155,6 +173,9 @@ export default function TestRunPage() {
         emptyText="Không có lệnh nào đang Test Run" />
 
       {sel && <TestRunPanel lenhId={sel} onClose={() => setSel(null)} onChanged={load} />}
+
+      <QrScanner open={scanOpen} onClose={() => setScanOpen(false)} onResult={onScan} title="Quét QR code phần" />
+
 
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}
         title="Lịch sử Test Run" fetcher={testRunHistory} />

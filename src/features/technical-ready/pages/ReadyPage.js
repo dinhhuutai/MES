@@ -21,6 +21,7 @@ import {
 } from '../../../services/readyService';
 import ReadyPanel from '../components/ReadyPanel';
 import LoaiDotVaiBadge from '../../planning/components/LoaiDotVaiBadge';
+import HanGiaoCell from '../../../components/common/HanGiaoCell';
 
 const FILTER_FIELDS = [
   { key: 'codePhan', label: 'Code phần', col: 'ma_phan' }, { key: 'khach', label: 'Khách hàng', col: 'ten_khach_hang' },
@@ -159,6 +160,7 @@ export default function ReadyPage() {
       const s = STATUS[r.trang_thai_ready] || STATUS.CHUA;
       return <Badge tone={s.tone}>{s.label}</Badge>;
     } },
+    { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => <HanGiaoCell value={r.han_giao_hang} /> },
   ];
 
   return (

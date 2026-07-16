@@ -7,7 +7,7 @@ import SidePanel from '../../../components/common/SidePanel';
 import KcsBreakdown from '../../../components/common/KcsBreakdown';
 import useToast from '../../../hooks/useToast';
 import useSocketEvent from '../../../hooks/useSocketEvent';
-import { getActivity, getStageCounts, getBang2, getTinhTrangPhanIn, getHoanThanhHomNay, getChartDetail, getDieuPhoi, getFlow } from '../../../services/dashboardService';
+import { getActivity, getStageCounts, getBang2, getTinhTrangPhanIn, getHoanThanhHomNay, getChartDetail, getDieuPhoi, getFlow, getFlowOwners } from '../../../services/dashboardService';
 import { fmtNum } from '../../../utils/format';
 import { fmtDur } from '../../../utils/sla';
 
@@ -558,10 +558,11 @@ function TreHanPanel({ data, initKind, initTram, onClose }) {
 const SEG_LABEL = { da_xong: 'Đã đi qua', dung_sla: 'Đang xử lý (đúng SLA)', sap: 'Sắp nghẽn', nghen: 'Nghẽn' };
 const SLA_TONE = { NGHEN: 'danger', SAP_NGHEN: 'warning', OK: 'success' };
 const SLA_TEXT = { NGHEN: 'Nghẽn', SAP_NGHEN: 'Sắp nghẽn', OK: 'Đúng SLA' };
-function CheckpointDrillPanel({ drill, flow, tramToBucket, bucketOrder, onClose }) {
+function CheckpointDrillPanel({ drill, flow, tramToBucket, bucketOrder, bucketOwners, onClose }) {
   if (!drill) return null;
   const { name, seg } = drill;
   const bIdx = bucketOrder[name] ?? 99;
+  const cpOwner = (bucketOwners || {})[name] || {}; // owner mức checkpoint (gộp bucket)
   const reason = (r) => {
     const ton = `tồn ${fmtDur(r.phut_da_o || 0)}${r.sla_phut ? ` / định mức ${fmtDur(r.sla_phut)}` : ''}`;
     if (r.sla_status === 'NGHEN') return `Quá SLA — ${ton}`;
@@ -581,6 +582,17 @@ function CheckpointDrillPanel({ drill, flow, tramToBucket, bucketOrder, onClose 
   return (
     <SidePanel open onClose={onClose} title={title} width="max-w-2xl"
       subtitle={seg === 'da_xong' ? 'Đã đi qua checkpoint — đang ở các trạm sau' : 'Kẹt gì · vì sao · ai chịu trách nhiệm · ai xử lý tiếp'}>
+      {/* Owner mức CHECKPOINT (cấu hình ở Hệ thống > Owner) */}
+      <div className="mb-3 rounded-control border border-line bg-surface-muted/50 px-3 py-2 text-xs">
+        <div className="mb-1 font-semibold text-ink">Owner checkpoint "{name}"</div>
+        <div className="grid grid-cols-2 gap-x-3">
+          <div><span className="text-ink-soft">Chịu trách nhiệm: </span><b className="text-ink">{cpOwner.tn || '—'}</b></div>
+          <div><span className="text-ink-soft">Xử lý tiếp: </span><b className="text-ink">{cpOwner.xl || '—'}</b></div>
+        </div>
+        {!cpOwner.tn && !cpOwner.xl && (
+          <div className="mt-1 text-[11px] text-amber-600">Chưa gán owner cho checkpoint này — vào Hệ thống → Owner checkpoint/checklist.</div>
+        )}
+      </div>
       <div className="mb-3 text-xs text-ink-soft">{items.length} mục</div>
       {items.length === 0 ? (
         <p className="text-sm text-ink-soft">Không có mục nào{seg === 'da_xong' && name === 'Giao' ? ' (đã giao xong = ra khỏi dòng chảy theo dõi).' : '.'}</p>
@@ -600,8 +612,8 @@ function CheckpointDrillPanel({ drill, flow, tramToBucket, bucketOrder, onClose 
                 <div><span className="text-ink-soft">Ngày giao: </span><b className="text-ink">{r.han_giao_hang ? new Date(r.han_giao_hang).toLocaleDateString('vi-VN') : '—'}</b></div>
                 <div><span className="text-ink-soft">Thời gian tồn: </span><b className="text-ink">{fmtDur(r.phut_da_o || 0)}{r.sla_phut ? ` / ${fmtDur(r.sla_phut)}` : ''}</b></div>
                 <div className="col-span-2"><span className="text-ink-soft">Nguyên nhân: </span><span className="text-ink">{reason(r)}</span></div>
-                <div><span className="text-ink-soft">Chịu trách nhiệm: </span><b className="text-ink">{r.owner_trach_nhiem || '—'}</b></div>
-                <div><span className="text-ink-soft">Xử lý tiếp: </span><b className="text-ink">{r.owner_xu_ly || '—'}</b></div>
+                <div><span className="text-ink-soft">Chịu trách nhiệm: </span><b className="text-ink">{r.owner_trach_nhiem || cpOwner.tn || '—'}</b></div>
+                <div><span className="text-ink-soft">Xử lý tiếp: </span><b className="text-ink">{r.owner_xu_ly || cpOwner.xl || '—'}</b></div>
               </div>
             </div>
           ))}
@@ -620,6 +632,7 @@ export default function DashboardPage() {
   const [chartDetail, setChartDetail] = useState(null); // OQC + READY breakdown
   const [dieuPhoi, setDieuPhoi] = useState(null); // trễ hạn + chờ duyệt + chuyền
   const [flow, setFlow] = useState([]);           // dòng chảy per đợt vải (drill checkpoint)
+  const [owners, setOwners] = useState(null);     // owner theo trạm/checklist (Hệ thống > Owner)
   const [drill, setDrill] = useState(null);       // chip toàn cục
   const [treHan, setTreHan] = useState(null);     // panel trễ hạn giao
   const [stageDetail, setStageDetail] = useState(null); // ô giai đoạn
@@ -627,8 +640,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    const [sc, act, b2, ht, cd, dp, fl] = await Promise.allSettled([
-      getStageCounts(), getActivity(), getBang2(), getHoanThanhHomNay(), getChartDetail(), getDieuPhoi(), getFlow({}),
+    const [sc, act, b2, ht, cd, dp, fl, ow] = await Promise.allSettled([
+      getStageCounts(), getActivity(), getBang2(), getHoanThanhHomNay(), getChartDetail(), getDieuPhoi(), getFlow({}), getFlowOwners(),
     ]);
     if (sc.status === 'fulfilled') setStages(sc.value.data);
     else show(sc.reason?.message || 'Lỗi tải giai đoạn', 'error');
@@ -638,6 +651,7 @@ export default function DashboardPage() {
     if (cd.status === 'fulfilled') setChartDetail(cd.value.data);
     if (dp.status === 'fulfilled') setDieuPhoi(dp.value.data);
     if (fl.status === 'fulfilled') setFlow(fl.value.data || []);
+    if (ow.status === 'fulfilled') setOwners(ow.value.data || null);
     setLoading(false);
   }, [show]);
 
@@ -713,6 +727,21 @@ export default function DashboardPage() {
     return m;
   }, []);
   const bucketOrder = useMemo(() => Object.fromEntries(STATION_BUCKETS.map((b, i) => [b.label, i])), []);
+
+  // Owner mức CHECKPOINT (gộp owner mọi trạm trong bucket) — nguồn Hệ thống > Owner, độc lập với dòng chảy.
+  const bucketOwners = useMemo(() => {
+    const tramMap = owners?.tram || {};
+    const out = {};
+    STATION_BUCKETS.forEach((b) => {
+      const tn = new Set(); const xl = new Set();
+      b.trams.forEach((t) => {
+        (tramMap[t]?.chiu_trach_nhiem || []).forEach((x) => tn.add(x));
+        (tramMap[t]?.xu_ly || []).forEach((x) => xl.add(x));
+      });
+      out[b.label] = { tn: [...tn].join(', ') || null, xl: [...xl].join(', ') || null };
+    });
+    return out;
+  }, [owners]);
 
   // Chi tiết READY: Film/Khuôn/Mực — 3 cột Tổng (ở READY) / Đã xác nhận / Nghẽn (giống biểu đồ tiến độ).
   const readySubData = useMemo(() => {
@@ -991,7 +1020,7 @@ export default function DashboardPage() {
       {drill && bang2 && <Bang2Panel kind={drill} data={bang2} hoanThanhDetail={htDetail} onClose={() => setDrill(null)} />}
       {stageDetail && <StageDetailPanel stage={stageDetail} bang2={bang2} hoanThanhDetail={htDetail} chartDetail={chartDetail} onClose={() => setStageDetail(null)} />}
       {treHan && dieuPhoi && <TreHanPanel data={dieuPhoi.tre_han} initKind={treHan.kind} initTram={treHan.maTram} onClose={() => setTreHan(null)} />}
-      {cpDrill && <CheckpointDrillPanel drill={cpDrill} flow={flow} tramToBucket={tramToBucket} bucketOrder={bucketOrder} onClose={() => setCpDrill(null)} />}
+      {cpDrill && <CheckpointDrillPanel drill={cpDrill} flow={flow} tramToBucket={tramToBucket} bucketOrder={bucketOrder} bucketOwners={bucketOwners} onClose={() => setCpDrill(null)} />}
       <Toast toast={toast} />
     </div>
   );

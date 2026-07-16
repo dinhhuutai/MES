@@ -18,6 +18,10 @@ import DonePanel from '../../../components/common/DonePanel';
 import { Field, Textarea } from '../../../components/common/controls';
 import { listReadyQcCandidates, getReadyDetail, confirmReadyQC, confirmReadyQcBatch, readyHistory, readyDone, returnReadyToTech } from '../../../services/readyService';
 import LoaiDotVaiBadge from '../../planning/components/LoaiDotVaiBadge';
+import HanGiaoCell from '../../../components/common/HanGiaoCell';
+import QrScanner from '../../../components/common/QrScanner';
+import { baseMaTem } from '../../../utils/format';
+import exportReadyQcExcel from '../utils/exportReadyQcExcel';
 
 // Thứ tự hiển thị: FILM → KHUÔN → MỰC (HSKT đã bỏ khỏi checklist READY).
 const TECH_ITEMS = [
@@ -61,6 +65,7 @@ export default function ReadyQcPage() {
   const [returnReason, setReturnReason] = useState('');
   const [filters, setFilters] = useState({});
   const [showFilters, setShowFilters] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
   const activeCount = Object.values(filters).filter(Boolean).length;
   const filtered = useMemo(() => filterRows(rows, filters, FILTER_FIELDS), [rows, filters]);
 
@@ -99,6 +104,17 @@ export default function ReadyQcPage() {
     } finally {
       setLoadingDetail(false);
     }
+  };
+
+  // Quét QR = CODE PHẦN → tìm phần in ở READY → mở SidePanel QC xác nhận.
+  const onScan = (code) => {
+    setScanOpen(false);
+    const c = baseMaTem((code || '').trim());
+    if (!c) return;
+    const norm = (s) => (s || '').toLowerCase().replace(/\s+/g, '');
+    const row = rows.find((r) => norm(r.ma_phan) === norm(c)) || rows.find((r) => norm(r.ma_phan).includes(norm(c)));
+    if (!row) { show(`Không thấy phần in "${c}" ở READY`, 'error'); return; }
+    open(row);
   };
 
   const toggleReturnItem = (ma) => setReturnChecklists((s) => {
@@ -152,6 +168,15 @@ export default function ReadyQcPage() {
   const allChecked = readyRows.length > 0 && readyRows.every((r) => selected.has(r.id));
   const toggleAll = () => setSelected(() => (allChecked ? new Set() : new Set(readyRows.map((r) => r.id))));
 
+  const [exporting, setExporting] = useState(false);
+  const doExport = async () => {
+    if (filtered.length === 0) { show('Không có dòng nào để xuất', 'error'); return; }
+    setExporting(true);
+    try { await exportReadyQcExcel(filtered); }
+    catch (e) { show(e.message || 'Xuất Excel thất bại', 'error'); }
+    finally { setExporting(false); }
+  };
+
   const doBatch = async () => {
     setBatching(true);
     try {
@@ -193,6 +218,7 @@ export default function ReadyQcPage() {
       </div>
     ) },
     { key: 'loai_dot_vai', header: 'Loại đợt vải', render: (r) => <LoaiDotVaiBadge value={r.loai_dot_vai} /> },
+    { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => <HanGiaoCell value={r.han_giao_hang} /> },
     { key: 'tech', header: 'Kỹ thuật', render: (r) => (
       <div className="flex flex-wrap items-center gap-1">
         {TECH_ITEMS.map((it) => {
@@ -208,10 +234,12 @@ export default function ReadyQcPage() {
       <Toolbar title="QC chuẩn bị kỹ thuật" subtitle="Toàn bộ phần in ở READY — QC xác nhận khi đủ Khuôn/Film/Mực (SLA nghẽn QC chỉ tính sau khi kỹ thuật đủ 3 mục)"
         search={search} onSearch={(v) => { setSearch(v); setPage(1); }}
         searchPlaceholder="Tìm code phần, mã hàng, màu/kích vải, kích phim...">
+        {canQC && <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét QR code phần</Button>}
         {canQC && selected.size > 0 && (
           <Button loading={batching} onClick={doBatch}>QC xác nhận ({selected.size})</Button>
         )}
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
+        <Button variant="secondary" icon="file-spreadsheet" loading={exporting} onClick={doExport}>Excel ({filtered.length})</Button>
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="warning">{readyRows.length} đủ 3 mục · {meta.total} ở READY</Badge>
@@ -307,6 +335,8 @@ export default function ReadyQcPage() {
           </div>
         )}
       </SidePanel>
+
+      <QrScanner open={scanOpen} onClose={() => setScanOpen(false)} onResult={onScan} title="Quét QR code phần" />
 
       <HistoryPanel
         open={histOpen}

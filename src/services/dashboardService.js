@@ -13,11 +13,15 @@ export const getHoanThanhHomNay = () => client.get('/dashboard/hoan-thanh-hom-na
 export const getTinhTrangSummary = () => client.get('/dashboard/tinh-trang/summary');
 export const listTinhTrangPhanIn = (params) => client.get('/dashboard/tinh-trang/phan-in', { params });
 export const getTinhTrangPhanIn = (id) => client.get(`/dashboard/tinh-trang/phan-in/${id}`);
+export const getTinhTrangGraph = (id) => client.get(`/dashboard/tinh-trang/phan-in/${id}/graph`);
 
 // Dòng chảy + SLA (theo dõi chủ động)
 export const getFlow = (params) => client.get('/dashboard/flow', { params });
 export const getFlowTimeline = (dotVaiId) => client.get(`/dashboard/flow/${dotVaiId}`);
 export const getSlaOverview = () => client.get('/dashboard/sla-tong-quan');
 export const getFlowOwners = () => client.get('/dashboard/owners');
+// Lịch sử nghẽn (suy từ lịch sử — from/to/tram/level)
+export const getLichSuNghen = (params) => client.get('/dashboard/lich-su-nghen', { params });
+
 export const listReports = () => client.get('/dashboard/reports');
 export const getReport = (ma) => client.get(`/dashboard/reports/${ma}`);

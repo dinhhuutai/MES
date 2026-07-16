@@ -90,7 +90,8 @@ export const MODULES = [
     mau: 'bg-sky-50 text-sky-600',
     children: [
       { ten: 'Tổng quan', route: '/dashboard' },
-      { ten: 'Tình trạng theo trạm', route: '/dashboard/tinh-trang-tram' },
+      { ten: 'Lịch sử nghẽn', route: '/dashboard/lich-su-nghen' },
+      { ten: 'Sơ đồ phần in', route: '/dashboard/tinh-trang-tram' },
     ],
   },
   {

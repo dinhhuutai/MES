@@ -16,6 +16,7 @@ import {
 } from '../../../services/wfconfigService';
 import { listPhongBan, listRoleOptions } from '../../../services/systemService';
 import { listUsers } from '../../../services/userService';
+import { getFlowOwners } from '../../../services/dashboardService';
 
 const LOAI_LABEL = { CHIU_TRACH_NHIEM: 'Chịu trách nhiệm', XU_LY: 'Xử lý' };
 
@@ -73,6 +74,7 @@ export default function OwnerPage() {
   const [tramOwners, setTramOwners] = useState([]);
   const [cpOwners, setCpOwners] = useState([]);
 
+  const [overview, setOverview] = useState({ tram: {}, checkpoint: {} }); // tổng quan owner theo trạm (workflow hiện hành)
   const [phongBan, setPhongBan] = useState([]);
   const [roles, setRoles] = useState([]);
   const [users, setUsers] = useState([]);
@@ -80,11 +82,28 @@ export default function OwnerPage() {
   const [form, setForm] = useState({ loai: 'XU_LY', userId: '', roleId: '', phongBanId: '', batBuoc: false });
   const [saving, setSaving] = useState(false);
 
+  const loadOverview = useCallback(() => {
+    getFlowOwners().then((r) => setOverview(r.data || { tram: {}, checkpoint: {} })).catch(() => {});
+  }, []);
+
   useEffect(() => {
     listPhongBan().then((r) => setPhongBan(r.data)).catch(() => {});
     listRoleOptions().then((r) => setRoles(r.data)).catch(() => {});
-    listUsers({ limit: 500 }).then((r) => setUsers(r.data.items || r.data || [])).catch(() => {});
-  }, []);
+    // Tải HẾT user (server cap limit=200/trang) — lặp trang để không sót ai khi tìm owner.
+    (async () => {
+      let page = 1; let all = []; let stop = false;
+      while (!stop && page <= 25) {
+        const r = await listUsers({ page, limit: 200 });
+        const items = r.data.items || r.data || [];
+        all = all.concat(items);
+        const total = r.data.meta?.total;
+        stop = items.length < 200 || (total != null && all.length >= total);
+        page += 1;
+      }
+      setUsers(all);
+    })().catch(() => {});
+    loadOverview();
+  }, [loadOverview]);
 
   useEffect(() => {
     if (!versionId) return;
@@ -123,23 +142,56 @@ export default function OwnerPage() {
         await addCheckpointOwner({ checkpointId, ...base, batBuoc: form.batBuoc });
         loadCpOwners();
       }
+      loadOverview();
       show('Đã thêm owner'); setModal(null);
     } catch (e) { show(e.message || 'Thất bại', 'error'); }
     finally { setSaving(false); }
   };
 
   const removeTO = async (o) => {
-    try { await removeTramOwner(o.id); show('Đã xóa'); loadTramOwners(); }
+    try { await removeTramOwner(o.id); show('Đã xóa'); loadTramOwners(); loadOverview(); }
     catch (e) { show(e.message || 'Xóa thất bại (cần grant DELETE — migration 011)', 'error'); }
   };
   const removeCO = async (o) => {
-    try { await removeCheckpointOwner(o.id); show('Đã xóa'); loadCpOwners(); }
+    try { await removeCheckpointOwner(o.id); show('Đã xóa'); loadCpOwners(); loadOverview(); }
     catch (e) { show(e.message || 'Xóa thất bại (cần grant DELETE — migration 011)', 'error'); }
   };
 
   return (
     <div>
-      <Toolbar title="Owner checkpoint / checklist" subtitle="Gán owner chịu trách nhiệm & xử lý cho checkpoint và checklist" />
+      <Toolbar title="Owner checkpoint / checklist" subtitle="Gán owner CHỊU TRÁCH NHIỆM CHÍNH & NGƯỜI XỬ LÝ TIẾP (khi nghẽn) cho từng checkpoint/checklist — hiển thị ở dashboard 'Tiến độ phần in theo checkpoint'." />
+
+      {/* Tổng quan owner theo checkpoint (workflow hiện hành) — thấy ngay chỗ nào chưa gán */}
+      <div className="card mb-4 overflow-hidden">
+        <div className="border-b border-line px-4 py-2.5 text-sm font-semibold text-ink">Tổng quan owner theo checkpoint</div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-line bg-surface-muted/60 text-left text-xs uppercase tracking-wide text-ink-soft">
+                <th className="px-4 py-2 font-semibold">Checkpoint</th>
+                <th className="px-4 py-2 font-semibold">Chịu trách nhiệm chính</th>
+                <th className="px-4 py-2 font-semibold">Người xử lý tiếp (khi nghẽn)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {trams.map((t) => {
+                const o = overview.tram?.[t.ma_tram] || {};
+                const tn = (o.chiu_trach_nhiem || []).join(', ');
+                const xl = (o.xu_ly || []).join(', ');
+                return (
+                  <tr key={t.id} onClick={() => setTramId(t.id)}
+                    className={`cursor-pointer border-b border-line/60 hover:bg-surface-muted ${tramId === t.id ? 'bg-primary-wash/40' : ''}`}>
+                    <td className="px-4 py-2 font-medium text-ink">{t.ten_tram} <span className="text-xs text-ink-soft">{t.ma_tram}</span></td>
+                    <td className="px-4 py-2">{tn ? <span className="text-ink">{tn}</span> : <Badge tone="danger">Chưa gán</Badge>}</td>
+                    <td className="px-4 py-2">{xl ? <span className="text-ink">{xl}</span> : <span className="text-ink-soft">—</span>}</td>
+                  </tr>
+                );
+              })}
+              {trams.length === 0 && <tr><td colSpan={3} className="px-4 py-6 text-center text-ink-soft">Chưa có checkpoint.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       <div className="mb-4 grid max-w-2xl grid-cols-2 gap-4">
         <div>
@@ -190,8 +242,9 @@ export default function OwnerPage() {
             onChange={(v) => setForm({ ...form, userId: v })}
             options={users}
             getValue={(u) => u.id}
-            getLabel={(u) => u.ho_ten || u.ten_dang_nhap || ''}
-            placeholder="Gõ tên để tìm người..."
+            getLabel={(u) => (u.ho_ten ? `${u.ho_ten} (@${u.ten_dang_nhap})` : `@${u.ten_dang_nhap}`)}
+            getSearch={(u) => `${u.ho_ten || ''} ${u.ten_dang_nhap || ''}`}
+            placeholder="Gõ tên hoặc tên đăng nhập (không dấu cũng được)..."
           />
         </Field>
         <Field label="Vai trò">

@@ -50,6 +50,7 @@ import GiaoDacBietPage from './features/quality/pages/GiaoDacBietPage';
 import QcTraVePage from './features/quality/pages/QcTraVePage';
 import GiaoHangPage from './features/delivery/pages/GiaoHangPage';
 import DashboardPage from './features/dashboard/pages/DashboardPage';
+import LichSuNghenPage from './features/dashboard/pages/LichSuNghenPage';
 import TinhTrangTramPage from './features/dashboard/pages/TinhTrangTramPage';
 import MyReportsPage from './features/reports/pages/MyReportsPage';
 import ReportDesignerPage from './features/reports/pages/ReportDesignerPage';
@@ -81,6 +82,7 @@ const PAGES = {
   '/chat-luong/qc-tra-ve': <QcTraVePage />,
   '/giao-hang': <GiaoHangPage />,
   '/dashboard': <DashboardPage />,
+  '/dashboard/lich-su-nghen': <LichSuNghenPage />,
   '/dashboard/tinh-trang-tram': <TinhTrangTramPage />,
   '/bao-cao': <MyReportsPage />,
   '/bao-cao/phong-ban': <ReportByDeptPage />,

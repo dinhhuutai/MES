@@ -4,7 +4,7 @@ import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import Toast from '../../../components/common/Toast';
 import Icon from '../../../components/common/Icon';
-import { Field, Input } from '../../../components/common/controls';
+import { Field, Input, Select } from '../../../components/common/controls';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import QrScanner from '../../../components/common/QrScanner';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
@@ -15,6 +15,35 @@ import { listRelease1Candidates, createDotSanXuat, listChuyen } from '../../../s
 import { fmtNum, fmtDate } from '../../../utils/format';
 
 const norm = (s) => (s || '').trim().toLowerCase();
+
+// Chọn giờ 24h (0h–23h) + phút, KHÔNG có AM/PM — dễ chọn hơn <input type="time">.
+// value/onChange dạng "HH:MM" (rỗng = chưa chọn). Đặt ở module level để không bị remount.
+const HOURS = Array.from({ length: 24 }, (_, i) => i);        // 0h → 23h
+const MINUTES = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
+function TimeSelect({ value, onChange }) {
+  const [rawH = '', rawM = ''] = value ? value.split(':') : [];
+  const hh = rawH === '' ? '' : String(Number(rawH));
+  const mm = rawM === '' ? '' : String(Number(rawM));
+  const emit = (nh, nm) => {
+    if (nh === '' && nm === '') { onChange(''); return; } // xóa cả hai → bỏ chọn
+    const H = String(nh === '' ? 0 : Number(nh)).padStart(2, '0');
+    const M = String(nm === '' ? 0 : Number(nm)).padStart(2, '0');
+    onChange(`${H}:${M}`);
+  };
+  return (
+    <div className="flex items-center gap-1.5">
+      <Select value={hh} onChange={(e) => emit(e.target.value, mm)} className="!px-2 tabular-nums" aria-label="Giờ">
+        <option value="">-- giờ --</option>
+        {HOURS.map((x) => <option key={x} value={x}>{x}h</option>)}
+      </Select>
+      <span className="text-ink-soft">:</span>
+      <Select value={mm} onChange={(e) => emit(hh, e.target.value)} className="!px-2 tabular-nums" aria-label="Phút">
+        <option value="">phút</option>
+        {MINUTES.map((x) => <option key={x} value={x}>{String(x).padStart(2, '0')}</option>)}
+      </Select>
+    </div>
+  );
+}
 
 // Ngày mai (giờ máy) dạng YYYY-MM-DD — mặc định cho ô "Ngày kế hoạch".
 const tomorrowStr = () => {
@@ -233,14 +262,10 @@ export default function TaoDotSanXuatPage() {
             </Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Giờ bắt đầu (tùy chọn)">
-                <Input type="time" value={gioBd} onChange={(e) => setGioBd(e.target.value)}
-                  className="cursor-pointer"
-                  onClick={(e) => { try { e.target.showPicker?.(); } catch { /* bỏ qua */ } }} />
+                <TimeSelect value={gioBd} onChange={setGioBd} />
               </Field>
               <Field label="Giờ kết thúc (tùy chọn)">
-                <Input type="time" value={gioKt} onChange={(e) => setGioKt(e.target.value)}
-                  className="cursor-pointer"
-                  onClick={(e) => { try { e.target.showPicker?.(); } catch { /* bỏ qua */ } }} />
+                <TimeSelect value={gioKt} onChange={setGioKt} />
               </Field>
             </div>
             <Button className="w-full" onClick={submit} loading={busy}

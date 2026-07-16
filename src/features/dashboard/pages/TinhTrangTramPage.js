@@ -1,319 +1,464 @@
 import { useEffect, useState, useCallback } from 'react';
 import Icon from '../../../components/common/Icon';
 import Badge from '../../../components/common/Badge';
-import SidePanel from '../../../components/common/SidePanel';
-import KcsBreakdown from '../../../components/common/KcsBreakdown';
+import Button from '../../../components/common/Button';
 import Toast from '../../../components/common/Toast';
+import QrScanner from '../../../components/common/QrScanner';
 import useToast from '../../../hooks/useToast';
-import useNow from '../../../hooks/useNow';
 import useSocketEvent from '../../../hooks/useSocketEvent';
-import { evalSla, SLA_BADGE, fmtDur } from '../../../utils/sla';
-import { fmtNum } from '../../../utils/format';
-import {
-  getTinhTrangSummary, listTinhTrangPhanIn, getTinhTrangPhanIn,
-} from '../../../services/dashboardService';
+import { fmtNum, fmtDateTime, baseMaTem } from '../../../utils/format';
+import { listTinhTrangPhanIn, getTinhTrangGraph } from '../../../services/dashboardService';
 
-const ROTATE_MS = 10000;
-const fmtTime = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '');
-
-function SummaryCard({ icon, label, value, tone, onClick }) {
-  return (
-    <div className={`card p-4 ${onClick ? 'cursor-pointer transition hover:shadow-card-hover' : ''}`}
-      onClick={onClick} role={onClick ? 'button' : undefined}>
-      <div className={`mb-2 flex h-9 w-9 items-center justify-center rounded-control ${tone}`}>
-        <Icon name={icon} size={18} />
-      </div>
-      <div className="text-3xl font-bold tabular-nums text-ink">{fmtNum(value)}</div>
-      <div className="text-sm text-ink-soft">{label}{onClick ? ' →' : ''}</div>
-    </div>
-  );
-}
-
-// 1 node trạm trên đường kẻ ngang.
-function StageNode({ title, when, nguoi, phut, live, current }) {
-  return (
-    <div className="flex shrink-0 flex-col items-center">
-      <div className={`min-w-[130px] rounded-control border px-3 py-2 text-center
-        ${current ? 'border-primary bg-primary-wash shadow-card' : 'border-line bg-surface'}`}>
-        <div className={`text-sm font-semibold ${current ? 'text-primary' : 'text-ink'}`}>{title}</div>
-        {live != null && (
-          <div className={`mt-0.5 text-xs font-medium ${live.status === 'NGHEN' ? 'text-danger' : live.status === 'SAP_NGHEN' ? 'text-warning' : 'text-ink-soft'}`}>
-            Đã ở {fmtDur(live.phut)}
-          </div>
-        )}
-        {when && <div className="mt-0.5 text-[11px] text-ink-soft">{fmtTime(when)}</div>}
-        {phut != null && <div className="text-[11px] text-ink-soft">ở trạm trước {fmtDur(phut)}</div>}
-        {nguoi && <div className="mt-0.5 text-[11px] font-medium text-ink">{nguoi}</div>}
-      </div>
-    </div>
-  );
-}
-
-const Connector = () => (
-  <div className="mx-1 mt-6 h-px w-6 shrink-0 self-start bg-line" />
-);
-
-// Nhánh KCS → (Sửa) → OQC của 1 tem.
-function TemBranch({ tem }) {
-  const chips = [];
-  if (tem.kcs_ket_qua) {
-    chips.push({ k: 'kcs', label: `KCS ${tem.kcs_ket_qua === 'DAT' ? 'đạt' : 'có lỗi'}`,
-      sub: `đạt ${fmtNum(tem.kcs_dat)}${tem.kcs_loi ? ` · lỗi ${fmtNum(tem.kcs_loi)}` : ''}`, nguoi: tem.kcs_nguoi, tone: 'info' });
-  }
-  if (tem.sua_dat != null) {
-    chips.push({ k: 'sua', label: 'Sửa', sub: `đạt ${fmtNum(tem.sua_dat)}`, nguoi: tem.sua_nguoi, tone: 'warning' });
-  }
-  if (tem.oqc_ket_qua) {
-    chips.push({ k: 'oqc', label: `OQC ${tem.oqc_ket_qua === 'DAT' ? 'đạt' : 'không đạt'}${tem.oqc_cho_giao ? ' · cho giao' : ''}`,
-      sub: '', nguoi: tem.oqc_nguoi, tone: tem.oqc_ket_qua === 'DAT' ? 'success' : 'danger' });
-  }
-  return (
-    <div className="flex items-start gap-1">
-      {chips.length === 0 && <span className="text-[11px] text-ink-soft">Chưa kiểm</span>}
-      {chips.map((c, i) => (
-        <div key={c.k} className="flex items-start gap-1">
-          {i > 0 && <span className="mt-1.5 text-ink-soft">→</span>}
-          <div className="rounded-control border border-line bg-surface px-2 py-1 text-center">
-            <Badge tone={c.tone}>{c.label}</Badge>
-            {c.sub && <div className="mt-0.5 text-[11px] text-ink-soft">{c.sub}</div>}
-            {c.nguoi && <div className="text-[11px] font-medium text-ink">{c.nguoi}</div>}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
+const CL_LABEL = { KHUON: 'Khuôn', FILM: 'Film', MUC: 'Mực', QC_XAC_NHAN: 'QC' };
 const TEM_TONE = {
   IN: 'default', DANG_PHOI: 'info', DA_KHO: 'info', CHO_SUA: 'warning',
   CHO_OQC: 'info', OQC_DAT: 'success', DA_GIAO: 'success', LOAI: 'danger', HUY: 'danger',
 };
+const HEAD_TONE = {
+  slate: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+  primary: 'bg-primary-wash text-primary',
+  sky: 'bg-sky-100 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300',
+  amber: 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
+  emerald: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
+  violet: 'bg-violet-100 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300',
+};
+const clock = (t) => (t ? new Date(t).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '');
+const mins = (a, b) => (a && b ? Math.max(0, Math.round((new Date(b) - new Date(a)) / 60000)) : null);
+const pct = (num, den) => (den > 0 ? Math.round((num / den) * 100) : 0);
 
-// Nhóm tem — rẽ nhánh DÍNH vào node trạm ở trên (đường kẻ dọc nối lên).
-function TemGroup({ tems }) {
+// ---- Nguyên thô SƠ ĐỒ CÂY ----
+function Node({ title, tone = 'slate', w = 168, children }) {
   return (
-    <div className="flex flex-col items-center">
-      <div className="h-4 w-px bg-primary/40" />
-      <div className="rounded-control border border-dashed border-primary/40 bg-primary-wash/20 p-2">
-        <div className="mb-1.5 text-center text-[11px] font-semibold text-ink-soft">Tem ({tems.length})</div>
-        <div className="flex flex-wrap justify-center gap-2">
-          {tems.map((tem) => (
-            <div key={tem.tem_id} className="rounded-control border border-line bg-surface p-2.5">
-              <div className="mb-1.5 flex items-center gap-2">
-                <span className="font-mono text-xs font-semibold text-ink">{tem.ma_tem}</span>
-                <Badge tone={TEM_TONE[tem.trang_thai] || 'default'}>{tem.trang_thai}</Badge>
-                <span className="text-[11px] text-ink-soft">{fmtNum(tem.so_luong)} pcs</span>
-              </div>
-              <TemBranch tem={tem} />
+    <div className="shrink-0 self-center overflow-hidden rounded-control border border-line bg-surface shadow-sm" style={{ width: w }}>
+      <div className={`px-2 py-1 text-[10px] font-bold uppercase tracking-wide ${HEAD_TONE[tone]}`}>{title}</div>
+      <div className="p-2">{children}</div>
+    </div>
+  );
+}
+// Mũi tên nối (đường + đầu nhọn) — cho bước tuần tự.
+const Link = () => (
+  <div className="flex shrink-0 items-center self-center">
+    <span className="h-0.5 w-5 bg-primary/45" />
+    <span className="h-0 w-0 border-y-[4px] border-l-[7px] border-y-transparent border-l-primary/45" />
+  </div>
+);
+// Nhánh CÂY: cha nằm GIỮA (đối xứng) → nhiều con, nối bằng đường gấp khúc + đầu mũi tên.
+function Fork({ parent, items }) {
+  const nodes = (items || []).filter(Boolean);
+  if (nodes.length === 0) return parent;
+  if (nodes.length === 1) return <div className="flex items-center">{parent}<Link />{nodes[0]}</div>;
+  return (
+    <div className="flex items-center">
+      {parent}
+      <span className="h-0.5 w-3 shrink-0 self-center bg-primary/45" />
+      <div className="flex flex-col">
+        {nodes.map((n, i) => (
+          <div key={i} className="flex items-stretch">
+            <div className="relative w-7 shrink-0">
+              <span className={`absolute left-0 w-0.5 bg-primary/45 ${i === 0 ? 'top-1/2 bottom-0' : i === nodes.length - 1 ? 'top-0 bottom-1/2' : 'inset-y-0'}`} />
+              <span className="absolute left-0 top-1/2 h-0.5 w-6 -translate-y-1/2 bg-primary/45" />
+              <span className="absolute right-0 top-1/2 h-0 w-0 -translate-y-1/2 border-y-[4px] border-l-[7px] border-y-transparent border-l-primary/45" />
             </div>
-          ))}
-        </div>
+            <div className="min-w-0 py-2">{n}</div>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
+// Chuỗi nút tuần tự (Link giữa các nút có dữ liệu).
+function Chain({ nodes }) {
+  const arr = (nodes || []).filter(Boolean);
+  if (arr.length === 0) return null;
+  return <div className="flex items-center">{arr.map((n, i) => <div key={i} className="flex items-center">{i > 0 && <Link />}{n}</div>)}</div>;
+}
 
-// 1 đợt vải: đường kẻ ngang các trạm; tem rẽ nhánh dính vào node trạm hiện tại.
-function DotVaiFlow({ dot, now }) {
-  const cur = dot.current;
-  const live = cur ? evalSla(cur.tg_vao, cur.sla_phut, cur.canh_bao_truoc_phut, now) : null;
-  const hasTimeline = dot.timeline && dot.timeline.length > 0;
-  // Node cuối được coi là "hiện tại" để dính nhánh tem (kể cả khi không khớp ton_tram).
-  const lastIdx = hasTimeline ? dot.timeline.length - 1 : -1;
-  const tems = dot.tems || [];
+const Q = ({ label, v, tone = 'text-ink' }) => (
+  <div className="flex items-center justify-between gap-2 text-[11px]">
+    <span className="text-ink-soft">{label}</span><b className={`tabular-nums ${tone}`}>{fmtNum(v)}</b>
+  </div>
+);
+const Who = ({ nguoi, tg }) => (nguoi || tg) ? (
+  <div className="mt-1 border-t border-line/60 pt-1 text-[10px] leading-tight text-ink-soft">
+    {nguoi && <div className="truncate font-medium text-ink">{nguoi}</div>}
+    {tg && <div className="tabular-nums">{fmtDateTime(tg)}</div>}
+  </div>
+) : null;
 
+function ReadyNode({ checklists, lan = 0 }) {
+  const byMa = Object.fromEntries((checklists || []).map((c) => [c.ma_checkpoint, c]));
   return (
-    <div className="rounded-card border border-line bg-surface-muted/40 p-4">
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <Badge tone="info"><Icon name="git-branch" size={12} className="mr-1" />{dot.ma_dot_vai}</Badge>
-        <span className="text-xs text-ink-soft">SLNV {fmtNum(dot.so_luong_vai_ve)}</span>
-        {cur && live && <Badge tone={SLA_BADGE[live.status].tone}>{SLA_BADGE[live.status].label} · {cur.ten_tram}</Badge>}
-        {!cur && <Badge tone="default">Chưa vào dòng chảy</Badge>}
-      </div>
-
-      <div className="flex items-start overflow-x-auto pb-2">
-        {hasTimeline ? dot.timeline.map((t, i) => {
-          const isLast = i === lastIdx;
-          const isCur = cur && t.den_tram === cur.ma_tram;
+    <Node title={`READY${lan ? ` · lần ${lan}` : ''} · Chuẩn bị KT`} tone="primary" w={190}>
+      <div className="space-y-1">
+        {['KHUON', 'FILM', 'MUC', 'QC_XAC_NHAN'].map((ma) => {
+          const c = byMa[ma];
           return (
-            <div key={i} className="flex items-start">
-              {i > 0 && <Connector />}
-              <div className="flex flex-col items-center">
-                <StageNode title={t.den_ten} when={t.tg_kt} nguoi={t.nguoi} phut={t.phut}
-                  current={isCur} live={isCur ? live : null} />
-                {isLast && tems.length > 0 && <TemGroup tems={tems} />}
+            <div key={ma} className="flex items-start gap-1.5 text-[11px]">
+              <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${c ? 'bg-emerald-500' : 'bg-line'}`} />
+              <div className="min-w-0 flex-1">
+                <span className="font-semibold text-ink">{CL_LABEL[ma]}</span>
+                {c ? <span className="ml-1 text-[10px] text-ink-soft">{c.nguoi || ''}{c.tg ? ` · ${fmtDateTime(c.tg)}` : ''}</span>
+                  : <span className="ml-1 text-[10px] text-ink-soft">chưa XN</span>}
               </div>
             </div>
           );
-        }) : (
-          <div className="flex flex-col items-center">
-            <StageNode title={cur ? cur.ten_tram : 'Chưa vào trạm'} when={cur?.tg_vao} current={!!cur} live={live} />
-            {tems.length > 0 && <TemGroup tems={tems} />}
-          </div>
-        )}
+        })}
       </div>
+    </Node>
+  );
+}
+
+function lenhStages(l) {
+  const tt = l.trang_thai;
+  const daR2 = tt === 'RELEASE_2' || tt === 'SAN_XUAT';
+  const test = (l.test_qa || l.test?.qa) ? { st: 'done', note: 'đạt' } : daR2 ? { st: 'skip', note: 'bỏ' } : { st: 'cur', note: 'chờ' };
+  return [
+    { key: 'R1', label: 'Release 1', st: 'done', who: l.r1 },
+    { key: 'TEST', label: 'Test Run', st: test.st, note: test.note, who: l.test?.qa || l.test?.cnsp },
+    { key: 'R2', label: 'Release 2', st: tt === 'SAN_XUAT' ? 'done' : tt === 'RELEASE_2' ? 'cur' : 'pending', who: l.r2 },
+    { key: 'SX', label: 'Sản xuất', st: tt === 'SAN_XUAT' ? 'cur' : 'pending' },
+  ];
+}
+const ST_DOT = { done: 'bg-emerald-500', cur: 'bg-primary', skip: 'bg-amber-400', pending: 'bg-line' };
+const ST_TXT = { done: 'text-ink', cur: 'text-primary font-semibold', skip: 'text-amber-600', pending: 'text-ink-soft' };
+
+function LenhNode({ lenh }) {
+  return (
+    <Node title={`Đợt SX · ${lenh.ma_lenh_san_xuat}`} tone="sky" w={186}>
+      {lenh.feeds.map((f) => (
+        <div key={f.dot_vai_ve_id} className="text-[11px]">
+          <span className="text-ink-soft">Vải về </span><b>{fmtNum(f.so_luong_vai_ve)}</b>
+          <span className="text-ink-soft"> · vào SX </span><b>{fmtNum(f.so_luong)}</b>
+        </div>
+      ))}
+      <div className="my-1 flex flex-wrap gap-1">
+        {lenh.feeds.length >= 2 && <Badge tone="info">Gộp {lenh.feeds.length} đợt</Badge>}
+        {lenh.giai_doan === 'EP_UI' && <Badge tone="warning">Ép ủi</Badge>}
+      </div>
+      <Q label="SL release" v={lenh.so_luong_release} tone="text-primary" />
+      <div className="mt-1.5 border-t border-line/60 pt-1">
+        {lenhStages(lenh).map((s) => (
+          <div key={s.key} className="py-px">
+            <div className="flex items-center gap-1.5 text-[10px]">
+              <span className={`h-1.5 w-1.5 rounded-full ${ST_DOT[s.st]}`} />
+              <span className={ST_TXT[s.st]}>{s.label}</span>
+              {s.note && <span className={`ml-auto ${s.st === 'skip' ? 'text-amber-600' : s.st === 'done' ? 'text-emerald-600' : 'text-ink-soft'}`}>{s.note}</span>}
+            </div>
+            {(s.who?.nguoi || s.who?.tg) && (
+              <div className="pl-3 text-[9px] leading-tight text-ink-soft">
+                {s.who.nguoi ? <span className="text-ink">{s.who.nguoi}</span> : null}
+                {s.who.tg ? <span className="tabular-nums"> · {fmtDateTime(s.who.tg)}</span> : null}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </Node>
+  );
+}
+
+// Nút "Sản xuất · Chờ khô" (kèm thời gian phơi).
+function TemNode({ tem }) {
+  const khoLabel = tem.trang_thai === 'DANG_PHOI' ? 'Đang phơi' : tem.trang_thai === 'IN' ? 'Mới in' : 'Đã khô';
+  const dur = mins(tem.tg_bd_phoi, tem.tg_kt_phoi);
+  return (
+    <Node title="Sản xuất · Chờ khô" tone="amber" w={168}>
+      <div className="mb-1 flex items-center gap-1.5">
+        <span className="font-mono text-[11px] font-bold text-ink">{tem.ma_tem}</span>
+        <Badge tone={TEM_TONE[tem.trang_thai] || 'default'}>{khoLabel}</Badge>
+      </div>
+      <Q label="SL in" v={tem.so_luong} />
+      {tem.ten_chuyen && <div className="text-[10px] text-ink-soft">{tem.ten_chuyen}</div>}
+      {tem.tg_bd_phoi && (
+        <div className="mt-1 border-t border-line/60 pt-1 text-[10px] text-ink-soft">
+          🕒 Phơi {clock(tem.tg_bd_phoi)}{tem.tg_kt_phoi ? `–${clock(tem.tg_kt_phoi)}` : ''}{dur != null ? ` (${dur}′)` : ''}
+        </div>
+      )}
+    </Node>
+  );
+}
+function KcsNode({ tem, label = 'KCS' }) {
+  const kiem = (tem.sl_kcs_dat || 0) + (tem.sl_kcs_sua || 0) + (tem.sl_kcs_huy || 0);
+  return (
+    <Node title={label} tone="sky" w={148}>
+      {kiem > 0 ? (
+        <>
+          <Q label="Kiểm" v={kiem} />
+          <Q label="Đạt" v={tem.sl_kcs_dat} tone="text-emerald-600" />
+          {tem.sl_kcs_sua > 0 && <Q label="Sửa" v={tem.sl_kcs_sua} tone="text-amber-600" />}
+          {tem.sl_kcs_huy > 0 && <Q label="Hủy" v={tem.sl_kcs_huy} tone="text-danger" />}
+          <Who nguoi={tem.kcs_nguoi} tg={tem.kcs_tg} />
+        </>
+      ) : <span className="text-[11px] text-ink-soft">Chờ KCS</span>}
+    </Node>
+  );
+}
+function OqcNode({ nguon, qty, bocMau, bocMauDat, nguoi, tg }) {
+  return (
+    <Node title={`OQC (${nguon})`} tone="violet" w={150}>
+      <Q label="Qua OQC" v={qty} tone="text-emerald-600" />
+      {bocMau > 0 && <Q label="Bốc mẫu" v={bocMau} />}
+      {bocMauDat > 0 && <Q label="Mẫu đạt" v={bocMauDat} tone="text-emerald-600" />}
+      <Who nguoi={nguoi} tg={tg} />
+    </Node>
+  );
+}
+function GiaoNode({ nguon, lan = 0, qty, nguoi, tg, phieu }) {
+  return (
+    <Node title={`Giao (${nguon})${lan ? ` · lần ${lan}` : ''}`} tone="emerald" w={150}>
+      <Q label="Đã giao" v={qty} tone="text-emerald-600" />
+      {phieu && <div className="text-[10px] text-ink-soft">Phiếu {phieu}</div>}
+      <Who nguoi={nguoi} tg={tg} />
+    </Node>
+  );
+}
+
+// Đoạn OQC → các LẦN GIAO (giao trước/giao sau) của 1 nguồn: nhiều lần giao → rẽ nhánh từ OQC.
+function oqcGiaoSeg(nguon, oqcProps, giaoRecs) {
+  const oqcNode = <OqcNode nguon={nguon} {...oqcProps} />;
+  if (!giaoRecs.length) return oqcNode;
+  const giaoNodes = giaoRecs.map((g, i) => (
+    <GiaoNode key={i} nguon={nguon} lan={giaoRecs.length > 1 ? i + 1 : 0}
+      qty={g.so_luong_giao} nguoi={g.nguoi} tg={g.tg} phieu={g.ma_phieu_giao} />
+  ));
+  return <Fork parent={oqcNode} items={giaoNodes} />;
+}
+
+// Nhánh Sửa → OQC(Sửa) → các lần giao (dùng chung cho cả 2 chế độ).
+function suaBranch(suaQty, suaDat, suaHuy, nguoi, tg, oqcSuaProps, giaoRecSua) {
+  return (
+    <Chain nodes={[
+      <Node key="s" title="Sửa" tone="amber" w={140}>
+        <Q label="SL sửa" v={suaQty} />
+        {suaDat != null && <Q label="Sửa đạt" v={suaDat} tone="text-emerald-600" />}
+        {suaHuy > 0 && <Q label="Sửa hủy" v={suaHuy} tone="text-danger" />}
+        <Who nguoi={nguoi} tg={tg} />
+      </Node>,
+      oqcGiaoSeg('Sửa', oqcSuaProps, giaoRecSua),
+    ]} />
+  );
+}
+
+// Cây 1 tem. Nếu KIỂM 1 lần → KCS →(đạt) OQC→Giao / (lỗi) Sửa→OQC→Giao.
+// Nếu KIỂM NHIỀU LẦN (kiểm trước để giao trước) → KCS TỔNG rẽ ra các KCS con (từng lần kiểm),
+// mỗi con → đạt→OQC→Giao(lần đó) / lỗi→Sửa→OQC→Giao.
+function TemTree({ tem }) {
+  if (!tem) return <Node title="Sản xuất" tone="slate" w={150}><span className="text-[11px] text-ink-soft">Chưa in tem</span></Node>;
+  const oqcKcs = (tem.sl_oqc_dat || 0) - (tem.sl_oqc_dat_sua || 0);
+  const oqcSua = tem.sl_oqc_dat_sua || 0;
+  const gr = tem.giao_records || [];
+  const giaoRecKcs = gr.filter((g) => g.nguon !== 'SUA');
+  const giaoRecSua = gr.filter((g) => g.nguon === 'SUA');
+  const kcsRecs = tem.kcs_records || [];
+
+  let kcsChildren;
+  if (kcsRecs.length >= 2) {
+    // Gán các lần giao cho từng lần kiểm theo THỨ TỰ thời gian (kiểm trước ↔ giao trước).
+    const datRecs = kcsRecs.filter((r) => (r.so_luong_dat || 0) > 0);
+    const suaRecs = kcsRecs.filter((r) => Math.max((r.so_luong_loi || 0) - (r.so_luong_huy || 0), 0) > 0);
+    const giaoMap = new Map(); // record -> { kcs:[], sua:[] }
+    kcsRecs.forEach((r) => giaoMap.set(r, { kcs: [], sua: [] }));
+    giaoRecKcs.forEach((g, i) => { const r = datRecs[Math.min(i, datRecs.length - 1)]; if (r) giaoMap.get(r).kcs.push(g); });
+    giaoRecSua.forEach((g, i) => { const r = suaRecs[Math.min(i, suaRecs.length - 1)]; if (r) giaoMap.get(r).sua.push(g); });
+
+    kcsChildren = kcsRecs.map((r, i) => {
+      const dat = r.so_luong_dat || 0;
+      const sua = Math.max((r.so_luong_loi || 0) - (r.so_luong_huy || 0), 0);
+      const huy = r.so_luong_huy || 0;
+      const kiem = r.so_luong_kiem || (dat + (r.so_luong_loi || 0) + huy);
+      const gm = giaoMap.get(r) || { kcs: [], sua: [] };
+      const conNode = (
+        <Node title={`KCS lần ${i + 1}`} tone="sky" w={150}>
+          <Q label="Kiểm" v={kiem} />
+          <Q label="Đạt" v={dat} tone="text-emerald-600" />
+          {sua > 0 && <Q label="Sửa" v={sua} tone="text-amber-600" />}
+          {huy > 0 && <Q label="Hủy" v={huy} tone="text-danger" />}
+          <Who nguoi={r.nguoi} tg={r.tg} />
+        </Node>
+      );
+      const dBranch = dat > 0 ? oqcGiaoSeg('KCS', { qty: dat, nguoi: tem.oqc_kcs_nguoi, tg: tem.oqc_kcs_tg }, gm.kcs) : null;
+      const sBranch = sua > 0 ? suaBranch(sua, null, 0, tem.sua_nguoi, tem.sua_tg, { qty: sua, nguoi: tem.oqc_sua_nguoi, tg: tem.oqc_sua_tg }, gm.sua) : null;
+      if (!dBranch && !sBranch) return conNode;
+      return <Fork key={i} parent={conNode} items={[dBranch, sBranch]} />;
+    });
+    return (
+      <div className="flex items-center">
+        <TemNode tem={tem} />
+        <Link />
+        <Fork parent={<KcsNode tem={tem} label="KCS tổng" />} items={kcsChildren} />
+      </div>
+    );
+  }
+
+  // Kiểm 1 lần (mặc định)
+  const branchKcs = tem.sl_kcs_dat > 0
+    ? oqcGiaoSeg('KCS', { qty: oqcKcs, bocMau: tem.oqc_kcs_boc_mau, bocMauDat: tem.oqc_kcs_boc_mau_dat, nguoi: tem.oqc_kcs_nguoi, tg: tem.oqc_kcs_tg }, giaoRecKcs)
+    : null;
+  const branchSua = tem.sl_kcs_sua > 0
+    ? suaBranch(tem.sl_kcs_sua, tem.sl_sua_dat, tem.sl_sua_huy, tem.sua_nguoi, tem.sua_tg,
+      { qty: oqcSua, bocMau: tem.oqc_sua_boc_mau, bocMauDat: tem.oqc_sua_boc_mau_dat, nguoi: tem.oqc_sua_nguoi, tg: tem.oqc_sua_tg }, giaoRecSua)
+    : null;
+
+  return (
+    <div className="flex items-center">
+      <TemNode tem={tem} />
+      <Link />
+      <Fork parent={<KcsNode tem={tem} />} items={[branchKcs, branchSua]} />
     </div>
   );
 }
 
 export default function TinhTrangTramPage() {
   const { toast, show } = useToast();
-  const now = useNow(1000);
-  const [summary, setSummary] = useState(null);
   const [list, setList] = useState([]);
   const [idx, setIdx] = useState(0);
   const [search, setSearch] = useState('');
-  const [detail, setDetail] = useState(null);
-  const [paused, setPaused] = useState(false);
-  const [nghenPanel, setNghenPanel] = useState(null); // null | 'NGHEN' | 'SAP_NGHEN'
+  const [graph, setGraph] = useState(null);
+  const [scanOpen, setScanOpen] = useState(false);
 
+  // Tìm rỗng → 1 phần in MỚI NHẤT; có nhập → tối đa 30 khớp (KHÔNG tải hết vài ngàn phần in).
   const loadList = useCallback(async () => {
     try {
-      const [s, l] = await Promise.all([getTinhTrangSummary(), listTinhTrangPhanIn({ search })]);
-      setSummary(s.data);
+      const l = await listTinhTrangPhanIn({ search, limit: search.trim() ? 30 : 1 });
       setList(l.data.items);
-      setIdx((i) => (l.data.items.length ? Math.min(i, l.data.items.length - 1) : 0));
+      setIdx(0);
     } catch (e) { show(e.message || 'Lỗi tải', 'error'); }
   }, [search, show]);
 
-  useEffect(() => { const t = setTimeout(loadList, 250); return () => clearTimeout(t); }, [loadList]);
+  useEffect(() => { const t = setTimeout(loadList, 300); return () => clearTimeout(t); }, [loadList]);
   useSocketEvent('dashboard:refresh', loadList);
   useSocketEvent('production:updated', loadList);
 
   const current = list[idx];
 
   useEffect(() => {
-    if (!current) { setDetail(null); return undefined; }
+    if (!current) { setGraph(null); return undefined; }
     let alive = true;
-    getTinhTrangPhanIn(current.id).then((r) => { if (alive) setDetail(r.data); }).catch(() => {});
+    getTinhTrangGraph(current.id).then((r) => { if (alive) setGraph(r.data); }).catch(() => {});
     return () => { alive = false; };
   }, [current?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Tự xoay sang phần in kế tiếp mỗi 10s.
-  useEffect(() => {
-    if (paused || list.length <= 1) return undefined;
-    const t = setTimeout(() => setIdx((i) => (i + 1) % list.length), ROTATE_MS);
-    return () => clearTimeout(t);
-  }, [paused, idx, list.length]);
-
   const go = (delta) => setIdx((i) => (list.length ? (i + delta + list.length) % list.length : 0));
+  // Quét QR code phần → điền ô tìm kiếm → ra phần in.
+  const onScan = (code) => { setScanOpen(false); const c = baseMaTem((code || '').trim()); if (c) setSearch(c); };
 
-  // Bấm 1 phần in trong danh sách nghẽn → lọc tới nó (tạm dừng xoay).
-  const pickPhanIn = (item) => { setSearch(item.ma_phan); setPaused(true); setNghenPanel(null); };
-  const nghenItems = nghenPanel ? (summary?.danh_sach?.[nghenPanel] || []) : [];
+  const allLenh = graph ? graph.ready_cycles.flatMap((c) => c.lenh) : [];
+  const agg = graph ? allLenh.reduce((a, l) => {
+    a.release += l.so_luong_release || 0;
+    l.tems.forEach((t) => {
+      a.in += t.so_luong || 0; a.kcs_dat += t.sl_kcs_dat || 0; a.sua += t.sl_kcs_sua || 0;
+      a.sua_dat += t.sl_sua_dat || 0; a.oqc_dat += t.sl_oqc_dat || 0; a.giao += t.sl_da_giao || 0;
+      a.huy += (t.sl_kcs_huy || 0) + (t.sl_sua_huy || 0);
+    });
+    return a;
+  }, { release: 0, in: 0, kcs_dat: 0, sua: 0, sua_dat: 0, oqc_dat: 0, giao: 0, huy: 0 }) : null;
+
+  // 1 đợt SX → cây tem.
+  const lenhTree = (l) => (
+    <Fork key={l.id} parent={<LenhNode lenh={l} />}
+      items={(l.tems.length ? l.tems : [null]).map((t, i) => <TemTree key={t ? t.tem_id : `x${i}`} tem={t} />)} />
+  );
+  // Mỗi CHU KỲ READY = 1 nhánh: ReadyNode → các đợt SX của chu kỳ đó (+ đợt vải chờ release).
+  const cycleBranches = graph ? graph.ready_cycles.map((cy, ci) => (
+    <Fork key={ci} parent={<ReadyNode checklists={cy.checklists} lan={graph.ready_cycles.length > 1 ? ci + 1 : 0} />}
+      items={[
+        ...cy.lenh.map(lenhTree),
+        ...(cy.pending || []).map((d) => (
+          <Node key={d.id} title="Đợt vải chờ release" tone="slate" w={170}>
+            <Q label="Vải về" v={d.so_luong_vai_ve} />
+            <div className="text-[11px] text-amber-600">Chờ release (READY)</div>
+          </Node>
+        )),
+      ]} />
+  )) : [];
 
   return (
     <div>
-      <div className="mb-5 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-ink">Tình trạng đơn hàng theo trạm</h1>
-          <p className="text-sm text-ink-soft">Trình chiếu realtime — mỗi phần in hiển thị {ROTATE_MS / 1000}s rồi tự chuyển</p>
-        </div>
-        <Badge tone="success"><span className="mr-1.5 inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-500" />Realtime</Badge>
+      <div className="mb-4">
+        <h1 className="text-xl font-bold text-ink">Sơ đồ phần in</h1>
+        <p className="text-sm text-ink-soft">Nhập/quét QR code phần để xem sơ đồ cây: phần in → READY (theo từng lần) → đợt sản xuất → tem → KCS → (OQC-KCS / Sửa→OQC-Sửa) → Giao.</p>
       </div>
 
-      <div className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <SummaryCard icon="activity" label="Phần in đang chạy (chưa giao)" value={summary?.dang_chay_chua_giao || 0} tone="text-primary bg-primary-wash" />
-        <SummaryCard icon="clock" label="Phần in sắp nghẽn" value={summary?.sap_nghen || 0}
-          onClick={() => setNghenPanel('SAP_NGHEN')}
-          tone={(summary?.sap_nghen || 0) > 0 ? 'text-amber-600 bg-amber-50' : 'text-ink-soft bg-surface-muted'} />
-        <SummaryCard icon="alert-triangle" label="Phần in nghẽn" value={summary?.nghen || 0}
-          onClick={() => setNghenPanel('NGHEN')}
-          tone={(summary?.nghen || 0) > 0 ? 'text-rose-600 bg-rose-50' : 'text-ink-soft bg-surface-muted'} />
-      </div>
-
-      {/* Điều khiển + tìm kiếm */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="relative flex-1 min-w-[220px]">
           <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" />
           <input value={search} onChange={(e) => setSearch(e.target.value)}
-            placeholder="Tìm code phần / đơn / màu / kích vải / kích phim..."
+            placeholder="Nhập code phần / đơn / màu / kích vải / kích phim..."
             className="h-11 w-full rounded-input border border-line bg-surface pl-9 pr-3 text-sm" />
         </div>
-        <button onClick={() => go(-1)} className="rounded-control border border-line px-3 py-2 text-sm hover:bg-surface-muted"><Icon name="chevron-left" size={16} /></button>
-        <span className="text-sm text-ink-soft tabular-nums">{list.length ? idx + 1 : 0}/{list.length}</span>
-        <button onClick={() => go(1)} className="rounded-control border border-line px-3 py-2 text-sm hover:bg-surface-muted"><Icon name="chevron-right" size={16} /></button>
-        <button onClick={() => setPaused((p) => !p)}
-          className={`rounded-control px-3 py-2 text-sm font-medium ${paused ? 'bg-primary text-white' : 'border border-line text-ink-soft hover:bg-surface-muted'}`}>
-          {paused ? 'Tiếp tục' : 'Tạm dừng'}
-        </button>
+        <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét QR code phần</Button>
+        {list.length > 1 && (
+          <div className="flex items-center gap-1.5">
+            <button onClick={() => go(-1)} className="rounded-control border border-line px-3 py-2 text-sm hover:bg-surface-muted"><Icon name="chevron-left" size={16} /></button>
+            <span className="text-sm text-ink-soft tabular-nums">{idx + 1}/{list.length}</span>
+            <button onClick={() => go(1)} className="rounded-control border border-line px-3 py-2 text-sm hover:bg-surface-muted"><Icon name="chevron-right" size={16} /></button>
+          </div>
+        )}
       </div>
 
-      {/* Nội dung 1 phần in */}
       {!current ? (
-        <div className="card p-12 text-center text-ink-soft">Không có phần in nào trong dòng chảy.</div>
-      ) : !detail ? (
+        <div className="card p-12 text-center text-ink-soft">
+          {search.trim() ? `Không tìm thấy phần in khớp "${search.trim()}".` : 'Nhập code phần hoặc quét QR để xem sơ đồ.'}
+        </div>
+      ) : !graph ? (
         <div className="card p-12 text-center text-ink-soft">Đang tải...</div>
       ) : (
-        <div className="card p-5">
-          {/* Node gốc phần in */}
-          <div className="mb-4 flex flex-wrap items-center gap-3 rounded-card border border-primary/30 bg-primary-wash px-4 py-3">
+        <div className="card space-y-3 p-5">
+          <div className="flex flex-wrap items-center gap-3 rounded-card border border-primary/30 bg-primary-wash px-4 py-3">
             <Icon name="package" size={20} className="text-primary" />
             <div>
-              <div className="text-lg font-bold text-ink">{detail.phan_in.ma_phan}</div>
-              <div className="text-sm text-ink-soft">
-                {[detail.phan_in.ten_khach_hang, detail.phan_in.ma_don_hang, detail.phan_in.ma_hang].filter(Boolean).join(' · ')}
-              </div>
-              <div className="text-xs text-ink-soft">
-                {[detail.phan_in.mau_vai, detail.phan_in.kich_vai, detail.phan_in.kich_phim].filter(Boolean).join(' · ')}
-              </div>
+              <div className="text-lg font-bold text-ink">{graph.phan_in.ma_phan}</div>
+              <div className="text-sm text-ink-soft">{[graph.phan_in.ten_khach_hang, graph.phan_in.ma_don_hang, graph.phan_in.ma_hang].filter(Boolean).join(' · ')}</div>
+              <div className="text-xs text-ink-soft">{[graph.phan_in.mau_vai, graph.phan_in.kich_vai, graph.phan_in.kich_phim].filter(Boolean).join(' · ')}</div>
             </div>
-            <Badge tone="info" className="ml-auto">{detail.dot_vai.length} đợt vải</Badge>
+            <div className="ml-auto flex flex-wrap items-center gap-1.5">
+              {graph.phan_in.la_in_kieng && <Badge tone="warning">In kiếng</Badge>}
+              <Badge tone="info">{graph.dot_vai.length} đợt vải</Badge>
+              <Badge tone="default">{allLenh.length} đợt SX</Badge>
+              {graph.ready_cycles.length > 1 && <Badge tone="warning">{graph.ready_cycles.length} lần READY</Badge>}
+            </div>
           </div>
 
-          {/* Tổng hợp số lượng theo tem (hợp nhất theo phần in) */}
-          {(detail.tem_summary?.pcs_in > 0 || detail.stage_pcs?.sl_release > 0) && (
-            <div className="mb-4 flex flex-wrap gap-2">
-              {detail.stage_pcs?.sl_release > 0 && <Badge tone="info">Release {fmtNum(detail.stage_pcs.sl_release)}</Badge>}
-              {detail.tem_summary?.pcs_in > 0 && <Badge tone="default">In xong {fmtNum(detail.tem_summary.pcs_in)} pcs · {fmtNum(detail.tem_summary.so_tem)} tem</Badge>}
-              {detail.tem_summary?.sl_dat > 0 && <Badge tone="success">Đạt {fmtNum(detail.tem_summary.sl_dat)}</Badge>}
-              {detail.tem_summary?.sl_sua > 0 && <Badge tone="warning">Sửa {fmtNum(detail.tem_summary.sl_sua)}</Badge>}
-              {detail.stage_pcs?.oqc_dat > 0 && <Badge tone="success">OQC đạt {fmtNum(detail.stage_pcs.oqc_dat)}</Badge>}
-              {detail.stage_pcs?.sua_dat > 0 && <Badge tone="warning">OQC qua sửa {fmtNum(detail.stage_pcs.sua_dat)}</Badge>}
+          {/* Tổng số lượng */}
+          {agg && (agg.release > 0 || agg.in > 0) && (
+            <div className="flex flex-wrap gap-2">
+              {agg.release > 0 && <Badge tone="info">Release {fmtNum(agg.release)}</Badge>}
+              {agg.in > 0 && <Badge tone="default">In {fmtNum(agg.in)} pcs</Badge>}
+              {agg.kcs_dat > 0 && <Badge tone="success">KCS đạt {fmtNum(agg.kcs_dat)}</Badge>}
+              {agg.sua > 0 && <Badge tone="warning">Qua sửa {fmtNum(agg.sua)}</Badge>}
+              {agg.sua_dat > 0 && <Badge tone="success">Sửa đạt {fmtNum(agg.sua_dat)}</Badge>}
+              {agg.huy > 0 && <Badge tone="danger">Tổng hủy {fmtNum(agg.huy)}</Badge>}
+              {agg.oqc_dat > 0 && <Badge tone="success">OQC đạt {fmtNum(agg.oqc_dat)}</Badge>}
+              {agg.giao > 0 && <Badge tone="success">Đã giao {fmtNum(agg.giao)}</Badge>}
+              {agg.in > 0 && (agg.kcs_dat > 0 || agg.huy > 0) && <Badge tone="info">% sau kiểm {pct(agg.kcs_dat, agg.in)}%</Badge>}
+              {agg.in > 0 && agg.sua_dat > 0 && <Badge tone="info">% sau sửa {pct(agg.kcs_dat + agg.sua_dat, agg.in)}%</Badge>}
             </div>
           )}
 
-          {/* KCS theo từng đợt vải + tổng */}
-          {detail.kcs_by_dot?.dot?.length > 0 && (
-            <div className="mb-4 rounded-card border border-line bg-surface-muted/40 p-3">
-              <div className="mb-1 text-[11px] font-bold uppercase tracking-wide text-ink-soft">KCS theo đợt vải</div>
-              <KcsBreakdown data={detail.kcs_by_dot} />
+          {/* SƠ ĐỒ CÂY */}
+          {cycleBranches.length === 0 ? (
+            <div className="py-4 text-center text-sm text-ink-soft">Phần in chưa có đợt sản xuất.</div>
+          ) : (
+            <div className="overflow-x-auto pb-3">
+              <div className="flex items-center" style={{ minWidth: 'min-content' }}>
+                <Fork
+                  parent={(
+                    <Node title="Phần in" tone="primary" w={150}>
+                      <div className="text-[11px] font-bold text-ink">{graph.phan_in.ma_phan}</div>
+                      <div className="text-[10px] text-ink-soft">{graph.phan_in.mau_vai || ''}</div>
+                      <Q label="Đợt vải" v={graph.dot_vai.length} />
+                      <Q label="Đợt SX" v={allLenh.length} />
+                    </Node>
+                  )}
+                  items={cycleBranches}
+                />
+              </div>
             </div>
           )}
-
-          {/* Các đợt vải (rẽ nhánh) */}
-          <div className="space-y-4">
-            {detail.dot_vai.map((d) => <DotVaiFlow key={d.id} dot={d} now={now} />)}
-          </div>
         </div>
       )}
 
-      <SidePanel open={!!nghenPanel} onClose={() => setNghenPanel(null)}
-        title={nghenPanel === 'NGHEN' ? 'Phần in đang nghẽn' : 'Phần in sắp nghẽn'}
-        subtitle={`${nghenItems.length} phần in`} width="max-w-md">
-        {nghenItems.length === 0 ? (
-          <p className="py-6 text-center text-sm text-ink-soft">Không có phần in nào.</p>
-        ) : (
-          <div className="space-y-2">
-            {nghenItems.map((it) => (
-              <button key={it.id} onClick={() => pickPhanIn(it)}
-                className="w-full rounded-control border border-line p-3 text-left transition hover:bg-surface-muted">
-                <div className="flex items-center justify-between">
-                  <span className="font-semibold text-ink">{it.ma_phan}</span>
-                  <Badge tone={SLA_BADGE[it.sla_status].tone}>{SLA_BADGE[it.sla_status].label}</Badge>
-                </div>
-                <div className="mt-0.5 text-xs text-ink-soft">
-                  {[it.ten_khach_hang, it.ma_don_hang, it.ma_hang].filter(Boolean).join(' · ')}
-                </div>
-                <div className="text-xs text-ink-soft">
-                  {[it.mau_vai, it.kich_vai, it.kich_phim].filter(Boolean).join(' · ')} · đang ở <b>{it.ten_tram}</b>
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-      </SidePanel>
-
+      <QrScanner open={scanOpen} onClose={() => setScanOpen(false)} onResult={onScan} title="Quét QR code phần" />
       <Toast toast={toast} />
     </div>
   );

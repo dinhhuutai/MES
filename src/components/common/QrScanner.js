@@ -96,7 +96,7 @@ export default function QrScanner({ open, onClose, onResult, title = 'Quét QR t
             <div className="pointer-events-none absolute inset-6 rounded-lg border-2 border-white/80" />
           </div>
           <p className="text-center text-xs text-ink-soft">
-            {ready ? 'Đưa mã QR trên tem vào khung' : 'Đang mở camera...'}
+            {ready ? 'Đưa mã QR vào khung' : 'Đang mở camera...'}
           </p>
         </div>
       )}

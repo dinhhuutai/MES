@@ -17,7 +17,7 @@ import Icon from '../../../components/common/Icon';
 import { Field, Input } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import { listKcsCandidates, recordKcs, kcsHistory, kcsDone, getTemHanhTrinh } from '../../../services/qualityService';
+import { listKcsCandidates, recordKcs, gopTem, kcsHistory, kcsDone, getTemHanhTrinh } from '../../../services/qualityService';
 import { redryTem, getTemLabel } from '../../../services/productionService';
 import { printKcsGiaoTem } from '../../production/utils/printTemLabel';
 import { fmtNum, fmtDateTime, baseMaTem } from '../../../utils/format';
@@ -59,8 +59,35 @@ export default function KcsPage() {
   const [onlyReturned, setOnlyReturned] = useState(false); // lọc tem bị OQC trả về
   const [journey, setJourney] = useState(null); // { temId, maTem } — panel hành trình
   const [scanOpen, setScanOpen] = useState(false);
+  const [selected, setSelected] = useState(() => new Set()); // tem_id đã chọn để GỘP
+  const [gopOpen, setGopOpen] = useState(false);
+  const [targetId, setTargetId] = useState('');
+  const [gopping, setGopping] = useState(false);
 
   const viewRows = onlyReturned ? rows.filter((r) => r.tra_ve_ly_do) : rows;
+  const toggleOne = (id) => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const allSelected = viewRows.length > 0 && viewRows.every((r) => selected.has(r.tem_id));
+  const toggleAll = () => setSelected(() => (allSelected ? new Set() : new Set(viewRows.map((r) => r.tem_id))));
+  const selectedRows = viewRows.filter((r) => selected.has(r.tem_id));
+  const gopMixedPhanIn = selectedRows.length > 1 && new Set(selectedRows.map((r) => r.ma_phan)).size > 1;
+
+  const openGop = () => {
+    setTargetId(selectedRows[0]?.tem_id || '');
+    setGopOpen(true);
+  };
+  const doGop = async () => {
+    const sources = selectedRows.filter((r) => r.tem_id !== targetId).map((r) => r.tem_id);
+    setGopping(true);
+    try {
+      const r = await gopTem({ targetTemId: targetId, sourceTemIds: sources });
+      show(`Đã gộp ${r.data.so_tem_gop} tem vào ${r.data.ma_tem} · +${fmtNum(r.data.sl_gop_them)} pcs → SL mới ${fmtNum(r.data.so_luong_moi)}`);
+      setGopOpen(false); setSelected(new Set()); load();
+    } catch (e) {
+      show(e.message || 'Gộp tem thất bại', 'error');
+    } finally {
+      setGopping(false);
+    }
+  };
 
   const filtersKey = useMemo(() => JSON.stringify(filters), [filters]);
   const rangeKey = useMemo(() => `${range.from || ''}|${range.to || ''}`, [range]);
@@ -162,6 +189,12 @@ export default function KcsPage() {
   };
 
   const columns = [
+    { key: 'sel', selection: true,
+      header: <input type="checkbox" aria-label="Chọn tất cả" checked={allSelected} onChange={toggleAll} />,
+      render: (r) => (
+        <input type="checkbox" aria-label="Chọn tem" checked={selected.has(r.tem_id)}
+          onClick={(e) => e.stopPropagation()} onChange={() => toggleOne(r.tem_id)} />
+      ) },
     { key: 'ma_tem', header: 'Tem', render: (r) => (
       <div>
         <Badge tone="info">{r.ma_tem}</Badge>
@@ -214,6 +247,9 @@ export default function KcsPage() {
       <Toolbar title="KCS — Kiểm tra chất lượng" subtitle="Kiểm theo tem (tem đã khô)"
         search={search} onSearch={setSearch} searchPlaceholder="Quét/nhập mã tem...">
         {canKcs && <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét QR</Button>}
+        {canKcs && selected.size >= 2 && (
+          <Button variant="secondary" icon="git-branch" onClick={openGop}>Gộp tem ({selected.size})</Button>
+        )}
         <div className="flex items-center gap-1.5 text-xs text-ink-soft">
           <span>Ngày in tem</span>
           <div className="w-60"><DateRangePicker value={range} onChange={setRange} placeholder="Chọn khoảng ngày in tem" /></div>
@@ -318,6 +354,49 @@ export default function KcsPage() {
         <Field label="Thời gian phơi lại (phút)" required>
           <Input type="number" min="1" value={redryMin} onChange={(e) => setRedryMin(e.target.value)} />
         </Field>
+      </Modal>
+
+      <Modal
+        open={gopOpen}
+        onClose={() => setGopOpen(false)}
+        title="Gộp tem"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setGopOpen(false)}>Hủy</Button>
+            <Button onClick={doGop} loading={gopping} disabled={!targetId || selectedRows.length < 2 || gopMixedPhanIn}>Gộp về tem đã chọn</Button>
+          </>
+        }
+      >
+        <p className="mb-3 text-sm text-ink-soft">
+          Chọn <b>tem đích</b> (giữ lại) — số lượng các tem còn lại sẽ dồn về tem này, các tem kia bị <b>hủy</b>. Dùng khi in dư tem do nhập thiếu số lượng.
+        </p>
+        {gopMixedPhanIn && (
+          <div className="mb-3 rounded-control border border-danger/40 bg-danger/5 px-3 py-2 text-xs text-danger">
+            Các tem đang chọn KHÔNG cùng một phần in — chỉ gộp được tem cùng phần in.
+          </div>
+        )}
+        <div className="space-y-2">
+          {selectedRows.map((r) => (
+            <label key={r.tem_id}
+              className={`flex cursor-pointer items-center gap-3 rounded-control border px-3 py-2 text-sm ${targetId === r.tem_id ? 'border-primary bg-primary-wash' : 'border-line'}`}>
+              <input type="radio" name="gop-target" checked={targetId === r.tem_id} onChange={() => setTargetId(r.tem_id)} />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono font-semibold text-ink">{r.ma_tem}</span>
+                  {targetId === r.tem_id && <Badge tone="info">Tem đích (nhận SL)</Badge>}
+                </div>
+                <div className="text-xs text-ink-soft">{r.ma_phan || r.ma_hang} · SL in {fmtNum(r.so_luong)} · còn kiểm {fmtNum(r.con_kcs)}</div>
+              </div>
+            </label>
+          ))}
+        </div>
+        {targetId && !gopMixedPhanIn && (
+          <div className="mt-3 rounded-control bg-surface-muted px-3 py-2 text-sm">
+            Tem đích <b>{selectedRows.find((r) => r.tem_id === targetId)?.ma_tem}</b> sẽ có SL mới ={' '}
+            <b className="text-primary">{fmtNum(selectedRows.reduce((s, r) => s + (Number(r.so_luong) || 0), 0))}</b> pcs
+            {' '}(gộp {selectedRows.length - 1} tem).
+          </div>
+        )}
       </Modal>
 
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}
