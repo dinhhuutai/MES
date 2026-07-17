@@ -18,6 +18,7 @@ import { listCancelableLenh, cancelLenh } from '../../../services/planningServic
 import { listCancelableTem, cancelPrintTem, listCloseCandidates, closeProduction, listReopenCandidates, reopenProduction, listUndoStartCandidates, undoStartProduction } from '../../../services/productionService';
 import { listCancelKcs, cancelKcs, listCancelSua, cancelSua, listCancelOqc, cancelOqc } from '../../../services/qualityService';
 import { fmtNum } from '../../../utils/format';
+import HanGiaoCell from '../../../components/common/HanGiaoCell';
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const fmtTime = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '—');
@@ -878,6 +879,11 @@ function PhanInCancelSection({ show }) {
     return next;
   });
   const selArr = [...selected.values()];
+  const allChecked = results.length > 0 && results.every((r) => selected.has(r.phan_in_id));
+  const toggleAll = () => setSelected((m) => {
+    if (allChecked) { const next = new Map(m); results.forEach((r) => next.delete(r.phan_in_id)); return next; }
+    const next = new Map(m); results.forEach((r) => next.set(r.phan_in_id, r)); return next;
+  });
 
   const doHuy = async () => {
     setBusy(true);
@@ -894,16 +900,19 @@ function PhanInCancelSection({ show }) {
   };
 
   const columns = [
-    { key: 'sel', className: 'w-10', render: (r) => (
-      <input type="checkbox" checked={selected.has(r.phan_in_id)}
-        onClick={(e) => e.stopPropagation()} onChange={() => toggle(r)} aria-label="Chọn phần in" />
-    ) },
+    { key: 'sel', className: 'w-10', selection: true,
+      header: <input type="checkbox" checked={allChecked} onChange={toggleAll} aria-label="Chọn tất cả" />,
+      render: (r) => (
+        <input type="checkbox" checked={selected.has(r.phan_in_id)}
+          onClick={(e) => e.stopPropagation()} onChange={() => toggle(r)} aria-label="Chọn phần in" />
+      ) },
     { key: 'ma_phan', header: 'Code phần', className: 'font-medium text-ink', render: (r) => r.ma_phan },
     { key: 'ten_khach_hang', header: 'Khách hàng', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
     { key: 'mau_vai', header: 'Màu · Kích', render: (r) => [r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—' },
     { key: 'giai_doan', header: 'Trạm hiện tại', render: (r) => <Badge tone="info">{STAGE_LABEL[r.giai_doan] || r.giai_doan || '—'}</Badge> },
+    { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => <HanGiaoCell value={r.han_giao_hang} /> },
     { key: 'so_dot_vai', header: 'Đợt vải', className: 'text-right tabular-nums', render: (r) => r.so_dot_vai },
     { key: 'da_san_xuat', header: 'SX', render: (r) => (r.da_san_xuat ? <Badge tone="warning">Đã có SX</Badge> : <Badge tone="default">Chưa</Badge>) },
   ];

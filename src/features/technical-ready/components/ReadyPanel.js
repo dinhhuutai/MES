@@ -75,18 +75,25 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
     }
   };
 
-  // Mục đủ điều kiện xác nhận: có quyền + chưa done + mục phụ thuộc đã done (Film trước Khuôn).
-  const depMet = (ma) => { const d = REQUIRES[ma]; return !d || state[`${d.toLowerCase()}_done`]; };
-  // Mục đủ điều kiện xác nhận hàng loạt: thêm điều kiện có chọn giá trị (option).
+  // Khuôn chọn "Khuôn MỚI" (value chứa "mới") mới cần Film; "Khuôn cũ"/"Gia công" thì không.
+  const needsFilm = (v) => (v || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').toLowerCase().includes('moi');
+  // Mục phụ thuộc CHƯA thỏa (chặn xác nhận) cho `ma` với giá trị `value`.
+  const depBlocked = (ma, value) => {
+    const d = REQUIRES[ma];
+    if (!d) return false;
+    if (ma === 'KHUON' && !needsFilm(value)) return false; // khuôn cũ / gia công → không cần film
+    return !state[`${d.toLowerCase()}_done`];
+  };
+  // Mục đủ điều kiện xác nhận hàng loạt: có quyền + chưa done + có chọn giá trị (option).
   const eligibleBase = state.qc_done ? [] : ITEMS.filter((it) => {
     const done = state[`${it.ma.toLowerCase()}_done`];
     if (done || !can(it.perm)) return false;
     return it.hasOptions ? !!sel[it.ma] : true;
   });
-  // Loại mục phụ thuộc chưa thỏa (vd Khuôn khi Film chưa done và cũng không nằm trong lô) → backend chặn.
+  // Loại mục phụ thuộc chưa thỏa (Khuôn mới khi Film chưa done và Film cũng không trong lô) → backend chặn.
   const eligible = eligibleBase.filter((it) => {
-    const d = REQUIRES[it.ma];
-    return !d || state[`${d.toLowerCase()}_done`] || eligibleBase.some((x) => x.ma === d);
+    if (!depBlocked(it.ma, sel[it.ma])) return true;
+    return eligibleBase.some((x) => x.ma === REQUIRES[it.ma]);
   });
 
   const doConfirmAll = async () => {
@@ -109,8 +116,8 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
   const renderItem = (item) => {
     const cp = byMa[item.ma];
     const done = state[`${item.ma.toLowerCase()}_done`];
-    const blockedByDep = !done && !depMet(item.ma); // vd Khuôn khi chưa xác nhận Film
-    const editable = !done && !state.qc_done && can(item.perm) && !blockedByDep;
+    const canEdit = !done && !state.qc_done && can(item.perm); // Select luôn mở để đổi được "Khuôn cũ"
+    const depBlock = !done && depBlocked(item.ma, sel[item.ma]); // Khuôn mới khi chưa xác nhận Film → chặn NÚT
     // SLA checklist: đếm từ thời điểm phần in vào trạm READY.
     const sla = (!done && cp?.thoi_gian_quy_dinh_phut)
       ? evalSla(detail?.ready_tg_vao, cp.thoi_gian_quy_dinh_phut, cp.canh_bao_truoc_phut, now)
@@ -137,7 +144,7 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
             {cp?.nguoi_xac_nhan_ten ? <div className="text-xs font-medium text-ink">{cp.nguoi_xac_nhan_ten}</div> : null}
             {cp?.tg_xac_nhan ? <div className="text-xs">Lúc {fmt(cp.tg_xac_nhan)}</div> : null}
           </div>
-        ) : editable ? (
+        ) : canEdit ? (
           <div className="space-y-2">
             {item.hasOptions && (
               <Select
@@ -148,10 +155,15 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
                 {(cp?.options || []).map((o) => <option key={o} value={o}>{o}</option>)}
               </Select>
             )}
+            {depBlock && (
+              <div className="rounded-control border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
+                "Khuôn mới" cần xác nhận {labelOf(REQUIRES[item.ma])} trước. Chọn "Khuôn cũ" / "Gia công" thì xác nhận được ngay.
+              </div>
+            )}
             <Button
               className="w-full"
               loading={busy === item.ma}
-              disabled={item.hasOptions && !sel[item.ma]}
+              disabled={(item.hasOptions && !sel[item.ma]) || depBlock}
               onClick={() => doConfirm(item)}
             >
               Xác nhận {item.label}
@@ -159,9 +171,7 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
           </div>
         ) : (
           <div className="text-xs text-ink-soft">
-            {blockedByDep
-              ? `Cần xác nhận ${labelOf(REQUIRES[item.ma])} trước khi xác nhận ${item.label}.`
-              : can(item.perm) ? 'Chưa thực hiện.' : 'Bạn không có quyền xác nhận mục này.'}
+            {can(item.perm) ? 'Chưa thực hiện.' : 'Bạn không có quyền xác nhận mục này.'}
           </div>
         )}
       </div>
