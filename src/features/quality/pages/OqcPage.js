@@ -18,8 +18,8 @@ import useToast from '../../../hooks/useToast';
 import useNow from '../../../hooks/useNow';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 import usePermissions from '../../../hooks/usePermissions';
-import { listOqcCandidates, recordOqc, oqcHistory, oqcDone, listGiaoDacBietActive, returnOqcToKcs } from '../../../services/qualityService';
-import { listUsers } from '../../../services/userService';
+import { listOqcCandidates, recordOqc, oqcHistory, oqcDone, returnOqcToKcs } from '../../../services/qualityService';
+import { listUserOptions } from '../../../services/userService';
 import { fmtNum, baseMaTem } from '../../../utils/format';
 
 const FILTER_FIELDS = [
@@ -40,18 +40,23 @@ export default function OqcPage() {
   const [filters, setFilters] = useState({});
   const [showFilters, setShowFilters] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ soLuongKiem: '', soLuongDat: '', ketQua: 'DAT', ownerChoGiaoId: '', truongHopGiaoId: '', lyDoChoGiao: '' });
+  const [form, setForm] = useState({ soLuongKiem: '', soLuongDat: '', ketQua: 'DAT', ownerChoGiaoId: '', lyDoChoGiao: '' });
   const [saving, setSaving] = useState(false);
   const [histOpen, setHistOpen] = useState(false);
   const [doneOpen, setDoneOpen] = useState(false);
   const [users, setUsers] = useState([]);
-  const [truongHopList, setTruongHopList] = useState([]);
   const [returnReason, setReturnReason] = useState('');
   const [returnMode, setReturnMode] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
 
-  useEffect(() => { listUsers({ limit: 500 }).then((r) => setUsers(r.data.items || r.data || [])).catch(() => {}); }, []);
-  useEffect(() => { listGiaoDacBietActive().then((r) => setTruongHopList(r.data || [])).catch(() => {}); }, []);
+  // Danh sách người để chọn owner. Dùng /users/options (chỉ cần đăng nhập) — endpoint /users cũ đòi
+  // quyền USER_VIEW mà role QA/OQC không có ⇒ 403 → combobox rỗng, gõ tên không ra ai.
+  // Lỗi tải phải BÁO, không nuốt im lặng như trước.
+  useEffect(() => {
+    listUserOptions({ limit: 500 })
+      .then((r) => setUsers(r.data || []))
+      .catch((e) => show(e.message || 'Không tải được danh sách người dùng', 'error'));
+  }, [show]);
 
   const rangeKey = useMemo(() => `${range.from || ''}|${range.to || ''}`, [range]);
   const filtersKey = useMemo(() => JSON.stringify(filters), [filters]);
@@ -83,7 +88,7 @@ export default function OqcPage() {
     setReturnMode(false);
     setReturnReason('');
     const con = row.con_src ?? row.con_oqc ?? row.so_luong ?? '';
-    setForm({ soLuongKiem: String(con), soLuongDat: String(con), ketQua: 'DAT', ownerChoGiaoId: '', truongHopGiaoId: '', lyDoChoGiao: '' });
+    setForm({ soLuongKiem: String(con), soLuongDat: String(con), ketQua: 'DAT', ownerChoGiaoId: '', lyDoChoGiao: '' });
   };
 
   // Tách mỗi tem thành tối đa 2 dòng theo NGUỒN: KCS-đạt (tem 15-) & Sửa-đạt (tem 17-).
@@ -117,12 +122,16 @@ export default function OqcPage() {
     } catch (e) { show(e.message || 'Không tra được tem', 'error'); }
   };
 
-  const doReturnKcs = async () => {
-    if (!returnReason.trim()) { show('Nhập lý do trả về KCS', 'error'); return; }
+  // Trạm nhận tem trả về = trạm trước của nguồn đang mở.
+  const returnTram = editing?.nguon === 'SUA' ? 'Sửa' : 'KCS';
+
+  // Trả về ĐÚNG trạm trước theo nguồn: tem 15- (KCS) → KCS · tem 17- (đã sửa) → Sửa.
+  const doReturn = async () => {
+    if (!returnReason.trim()) { show(`Nhập lý do trả về ${returnTram}`, 'error'); return; }
     setSaving(true);
     try {
-      await returnOqcToKcs(editing.tem_id, { lyDo: returnReason.trim() });
-      show(`Đã trả tem ${editing.ma_tem} về KCS`);
+      await returnOqcToKcs(editing.tem_id, { lyDo: returnReason.trim(), nguon: editing.nguon });
+      show(`Đã trả tem ${editing.ma_tem_display || editing.ma_tem} về ${returnTram}`);
       setEditing(null);
       load();
     } catch (e) {
@@ -253,53 +262,47 @@ export default function OqcPage() {
         {form.ketQua === 'KHONG_DAT' && (
           <div className="rounded-control border border-amber-200 bg-amber-50 p-3 dark:border-amber-900/60 dark:bg-amber-950/40">
             <p className="mb-2 text-xs font-medium text-amber-700 dark:text-amber-300">
-              Không đạt: muốn <b>vẫn cho giao</b> (giao đặc biệt) thì chọn <b>owner cho giao</b> + <b>trường hợp</b> + nhập <b>lý do</b>.
+              Không đạt: muốn <b>vẫn cho giao</b> (giao đặc biệt) thì chọn <b>owner chịu trách nhiệm</b> + nhập <b>lý do</b>.
               Bỏ trống owner → tem <b>nằm lại OQC</b>.
             </p>
-            <Field label="Owner cho giao (chịu trách nhiệm)">
+            <Field label="Owner cho giao (chịu trách nhiệm)" required>
               <SearchableSelect
                 value={form.ownerChoGiaoId}
                 onChange={(v) => setForm({ ...form, ownerChoGiaoId: v })}
                 options={users}
                 getValue={(u) => u.id}
                 getLabel={(u) => u.ho_ten || u.ten_dang_nhap || ''}
-                placeholder="Gõ tên để tìm người..."
+                getSearch={(u) => `${u.ho_ten || ''} ${u.ten_dang_nhap || ''}`}
+                placeholder="Gõ tên hoặc tên đăng nhập để tìm..."
               />
             </Field>
-            <Field label="Trường hợp giao đặc biệt" hint="Bắt buộc khi cho giao (chọn owner)">
-              <SearchableSelect
-                value={form.truongHopGiaoId}
-                onChange={(v) => setForm({ ...form, truongHopGiaoId: v })}
-                options={truongHopList}
-                getValue={(t) => t.id}
-                getLabel={(t) => t.ten || ''}
-                placeholder="Chọn trường hợp (Ban giám đốc ký, Trễ hạn KH...)"
-              />
-            </Field>
-            <Field label="Lý do cho giao">
+            <Field label="Lý do cho giao" required>
               <Textarea rows={2} value={form.lyDoChoGiao} onChange={(e) => setForm({ ...form, lyDoChoGiao: e.target.value })}
                 placeholder="Vì sao cho giao dù không đạt..." />
             </Field>
           </div>
         )}
 
-        <p className="text-xs text-ink-soft">Đạt → toàn bộ lô qua giao. Không đạt: có owner + trường hợp + lý do → cho giao ngoại lệ toàn bộ; không có → cả lô nằm lại OQC.</p>
+        <p className="text-xs text-ink-soft">Đạt → toàn bộ lô qua giao. Không đạt: có <b>owner + lý do</b> → cho giao ngoại lệ toàn bộ; không có → cả lô nằm lại OQC.</p>
 
-        {/* Trả về KCS (kèm lý do) */}
+        {/* Trả về trạm trước theo nguồn — tem 15- về KCS, tem 17- về Sửa (kèm lý do) */}
         <div className="mt-3 border-t border-line pt-3">
           {!returnMode ? (
             <button type="button" onClick={() => setReturnMode(true)}
-              className="text-xs font-medium text-danger hover:underline">↩ Trả về KCS</button>
+              className="text-xs font-medium text-danger hover:underline">↩ Trả về {returnTram}</button>
           ) : (
             <div className="rounded-control border border-rose-200 bg-rose-50 p-3 dark:border-rose-900/60 dark:bg-rose-950/40">
-              <p className="mb-2 text-xs font-medium text-rose-700 dark:text-rose-300">Trả tem về KCS để kiểm/khắc phục lại (kèm lý do bắt buộc).</p>
-              <Field label="Lý do trả về KCS" required>
+              <p className="mb-2 text-xs font-medium text-rose-700 dark:text-rose-300">
+                Trả <b>toàn bộ {fmtNum(editing?.con_src ?? editing?.con_oqc)} pcs</b> của lô{' '}
+                {editing?.nguon === 'SUA' ? <>đã sửa (tem 17-) về <b>Sửa</b> để sửa lại</> : <>từ KCS (tem 15-) về <b>KCS</b> để kiểm lại</>} (kèm lý do bắt buộc).
+              </p>
+              <Field label={`Lý do trả về ${returnTram}`} required>
                 <Textarea rows={2} value={returnReason} onChange={(e) => setReturnReason(e.target.value)}
-                  placeholder="Vì sao trả về KCS..." />
+                  placeholder={`Vì sao trả về ${returnTram}...`} />
               </Field>
               <div className="flex justify-end gap-2">
                 <Button variant="ghost" className="px-3 py-1.5" onClick={() => { setReturnMode(false); setReturnReason(''); }}>Hủy</Button>
-                <Button variant="danger" className="px-3 py-1.5" onClick={doReturnKcs} loading={saving} disabled={!returnReason.trim()}>Trả về KCS</Button>
+                <Button variant="danger" className="px-3 py-1.5" onClick={doReturn} loading={saving} disabled={!returnReason.trim()}>Trả về {returnTram}</Button>
               </div>
             </div>
           )}

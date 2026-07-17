@@ -10,7 +10,7 @@ import { qcTraVeHistory } from '../../../services/qualityService';
 const LOAI = [
   { key: 'READY', label: 'QC chuẩn bị KT → Ready KT' },
   { key: 'TEST_RUN', label: 'Test Run → Release 1' },
-  { key: 'OQC', label: 'OQC → KCS' },
+  { key: 'OQC', label: 'OQC → KCS / Sửa' },
 ];
 
 const todayStr = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -51,6 +51,9 @@ export default function QcTraVePage() {
     ) },
     ...(loai === 'READY' ? [{ key: 'checklist_list', header: 'Checklist rớt', render: (r) =>
       (r.checklist_list || '').split(',').filter(Boolean).map((c) => <Badge key={c} tone="warning" className="mr-1">{c}</Badge>) }] : []),
+    // OQC trả về 2 đích tùy nguồn tem: 15- (từ KCS) → KCS · 17- (đã sửa) → Sửa.
+    ...(loai === 'OQC' ? [{ key: 'loai', header: 'Trả về', render: (r) =>
+      (r.loai === 'OQC_SUA' ? <Badge tone="warning">Sửa</Badge> : <Badge tone="info">KCS</Badge>) }] : []),
     { key: 'ly_do', header: 'Lý do', className: 'text-danger', render: (r) => r.ly_do || '—' },
     { key: 'da_xu_ly', header: 'Trạng thái', render: (r) =>
       r.da_xu_ly ? <Badge tone="success">Đã làm lại</Badge> : <Badge tone="warning">Chờ xử lý</Badge> },

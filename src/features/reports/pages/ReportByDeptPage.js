@@ -12,6 +12,7 @@ import { Field, Textarea } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import ReportGrid from '../components/ReportGrid';
+import ReportChart, { chartData } from '../components/ReportChart';
 import exportReportExcel from '../utils/exportReportExcel';
 import {
   listPhongBanApDung, listAllReports, deXuatApDung, duyetApDung, tuChoiApDung,
@@ -179,10 +180,31 @@ export default function ReportByDeptPage() {
         title={viewing ? `Báo cáo — ${viewing.ten}` : ''}
         subtitle={viewing?.content?.ten_bao_cao} width="max-w-4xl">
         {viewing && (
-          <ReportGrid
-            grid={{ so_cot: viewing.content.so_cot, so_hang: viewing.content.so_hang, o: viewing.content.o,
-              merges: viewing.content.merges || [], dinh_dang: viewing.content.dinh_dang || {} }}
-            ketQua={viewing.content.ket_qua} mode="view" />
+          <>
+            <ReportGrid
+              grid={{ so_cot: viewing.content.so_cot, so_hang: viewing.content.so_hang, o: viewing.content.o,
+                merges: viewing.content.merges || [], dinh_dang: viewing.content.dinh_dang || {},
+                cot_w: viewing.content.cot_w || {}, hang_h: viewing.content.hang_h || {},
+                dong_bang: viewing.content.dong_bang || null }}
+              ketQua={viewing.content.ket_qua} danhSach={viewing.content.danh_sach || {}} mode="view" />
+
+            {/* Biểu đồ của báo cáo — dưới lưới, giống trình thiết kế. */}
+            {(viewing.content.bieu_do || []).length > 0 && (
+              <div className="mt-4 space-y-4">
+                {viewing.content.bieu_do.map((b) => (
+                  <div key={b.id} className="card p-3">
+                    <h3 className="mb-1 text-sm font-semibold text-ink">{b.ten}</h3>
+                    <ReportChart cfg={b} cao={Number(b.cao) || 260}
+                      data={chartData(b, {
+                        danhSach: viewing.content.danh_sach || {},
+                        metricValues: viewing.content.metric_values || {},
+                        metricsByMa: {},
+                      })} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </SidePanel>
 

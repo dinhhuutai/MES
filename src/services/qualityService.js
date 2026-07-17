@@ -26,6 +26,12 @@ export const cancelSua = (id, lyDo) => client.post(`/quality/sua/${id}/huy`, { l
 export const listCancelOqc = (date) => client.get('/quality/oqc/cancelable', { params: { date } });
 export const cancelOqc = (id, lyDo) => client.post(`/quality/oqc/${id}/huy`, { lyDo });
 
+// Xóa mềm TEM SỬA (nhãn 16-) — tab "Hủy tem sửa" / "Mở lại tem sửa"
+export const listTemSuaCancelable = (search) => client.get('/quality/sua/tem-sua/cancelable', { params: { search } });
+export const listTemSuaDeleted = (search) => client.get('/quality/sua/tem-sua/deleted', { params: { search } });
+export const huyTemSua = (temIds, lyDo) => client.post('/quality/sua/tem-sua/huy', { temIds, lyDo });
+export const moTemSua = (temIds, lyDo) => client.post('/quality/sua/tem-sua/mo', { temIds, lyDo });
+
 // Lịch sử QC trả về (toggle READY/TEST_RUN/OQC)
 export const qcTraVeHistory = (loai, date) => client.get('/quality/qc-tra-ve', { params: { loai, date } });
 

@@ -15,6 +15,7 @@ import usePermissions from '../../../hooks/usePermissions';
 import useNghenMap from '../../../hooks/useNghenMap';
 import { slaRowClass } from '../../../utils/sla';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
+import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import { listReplanCandidates, replan, replanBatch, listChuyen, planHistory, replanDone } from '../../../services/planningService';
 import { fmtNum, fmtDate } from '../../../utils/format';
 
@@ -150,6 +151,7 @@ export default function ReplanPage() {
     { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
     { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
+    { key: 'tinh_chat_in', header: 'Tính chất in', render: (r) => <TinhChatInCell value={r.tinh_chat_in} /> },
     { key: 'loai_dot_vai', header: 'Loại đợt vải', render: (r) => <LoaiDotVaiBadge value={r.loai_dot_vai} /> },
     { key: 'so_luong_vai_ve', header: 'SLNV', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong_vai_ve) },
     { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => fmtDate(r.han_giao_hang) },

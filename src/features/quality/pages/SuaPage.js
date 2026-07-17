@@ -3,6 +3,7 @@ import Toolbar from '../../../components/common/Toolbar';
 import OwnerHint from '../../../components/common/OwnerHint';
 import DataTable from '../../../components/common/DataTable';
 import Badge from '../../../components/common/Badge';
+import TraVeBadge from '../../../components/common/TraVeBadge';
 import Button from '../../../components/common/Button';
 import SidePanel from '../../../components/common/SidePanel';
 import Toast from '../../../components/common/Toast';
@@ -131,7 +132,12 @@ export default function SuaPage() {
   };
 
   const columns = [
-    { key: 'ma_tem', header: 'Tem', render: (r) => <Badge tone="info">{r.ma_tem}</Badge> },
+    { key: 'ma_tem', header: 'Tem', render: (r) => (
+      <div>
+        <Badge tone="info">{r.ma_tem}</Badge>
+        {(r.tra_ve || r.tra_ve_ly_do) && <div className="mt-1"><TraVeBadge data={r.tra_ve || r.tra_ve_ly_do} label="Bị OQC trả về" nguon="OQC" /></div>}
+      </div>
+    ) },
     { key: 'khach_don', header: 'Khách hàng · Đơn hàng', render: (r) => (
       <div className="leading-tight">
         <div className="font-medium text-ink">{r.ten_khach_hang || '—'}</div>
@@ -231,6 +237,11 @@ export default function SuaPage() {
         <div className="mb-3 rounded-control bg-surface-muted px-3 py-2 text-sm text-ink-soft">
           {editing?.ma_lenh_san_xuat} · {editing?.phan_list} · <b className="text-amber-600">SL cần sửa {fmtNum(editing?.con_sua)}</b> (kế thừa từ KCS)
         </div>
+        {(editing?.tra_ve || editing?.tra_ve_ly_do) && (
+          <div className="mb-3 rounded-control border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300">
+            <b>Bị OQC trả về:</b> {editing.tra_ve?.ly_do || editing.tra_ve_ly_do}
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-x-4">
           {N('soLuongSuaDat', 'Sửa đạt')}
           {N('soLuongSuaHuy', 'Sửa hủy')}

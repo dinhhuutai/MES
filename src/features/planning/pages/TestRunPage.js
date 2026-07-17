@@ -16,6 +16,7 @@ import { slaRowClass } from '../../../utils/sla';
 import { listTestRunCandidates, testRunHistory, confirmQABatch, testQaDone } from '../../../services/planningService';
 import TestRunPanel from '../components/TestRunPanel';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
+import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import QrScanner from '../../../components/common/QrScanner';
 import { baseMaTem } from '../../../utils/format';
@@ -134,9 +135,9 @@ export default function TestRunPage() {
         <div className="text-xs text-ink-soft">{[r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—'}</div>
       </div>
     ) },
+    { key: 'tinh_chat_in', header: 'Tính chất in', render: (r) => <TinhChatInCell value={r.tinh_chat_in} /> },
     { key: 'loai_dot_vai', header: 'Loại đợt vải', render: (r) => <LoaiDotVaiBadge value={r.loai_dot_vai} /> },
     { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => <HanGiaoCell value={r.han_giao_hang} /> },
-    { key: 'chuyen', header: 'Chuyền', render: (r) => r.ten_chuyen || '—' },
     { key: 'so_lan_test', header: 'Lần test', className: 'text-right tabular-nums', render: (r) => r.so_lan_test },
     { key: 'qa_done', header: 'QA', render: (r) => r.qa_done ? <Badge tone="success">✓</Badge> : <Badge tone="warning">Chờ</Badge> },
   ];

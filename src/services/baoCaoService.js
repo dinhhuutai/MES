@@ -2,6 +2,8 @@ import client from './axiosClient';
 
 // Catalog dữ liệu có sẵn
 export const getMetrics = () => client.get('/bao-cao/metrics');
+// Danh mục NGUỒN DANH SÁCH (khối bảng nhiều dòng): nguồn + cột + bộ lọc hỗ trợ.
+export const getDatasets = () => client.get('/bao-cao/datasets');
 
 // Báo cáo của tôi / tất cả
 export const listMyReports = (params) => client.get('/bao-cao', { params });

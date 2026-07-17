@@ -14,8 +14,11 @@ import { ColorPopover, BorderPopover } from '../components/formatControls';
 import ConditionalFormatModal from '../components/ConditionalFormatModal';
 import MetricPalette from '../components/MetricPalette';
 import MetricPickerModal from '../components/MetricPickerModal';
+import DatasetBlockModal from '../components/DatasetBlockModal';
+import ChartManagerModal from '../components/ChartManagerModal';
+import ReportChart, { chartData, CHART_KIEU } from '../components/ReportChart';
 import {
-  getReport, getMetrics, updateReport, undoReport, renderReport, reportHistory,
+  getReport, getMetrics, getDatasets, updateReport, undoReport, renderReport, reportHistory,
 } from '../../../services/baoCaoService';
 
 const LOAI_OPTS = [
@@ -23,10 +26,20 @@ const LOAI_OPTS = [
   { v: 'text', label: 'Văn bản (text)' },
   { v: 'so', label: 'Số nhập tay' },
   { v: 'metric', label: 'Dữ liệu hệ thống (metric)' },
+  { v: 'danh_sach', label: 'Khối danh sách (bảng nhiều dòng)' },
   { v: 'cong_thuc', label: 'Công thức (+ − × ÷, ngoặc)' },
   { v: 'hop_kiem', label: 'Hộp kiểm (☑/☐)' },
   { v: 'tha_xuong', label: 'Trình thả xuống' },
 ];
+
+// Bố cục lưới mặc định — dùng chung khi tải / hoàn tác để không sót trường mới.
+const GRID_MAC_DINH = { so_cot: 8, so_hang: 20, o: {}, merges: [], dinh_dang: {}, cot_w: {}, hang_h: {}, dong_bang: null, bieu_do: [] };
+const napGrid = (nd = {}) => ({
+  ...GRID_MAC_DINH,
+  so_cot: nd.so_cot || 8, so_hang: nd.so_hang || 20,
+  o: nd.o || {}, merges: nd.merges || [], dinh_dang: nd.dinh_dang || {},
+  cot_w: nd.cot_w || {}, hang_h: nd.hang_h || {}, dong_bang: nd.dong_bang || null, bieu_do: nd.bieu_do || [],
+});
 
 const SIZE_OPTS = [{ v: 'sm', label: 'Nhỏ' }, { v: 'base', label: 'Vừa' }, { v: 'lg', label: 'Lớn' }, { v: 'xl', label: 'Rất lớn' }];
 // Định dạng kiểu dữ liệu (hiển thị) cho ô số/metric/công thức.
@@ -39,6 +52,8 @@ const SO_OPTS = [
 const FONT_OPTS = [
   { v: 'sans', label: 'Mặc định' }, { v: 'serif', label: 'Có chân (Serif)' }, { v: 'mono', label: 'Đơn cách (Mono)' },
 ];
+
+const CHART_TEN = Object.fromEntries(CHART_KIEU.map((k) => [k.v, k.ten]));
 
 // Rectangle bao 2 ô key.
 function rectKeys(a, b) {
@@ -60,8 +75,13 @@ export default function ReportDesignerPage() {
 
   const [rep, setRep] = useState(null);
   const [name, setName] = useState('');
-  const [grid, setGrid] = useState({ so_cot: 8, so_hang: 20, o: {}, merges: [], dinh_dang: {} });
+  const [grid, setGrid] = useState(GRID_MAC_DINH);
   const [metrics, setMetrics] = useState([]);
+  const [datasets, setDatasets] = useState([]);
+  const [danhSach, setDanhSach] = useState({});   // dữ liệu khối danh sách (sau Xem trước)
+  const [metricValues, setMetricValues] = useState({}); // giá trị metric (cho biểu đồ nguồn metric)
+  const [dsOpen, setDsOpen] = useState(false);    // modal cấu hình khối danh sách
+  const [chartOpen, setChartOpen] = useState(false);
   const [selected, setSelected] = useState(() => new Set()); // đa chọn
   const [anchor, setAnchor] = useState(null); // ô neo (chỉnh nội dung)
   const [mode, setMode] = useState('design'); // design | view
@@ -88,6 +108,15 @@ export default function ReportDesignerPage() {
   }, []);
 
   const metricsByMa = useMemo(() => Object.fromEntries(metrics.map((m) => [m.ma, m])), [metrics]);
+  const datasetsByMa = useMemo(() => Object.fromEntries(datasets.map((d) => [d.ma, d])), [datasets]);
+  // Các khối danh sách đang có trong lưới — để biểu đồ chọn làm nguồn.
+  const dsBlocks = useMemo(() => Object.entries(grid.o || {})
+    .filter(([, c]) => c && c.loai === 'danh_sach' && c.ds?.nguon)
+    .map(([oKey, c]) => {
+      const def = datasetsByMa[c.ds.nguon];
+      const keys = c.ds.cot?.length ? c.ds.cot : (def?.cot || []).slice(0, 8).map((x) => x.key);
+      return { oKey, ten: def?.ten || c.ds.nguon, cot: keys.map((k) => (def?.cot || []).find((x) => x.key === k)).filter(Boolean) };
+    }), [grid.o, datasetsByMa]);
   const metricGroups = useMemo(() => {
     const g = {};
     metrics.forEach((m) => { (g[m.nhom] = g[m.nhom] || []).push(m); });
@@ -96,14 +125,14 @@ export default function ReportDesignerPage() {
 
   const load = useCallback(async () => {
     try {
-      const [r, mt] = await Promise.all([getReport(id), getMetrics()]);
+      const [r, mt, dsx] = await Promise.all([getReport(id), getMetrics(), getDatasets()]);
       const d = r.data;
       setRep(d);
       setName(d.ten_bao_cao);
-      const nd = d.noi_dung_json || {};
-      setGrid({ so_cot: nd.so_cot || 8, so_hang: nd.so_hang || 20, o: nd.o || {}, merges: nd.merges || [], dinh_dang: nd.dinh_dang || {} });
+      setGrid(napGrid(d.noi_dung_json || {}));
       setCoTheHoanTac(!!d.co_the_hoan_tac);
       setMetrics(mt.data);
+      setDatasets(dsx.data || []);
     } catch (e) { show(e.message || 'Lỗi tải', 'error'); }
   }, [id, show]);
 
@@ -281,8 +310,7 @@ export default function ReportDesignerPage() {
   const doUndo = async () => {
     try {
       const res = await undoReport(id);
-      const nd = res.data.noi_dung_json || {};
-      setGrid({ so_cot: nd.so_cot || 8, so_hang: nd.so_hang || 20, o: nd.o || {}, merges: nd.merges || [], dinh_dang: nd.dinh_dang || {} });
+      setGrid(napGrid(res.data.noi_dung_json || {}));
       setCoTheHoanTac(false);
       setMode('design');
       show('Đã hoàn tác về bản trước');
@@ -294,6 +322,8 @@ export default function ReportDesignerPage() {
     try {
       const res = await renderReport(id, { noiDung: grid });
       setKetQua(res.data.ket_qua || {});
+      setDanhSach(res.data.danh_sach || {});
+      setMetricValues(res.data.metric_values || {});
       setMode('view');
     } catch (e) { show(e.message || 'Xem trước lỗi', 'error'); }
     finally { setRendering(false); }
@@ -373,6 +403,44 @@ export default function ReportDesignerPage() {
             <Button variant="ghost" className="px-2.5 py-1 text-xs" onClick={() => setGrid((g) => ({ ...g, so_cot: g.so_cot + 1 }))}>+ Cột</Button>
             <Button variant="ghost" className="px-2.5 py-1 text-xs" onClick={() => setGrid((g) => ({ ...g, so_hang: g.so_hang + 1 }))}>+ Hàng</Button>
             <Button variant={paletteOpen ? 'primary' : 'ghost'} className="px-2.5 py-1 text-xs" onClick={() => setPaletteOpen((v) => !v)}>Bảng dữ liệu</Button>
+            {/* Khối danh sách: đặt tại ô đang chọn, đổ nhiều dòng từ nguồn dữ liệu. */}
+            <Button variant="secondary" icon="table" className="px-2.5 py-1 text-xs"
+              disabled={!anchor}
+              title={anchor ? `Chèn / sửa khối danh sách tại ô ${anchor}` : 'Chọn 1 ô neo trước'}
+              onClick={() => setDsOpen(true)}>Khối danh sách</Button>
+            <Button variant="secondary" icon="bar-chart-3" className="px-2.5 py-1 text-xs"
+              onClick={() => setChartOpen(true)}>Biểu đồ ({grid.bieu_do?.length || 0})</Button>
+            {/* Cố định hàng/cột (freeze) — như Google Sheets. */}
+            <span className="flex items-center gap-1 rounded-control border border-line px-2 py-0.5 text-xs text-ink-soft">
+              <Icon name="pin" size={12} /> Cố định
+              <input type="number" min="0" max={grid.so_hang} value={grid.dong_bang?.hang ?? 0} title="Số hàng cố định (dính đỉnh)"
+                onChange={(e) => setGrid((g) => ({ ...g, dong_bang: { ...(g.dong_bang || {}), hang: Number(e.target.value) || 0 } }))}
+                className="h-6 w-11 rounded border border-line bg-surface px-1 text-center" />
+              hàng
+              <input type="number" min="0" max={grid.so_cot} value={grid.dong_bang?.cot ?? 0} title="Số cột cố định (dính trái)"
+                onChange={(e) => setGrid((g) => ({ ...g, dong_bang: { ...(g.dong_bang || {}), cot: Number(e.target.value) || 0 } }))}
+                className="h-6 w-11 rounded border border-line bg-surface px-1 text-center" />
+              cột
+            </span>
+            {/* Chiều cao hàng của các hàng đang chọn. */}
+            {selected.size > 0 && (
+              <span className="flex items-center gap-1 rounded-control border border-line px-2 py-0.5 text-xs text-ink-soft">
+                Cao hàng
+                <input type="number" min="24" max="200" placeholder="36"
+                  onChange={(e) => {
+                    const h = Number(e.target.value) || 0;
+                    setGrid((g) => {
+                      const hh = { ...(g.hang_h || {}) };
+                      [...selected].map(parseKey).filter(Boolean).forEach((p) => {
+                        if (h) hh[p.r] = h; else delete hh[p.r];
+                      });
+                      return { ...g, hang_h: hh };
+                    });
+                  }}
+                  className="h-6 w-14 rounded border border-line bg-surface px-1 text-center" />
+                px
+              </span>
+            )}
             <Button variant="ghost" className="px-2.5 py-1 text-xs" onClick={() => setCatalogOpen(true)}>Giải thích chỉ số</Button>
           </div>
         )}
@@ -456,10 +524,28 @@ export default function ReportDesignerPage() {
         {/* Lưới */}
         <div className="min-w-0 flex-1">
           <ReportGrid grid={grid} ketQua={ketQua} mode={mode} selected={selected} metricsByMa={metricsByMa}
-            editable={canDesign}
+            editable={canDesign} danhSach={danhSach} datasetsByMa={datasetsByMa}
             onCellMouseDown={onCellMouseDown} onCellMouseEnter={onCellMouseEnter}
             onEditCommit={commitCell} onToggleCheck={toggleCheck} onSelectDropdown={selectDropdown}
-            onDropMetric={dropMetric} />
+            onDropMetric={dropMetric}
+            onColResize={canDesign && mode === 'design'
+              ? (c, w) => setGrid((g) => ({ ...g, cot_w: { ...(g.cot_w || {}), [c]: w } })) : undefined} />
+
+          {/* Biểu đồ — hiển thị DƯỚI lưới, dữ liệu lấy từ khối danh sách / metric sau khi Xem trước. */}
+          {(grid.bieu_do || []).length > 0 && (
+            <div className="mt-4 grid gap-4 xl:grid-cols-2">
+              {grid.bieu_do.map((b) => (
+                <div key={b.id} className="card p-3">
+                  <div className="mb-1 flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-ink">{b.ten}</h3>
+                    <Badge tone="default">{CHART_TEN[b.kieu] || b.kieu}</Badge>
+                  </div>
+                  <ReportChart cfg={b} cao={Number(b.cao) || 260}
+                    data={chartData(b, { danhSach, metricValues, metricsByMa })} />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Panel chỉnh ô + Bảng dữ liệu */}
@@ -608,6 +694,19 @@ export default function ReportDesignerPage() {
           );
         })()}
       </Modal>
+
+      {/* Khối danh sách tại ô neo đang chọn */}
+      <DatasetBlockModal
+        open={dsOpen} onClose={() => setDsOpen(false)} oKey={anchor}
+        value={anchor ? grid.o[anchor]?.ds : null} datasets={datasets}
+        onSave={(ds) => anchor && setCell(anchor, { loai: 'danh_sach', ds, dinh_dang: grid.o[anchor]?.dinh_dang })}
+        onRemove={() => anchor && setCell(anchor, null)} />
+
+      {/* Biểu đồ của báo cáo */}
+      <ChartManagerModal
+        open={chartOpen} onClose={() => setChartOpen(false)}
+        value={grid.bieu_do || []} dsBlocks={dsBlocks} metrics={metrics}
+        onSave={(list) => setGrid((g) => ({ ...g, bieu_do: list }))} />
 
       <MetricPickerModal open={metricPickOpen} metricGroups={metricGroups} current={cell?.metric}
         onPick={(ma) => { if (anchor) patchCell(anchor, { loai: 'metric', metric: ma }); }}

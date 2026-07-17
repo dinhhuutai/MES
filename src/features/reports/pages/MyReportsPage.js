@@ -5,13 +5,17 @@ import DataTable from '../../../components/common/DataTable';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
+import SidePanel from '../../../components/common/SidePanel';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import Toast from '../../../components/common/Toast';
 import { Field, Input, Textarea } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import { listMyReports, createReport, deleteReport } from '../../../services/baoCaoService';
-import { fmtDate } from '../../../utils/format';
+import ReportGrid from '../components/ReportGrid';
+import ReportChart, { chartData } from '../components/ReportChart';
+import exportReportExcel from '../utils/exportReportExcel';
+import { listMyReports, createReport, deleteReport, renderReport } from '../../../services/baoCaoService';
+import { fmtDate, fmtDateTime } from '../../../utils/format';
 
 export default function MyReportsPage() {
   const { can } = usePermissions();
@@ -25,6 +29,8 @@ export default function MyReportsPage() {
   const [creating, setCreating] = useState(null); // { tenBaoCao, moTa }
   const [saving, setSaving] = useState(false);
   const [confirm, setConfirm] = useState(null);
+  const [viewing, setViewing] = useState(null);   // { ten, content } — xem nhanh khỏi cần vào trình thiết kế
+  const [busyId, setBusyId] = useState(null);     // id báo cáo đang render (Xem trước / Excel)
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -50,6 +56,25 @@ export default function MyReportsPage() {
     catch (e) { show(e.message || 'Xóa thất bại', 'error'); }
   };
 
+  // Xem nhanh: render realtime rồi mở SidePanel — không phải vào trình thiết kế.
+  const doPreview = async (r) => {
+    setBusyId(r.id);
+    try {
+      const res = await renderReport(r.id, {});
+      setViewing({ ten: r.ten_bao_cao, content: res.data });
+    } catch (e) { show(e.message || 'Xem trước lỗi', 'error'); }
+    finally { setBusyId(null); }
+  };
+
+  const doExcel = async (r) => {
+    setBusyId(r.id);
+    try {
+      const res = await renderReport(r.id, {});
+      await exportReportExcel(res.data, `${r.ma_bao_cao || 'bao-cao'}-${r.ten_bao_cao}`.slice(0, 80));
+    } catch (e) { show(e.message || 'Tải Excel thất bại', 'error'); }
+    finally { setBusyId(null); }
+  };
+
   const columns = [
     { key: 'ma_bao_cao', header: 'Mã', render: (r) => <Badge tone="info">{r.ma_bao_cao}</Badge> },
     { key: 'ten_bao_cao', header: 'Tên báo cáo', className: 'font-medium text-ink' },
@@ -57,6 +82,11 @@ export default function MyReportsPage() {
     { key: 'updated_date', header: 'Cập nhật', render: (r) => fmtDate(r.updated_date || r.created_date) },
     { key: 'actions', header: '', className: 'text-right', render: (r) => (
       <div className="flex justify-end gap-1.5">
+        {/* Xem nhanh + Excel: đứng TRƯỚC Mở/Xóa — số liệu lấy realtime, khỏi vào trình thiết kế. */}
+        <Button variant="secondary" icon="eye" className="px-3 py-1.5" disabled={busyId === r.id}
+          onClick={(e) => { e.stopPropagation(); doPreview(r); }}>Xem trước</Button>
+        <Button variant="ghost" icon="download" className="px-3 py-1.5" disabled={busyId === r.id}
+          onClick={(e) => { e.stopPropagation(); doExcel(r); }}>Excel</Button>
         <Button className="px-3 py-1.5" onClick={(e) => { e.stopPropagation(); navigate(`/bao-cao/thiet-ke/${r.id}`); }}>Mở</Button>
         {canDesign && (
           <Button variant="danger" className="px-3 py-1.5" onClick={(e) => { e.stopPropagation(); setConfirm(r); }}>Xóa</Button>
@@ -87,6 +117,45 @@ export default function MyReportsPage() {
           <Textarea rows={2} value={creating?.moTa || ''} onChange={(e) => setCreating({ ...creating, moTa: e.target.value })} />
         </Field>
       </Modal>
+
+      {/* Xem trước — số liệu realtime, giống chế độ Xem của trình thiết kế (kèm khối danh sách + biểu đồ). */}
+      <SidePanel open={!!viewing} onClose={() => setViewing(null)}
+        title={viewing ? `Xem trước — ${viewing.ten}` : ''}
+        subtitle={viewing ? `${viewing.content?.ma_bao_cao || ''} · tính lúc ${fmtDateTime(viewing.content?.tinh_luc)}` : ''}
+        width="max-w-5xl">
+        {viewing && (
+          <>
+            <ReportGrid mode="view"
+              grid={{ so_cot: viewing.content.so_cot, so_hang: viewing.content.so_hang, o: viewing.content.o,
+                merges: viewing.content.merges || [], dinh_dang: viewing.content.dinh_dang || {},
+                cot_w: viewing.content.cot_w || {}, hang_h: viewing.content.hang_h || {},
+                dong_bang: viewing.content.dong_bang || null }}
+              ketQua={viewing.content.ket_qua} danhSach={viewing.content.danh_sach || {}} />
+
+            {(viewing.content.bieu_do || []).length > 0 && (
+              <div className="mt-4 space-y-4">
+                {viewing.content.bieu_do.map((b) => (
+                  <div key={b.id} className="card p-3">
+                    <h3 className="mb-1 text-sm font-semibold text-ink">{b.ten}</h3>
+                    <ReportChart cfg={b} cao={Number(b.cao) || 260}
+                      data={chartData(b, {
+                        danhSach: viewing.content.danh_sach || {},
+                        metricValues: viewing.content.metric_values || {},
+                        metricsByMa: {},
+                      })} />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-4 flex justify-end gap-2 border-t border-line pt-3">
+              <Button variant="ghost" icon="download"
+                onClick={() => exportReportExcel(viewing.content, viewing.content.ma_bao_cao)}>Xuất Excel</Button>
+              <Button icon="pencil" onClick={() => navigate(`/bao-cao/thiet-ke/${viewing.content.id}`)}>Mở để sửa</Button>
+            </div>
+          </>
+        )}
+      </SidePanel>
 
       <ConfirmDialog open={!!confirm} onClose={() => setConfirm(null)} onConfirm={doDelete}
         title="Xóa báo cáo" message={confirm ? `Xóa báo cáo "${confirm.ten_bao_cao}"?` : ''}

@@ -14,6 +14,7 @@ import DonePanel from '../../../components/common/DonePanel';
 import { Field, Input } from '../../../components/common/controls';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
+import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import useToast from '../../../hooks/useToast';
 import useNghenMap from '../../../hooks/useNghenMap';
 import { slaRowClass } from '../../../utils/sla';
@@ -66,6 +67,7 @@ function DataCells({ r }) {
           <div className="text-xs text-ink-soft">{[r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—'}</div>
         </div>
       </td>
+      <td className={TD}><TinhChatInCell value={r.tinh_chat_in} /></td>
       <td className={TD}><LoaiDotVaiBadge value={r.loai_dot_vai} /></td>
       <td className={`${TD} text-right tabular-nums whitespace-nowrap`}>
         <b className="text-ink">{fmtNum(r.so_luong_vai_ve)}</b><span className="text-ink-soft"> / {fmtNum(r.so_luong_don_hang)}</span>
@@ -210,7 +212,7 @@ export default function Release1Page() {
     } finally { setSaving(false); }
   };
 
-  const colCount = 10;
+  const colCount = 11; // +1: cột "Tính chất in"
 
   return (
     <div>
@@ -241,6 +243,7 @@ export default function Release1Page() {
                 <th className={TH}>Khách hàng · Đơn hàng</th>
                 <th className={TH}>Mã hàng</th>
                 <th className={TH}>Màu · Kích (vải/phim)</th>
+                <th className={TH}>Tính chất in</th>
                 <th className={TH}>Loại đợt vải</th>
                 <th className={`${TH} text-right`}>SL vải về / đơn</th>
                 <th className={`${TH} text-right`}>Còn release</th>

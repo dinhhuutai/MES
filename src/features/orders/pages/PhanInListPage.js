@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import Toolbar from '../../../components/common/Toolbar';
 import Pagination from '../../../components/common/Pagination';
 import Badge from '../../../components/common/Badge';
+import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import Button from '../../../components/common/Button';
 import SidePanel from '../../../components/common/SidePanel';
 import Modal from '../../../components/common/Modal';
@@ -314,7 +315,8 @@ export default function PhanInListPage() {
   const AGG_STAGES = ['ALL', 'READY', 'RELEASE_1', 'TEST_RUN', 'RELEASE_2'];
   const showSxCols = !stage || AGG_STAGES.includes(stage);
   const showTemQuality = showTemRows && !['KCS', 'CHO_KHO'].includes(stage); // KCS/Chờ khô chưa có chất lượng → ẩn cột
-  const COLS = showTemRows ? (10 + (showTemQuality ? 1 : 0)) : (11 + (showPcsCol ? 1 : 0) + (showSxCols ? 12 : 0));
+  // +1 ở cả 2 chế độ: cột "Tính chất in".
+  const COLS = showTemRows ? (11 + (showTemQuality ? 1 : 0)) : (12 + (showPcsCol ? 1 : 0) + (showSxCols ? 12 : 0));
 
   return (
     <div>
@@ -413,6 +415,7 @@ export default function PhanInListPage() {
                     <th className={TH}>Khách hàng · Đơn hàng</th>
                     <th className={TH}>Mã hàng</th>
                     <th className={TH}>Màu · Kích (vải/phim)</th>
+                    <th className={TH}>Tính chất in</th>
                     <th className={`${TH} text-right border-r border-line/60`}>SL vải về / đơn</th>
                     <th className={TH}>Ngày vải về</th>
                     <th className={TH}>Hạn giao</th>
@@ -429,6 +432,7 @@ export default function PhanInListPage() {
                     {sortTh('Màu vải', 'mauVai')}
                     {sortTh('Kích vải', 'kichVai')}
                     {sortTh('Kích phim', 'kichPhim')}
+                    <th className={TH}>Tính chất in</th>
                     {sortTh('SL đơn hàng', 'slDon', 'text-right border-r border-line/60')}
                     {sortTh('SL vải về', 'slVai', 'text-right')}
                     {sortTh('Ngày vải về', 'ngayVai')}
@@ -480,6 +484,7 @@ export default function PhanInListPage() {
                       <td rowSpan={n} className={TD}>{g.mau_vai || '—'}</td>
                       <td rowSpan={n} className={TD}>{g.kich_vai || '—'}</td>
                       <td rowSpan={n} className={TD}>{g.kich_phim || '—'}</td>
+                      <td rowSpan={n} className={TD}><TinhChatInCell value={g.tinh_chat_in} /></td>
                       <td rowSpan={n} className={`${TD} text-right tabular-nums border-r border-line/60`}>{fmtNum(g.so_luong_don_hang)}</td>
                     </>
                   );
@@ -513,6 +518,7 @@ export default function PhanInListPage() {
                                 <div className="text-ink">{g.mau_vai || '—'}</div>
                                 <div className="text-xs text-ink-soft">{[g.kich_vai, g.kich_phim].filter(Boolean).join(' · ') || '—'}</div>
                               </td>
+                              <td rowSpan={n} className={TD}><TinhChatInCell value={g.tinh_chat_in} /></td>
                               <td rowSpan={n} className={`${TD} text-right tabular-nums border-r border-line/60`}>
                                 <div className="font-medium text-ink">{fmtNum(agg.total)}</div>
                                 <div className="text-[10px] text-ink-soft">đơn {fmtNum(g.so_luong_don_hang)}</div>

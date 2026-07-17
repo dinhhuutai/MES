@@ -27,6 +27,7 @@ export function parseKey(key) {
 const LOAI_BG = {
   metric: 'bg-primary-wash/40',
   cong_thuc: 'bg-amber-50 dark:bg-amber-950/20',
+  danh_sach: 'bg-emerald-50 dark:bg-emerald-950/20',
   hop_kiem: '',
   tha_xuong: '',
   text: '',
@@ -37,7 +38,48 @@ const SIZE_CLS = { sm: 'text-xs', base: 'text-sm', lg: 'text-base', xl: 'text-lg
 const ALIGN_CLS = { left: 'text-left', center: 'text-center', right: 'text-right' };
 const VALIGN_CLS = { top: 'align-top', giua: 'align-middle', duoi: 'align-bottom' };
 const FONT_CLS = { serif: 'font-serif', mono: 'font-mono', sans: 'font-sans' };
-const COL_W = 128; // bề rộng mặc định mỗi cột dữ liệu (px)
+export const COL_W = 128; // bề rộng mặc định mỗi cột dữ liệu (px)
+export const ROW_H = 36;  // chiều cao mặc định mỗi hàng (px)
+const HDR_W = 44;         // bề rộng cột số thứ tự hàng (góc trái)
+
+// Bề rộng cột c (grid.cot_w là map { chỉ-số-cột: px }).
+export const colW = (grid, c) => Number(grid?.cot_w?.[c]) || COL_W;
+// Chiều cao hàng r (grid.hang_h là map { chỉ-số-hàng: px }).
+export const rowH = (grid, r) => Number(grid?.hang_h?.[r]) || ROW_H;
+
+// ---- KHỐI DANH SÁCH: trải dữ liệu dataset lên lưới từ ô neo ----
+// Trả { map: { cellKey: {text, kieu, la_dau} }, maxRow, anchors: [{key,r,c,rows,cols}] }.
+// Hàng đầu (ô neo) = tiêu đề cột; các hàng sau = dữ liệu. `locHang` lọc client-side theo từng cột.
+// Export để `exportReportExcel` dùng CHUNG — Excel phải ra đúng những gì màn hình hiện.
+export function buildDsMap(cells, danhSach, locHang) {
+  const map = {};
+  const anchors = [];
+  let maxRow = 0;
+  Object.entries(cells).forEach(([key, cell]) => {
+    if (!cell || cell.loai !== 'danh_sach') return;
+    const p = parseKey(key);
+    const blk = danhSach?.[key];
+    if (!p || !blk || !blk.cot?.length) return;
+    const f = locHang?.[key] || {};
+    const rows = (blk.rows || []).filter((row) => blk.cot.every((col) => {
+      const q = (f[col.key] || '').trim().toLowerCase();
+      return !q || String(row[col.key] ?? '').toLowerCase().includes(q);
+    }));
+    blk.cot.forEach((col, i) => {
+      map[cellKey(p.r, p.c + i)] = { text: col.ten, kieu: 'text', la_dau: true };
+    });
+    rows.forEach((row, ri) => blk.cot.forEach((col, ci) => {
+      const v = row[col.key];
+      map[cellKey(p.r + 1 + ri, p.c + ci)] = {
+        text: v == null || v === '' ? '' : String(v),
+        kieu: col.kieu || 'text',
+      };
+    }));
+    anchors.push({ key, r: p.r, c: p.c, rows: rows.length, cols: blk.cot.length, cot: blk.cot });
+    maxRow = Math.max(maxRow, p.r + 1 + rows.length);
+  });
+  return { map, maxRow, anchors };
+}
 
 const toNum = (v) => { if (v == null || v === '') return null; const n = Number(v); return Number.isFinite(n) ? n : null; };
 
@@ -125,12 +167,17 @@ function rawOf(cell) {
 // Tương tác (design + editable): kéo chọn vùng (mousedown/enter), nhập trực tiếp (double-click).
 export default function ReportGrid({
   grid, ketQua = {}, mode = 'design', selected, metricsByMa = {},
-  editable = false,
+  editable = false, danhSach = {}, datasetsByMa = {},
   onCellMouseDown, onCellMouseEnter, onEditCommit, onToggleCheck, onSelectDropdown, onDropMetric,
+  onColResize,
 }) {
-  const soCot = grid?.so_cot || 8;
-  const soHang = grid?.so_hang || 20;
   const cells = grid?.o || {};
+  // Bộ lọc theo hàng của khối danh sách: { [ô neo]: { [cột]: 'chuỗi lọc' } } — thuần client, không lưu DB.
+  const [locHang, setLocHang] = useState({});
+  const ds = buildDsMap(cells, danhSach, locHang);
+  const soCot = grid?.so_cot || 8;
+  // Lưới TỰ NỞ đủ chứa dữ liệu khối danh sách (dataset có bao nhiêu dòng thì hiện bấy nhiêu).
+  const soHang = Math.max(grid?.so_hang || 20, ds.maxRow);
   const merges = grid?.merges || [];
   const xenKe = !!(grid?.dinh_dang?.mau_xen_ke);
   const dieuKien = (grid?.dinh_dang?.dieu_kien || [])
@@ -146,7 +193,9 @@ export default function ReportGrid({
   const startEdit = (key) => {
     if (!editable) return;
     const c = cells[key];
-    if (c && (c.loai === 'metric' || c.loai === 'hop_kiem' || c.loai === 'tha_xuong')) return; // các loại này chỉnh ở panel/click
+    // Các loại này chỉnh ở panel/click, không nhập trực tiếp. Ô do khối danh sách đổ ra cũng không sửa tay.
+    if (c && ['metric', 'hop_kiem', 'tha_xuong', 'danh_sach'].includes(c.loai)) return;
+    if (ds.map[key]) return;
     setEdit({ key, val: rawOf(c) });
   };
   const commit = () => {
@@ -172,29 +221,74 @@ export default function ReportGrid({
     }
   });
 
+  // ---- CỐ ĐỊNH (freeze) hàng/cột: { hang, cot } — hàng đầu dính đỉnh, cột đầu dính trái.
+  const fz = grid?.dong_bang || {};
+  const fzHang = Math.max(0, Number(fz.hang) || 0);
+  const fzCot = Math.max(0, Number(fz.cot) || 0);
+  // Vị trí `left` của cột c khi dính = 44px (cột STT) + tổng bề rộng các cột trước.
+  const leftOf = (c) => {
+    let x = HDR_W;
+    for (let i = 0; i < c; i += 1) x += colW(grid, i);
+    return x;
+  };
+  // `top` của hàng r khi dính = chiều cao hàng tiêu đề (A/B/C…) + tổng chiều cao các hàng trước.
+  const topOf = (r) => {
+    let y = 28;
+    for (let i = 0; i < r; i += 1) y += rowH(grid, i);
+    return y;
+  };
+  const fzCell = (r, c) => {
+    const s = {};
+    if (c < fzCot) { s.position = 'sticky'; s.left = leftOf(c); s.zIndex = 12; }
+    if (r < fzHang) { s.position = 'sticky'; s.top = topOf(r); s.zIndex = c < fzCot ? 14 : 11; }
+    return s;
+  };
+
+  // Kéo mép phải tiêu đề cột để đổi bề rộng (chỉ ở chế độ thiết kế).
+  const startResize = (c, e) => {
+    if (!onColResize) return;
+    e.preventDefault(); e.stopPropagation();
+    const x0 = e.clientX; const w0 = colW(grid, c);
+    const move = (ev) => onColResize(c, Math.max(48, w0 + ev.clientX - x0));
+    const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+    window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
+  };
+
   return (
-    <div className="overflow-auto rounded-card border border-line">
+    <div className="overflow-auto rounded-card border border-line max-h-[calc(100vh-16rem)]">
       {/* table-fixed + colgroup: cột có bề rộng cố định → "xuống dòng" mới bẻ dòng đúng
           khi nội dung dài hơn ô (thay vì cột nở ra theo nội dung). */}
       <table className={`w-max table-fixed border-collapse text-sm ${mode === 'design' ? 'select-none' : ''}`}>
         <colgroup>
-          <col style={{ width: 44 }} />
-          {Array.from({ length: soCot }).map((_, c) => <col key={c} style={{ width: COL_W }} />)}
+          <col style={{ width: HDR_W }} />
+          {Array.from({ length: soCot }).map((_, c) => <col key={c} style={{ width: colW(grid, c) }} />)}
         </colgroup>
         <thead>
           <tr>
-            <th className="sticky left-0 z-10 border border-line bg-surface-muted" />
+            <th className="sticky left-0 top-0 z-30 border border-line bg-surface-muted" style={{ width: HDR_W }} />
             {Array.from({ length: soCot }).map((_, c) => (
-              <th key={c} className="border border-line bg-surface-muted px-2 py-1 text-xs font-semibold text-ink-soft">
-                {colLabel(c)}
+              <th key={c}
+                style={c < fzCot ? { position: 'sticky', left: leftOf(c), zIndex: 25 } : undefined}
+                className="sticky top-0 z-20 border border-line bg-surface-muted px-2 py-1 text-xs font-semibold text-ink-soft">
+                <span className="relative block">
+                  {colLabel(c)}
+                  {mode === 'design' && onColResize && (
+                    // Tay cầm kéo bề rộng cột — nằm ở mép phải ô tiêu đề.
+                    <span onMouseDown={(e) => startResize(c, e)}
+                      title={`Kéo để đổi bề rộng cột ${colLabel(c)} (${colW(grid, c)}px)`}
+                      className="absolute -right-2 top-0 h-full w-2 cursor-col-resize hover:bg-primary/40" />
+                  )}
+                </span>
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
           {Array.from({ length: soHang }).map((_, r) => (
-            <tr key={r}>
-              <td className="sticky left-0 z-10 border border-line bg-surface-muted px-2 py-1 text-center text-xs font-medium text-ink-soft">
+            <tr key={r} style={{ height: rowH(grid, r) }}>
+              <td
+                style={r < fzHang ? { position: 'sticky', left: 0, top: topOf(r), zIndex: 15 } : undefined}
+                className="sticky left-0 z-10 border border-line bg-surface-muted px-2 py-1 text-center text-xs font-medium text-ink-soft">
                 {r + 1}
               </td>
               {Array.from({ length: soCot }).map((_, c) => {
@@ -202,6 +296,7 @@ export default function ReportGrid({
                 if (hidden.has(key)) return null;
                 const cell = cells[key];
                 const res = ketQua[key];
+                const dsc = ds.map[key];
                 const isSel = selSet.has(key);
                 const ddBase = cell?.dinh_dang || {};
                 // Định dạng có điều kiện: gộp đè lên định dạng gốc theo thứ tự quy tắc.
@@ -229,6 +324,7 @@ export default function ReportGrid({
                   'border border-line px-2 py-1',
                   VALIGN_CLS[dd.can_doc] || 'align-middle',
                   err ? 'bg-rose-50 text-danger dark:bg-rose-950/20' : bg,
+                  dsc?.la_dau ? 'bg-surface-muted' : '',
                   zebra ? 'bg-surface-muted/40' : '',
                   SIZE_CLS[dd.co_chu] || 'text-sm',
                   FONT_CLS[dd.phong_chu] || '',
@@ -236,13 +332,16 @@ export default function ReportGrid({
                   dd.nghieng ? 'italic' : '',
                   dd.vien_dam ? 'border-2 border-ink/60' : '',
                   // Mặc định: SỐ căn phải (tabular), CHỮ/còn lại căn TRÁI (kể cả chế độ Xem).
+                  // Ô khối danh sách: theo `kieu` của cột dataset (tiêu đề luôn căn trái).
                   ALIGN_CLS[dd.can_le]
-                    || ((cell?.loai === 'so' || (mode === 'view' && res && res.kieu !== 'text' && res.kieu !== 'bool' && !res.loi))
+                    || ((dsc && !dsc.la_dau && dsc.kieu === 'so')
+                      || (!dsc && (cell?.loai === 'so' || (mode === 'view' && res && res.kieu !== 'text' && res.kieu !== 'bool' && !res.loi)))
                       ? 'text-right tabular-nums' : 'text-left'),
                   editable && mode === 'design' ? 'cursor-cell' : (mode === 'view' ? '' : 'cursor-pointer'),
                 ].filter(Boolean).join(' ');
 
-                const style = {};
+                const style = { ...fzCell(r, c) };
+                if (style.position === 'sticky' && !dd.mau_nen) style.backgroundColor = 'var(--surface, #fff)';
                 if (dd.mau_chu) style.color = dd.mau_chu;
                 if (dd.mau_nen && !err) style.backgroundColor = dd.mau_nen;
                 if (deco) style.textDecorationLine = deco;
@@ -262,7 +361,36 @@ export default function ReportGrid({
 
                 // Nội dung ô
                 let inner;
-                if (editing) {
+                if (dsc) {
+                  // Ô thuộc KHỐI DANH SÁCH: hàng đầu = tiêu đề cột (kèm ô lọc), các hàng sau = dữ liệu.
+                  const anc = ds.anchors.find((a) => a.r === r && a.c <= c && c < a.c + a.cols);
+                  const col = anc && anc.cot[c - anc.c];
+                  const soCan = dsc.kieu === 'so';
+                  inner = dsc.la_dau ? (
+                    <div>
+                      <div className="truncate text-xs font-semibold uppercase tracking-wide text-ink-soft" title={dsc.text}>{dsc.text}</div>
+                      {mode === 'view' && anc && col && (
+                        <input
+                          value={(locHang[anc.key] || {})[col.key] || ''}
+                          onChange={(e) => setLocHang((m) => ({ ...m, [anc.key]: { ...(m[anc.key] || {}), [col.key]: e.target.value } }))}
+                          placeholder="Lọc…"
+                          className="mt-0.5 h-5 w-full rounded border border-line bg-surface px-1 text-[11px] font-normal normal-case outline-none focus:border-primary" />
+                      )}
+                    </div>
+                  ) : (
+                    <span className={`block ${dd.xuong_dong ? 'whitespace-pre-wrap break-words' : 'truncate'}`} title={dsc.text}>
+                      {soCan ? fmtSo(dsc.text, dd.dinh_dang_so) : dsc.text}
+                    </span>
+                  );
+                } else if (mode === 'design' && cell?.loai === 'danh_sach') {
+                  // Ô NEO khối danh sách khi CHƯA có dữ liệu (chưa Xem trước) — hiện nhãn nguồn.
+                  inner = (
+                    <span className="block truncate text-xs font-semibold text-primary">
+                      <span className="mr-1 rounded bg-primary/20 px-1 text-[10px] font-bold uppercase">DS</span>
+                      {datasetsByMa[cell.ds?.nguon]?.ten || cell.ds?.nguon || 'Chưa chọn nguồn'}
+                    </span>
+                  );
+                } else if (editing) {
                   inner = (
                     <input ref={inputRef} value={edit.val}
                       onChange={(e) => setEdit({ key, val: e.target.value })}

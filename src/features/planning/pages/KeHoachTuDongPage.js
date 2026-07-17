@@ -276,7 +276,7 @@ export default function KeHoachTuDongPage() {
                       <div key={keyOf(it)} className="rounded-control border border-indigo-200 bg-indigo-50/40 p-2.5 dark:border-indigo-900/50 dark:bg-indigo-950/20">
                         <div className="min-w-0">
                           <div className="truncate text-sm font-semibold text-ink">{it.ma_phan}{it.ten_khach_hang ? ` · ${it.ten_khach_hang}` : ''}</div>
-                          <div className="truncate text-xs text-ink-soft">{[it.ma_hang, it.mau_vai, it.kich_vai, it.kich_phim].filter(Boolean).join(' · ')}</div>
+                          <div className="truncate text-xs text-ink-soft">{[it.ma_hang, it.mau_vai, it.kich_vai, it.kich_phim].filter(Boolean).join(' · ')}{it.tinh_chat_in ? <> · <span className="text-ink">{it.tinh_chat_in}</span></> : null}</div>
                           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-soft">
                             <Badge tone="info">{it.ma_lenh_san_xuat}</Badge>
                             <Badge tone={it.trang_thai === 'RELEASE_2' ? 'success' : 'warning'}>
@@ -296,7 +296,7 @@ export default function KeHoachTuDongPage() {
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <div className="truncate text-sm font-semibold text-ink">{it.ma_phan}{it.ten_khach_hang ? ` · ${it.ten_khach_hang}` : ''}</div>
-                          <div className="truncate text-xs text-ink-soft">{[it.ma_hang, it.mau_vai, it.kich_vai, it.kich_phim].filter(Boolean).join(' · ')}</div>
+                          <div className="truncate text-xs text-ink-soft">{[it.ma_hang, it.mau_vai, it.kich_vai, it.kich_phim].filter(Boolean).join(' · ')}{it.tinh_chat_in ? <> · <span className="text-ink">{it.tinh_chat_in}</span></> : null}</div>
                           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-soft">
                             <Badge tone="info">{it.ma_dot_vai}</Badge>
                             <span>SL {fmtNum(it.so_luong_vai_ve)}</span>

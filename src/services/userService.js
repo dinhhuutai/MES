@@ -1,6 +1,8 @@
 import client from './axiosClient';
 
 export const listUsers = (params) => client.get('/users', { params });
+// Chọn người cho combobox (owner...) — chỉ cần đăng nhập, KHÔNG đòi quyền USER_VIEW như listUsers.
+export const listUserOptions = (params) => client.get('/users/options', { params });
 export const getUser = (id) => client.get(`/users/${id}`);
 export const createUser = (body) => client.post('/users', body);
 export const updateUser = (id, body) => client.patch(`/users/${id}`, body);

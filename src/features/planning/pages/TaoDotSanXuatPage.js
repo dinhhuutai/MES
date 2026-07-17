@@ -187,8 +187,10 @@ export default function TaoDotSanXuatPage() {
                       <div className="truncate font-medium text-ink">
                         {r.ma_phan} · <span className="font-normal text-ink-soft">{r.ten_khach_hang}</span> · <span className="font-normal text-ink-soft">{r.ma_don_hang}</span>
                       </div>
-                      {/* Hàng 2: mã hàng */}
-                      <div className="truncate text-xs text-ink-soft">{r.ma_hang}</div>
+                      {/* Hàng 2: mã hàng · tính chất in */}
+                      <div className="truncate text-xs text-ink-soft">
+                        {r.ma_hang}{r.tinh_chat_in ? <> · <span className="text-ink">{r.tinh_chat_in}</span></> : null}
+                      </div>
                       {/* Hàng 3: màu vải · kích vải · kích phim · loại đợt vải · hạn giao */}
                       <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-ink-soft">
                         <span>{[r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—'}</span>
@@ -222,7 +224,10 @@ export default function TaoDotSanXuatPage() {
                   <div key={b.dot_vai_id} className="flex items-center gap-2 rounded-control border border-line px-3 py-2 text-sm">
                     <div className="min-w-0 flex-1 leading-tight">
                       <div className="truncate font-medium text-ink">{b.ma_phan} · <span className="font-normal text-ink-soft">{b.ten_khach_hang}</span> · <span className="font-normal text-ink-soft">{b.ma_don_hang}</span></div>
-                      <div className="truncate text-xs text-ink-soft">{b.ma_hang}</div>
+                      {/* Hàng 2: mã hàng · tính chất in */}
+                      <div className="truncate text-xs text-ink-soft">
+                        {b.ma_hang}{b.tinh_chat_in ? <> · <span className="text-ink">{b.tinh_chat_in}</span></> : null}
+                      </div>
                       <div className="truncate text-xs text-ink-soft">{[b.mau_vai, b.kich_vai, b.kich_phim].filter(Boolean).join(' · ') || '—'}{b.loai_dot_vai ? ` · ${b.loai_dot_vai}` : ''}{b.han_giao_hang ? ` · hạn ${fmtDate(b.han_giao_hang)}` : ''} · còn đưa {fmtNum(b.con_release)}</div>
                     </div>
                     <Input type="number" value={b.soLuong} onChange={(e) => setQty(b.dot_vai_id, e.target.value)}

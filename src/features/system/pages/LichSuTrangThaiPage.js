@@ -16,7 +16,8 @@ import { listConfirmHistory, cancelReadyItem, listReopenReadyCandidates, reopenR
 import { searchPhanInForCancel, huyPhanIn, listDeletedPhanIn, moPhanIn } from '../../../services/orderService';
 import { listCancelableLenh, cancelLenh } from '../../../services/planningService';
 import { listCancelableTem, cancelPrintTem, listCloseCandidates, closeProduction, listReopenCandidates, reopenProduction, listUndoStartCandidates, undoStartProduction } from '../../../services/productionService';
-import { listCancelKcs, cancelKcs, listCancelSua, cancelSua, listCancelOqc, cancelOqc } from '../../../services/qualityService';
+import { listCancelKcs, cancelKcs, listCancelSua, cancelSua, listCancelOqc, cancelOqc,
+  listTemSuaCancelable, listTemSuaDeleted, huyTemSua, moTemSua } from '../../../services/qualityService';
 import { fmtNum } from '../../../utils/format';
 import HanGiaoCell from '../../../components/common/HanGiaoCell';
 
@@ -1075,6 +1076,233 @@ function PhanInReopenSection({ show }) {
   );
 }
 
+// ─── Tab: Hủy tem sửa (xóa mềm) — ẩn phần chờ sửa khỏi màn Sửa, GIỮ NGUYÊN mọi số lượng ───
+// "Tem sửa" (nhãn 16-) = phần chờ sửa của 1 tem (con_sua), không phải dòng tem riêng.
+function TemSuaCancelSection({ show }) {
+  const [q, setQ] = useState('');
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState(() => new Map());
+  const [lyDo, setLyDo] = useState('');
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listTemSuaCancelable(q);
+      setRows(res.data);
+    } catch (e) {
+      show(e.message || 'Lỗi tải', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [q, show]);
+  useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t); }, [load]);
+
+  const toggle = (row) => setSelected((m) => {
+    const next = new Map(m);
+    if (next.has(row.tem_id)) next.delete(row.tem_id); else next.set(row.tem_id, row);
+    return next;
+  });
+  const selArr = [...selected.values()];
+  const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.tem_id));
+  const toggleAll = () => setSelected((m) => {
+    const next = new Map(m);
+    if (allChecked) rows.forEach((r) => next.delete(r.tem_id)); else rows.forEach((r) => next.set(r.tem_id, r));
+    return next;
+  });
+
+  const doHuy = async () => {
+    setBusy(true);
+    try {
+      const res = await huyTemSua(selArr.map((r) => r.tem_id), lyDo.trim());
+      show(`Đã hủy (xóa mềm) ${res.data.so_tem} tem sửa`);
+      setSelected(new Map()); setLyDo(''); setConfirm(false);
+      load();
+    } catch (e) {
+      show(e.message || 'Hủy thất bại', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const columns = [
+    { key: 'sel', className: 'w-10', selection: true,
+      header: <input type="checkbox" checked={allChecked} onChange={toggleAll} aria-label="Chọn tất cả" />,
+      render: (r) => (
+        <input type="checkbox" checked={selected.has(r.tem_id)}
+          onClick={(e) => e.stopPropagation()} onChange={() => toggle(r)} aria-label="Chọn tem sửa" />
+      ) },
+    { key: 'ma_tem', header: 'Tem sửa', render: (r) => <Badge tone="warning">{`16-${r.ma_tem}`}</Badge> },
+    { key: 'ma_lenh_san_xuat', header: 'Mã lệnh', render: (r) => r.ma_lenh_san_xuat || '—' },
+    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
+    { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
+    { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
+    { key: 'mau_vai', header: 'Màu · Kích', render: (r) => [r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—' },
+    { key: 'ten_chuyen', header: 'Chuyền', render: (r) => r.ten_chuyen || '—' },
+    { key: 'so_luong', header: 'SL in', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
+    { key: 'sl_kcs_dat', header: 'KCS đạt', className: 'text-right tabular-nums', render: (r) => fmtNum(r.sl_kcs_dat) },
+    { key: 'con_sua', header: 'SL chờ sửa', className: 'text-right tabular-nums font-semibold',
+      render: (r) => <span className="text-amber-600">{fmtNum(r.con_sua)}</span> },
+    // Kết quả hủy phụ thuộc KCS đạt: có đạt → SL sửa thành HỦY · chưa đạt → SL sửa quay lại chờ kiểm.
+    { key: 'ket_qua', header: 'Hủy thì SL sửa đi đâu?', render: (r) => (Number(r.sl_kcs_dat) > 0
+      ? <Badge tone="danger">{`→ Hủy (${fmtNum(r.con_sua)})`}</Badge>
+      : <Badge tone="info">{`→ Về KCS chờ kiểm lại (${fmtNum(r.con_sua)})`}</Badge>) },
+  ];
+
+  return (
+    <div>
+      <Toolbar title="Hủy tem sửa"
+        subtitle="Tem sửa = nhãn 16- (phần chờ sửa của tem). Hủy = xóa SL sửa: KCS đã có SL đạt → SL sửa chuyển thành HỦY; chưa có SL đạt → SL sửa quay lại KCS chờ kiểm lại. Mở lại được ở tab bên cạnh."
+        search={q} onSearch={setQ} searchPlaceholder="Tìm mã tem, mã lệnh, code phần, màu...">
+        <Badge tone="default">{rows.length} tem sửa</Badge>
+      </Toolbar>
+
+      {selArr.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-card border border-line bg-surface p-3">
+          <span className="text-xs font-semibold text-ink-soft">Đã chọn {selArr.length}:</span>
+          {selArr.map((r) => (
+            <span key={r.tem_id} className="inline-flex items-center gap-1 rounded-full bg-primary-wash px-3 py-1 text-xs font-medium text-primary">
+              {`16-${r.ma_tem}`}
+              <button onClick={() => toggle(r)} className="ml-0.5 hover:text-danger" aria-label="Bỏ chọn"><Icon name="x" size={12} /></button>
+            </span>
+          ))}
+          <div className="ml-auto flex items-center gap-2">
+            <input value={lyDo} onChange={(e) => setLyDo(e.target.value)} placeholder="Lý do (bắt buộc)"
+              className="h-9 w-52 rounded-input border border-line px-3 text-sm focus:border-primary focus:outline-none" />
+            <Button variant="danger" onClick={() => setConfirm(true)} disabled={!lyDo.trim()}>Hủy {selArr.length} tem sửa</Button>
+          </div>
+        </div>
+      )}
+
+      <DataTable columns={columns} rows={rows} loading={loading} rowKey="tem_id"
+        onRowClick={(r) => toggle(r)} emptyText="Không có tem sửa nào đang chờ sửa" />
+
+      <ConfirmDialog
+        open={confirm}
+        onClose={() => setConfirm(false)}
+        onConfirm={doHuy}
+        loading={busy}
+        title="Hủy tem sửa"
+        message={`Xóa SL sửa của ${selArr.length} tem: ${selArr.map((r) => `16-${r.ma_tem}`).join(', ')}?\n`
+          + `· ${selArr.filter((r) => Number(r.sl_kcs_dat) > 0).length} tem đã có KCS đạt → SL sửa chuyển thành HỦY.\n`
+          + `· ${selArr.filter((r) => !(Number(r.sl_kcs_dat) > 0)).length} tem chưa có KCS đạt → SL sửa quay lại KCS chờ kiểm lại.\n`
+          + 'Mở lại được ở tab "Mở lại tem sửa".'}
+        confirmText="Hủy tem sửa"
+        variant="danger"
+      />
+    </div>
+  );
+}
+
+// ─── Tab: Mở lại tem sửa (khôi phục xóa mềm) ───
+function TemSuaReopenSection({ show }) {
+  const [q, setQ] = useState('');
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState(() => new Map());
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listTemSuaDeleted(q);
+      setRows(res.data);
+    } catch (e) {
+      show(e.message || 'Lỗi tải', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [q, show]);
+  useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t); }, [load]);
+
+  const toggle = (row) => setSelected((m) => {
+    const next = new Map(m);
+    if (next.has(row.tem_id)) next.delete(row.tem_id); else next.set(row.tem_id, row);
+    return next;
+  });
+  const selArr = [...selected.values()];
+
+  const doReopen = async () => {
+    setBusy(true);
+    try {
+      const res = await moTemSua(selArr.map((r) => r.tem_id));
+      show(`Đã mở lại ${res.data.so_tem} tem sửa`);
+      setSelected(new Map()); setConfirm(false);
+      load();
+    } catch (e) {
+      show(e.message || 'Mở lại thất bại', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const columns = [
+    { key: 'sel', className: 'w-10', render: (r) => (
+      <input type="checkbox" checked={selected.has(r.tem_id)}
+        onClick={(e) => e.stopPropagation()} onChange={() => toggle(r)} aria-label="Chọn tem sửa" />
+    ) },
+    { key: 'ma_tem', header: 'Tem sửa', render: (r) => <Badge tone="warning">{`16-${r.ma_tem}`}</Badge> },
+    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
+    { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
+    { key: 'mau_vai', header: 'Màu · Kích', render: (r) => [r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—' },
+    { key: 'sl_huy', header: 'SL sửa đã xóa', className: 'text-right tabular-nums font-semibold',
+      render: (r) => <span className="text-amber-600">{fmtNum(r.sl_huy)}</span> },
+    { key: 'da_cong_huy', header: 'Lúc hủy SL đi đâu', render: (r) => (r.da_cong_huy
+      ? <Badge tone="danger">Cộng vào Hủy</Badge>
+      : <Badge tone="info">Về KCS chờ kiểm</Badge>) },
+    { key: 'tg_huy', header: 'Hủy lúc', className: 'whitespace-nowrap', render: (r) => (
+      <div>
+        <div>{fmtTime(r.tg_huy)}</div>
+        <div className="text-xs text-ink-soft">{r.nguoi_huy || '—'}{r.ly_do ? ` · ${r.ly_do}` : ''}</div>
+      </div>
+    ) },
+    { key: 'tu_dong', header: 'Nguồn hủy', render: (r) => (r.tu_dong
+      ? <Badge tone="info" title="OQC trả tem về KCS → tự động hủy tem sửa">Tự động (OQC trả về)</Badge>
+      : <Badge tone="default">Thủ công</Badge>) },
+  ];
+
+  return (
+    <div>
+      <Toolbar title="Mở lại tem sửa (khôi phục đã hủy)"
+        subtitle="Tem sửa đã hủy. Mở lại = đảo đúng sổ cái của lần hủy (trả SL về chờ sửa) → tem hiện lại ở màn Sửa."
+        search={q} onSearch={setQ} searchPlaceholder="Tìm mã tem, mã lệnh, code phần, màu...">
+        <Badge tone="default">{rows.length} đã hủy</Badge>
+      </Toolbar>
+
+      {selArr.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-card border border-line bg-surface p-3">
+          <span className="text-xs font-semibold text-ink-soft">Đã chọn {selArr.length}:</span>
+          {selArr.map((r) => (
+            <span key={r.tem_id} className="inline-flex items-center gap-1 rounded-full bg-primary-wash px-3 py-1 text-xs font-medium text-primary">
+              {`16-${r.ma_tem}`}
+              <button onClick={() => toggle(r)} className="ml-0.5 hover:text-danger" aria-label="Bỏ chọn"><Icon name="x" size={12} /></button>
+            </span>
+          ))}
+          <div className="ml-auto">
+            <Button onClick={() => setConfirm(true)}>Mở lại {selArr.length} tem sửa</Button>
+          </div>
+        </div>
+      )}
+
+      <DataTable columns={columns} rows={rows} loading={loading} rowKey="tem_id"
+        onRowClick={(r) => toggle(r)} emptyText="Không có tem sửa nào đã hủy" />
+
+      <ConfirmDialog
+        open={confirm}
+        onClose={() => setConfirm(false)}
+        onConfirm={doReopen}
+        loading={busy}
+        title="Mở lại tem sửa"
+        message={`Khôi phục ${selArr.length} tem sửa: ${selArr.map((r) => `16-${r.ma_tem}`).join(', ')}? SL sẽ trả về "chờ sửa" đúng như trước khi hủy và tem hiện lại ở màn Sửa.`}
+        confirmText="Mở lại tem sửa"
+      />
+    </div>
+  );
+}
+
 export default function LichSuTrangThaiPage() {
   const { can } = usePermissions();
   const { toast, show } = useToast();
@@ -1090,6 +1318,8 @@ export default function LichSuTrangThaiPage() {
     can('PROD_RUN') && { key: 'huychay', label: 'Hủy lệnh đang chạy' },
     can('KCS') && { key: 'huykcs', label: 'Hủy xác nhận KCS' },
     can('SUA') && { key: 'huysua', label: 'Hủy xác nhận Sửa' },
+    can('SUA') && { key: 'huytemsua', label: 'Hủy tem sửa' },
+    can('SUA') && { key: 'motemsua', label: 'Mở lại tem sửa' },
     can('OQC') && { key: 'huyoqc', label: 'Hủy xác nhận OQC' },
   ].filter(Boolean);
 
@@ -1123,6 +1353,8 @@ export default function LichSuTrangThaiPage() {
       {tab === 'huychay' && <UndoStartSection show={show} />}
       {tab === 'huykcs' && <QcCancelSection show={show} kind="kcs" />}
       {tab === 'huysua' && <QcCancelSection show={show} kind="sua" />}
+      {tab === 'huytemsua' && <TemSuaCancelSection show={show} />}
+      {tab === 'motemsua' && <TemSuaReopenSection show={show} />}
       {tab === 'huyoqc' && <QcCancelSection show={show} kind="oqc" />}
 
       <Toast toast={toast} />
