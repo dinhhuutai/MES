@@ -141,7 +141,8 @@ export default function MyReportsPage() {
                       data={chartData(b, {
                         danhSach: viewing.content.danh_sach || {},
                         metricValues: viewing.content.metric_values || {},
-                        metricsByMa: {},
+                        metricsByMa: Object.fromEntries(
+                          Object.entries(viewing.content.metric_names || {}).map(([ma, ten]) => [ma, { ten }])),
                       })} />
                   </div>
                 ))}
