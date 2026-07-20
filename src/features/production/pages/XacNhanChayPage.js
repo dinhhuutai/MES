@@ -11,6 +11,7 @@ import { Field, Input } from '../../../components/common/controls';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
+import useSocketEvent from '../../../hooks/useSocketEvent';
 import useNghenMap from '../../../hooks/useNghenMap';
 import { slaRowClass } from '../../../utils/sla';
 import {
@@ -55,6 +56,9 @@ export default function XacNhanChayPage() {
     const t = setTimeout(load, 250);
     return () => clearTimeout(t);
   }, [load]);
+  // Tự tải lại khi SL release / sản xuất đổi ở nơi khác (vd cập nhật SL nhận vải / release ở Hệ thống).
+  useSocketEvent('production:updated', load);
+  useSocketEvent('dashboard:refresh', load);
 
   // Lọc client-side theo từng trường (kết hợp AND) + chuyền. Áp cho cả "Đang chạy" & "Chờ chạy".
   const selChuyen = useMemo(() => (chuyen || []).find((x) => x.id === filters.chuyenId) || null, [chuyen, filters.chuyenId]);
