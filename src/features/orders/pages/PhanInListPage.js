@@ -205,6 +205,7 @@ export default function PhanInListPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState({ key: '', dir: '' }); // sắp xếp cột (màn "Tất cả")
+  const [daChuyen, setDaChuyen] = useState(''); // lọc đã chuyển / chưa chuyển READY (chỉ chip "Tất cả")
   const [menuKey, setMenuKey] = useState(null); // header đang mở menu sắp xếp
   const [exporting, setExporting] = useState(false);
   const [detailModal, setDetailModal] = useState(null); // phần in đang mở modal chi tiết theo đợt
@@ -220,7 +221,7 @@ export default function PhanInListPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await listVaiVe({ search, stage, ...filters, page, limit: LIMIT, sortKey: sort.key, sortDir: sort.dir });
+      const res = await listVaiVe({ search, stage, ...filters, daChuyen, page, limit: LIMIT, sortKey: sort.key, sortDir: sort.dir });
       setRows(res.data.items);
       setMeta(res.data.meta);
     } catch (e) {
@@ -229,7 +230,7 @@ export default function PhanInListPage() {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, stage, filtersKey, page, sort.key, sort.dir, show]);
+  }, [search, stage, filtersKey, daChuyen, page, sort.key, sort.dir, show]);
 
   // Chọn kiểu sắp xếp cho 1 cột: '' = mặc định, 'asc' = tăng, 'desc' = giảm.
   const applySort = (key, dir) => { setSort(dir ? { key, dir } : { key: '', dir: '' }); setPage(1); setMenuKey(null); };
@@ -238,7 +239,7 @@ export default function PhanInListPage() {
   const doExport = async (mode) => {
     setExporting(true);
     try {
-      const res = await listVaiVe({ search, stage, ...filters, page: 1, limit: 100000, sortKey: sort.key, sortDir: sort.dir });
+      const res = await listVaiVe({ search, stage, ...filters, daChuyen, page: 1, limit: 100000, sortKey: sort.key, sortDir: sort.dir });
       const items = res.data.items || [];
       if (!items.length) { show('Không có dữ liệu để xuất', 'error'); return; }
       await exportPhanInVaiVeExcel(items, `danh-sach-phan-in-${mode === 'tong' ? 'tong-hop' : 'chi-tiet'}`, mode);
@@ -372,6 +373,18 @@ export default function PhanInListPage() {
             <label className="mb-1 block text-xs font-medium text-ink-soft">Ngày vải về</label>
             <DateRangePicker value={{ from: filters.ngayVaiTu, to: filters.ngayVaiDen }}
               onChange={(r) => { setFilters((f) => ({ ...f, ngayVaiTu: r.from || '', ngayVaiDen: r.to || '' })); setPage(1); }} />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-ink-soft">Chuyển sang kỹ thuật</label>
+            <div className="flex gap-1.5">
+              {[['', 'Tất cả'], ['DA', 'Đã chuyển'], ['CHUA', 'Chưa chuyển']].map(([v, lb]) => (
+                <button key={v || 'all'} type="button" onClick={() => { setDaChuyen(v); setPage(1); }}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+                    daChuyen === v ? 'border-primary bg-primary text-white' : 'border-line text-ink-soft hover:bg-surface-muted'}`}>
+                  {lb}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -571,9 +584,12 @@ export default function PhanInListPage() {
                           {a.soDotSx > 0 ? <Badge tone="info">{a.soDotSx} đợt SX</Badge> : <span className="text-xs italic text-ink-soft">Chưa có đợt SX</span>}
                         </td>
                         <td className={TD}>
-                          {g.cho_kt_giay == null
-                            ? <Badge tone="warning">Chưa chuyển</Badge>
-                            : <span className="text-ink">{fmtWait(g.cho_kt_giay)}</span>}
+                          <div className="leading-tight">
+                            <div className="text-ink">{g.cho_kt_giay == null ? '—' : fmtWait(g.cho_kt_giay)}</div>
+                            <Badge tone={g.da_chuyen ? 'success' : 'warning'} className="mt-0.5">
+                              {g.da_chuyen ? 'Đã chuyển' : 'Chưa chuyển'}
+                            </Badge>
+                          </div>
                         </td>
                         <td className={`${TD} text-right tabular-nums`}>{fmtNum(a.slIn)}</td>
                         <td className={`${TD} text-right tabular-nums`}>{fmtNum(a.slKcsDat)}</td>
