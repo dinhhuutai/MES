@@ -96,6 +96,17 @@ const STAGE_TEM_STATUS = {
 };
 const N0 = (v) => Number(v) || 0;
 
+// Thời gian CHỜ từ khi tt60 chuyển vào READY → tới lúc kỹ thuật xử lý (xác nhận Khuôn/Film/Mực đầu tiên),
+// hoặc tới hiện tại nếu kỹ thuật chưa làm. Backend trả sẵn số GIÂY (cho_kt_giay). null = chưa chuyển sang KT.
+function fmtWait(sec) {
+  if (sec == null) return null;
+  const mins = Math.max(0, Math.round(Number(sec) / 60));
+  if (mins < 60) return `${mins} phút`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} giờ`;
+  return `${Math.floor(hrs / 24)} ngày`;
+}
+
 // Dựng danh sách dòng hiển thị của 1 tem theo giai đoạn: {key, prefix, ma, qty, tm}.
 //  - KCS/Chờ khô: SL in (so_luong), không tiền tố.
 //  - Sửa: tem 16-, SL = số lượng quyết định sửa.
@@ -315,8 +326,8 @@ export default function PhanInListPage() {
   const AGG_STAGES = ['ALL', 'READY', 'RELEASE_1', 'TEST_RUN', 'RELEASE_2'];
   const showSxCols = !stage || AGG_STAGES.includes(stage);
   const showTemQuality = showTemRows && !['KCS', 'CHO_KHO'].includes(stage); // KCS/Chờ khô chưa có chất lượng → ẩn cột
-  // +1 ở cả 2 chế độ: cột "Tính chất in".
-  const COLS = showTemRows ? (11 + (showTemQuality ? 1 : 0)) : (12 + (showPcsCol ? 1 : 0) + (showSxCols ? 12 : 0));
+  // +1 ở cả 2 chế độ: cột "Tính chất in". Non-tem thêm +1 cột "Barcode"; showSxCols thêm +1 cột "Thời gian ở READY".
+  const COLS = showTemRows ? (11 + (showTemQuality ? 1 : 0)) : (13 + (showPcsCol ? 1 : 0) + (showSxCols ? 13 : 0));
 
   return (
     <div>
@@ -433,6 +444,7 @@ export default function PhanInListPage() {
                     {sortTh('Kích vải', 'kichVai')}
                     {sortTh('Kích phim', 'kichPhim')}
                     <th className={TH}>Tính chất in</th>
+                    <th className={TH}>Barcode</th>
                     {sortTh('SL đơn hàng', 'slDon', 'text-right border-r border-line/60')}
                     {sortTh('SL vải về', 'slVai', 'text-right')}
                     {sortTh('Ngày vải về', 'ngayVai')}
@@ -441,6 +453,7 @@ export default function PhanInListPage() {
                     {showSxCols && (
                       <>
                         <th className={`${TH} border-l border-line/60`}>Đợt SX</th>
+                        <th className={TH}>Chờ sang kỹ thuật</th>
                         {sortTh('SL in', 'slIn', 'text-right')}
                         {sortTh('Kiểm đạt', 'kiemDat', 'text-right')}
                         {sortTh('Sửa', 'sua', 'text-right')}
@@ -485,6 +498,7 @@ export default function PhanInListPage() {
                       <td rowSpan={n} className={TD}>{g.kich_vai || '—'}</td>
                       <td rowSpan={n} className={TD}>{g.kich_phim || '—'}</td>
                       <td rowSpan={n} className={TD}><TinhChatInCell value={g.tinh_chat_in} /></td>
+                      <td rowSpan={n} className={`${TD} tabular-nums`}>{g.barcode || '—'}</td>
                       <td rowSpan={n} className={`${TD} text-right tabular-nums border-r border-line/60`}>{fmtNum(g.so_luong_don_hang)}</td>
                     </>
                   );
@@ -556,6 +570,11 @@ export default function PhanInListPage() {
                         <td className={`${TD} border-l border-line/60 font-medium text-ink`}>
                           {a.soDotSx > 0 ? <Badge tone="info">{a.soDotSx} đợt SX</Badge> : <span className="text-xs italic text-ink-soft">Chưa có đợt SX</span>}
                         </td>
+                        <td className={TD}>
+                          {g.cho_kt_giay == null
+                            ? <Badge tone="warning">Chưa chuyển</Badge>
+                            : <span className="text-ink">{fmtWait(g.cho_kt_giay)}</span>}
+                        </td>
                         <td className={`${TD} text-right tabular-nums`}>{fmtNum(a.slIn)}</td>
                         <td className={`${TD} text-right tabular-nums`}>{fmtNum(a.slKcsDat)}</td>
                         <td className={`${TD} text-right tabular-nums`}>{fmtNum(a.slSua)}</td>
@@ -624,6 +643,7 @@ export default function PhanInListPage() {
                 {g.mau_vai && <Badge tone="default">{g.mau_vai}</Badge>}
                 {g.kich_vai && <Badge tone="default">Vải {g.kich_vai}</Badge>}
                 {g.kich_phim && <Badge tone="default">Phim {g.kich_phim}</Badge>}
+                {g.barcode && <Badge tone="default">Barcode {g.barcode}</Badge>}
                 {g.so_dot > 1 && <Badge tone="warning">{g.so_dot} đợt vải</Badge>}
               </div>
               <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-0.5 border-t border-line/60 pt-2 text-xs text-ink-soft">
@@ -661,6 +681,7 @@ export default function PhanInListPage() {
             <section className="border-t border-line pt-4">
               <h3 className="mb-1 text-xs font-bold uppercase tracking-wide text-ink-soft">Thông số phần in</h3>
               <Row label="Code phần" value={detail.ma_phan} />
+              <Row label="Barcode" value={detail.barcode || '—'} />
               <Row label="Màu vải" value={detail.mau_vai || '—'} />
               <Row label="Kích vải" value={detail.kich_vai || '—'} />
               <Row label="Kích phim" value={detail.kich_phim || '—'} />

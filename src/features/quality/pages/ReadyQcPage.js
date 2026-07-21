@@ -19,8 +19,7 @@ import { Field, Textarea } from '../../../components/common/controls';
 import { listReadyQcCandidates, getReadyDetail, confirmReadyQC, confirmReadyQcBatch, readyHistory, readyDone, returnReadyToTech } from '../../../services/readyService';
 import LoaiDotVaiBadge from '../../planning/components/LoaiDotVaiBadge';
 import HanGiaoCell from '../../../components/common/HanGiaoCell';
-import QrScanner from '../../../components/common/QrScanner';
-import { baseMaTem } from '../../../utils/format';
+import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import exportReadyQcExcel from '../utils/exportReadyQcExcel';
 
 // Thứ tự hiển thị: FILM → KHUÔN → MỰC (HSKT đã bỏ khỏi checklist READY).
@@ -89,11 +88,11 @@ export default function ReadyQcPage() {
     return () => clearTimeout(t);
   }, [load]);
 
-  const open = async (row) => {
+  const open = async (row, asReturn = false) => {
     setEditing(row);
     setDetail(null);
     setLoadingDetail(true);
-    setReturnMode(false);
+    setReturnMode(asReturn);
     setReturnChecklists(new Set());
     setReturnReason('');
     try {
@@ -104,17 +103,6 @@ export default function ReadyQcPage() {
     } finally {
       setLoadingDetail(false);
     }
-  };
-
-  // Quét QR = CODE PHẦN → tìm phần in ở READY → mở SidePanel QC xác nhận.
-  const onScan = (code) => {
-    setScanOpen(false);
-    const c = baseMaTem((code || '').trim());
-    if (!c) return;
-    const norm = (s) => (s || '').toLowerCase().replace(/\s+/g, '');
-    const row = rows.find((r) => norm(r.ma_phan) === norm(c)) || rows.find((r) => norm(r.ma_phan).includes(norm(c)));
-    if (!row) { show(`Không thấy phần in "${c}" ở READY`, 'error'); return; }
-    open(row);
   };
 
   const toggleReturnItem = (ma) => setReturnChecklists((s) => {
@@ -234,7 +222,7 @@ export default function ReadyQcPage() {
       <Toolbar title="QC chuẩn bị kỹ thuật" subtitle="Toàn bộ phần in ở READY — QC xác nhận khi đủ Khuôn/Film/Mực (SLA nghẽn QC chỉ tính sau khi kỹ thuật đủ 3 mục)"
         search={search} onSearch={(v) => { setSearch(v); setPage(1); }}
         searchPlaceholder="Tìm code phần, mã hàng, màu/kích vải, kích phim...">
-        {canQC && <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét QR code phần</Button>}
+        {canQC && <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét / tích mã</Button>}
         {canQC && selected.size > 0 && (
           <Button loading={batching} onClick={doBatch}>QC xác nhận ({selected.size})</Button>
         )}
@@ -336,7 +324,24 @@ export default function ReadyQcPage() {
         )}
       </SidePanel>
 
-      <QrScanner open={scanOpen} onClose={() => setScanOpen(false)} onResult={onScan} title="Quét QR code phần" />
+      <ScanCollectModal
+        open={scanOpen}
+        onClose={() => setScanOpen(false)}
+        title="Quét / tích phần in — QC READY"
+        help="Máy tính: tích barcode. Điện thoại/pad: quét QR code phần. Chỉ chọn được phần in đã đủ 3 mục kỹ thuật. Quét nhiều rồi bấm QC xác nhận cùng lúc; mỗi dòng có nút Trả về nếu cần trả kỹ thuật."
+        rows={readyRows}
+        getId={(r) => r.id}
+        getCodes={(r) => [r.ma_phan]}
+        getBarcodes={(r) => [r.barcode]}
+        matchMultiple={false}
+        isSelected={(r) => selected.has(r.id)}
+        onToggle={(r) => toggleOne(r.id)}
+        primaryLabel={(r) => r.ma_phan || r.barcode || '—'}
+        secondaryLabel={(r) => [r.ten_khach_hang, r.ma_hang, r.mau_vai].filter(Boolean).join(' · ')}
+        rowAction={{ label: 'Trả về', icon: 'log-out', onClick: (r) => { setScanOpen(false); open(r, true); } }}
+        onConfirm={() => { setScanOpen(false); doBatch(); }}
+        confirmLabel="QC xác nhận"
+      />
 
       <HistoryPanel
         open={histOpen}

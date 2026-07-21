@@ -19,6 +19,8 @@ export const confirmReadyQC = (id) => client.post(`/ready/${id}/confirm-qc`);
 export const returnReadyToTech = (id, body) => client.post(`/ready/${id}/tra-ve`, body);
 // Hủy xác nhận 1 mục (Admin/READY_CANCEL): ma ∈ KHUON|FILM|MUC|HSKT|QC_XAC_NHAN.
 export const cancelReadyItem = (id, ma) => client.post(`/ready/${id}/huy`, { ma });
+// Bỏ tích 1 mục kỹ thuật ngay trong luồng Quét/tích (quyền tech, khi tích lộn): ma ∈ KHUON|FILM|MUC.
+export const uncheckReadyItem = (id, ma) => client.post(`/ready/${id}/uncheck/${ma}`);
 // Lịch sử trạng thái (xác nhận READY đang hiệu lực) theo ngày — cho trang Hệ thống.
 export const listConfirmHistory = (params) => client.get('/ready/lich-su-xac-nhan', { params });
 

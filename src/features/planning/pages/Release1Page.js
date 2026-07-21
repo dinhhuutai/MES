@@ -13,6 +13,7 @@ import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
 import { Field, Input } from '../../../components/common/controls';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
+import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import useToast from '../../../hooks/useToast';
@@ -96,6 +97,7 @@ export default function Release1Page() {
   const [onlyReturned, setOnlyReturned] = useState(false); // lọc đợt vải bị QC trả về
   const [filters, setFilters] = useState({});
   const [showFilters, setShowFilters] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
 
   const [detail, setDetail] = useState(null);        // row lẻ đang xem
   const [form, setForm] = useState({ chuyenId: '', soLuongRelease: '', ngayKeHoach: '' });
@@ -107,7 +109,8 @@ export default function Release1Page() {
     setLoading(true);
     try {
       const [res, setRes] = await Promise.all([
-        listRelease1Candidates({ search, page, limit: 20 }),
+        // Tải-hết (limit cao) để quét/tích khớp mọi đợt vải + lọc client trọn vẹn (mirror Release 2).
+        listRelease1Candidates({ search, page, limit: 500 }),
         listReleaseSets({ search }),
       ]);
       setRows(res.data.items);
@@ -219,6 +222,7 @@ export default function Release1Page() {
       <Toolbar title="Release 1" subtitle="Phần in đã READY — chọn đợt vải/set & chuyền để release"
         search={search} onSearch={(v) => { setSearch(v); setPage(1); }}
         searchPlaceholder="Tìm code phần, mã hàng, màu, kích...">
+        <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét QR code phần</Button>
         <label className="flex items-center gap-1.5 text-xs text-ink-soft">
           <input type="checkbox" checked={onlyReturned} onChange={(e) => setOnlyReturned(e.target.checked)} />
           Chỉ hiện phần bị trả về
@@ -399,6 +403,23 @@ export default function Release1Page() {
           </div>
         )}
       </SidePanel>
+
+      <ScanCollectModal
+        open={scanOpen}
+        onClose={() => setScanOpen(false)}
+        title="Quét QR code phần — Release 1"
+        help="Quét QR code phần để chọn đợt vải lẻ (mọi đợt chưa release của phần in đó). Quét nhiều rồi bấm Release để release tất cả cùng lúc."
+        rows={rows}
+        getId={(r) => r.dot_vai_id}
+        getCodes={(r) => [r.ma_phan]}
+        matchMultiple
+        isSelected={(r) => !!selected[r.dot_vai_id]}
+        onToggle={(r) => toggle(r)}
+        primaryLabel={(r) => r.ma_phan || '—'}
+        secondaryLabel={(r) => [r.ten_khach_hang, r.mau_vai, r.kich_vai].filter(Boolean).join(' · ')}
+        onConfirm={() => { setScanOpen(false); openReleaseAll(); }}
+        confirmLabel="Release"
+      />
 
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)} title="Lịch sử Release 1" fetcher={release1History} />
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}

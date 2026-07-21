@@ -18,8 +18,7 @@ import TestRunPanel from '../components/TestRunPanel';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import HanGiaoCell from '../../../components/common/HanGiaoCell';
-import QrScanner from '../../../components/common/QrScanner';
-import { baseMaTem } from '../../../utils/format';
+import ScanCollectModal from '../../../components/common/ScanCollectModal';
 
 const FILTER_FIELDS = [
   { key: 'codePhan', label: 'Code phần', col: 'ma_phan' }, { key: 'khach', label: 'Khách hàng', col: 'ten_khach_hang' },
@@ -71,18 +70,6 @@ export default function TestRunPage() {
     const t = setTimeout(load, 250);
     return () => clearTimeout(t);
   }, [load]);
-
-  // Quét QR = CODE PHẦN → tìm lệnh Test Run của phần in đó (ưu tiên lệnh chưa QA) → mở SidePanel xác nhận.
-  const onScan = (code) => {
-    setScanOpen(false);
-    const c = baseMaTem((code || '').trim()); // QR có thể chứa tiền tố → lấy phần gốc
-    if (!c) return;
-    const norm = (s) => (s || '').toLowerCase().replace(/\s+/g, '');
-    const match = rows.filter((r) => norm(r.ma_phan) === norm(c) || norm(r.ma_phan).includes(norm(c)));
-    if (match.length === 0) { show(`Không thấy lệnh Test Run cho code phần "${c}"`, 'error'); return; }
-    const pick = match.find((r) => !r.qa_done) || match[0]; // ưu tiên lệnh chưa QA xong
-    setSel(pick.id);
-  };
 
   // Chỉ chọn được lệnh chưa QA đạt.
   const selectable = (r) => !r.qa_done;
@@ -146,7 +133,7 @@ export default function TestRunPage() {
     <div>
       <Toolbar title="Test Run - QA" subtitle="QA nhập số lượng test, xác nhận đạt hoặc ghi nhận test lỗi"
         search={search} onSearch={setSearch} searchPlaceholder="Tìm mã lệnh, code phần, mã hàng, màu/kích...">
-        {canQA && <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét QR code phần</Button>}
+        {canQA && <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét / tích mã</Button>}
         {canQA && selected.size > 0 && (
           <div className="flex items-center gap-2">
             <Input value={nguoiTestBatch} onChange={(e) => setNguoiTestBatch(e.target.value)}
@@ -175,7 +162,35 @@ export default function TestRunPage() {
 
       {sel && <TestRunPanel lenhId={sel} onClose={() => setSel(null)} onChanged={load} />}
 
-      <QrScanner open={scanOpen} onClose={() => setScanOpen(false)} onResult={onScan} title="Quét QR code phần" />
+      <ScanCollectModal
+        open={scanOpen}
+        onClose={() => setScanOpen(false)}
+        title="Quét / tích lệnh Test Run — QA"
+        help="Máy tính: tích barcode. Điện thoại/pad: quét QR code phần. Quét nhiều lệnh (chưa QA) rồi nhập người test & bấm QA xác nhận đạt cùng lúc; mỗi dòng có nút Trả về Release 1 nếu test không đạt."
+        rows={selRows}
+        getId={(r) => r.id}
+        getCodes={(r) => [r.ma_phan]}
+        getBarcodes={(r) => [r.barcode]}
+        matchMultiple
+        isSelected={(r) => selected.has(r.id)}
+        onToggle={(r) => toggleOne(r.id)}
+        primaryLabel={(r) => r.ma_phan || r.barcode || '—'}
+        secondaryLabel={(r) => [r.ten_khach_hang, r.ma_hang, r.mau_vai].filter(Boolean).join(' · ')}
+        rowAction={{ label: 'Trả về', icon: 'log-out', onClick: (r) => { setScanOpen(false); setSel(r.id); } }}
+        renderHeader={(
+          <div className="rounded-control border border-line bg-surface-muted px-3 py-2">
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-soft">Người test (bắt buộc khi xác nhận đạt)</div>
+            <Input value={nguoiTestBatch} onChange={(e) => setNguoiTestBatch(e.target.value)}
+              placeholder="Tên người test"
+              className={!nguoiTestBatch.trim() ? 'border-danger' : ''} />
+          </div>
+        )}
+        onConfirm={() => {
+          if (!nguoiTestBatch.trim()) { show('Bắt buộc nhập người test khi QA xác nhận đạt', 'error'); return; }
+          setScanOpen(false); doBatch();
+        }}
+        confirmLabel="QA xác nhận đạt"
+      />
 
 
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}

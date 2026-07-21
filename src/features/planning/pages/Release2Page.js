@@ -15,6 +15,7 @@ import useNghenMap from '../../../hooks/useNghenMap';
 import { slaRowClass } from '../../../utils/sla';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
+import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import { listRelease2Candidates, approveRelease2, approveRelease2Batch, planHistory, release2Done } from '../../../services/planningService';
 import { fmtNum, fmtDate } from '../../../utils/format';
 
@@ -41,6 +42,7 @@ export default function Release2Page() {
   const [selected, setSelected] = useState(() => new Set());
   const [filters, setFilters] = useState({});
   const [showFilters, setShowFilters] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
   const filtered = useMemo(() => filterRows(rows, filters, FILTER_FIELDS), [rows, filters]);
   const activeCount = Object.values(filters).filter(Boolean).length;
 
@@ -133,6 +135,9 @@ export default function Release2Page() {
     <div>
       <Toolbar title="Release 2 — duyệt cuối" subtitle="Kế hoạch duyệt lệnh đã đủ test (CNSP + QA) để vào sản xuất"
         search={search} onSearch={setSearch} searchPlaceholder="Tìm mã lệnh, code phần, mã hàng, màu/kích...">
+        {canApprove && (
+          <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét QR code phần</Button>
+        )}
         {canApprove && selected.size > 0 && (
           <Button onClick={() => setConfirm({ batch: true })}>Duyệt Release 2 ({selected.size})</Button>
         )}
@@ -158,6 +163,23 @@ export default function Release2Page() {
           ? `Xác nhận Release 2 cho ${selected.size} lệnh đã chọn? Các lệnh sẽ sẵn sàng vào sản xuất.`
           : `Xác nhận Release 2 cho lệnh ${confirm.ma_lenh_san_xuat}? Lệnh sẽ sẵn sàng vào sản xuất.`}
         confirmText="Release 2"
+      />
+
+      <ScanCollectModal
+        open={scanOpen}
+        onClose={() => setScanOpen(false)}
+        title="Quét QR code phần — Release 2"
+        help="Quét QR code phần để chọn các lệnh chờ duyệt của phần in đó. Quét nhiều rồi bấm Duyệt để duyệt tất cả cùng lúc."
+        rows={rows}
+        getId={(r) => r.id}
+        getCodes={(r) => [r.ma_phan]}
+        matchMultiple
+        isSelected={(r) => selected.has(r.id)}
+        onToggle={(r) => toggleOne(r.id)}
+        primaryLabel={(r) => r.ma_phan || r.ma_lenh_san_xuat || '—'}
+        secondaryLabel={(r) => [r.ten_khach_hang, r.mau_vai, r.ma_lenh_san_xuat].filter(Boolean).join(' · ')}
+        onConfirm={() => { setScanOpen(false); setConfirm({ batch: true }); }}
+        confirmLabel="Duyệt Release 2"
       />
 
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}

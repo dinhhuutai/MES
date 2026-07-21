@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
 import Pagination from '../../../components/common/Pagination';
@@ -17,11 +17,13 @@ import useNow from '../../../hooks/useNow';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 import TraVeBadge from '../../../components/common/TraVeBadge';
 import {
-  listReadyCandidates, getReadyConfig, confirmReadyBulk, readyHistory, readyDone, getReadyItemCounts,
+  listReadyCandidates, confirmReadyBulk, readyHistory, readyDone, getReadyItemCounts,
+  confirmReadyItemsBatch, uncheckReadyItem,
 } from '../../../services/readyService';
 import ReadyPanel from '../components/ReadyPanel';
 import LoaiDotVaiBadge from '../../planning/components/LoaiDotVaiBadge';
 import HanGiaoCell from '../../../components/common/HanGiaoCell';
+import ScanCollectModal from '../../../components/common/ScanCollectModal';
 
 const FILTER_FIELDS = [
   { key: 'codePhan', label: 'Code phần', col: 'ma_phan' }, { key: 'khach', label: 'Khách hàng', col: 'ten_khach_hang' },
@@ -59,7 +61,6 @@ export default function ReadyPage() {
   const [sel, setSel] = useState(null);
 
   const [selected, setSelected] = useState(() => new Set());
-  const [optionsByMa, setOptionsByMa] = useState({});
   const [bulk, setBulk] = useState(null); // { ma, value }
   const [bulkSaving, setBulkSaving] = useState(false);
   const [histOpen, setHistOpen] = useState(false);
@@ -67,9 +68,21 @@ export default function ReadyPage() {
   const [onlyReturned, setOnlyReturned] = useState(false); // lọc phần bị QC trả về
   const [filters, setFilters] = useState({});
   const [showFilters, setShowFilters] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
   const [counts, setCounts] = useState({ khuon: 0, film: 0, muc: 0 }); // chưa xác nhận từng mục (toàn hệ thống)
 
   const permItems = ITEMS.filter((it) => can(it.perm));
+  // Mục sẽ xác nhận khi quét/tích (mặc định = tất cả mục mình có quyền). Người phụ trách 1 mục → tự khóa mục đó.
+  const [scanSel, setScanSel] = useState(() => new Set());
+  const scanItemsRef = useRef({}); // rowId -> mảng mục đã xác nhận (để Hủy đúng)
+  const labelOf = (ma) => ITEMS.find((i) => i.ma === ma)?.label || ma;
+  useEffect(() => {
+    if (scanOpen) setScanSel(new Set(permItems.map((it) => it.ma)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanOpen]);
+  const toggleScanItem = (ma) => setScanSel((s) => {
+    const n = new Set(s); if (n.has(ma)) n.delete(ma); else n.add(ma); return n;
+  });
   const activeCount = Object.values(filters).filter(Boolean).length;
   const viewRows = filterRows(onlyReturned ? rows.filter((r) => r.tra_ve_ly_do) : rows, filters, FILTER_FIELDS);
 
@@ -95,15 +108,6 @@ export default function ReadyPage() {
     return () => clearTimeout(t);
   }, [load]);
 
-  // Nạp options cho Khuôn/Film/Mực (1 lần) để bulk chọn giá trị.
-  useEffect(() => {
-    getReadyConfig().then((r) => {
-      const m = {};
-      (r.data.checkpoints || []).forEach((c) => { m[c.ma_checkpoint] = c.options || []; });
-      setOptionsByMa(m);
-    }).catch(() => {});
-  }, []);
-
   const toggleOne = (id) => setSelected((s) => {
     const next = new Set(s);
     if (next.has(id)) next.delete(id); else next.add(id);
@@ -112,8 +116,7 @@ export default function ReadyPage() {
   const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.id));
   const toggleAll = () => setSelected(() => (allChecked ? new Set() : new Set(rows.map((r) => r.id))));
 
-  const openBulk = () => setBulk({ ma: permItems[0]?.ma || '', value: '' });
-  const bulkItem = ITEMS.find((it) => it.ma === bulk?.ma);
+  const openBulk = () => setBulk({ ma: permItems[0]?.ma || '' });
 
   const doBulk = async () => {
     setBulkSaving(true);
@@ -168,6 +171,9 @@ export default function ReadyPage() {
       <Toolbar title="Chuẩn bị kỹ thuật — READY" subtitle="Xác nhận film / khuôn / mực trước khi Release"
         search={search} onSearch={(v) => { setSearch(v); setPage(1); }}
         searchPlaceholder="Tìm code phần, mã hàng, màu/kích vải, kích phim...">
+        {permItems.length > 0 && (
+          <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét / tích mã</Button>
+        )}
         {permItems.length > 0 && selected.size > 0 && (
           <Button onClick={openBulk}>Xác nhận hàng loạt ({selected.size})</Button>
         )}
@@ -200,30 +206,68 @@ export default function ReadyPage() {
         footer={
           <>
             <Button variant="ghost" onClick={() => setBulk(null)}>Hủy</Button>
-            <Button onClick={doBulk} loading={bulkSaving}
-              disabled={!bulk?.ma || (bulkItem?.hasOptions && !bulk?.value)}>
+            <Button onClick={doBulk} loading={bulkSaving} disabled={!bulk?.ma}>
               Xác nhận
             </Button>
           </>
         }
       >
         <Field label="Mục cần xác nhận" required>
-          <Select value={bulk?.ma || ''} onChange={(e) => setBulk({ ma: e.target.value, value: '' })}>
+          <Select value={bulk?.ma || ''} onChange={(e) => setBulk({ ma: e.target.value })}>
             {permItems.map((it) => <option key={it.ma} value={it.ma}>{it.label}</option>)}
           </Select>
         </Field>
-        {bulkItem?.hasOptions && (
-          <Field label="Giá trị" required>
-            <Select value={bulk?.value || ''} onChange={(e) => setBulk({ ...bulk, value: e.target.value })}>
-              <option value="">— Chọn —</option>
-              {(optionsByMa[bulk.ma] || []).map((o) => <option key={o} value={o}>{o}</option>)}
-            </Select>
-          </Field>
-        )}
         <p className="text-xs text-ink-soft">
-          Áp cho {selected.size} phần in đã chọn. Phần in đã xác nhận mục này (hoặc đã QC) sẽ được bỏ qua.
+          Áp cho {selected.size} phần in đã chọn — chỉ cần xác nhận (không chọn mới/cũ/gia công). Phần in đã xác nhận mục này (hoặc đã QC) sẽ được bỏ qua.
         </p>
       </Modal>
+
+      <ScanCollectModal
+        open={scanOpen}
+        onClose={() => { setScanOpen(false); load(); }}
+        title="Quét / tích phần in — READY"
+        help="Máy tính: tích barcode (đầu đọc mã vạch). Điện thoại/pad: quét QR code phần. Mỗi lần quét XÁC NHẬN NGAY các mục đang chọn — không cần chọn mới/cũ/gia công. Tích lộn thì bấm Hủy ở dòng đó."
+        rows={rows}
+        immediate
+        getId={(r) => r.id}
+        getCodes={(r) => [r.ma_phan]}
+        getBarcodes={(r) => [r.barcode]}
+        matchMultiple={false}
+        primaryLabel={(r) => r.ma_phan || r.barcode || '—'}
+        secondaryLabel={(r) => [r.ten_khach_hang, r.ma_hang, r.mau_vai].filter(Boolean).join(' · ')}
+        disabledScan={scanSel.size === 0}
+        renderHeader={(
+          <div className="rounded-control border border-line bg-surface-muted px-3 py-2">
+            <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-soft">Mục xác nhận khi quét</div>
+            {permItems.length === 0 ? (
+              <div className="text-xs text-danger">Bạn không có quyền xác nhận mục nào.</div>
+            ) : permItems.length === 1 ? (
+              <Badge tone="info">{permItems[0].label}</Badge>
+            ) : (
+              <div className="flex flex-wrap gap-3">
+                {permItems.map((it) => (
+                  <label key={it.ma} className="flex cursor-pointer items-center gap-1.5 text-sm text-ink">
+                    <input type="checkbox" checked={scanSel.has(it.ma)} onChange={() => toggleScanItem(it.ma)} />
+                    {it.label}
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        actionLabel={(r) => `${r.ma_phan || r.barcode} — ${[...scanSel].map(labelOf).join(' + ')}`}
+        onScanAction={async (r) => {
+          const items = [...scanSel];
+          if (items.length === 0) throw new Error('Chọn mục cần xác nhận');
+          await confirmReadyItemsBatch(r.id, items.map((ma) => ({ ma })));
+          scanItemsRef.current[r.id] = items;
+        }}
+        onUndo={async (r) => {
+          const items = scanItemsRef.current[r.id] || [...scanSel];
+          for (const ma of items) { try { await uncheckReadyItem(r.id, ma); } catch { /* đã bỏ hoặc chưa có */ } }
+          delete scanItemsRef.current[r.id];
+        }}
+      />
 
       <HistoryPanel
         open={histOpen}

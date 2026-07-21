@@ -4,7 +4,6 @@ import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import Icon from '../../../components/common/Icon';
 import Toast from '../../../components/common/Toast';
-import { Select } from '../../../components/common/controls';
 import OwnerHint from '../../../components/common/OwnerHint';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
@@ -13,16 +12,12 @@ import { evalSla, SLA_BADGE, fmtDur } from '../../../utils/sla';
 import { getReadyDetail, confirmReadyItem, confirmReadyItemsBatch } from '../../../services/readyService';
 
 // 3 mục kỹ thuật + quyền tương ứng. Thứ tự hiển thị: FILM → KHUÔN → MỰC (HSKT đã bỏ).
+// KHÔNG còn chọn giá trị (mới/cũ/gia công) — chỉ cần XÁC NHẬN là xong (đã bỏ ràng buộc Film-trước-Khuôn).
 const ITEMS = [
-  { ma: 'FILM', label: 'Film', perm: 'READY_FILM', hasOptions: true },
-  { ma: 'KHUON', label: 'Khuôn', perm: 'READY_KHUON', hasOptions: true },
-  { ma: 'MUC', label: 'Mực', perm: 'READY_MUC', hasOptions: true },
+  { ma: 'FILM', label: 'Film', perm: 'READY_FILM' },
+  { ma: 'KHUON', label: 'Khuôn', perm: 'READY_KHUON' },
+  { ma: 'MUC', label: 'Mực', perm: 'READY_MUC' },
 ];
-
-// Ràng buộc thứ tự: mục KEY chỉ xác nhận được khi mục phụ thuộc (VALUE) đã xác nhận.
-// Hiện tại: chưa xác nhận Film thì không xác nhận Khuôn.
-const REQUIRES = { KHUON: 'FILM' };
-const labelOf = (ma) => ITEMS.find((i) => i.ma === ma)?.label || ma;
 
 const fmt = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '');
 
@@ -33,7 +28,6 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
 
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [sel, setSel] = useState({ KHUON: '', FILM: '', MUC: '' }); // option đang chọn (chưa xác nhận)
   const [busy, setBusy] = useState(null); // ma đang submit
 
   const byMa = (detail?.checkpoints || []).reduce((acc, c) => ({ ...acc, [c.ma_checkpoint]: c }), {});
@@ -45,12 +39,6 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
     try {
       const res = await getReadyDetail(phanInId);
       setDetail(res.data);
-      const m = res.data.checkpoints.reduce((acc, c) => ({ ...acc, [c.ma_checkpoint]: c }), {});
-      setSel({
-        KHUON: m.KHUON?.gia_tri_text || '',
-        FILM: m.FILM?.gia_tri_text || '',
-        MUC: m.MUC?.gia_tri_text || '',
-      });
     } catch (e) {
       show(e.message || 'Lỗi tải', 'error');
     } finally {
@@ -63,8 +51,7 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
   const doConfirm = async (item) => {
     setBusy(item.ma);
     try {
-      const value = item.hasOptions ? sel[item.ma] : undefined;
-      await confirmReadyItem(phanInId, item.ma, value);
+      await confirmReadyItem(phanInId, item.ma);
       show(`Đã xác nhận ${item.label}`);
       await load();
       onChanged?.();
@@ -75,33 +62,14 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
     }
   };
 
-  // Khuôn chọn "Khuôn MỚI" (value chứa "mới") mới cần Film; "Khuôn cũ"/"Gia công" thì không.
-  const needsFilm = (v) => (v || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').toLowerCase().includes('moi');
-  // Mục phụ thuộc CHƯA thỏa (chặn xác nhận) cho `ma` với giá trị `value`.
-  const depBlocked = (ma, value) => {
-    const d = REQUIRES[ma];
-    if (!d) return false;
-    if (ma === 'KHUON' && !needsFilm(value)) return false; // khuôn cũ / gia công → không cần film
-    return !state[`${d.toLowerCase()}_done`];
-  };
-  // Mục đủ điều kiện xác nhận hàng loạt: có quyền + chưa done + có chọn giá trị (option).
-  const eligibleBase = state.qc_done ? [] : ITEMS.filter((it) => {
-    const done = state[`${it.ma.toLowerCase()}_done`];
-    if (done || !can(it.perm)) return false;
-    return it.hasOptions ? !!sel[it.ma] : true;
-  });
-  // Loại mục phụ thuộc chưa thỏa (Khuôn mới khi Film chưa done và Film cũng không trong lô) → backend chặn.
-  const eligible = eligibleBase.filter((it) => {
-    if (!depBlocked(it.ma, sel[it.ma])) return true;
-    return eligibleBase.some((x) => x.ma === REQUIRES[it.ma]);
-  });
+  // Mục đủ điều kiện xác nhận hàng loạt: có quyền + chưa done (không còn ràng buộc giá trị/phụ thuộc).
+  const eligible = state.qc_done ? [] : ITEMS.filter((it) => !state[`${it.ma.toLowerCase()}_done`] && can(it.perm));
 
   const doConfirmAll = async () => {
     setBusy('__ALL__');
     try {
-      const items = eligible.map((it) => ({ ma: it.ma, value: it.hasOptions ? sel[it.ma] : undefined }));
-      await confirmReadyItemsBatch(phanInId, items);
-      show(`Đã xác nhận ${items.length} mục`);
+      await confirmReadyItemsBatch(phanInId, eligible.map((it) => ({ ma: it.ma })));
+      show(`Đã xác nhận ${eligible.length} mục`);
       await load();
       onChanged?.();
     } catch (e) {
@@ -111,14 +79,11 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
     }
   };
 
-  // Render từng mục dạng HÀM (không phải component lồng nhau) để tránh remount mỗi giây
-  // khi `now` cập nhật (nếu là component lồng, Select sẽ bị đóng/nháy).
+  // Render từng mục dạng HÀM (không phải component lồng) để tránh remount mỗi giây khi `now` cập nhật.
   const renderItem = (item) => {
     const cp = byMa[item.ma];
     const done = state[`${item.ma.toLowerCase()}_done`];
-    const canEdit = !done && !state.qc_done && can(item.perm); // Select luôn mở để đổi được "Khuôn cũ"
-    const depBlock = !done && depBlocked(item.ma, sel[item.ma]); // Khuôn mới khi chưa xác nhận Film → chặn NÚT
-    // SLA checklist: đếm từ thời điểm phần in vào trạm READY.
+    const canEdit = !done && !state.qc_done && can(item.perm);
     const sla = (!done && cp?.thoi_gian_quy_dinh_phut)
       ? evalSla(detail?.ready_tg_vao, cp.thoi_gian_quy_dinh_phut, cp.canh_bao_truoc_phut, now)
       : null;
@@ -140,35 +105,14 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
 
         {done ? (
           <div className="text-sm text-ink-soft">
-            {item.hasOptions && cp?.gia_tri_text ? <div className="text-ink">{cp.gia_tri_text}</div> : null}
+            {cp?.gia_tri_text ? <div className="text-ink">{cp.gia_tri_text}</div> : null}
             {cp?.nguoi_xac_nhan_ten ? <div className="text-xs font-medium text-ink">{cp.nguoi_xac_nhan_ten}</div> : null}
             {cp?.tg_xac_nhan ? <div className="text-xs">Lúc {fmt(cp.tg_xac_nhan)}</div> : null}
           </div>
         ) : canEdit ? (
-          <div className="space-y-2">
-            {item.hasOptions && (
-              <Select
-                value={sel[item.ma]}
-                onChange={(e) => setSel({ ...sel, [item.ma]: e.target.value })}
-              >
-                <option value="">— Chọn —</option>
-                {(cp?.options || []).map((o) => <option key={o} value={o}>{o}</option>)}
-              </Select>
-            )}
-            {depBlock && (
-              <div className="rounded-control border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
-                "Khuôn mới" cần xác nhận {labelOf(REQUIRES[item.ma])} trước. Chọn "Khuôn cũ" / "Gia công" thì xác nhận được ngay.
-              </div>
-            )}
-            <Button
-              className="w-full"
-              loading={busy === item.ma}
-              disabled={(item.hasOptions && !sel[item.ma]) || depBlock}
-              onClick={() => doConfirm(item)}
-            >
-              Xác nhận {item.label}
-            </Button>
-          </div>
+          <Button className="w-full" loading={busy === item.ma} onClick={() => doConfirm(item)}>
+            Xác nhận {item.label}
+          </Button>
         ) : (
           <div className="text-xs text-ink-soft">
             {can(item.perm) ? 'Chưa thực hiện.' : 'Bạn không có quyền xác nhận mục này.'}

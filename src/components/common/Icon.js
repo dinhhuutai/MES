@@ -46,6 +46,10 @@ import {
   FileSpreadsheet,
   ScanLine,
   QrCode,
+  Barcode,
+  Camera,
+  Check,
+  Trash2,
 } from 'lucide-react';
 
 // Map tên kebab → component Lucide.
@@ -94,6 +98,10 @@ const MAP = {
   'file-spreadsheet': FileSpreadsheet,
   'scan-line': ScanLine,
   'qr-code': QrCode,
+  barcode: Barcode,
+  camera: Camera,
+  check: Check,
+  'trash-2': Trash2,
   'chevron-up': ChevronUp,
   'chevron-down': ChevronDown,
   'chevrons-up-down': ChevronsUpDown,

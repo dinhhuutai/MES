@@ -9,12 +9,14 @@ import SidePanel from '../../../components/common/SidePanel';
 import Toast from '../../../components/common/Toast';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import { syncPhieuNhanVai, syncHistory, syncRaw } from '../../../services/erpService';
+import { syncPhieuNhanVai, syncPhieuNhanVaiNew, syncHistory, syncRaw } from '../../../services/erpService';
 import { fmtNum } from '../../../utils/format';
 
 const fmtDt = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '—');
 const TONE = { THANH_CONG: 'success', DANG_CHAY: 'warning', LOI: 'danger' };
 const LABEL = { THANH_CONG: 'Thành công', DANG_CHAY: 'Đang chạy', LOI: 'Lỗi' };
+// Nhãn nguồn API. -new = lấy trước (chờ chuyển READY); -60 = chính thức (chuyển READY).
+const NGUON_LABEL = { phieu_nhan_vai_60: 'Chính thức (→READY)', phieu_nhan_vai_60_new: 'Lấy trước' };
 
 function downloadText(text, name) {
   const blob = new Blob([text || ''], { type: 'application/json' });
@@ -54,13 +56,12 @@ export default function ErpSyncPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const doSync = async () => {
+  const runSync = async (fn, ok) => {
     setBusy(true);
     try {
-      const res = await syncPhieuNhanVai();
+      const res = await fn();
       const d = res.data;
-      show(`Đồng bộ xong: ${d.soMoi} mới · ${d.soCapNhat} cập nhật · ${d.soBoQua || 0} bỏ qua · ${d.soLoi} lỗi (tổng ${d.tong})`,
-        d.soLoi && d.tong === 0 ? 'error' : 'success');
+      show(ok(d), d.soLoi && d.tong === 0 ? 'error' : 'success');
       if (page !== 1) setPage(1); else load();
     } catch (e) {
       show(e.message || 'Đồng bộ thất bại', 'error');
@@ -68,6 +69,10 @@ export default function ErpSyncPage() {
       setBusy(false);
     }
   };
+  const doSync = () => runSync(syncPhieuNhanVai,
+    (d) => `Đồng bộ chính thức: ${d.soMoi} mới · ${d.soCapNhat} chuyển READY · ${d.soLoi} lỗi (tổng ${d.tong})`);
+  const doSyncNew = () => runSync(syncPhieuNhanVaiNew,
+    (d) => `Đồng bộ lấy trước: ${d.soMoi} mới (${d.soChoChuyen || 0} chờ chuyển) · ${d.soCapNhat} cập nhật · ${d.soLoi} lỗi (tổng ${d.tong})`);
 
   const openRaw = async (log) => {
     setRaw({ log, text: '', loading: true });
@@ -82,6 +87,7 @@ export default function ErpSyncPage() {
 
   const columns = [
     { key: 'tg_bd', header: 'Bắt đầu', render: (r) => fmtDt(r.tg_bd) },
+    { key: 'nguon', header: 'Nguồn', render: (r) => <Badge tone={r.nguon === 'phieu_nhan_vai_60' ? 'success' : 'info'}>{NGUON_LABEL[r.nguon] || r.nguon}</Badge> },
     { key: 'tg_kt', header: 'Kết thúc', render: (r) => fmtDt(r.tg_kt) },
     { key: 'tu_dong', header: 'Kiểu', render: (r) => r.tu_dong ? <Badge tone="info">Tự động</Badge> : <Badge tone="default">Thủ công</Badge> },
     { key: 'tong_ban_ghi', header: 'Tổng', className: 'text-right tabular-nums', render: (r) => fmtNum(r.tong_ban_ghi) },
@@ -94,7 +100,7 @@ export default function ErpSyncPage() {
 
   return (
     <div>
-      <Toolbar title="Đồng bộ ERP" subtitle="Lấy phiếu nhận vải từ ERP (tự động mỗi giờ) — bấm 1 phiên để xem dữ liệu gốc">
+      <Toolbar title="Đồng bộ ERP" subtitle="2 API: 'Lấy trước' (chờ chuyển READY, trừ 5I) → 'Chính thức' (chuyển phần in qua READY). Tự động chạy cả 2. Bấm 1 phiên để xem dữ liệu gốc.">
         <div className="flex items-center gap-1.5 text-xs text-ink-soft">
           <span>Ngày</span>
           <input type="date" value={date} onChange={(e) => { setDate(e.target.value); setPage(1); }}
@@ -102,7 +108,8 @@ export default function ErpSyncPage() {
           {date && <button type="button" onClick={() => { setDate(''); setPage(1); }}
             className="text-ink-soft hover:text-danger" aria-label="Xóa lọc ngày"><Icon name="x" size={14} /></button>}
         </div>
-        {canSync && <Button icon="loader" loading={busy} onClick={doSync}>Đồng bộ ngay</Button>}
+        {canSync && <Button variant="secondary" icon="loader" loading={busy} onClick={doSyncNew}>Đồng bộ lấy trước</Button>}
+        {canSync && <Button icon="loader" loading={busy} onClick={doSync}>Đồng bộ chính thức</Button>}
         <Badge tone="info">{meta.total} lần</Badge>
       </Toolbar>
 

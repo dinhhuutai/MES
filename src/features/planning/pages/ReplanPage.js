@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
-import Pagination from '../../../components/common/Pagination';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import SidePanel from '../../../components/common/SidePanel';
@@ -16,6 +15,7 @@ import useNghenMap from '../../../hooks/useNghenMap';
 import { slaRowClass } from '../../../utils/sla';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
+import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import { listReplanCandidates, replan, replanBatch, listChuyen, planHistory, replanDone } from '../../../services/planningService';
 import { fmtNum, fmtDate } from '../../../utils/format';
 
@@ -37,7 +37,6 @@ export default function ReplanPage() {
   const [meta, setMeta] = useState({ page: 1, totalPages: 1, total: 0 });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
   const [chuyen, setChuyen] = useState([]);
   const [histOpen, setHistOpen] = useState(false);
   const [doneOpen, setDoneOpen] = useState(false);
@@ -49,11 +48,13 @@ export default function ReplanPage() {
   const [selected, setSelected] = useState(() => new Set());
   const [batchOpen, setBatchOpen] = useState(false);
   const [batchForm, setBatchForm] = useState({ chuyenId: '', ngayKeHoach: '', lyDo: '' });
+  const [scanOpen, setScanOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await listReplanCandidates({ search, page, limit: 20 });
+      // Tải-hết (limit cao) để quét/tích khớp mọi lệnh; DataTable tự phân trang 20/trang client-side.
+      const res = await listReplanCandidates({ search, limit: 500 });
       setRows(res.data.items);
       setMeta(res.data.meta);
       setSelected(new Set());
@@ -62,7 +63,7 @@ export default function ReplanPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, page, show]);
+  }, [search, show]);
 
   useEffect(() => { listChuyen().then((r) => setChuyen(r.data)).catch(() => {}); }, []);
   useEffect(() => {
@@ -162,8 +163,11 @@ export default function ReplanPage() {
   return (
     <div>
       <Toolbar title="Lập kế hoạch lại" subtitle="Lệnh đang Test Run hoặc đã Release 2 (chưa bắt đầu sản xuất) — đổi chuyền / ngày sản xuất kèm lý do"
-        search={search} onSearch={(v) => { setSearch(v); setPage(1); }}
+        search={search} onSearch={setSearch}
         searchPlaceholder="Tìm mã lệnh, code phần, mã hàng, màu/kích...">
+        {canReplan && (
+          <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét QR code phần</Button>
+        )}
         {canReplan && selected.size > 0 && (
           <Button onClick={openBatch}>Lập lại kế hoạch ({selected.size})</Button>
         )}
@@ -172,10 +176,9 @@ export default function ReplanPage() {
         <Badge tone="info">{meta.total} lệnh</Badge>
       </Toolbar>
 
-      <DataTable columns={columns} rows={rows} loading={loading} onRowClick={openDetail} sttStart={(meta.page - 1) * 50}
+      <DataTable columns={columns} rows={rows} loading={loading} onRowClick={openDetail} sttStart={0}
         rowClassName={(r) => slaRowClass(statusLenh(r.id))}
         emptyText="Không có lệnh nào để lập lại kế hoạch" />
-      <Pagination page={meta.page} totalPages={meta.totalPages} total={meta.total} onPage={setPage} />
 
       <SidePanel
         open={!!detail}
@@ -252,6 +255,23 @@ export default function ReplanPage() {
             placeholder="Vd: không kịp tiến độ, dời ngày sản xuất..." />
         </Field>
       </Modal>
+
+      <ScanCollectModal
+        open={scanOpen}
+        onClose={() => setScanOpen(false)}
+        title="Quét QR code phần — Lập lại kế hoạch"
+        help="Quét QR code phần để chọn các lệnh của phần in đó. Quét nhiều rồi bấm Lập lại kế hoạch cho tất cả cùng lúc."
+        rows={rows}
+        getId={(r) => r.id}
+        getCodes={(r) => [r.ma_phan]}
+        matchMultiple
+        isSelected={(r) => selected.has(r.id)}
+        onToggle={(r) => toggleOne(r.id)}
+        primaryLabel={(r) => r.ma_phan || r.ma_lenh_san_xuat || '—'}
+        secondaryLabel={(r) => [r.ten_khach_hang, r.mau_vai, r.ma_lenh_san_xuat].filter(Boolean).join(' · ')}
+        onConfirm={() => { setScanOpen(false); openBatch(); }}
+        confirmLabel="Lập lại kế hoạch"
+      />
 
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}
         title="Lịch sử kế hoạch (Release 2 + lập lại)" fetcher={planHistory} />
