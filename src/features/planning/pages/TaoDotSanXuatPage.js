@@ -6,15 +6,13 @@ import Toast from '../../../components/common/Toast';
 import Icon from '../../../components/common/Icon';
 import { Field, Input, Select } from '../../../components/common/controls';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
-import QrScanner from '../../../components/common/QrScanner';
+import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 import ReleaseListModal from '../components/ReleaseListModal';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import { listRelease1Candidates, createDotSanXuat, listChuyen } from '../../../services/planningService';
 import { fmtNum, fmtDate } from '../../../utils/format';
-
-const norm = (s) => (s || '').trim().toLowerCase();
 
 // Chọn giờ 24h (0h–23h) + phút, KHÔNG có AM/PM — dễ chọn hơn <input type="time">.
 // value/onChange dạng "HH:MM" (rỗng = chưa chọn). Đặt ở module level để không bị remount.
@@ -107,18 +105,11 @@ export default function TaoDotSanXuatPage() {
   const removeFromBasket = (id) => setBasket((b) => b.filter((x) => x.dot_vai_id !== id));
   const setQty = (id, v) => setBasket((b) => b.map((x) => x.dot_vai_id === id ? { ...x, soLuong: v } : x));
 
-  // Quét QR đợt vải: khớp theo mã đợt / ID → điện thoại: nhảy vào giỏ; máy tính: cũng hiện trong ô tìm kiếm.
-  const handleScan = (code) => {
-    setScanOpen(false);
-    const c = (code || '').trim();
-    if (!c) return;
-    setSearch(c); // hiện trong ô tìm kiếm (lọc danh sách bên trái)
-    const found = rows.find((r) => norm(r.ma_dot_vai) === norm(c) || String(r.dot_vai_id) === c || norm(r.dot_vai_id) === norm(c));
-    if (!found) { show(`Không thấy đợt vải "${c}" đủ điều kiện tạo đợt SX — xem danh sách bên trái`, 'error'); return; }
-    if (basketIds.has(found.dot_vai_id)) { show(`Đợt ${found.ma_dot_vai} đã ở trong đợt đang soạn`, 'info'); return; }
-    if (basketPin && found.phan_in_id !== basketPin) { show(MIXED_MSG, 'error'); return; }
-    addToBasket(found);
-    show(`Đã thêm đợt ${found.ma_dot_vai} vào đợt đang soạn`);
+  // Quét / tích: bật-tắt 1 đợt trong giỏ. Quét CODE PHẦN (QR) hoặc BARCODE → matchMultiple thêm HẾT
+  // đợt vải của phần in đó (nhiều đợt → hiện nhiều đợt). Ràng buộc CÙNG PHẦN IN giữ ở addToBasket.
+  const toggleBasket = (r) => {
+    if (basketIds.has(r.dot_vai_id)) removeFromBasket(r.dot_vai_id);
+    else addToBasket(r);
   };
 
   const tongSL = basket.reduce((s, b) => s + (Number(b.soLuong) || 0), 0);
@@ -161,7 +152,7 @@ export default function TaoDotSanXuatPage() {
             placeholder="Tìm code phần, mã hàng, màu/kích..."
             className="h-10 w-full rounded-control border border-line pl-9 pr-3 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10" />
         </div>
-        <Button variant="secondary" icon="qr-code" onClick={() => setScanOpen(true)}>Quét QR đợt vải</Button>
+        <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét / tích mã</Button>
         <Badge tone="info">{leftRows.length} đợt vải</Badge>
       </Toolbar>
 
@@ -281,7 +272,21 @@ export default function TaoDotSanXuatPage() {
         </div>
       </div>
 
-      <QrScanner open={scanOpen} onClose={() => setScanOpen(false)} onResult={handleScan} title="Quét QR đợt vải" />
+      <ScanCollectModal
+        open={scanOpen}
+        onClose={() => setScanOpen(false)}
+        title="Quét / tích mã — Tạo đợt sản xuất"
+        help="Máy tính: tích barcode (đầu đọc mã vạch USB). Điện thoại/pad: quét QR code phần. 1 code phần → thêm HẾT đợt vải của phần in đó vào đợt đang soạn (chỉ CÙNG phần in)."
+        rows={rows}
+        getId={(r) => r.dot_vai_id}
+        getCodes={(r) => [r.ma_phan]}
+        getBarcodes={(r) => [r.barcode]}
+        matchMultiple
+        isSelected={(r) => basketIds.has(r.dot_vai_id)}
+        onToggle={toggleBasket}
+        primaryLabel={(r) => r.ma_phan || r.barcode || '—'}
+        secondaryLabel={(r) => [r.ma_dot_vai, r.ten_khach_hang, r.mau_vai, r.kich_vai].filter(Boolean).join(' · ')}
+      />
       <ReleaseListModal open={releaseOpen} onClose={() => setReleaseOpen(false)} />
       <Toast toast={toast} />
     </div>

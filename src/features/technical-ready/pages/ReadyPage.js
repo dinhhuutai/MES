@@ -24,6 +24,7 @@ import ReadyPanel from '../components/ReadyPanel';
 import LoaiDotVaiBadge from '../../planning/components/LoaiDotVaiBadge';
 import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
+import { khuonRequired } from '../constants';
 
 const FILTER_FIELDS = [
   { key: 'codePhan', label: 'Code phần', col: 'ma_phan' }, { key: 'khach', label: 'Khách hàng', col: 'ten_khach_hang' },
@@ -157,7 +158,10 @@ export default function ReadyPage() {
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
     { key: 'loai_dot_vai', header: 'Loại đợt vải', render: (r) => <LoaiDotVaiBadge value={r.loai_dot_vai} /> },
     { key: 'film_done', header: `Film${counts.film ? ` (${counts.film})` : ''}`, className: 'text-center', render: (r) => DoneCell(r.film_done) },
-    { key: 'khuon_done', header: `Khuôn${counts.khuon ? ` (${counts.khuon})` : ''}`, className: 'text-center', render: (r) => DoneCell(r.khuon_done) },
+    { key: 'khuon_done', header: `Khuôn${counts.khuon ? ` (${counts.khuon})` : ''}`, className: 'text-center',
+      render: (r) => (khuonRequired(r.ten_khach_hang)
+        ? DoneCell(r.khuon_done)
+        : <span className="text-ink-soft" title="Khách này không cần xác nhận Khuôn">—</span>) },
     { key: 'muc_done', header: `Mực${counts.muc ? ` (${counts.muc})` : ''}`, className: 'text-center', render: (r) => DoneCell(r.muc_done) },
     { key: 'trang_thai_ready', header: 'Trạng thái', render: (r) => {
       const s = STATUS[r.trang_thai_ready] || STATUS.CHUA;

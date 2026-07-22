@@ -32,6 +32,10 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
 
   const byMa = (detail?.checkpoints || []).reduce((acc, c) => ({ ...acc, [c.ma_checkpoint]: c }), {});
   const state = detail?.state || {};
+  // Khách II/AD: Khuôn không bắt buộc (backend trả state.khuon_required=false) → ẩn mục Khuôn.
+  const items = ITEMS.filter((it) => it.ma !== 'KHUON' || state.khuon_required !== false);
+  const reqCount = items.length;
+  const doneCount = items.filter((it) => state[`${it.ma.toLowerCase()}_done`]).length;
 
   const load = useCallback(async () => {
     if (!phanInId) return;
@@ -63,7 +67,7 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
   };
 
   // Mục đủ điều kiện xác nhận hàng loạt: có quyền + chưa done (không còn ràng buộc giá trị/phụ thuộc).
-  const eligible = state.qc_done ? [] : ITEMS.filter((it) => !state[`${it.ma.toLowerCase()}_done`] && can(it.perm));
+  const eligible = state.qc_done ? [] : items.filter((it) => !state[`${it.ma.toLowerCase()}_done`] && can(it.perm));
 
   const doConfirmAll = async () => {
     setBusy('__ALL__');
@@ -139,11 +143,12 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
             </div>
           ) : state.tech_done ? (
             <div className="rounded-control border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-700">
-              Đã đủ 3 mục kỹ thuật — chờ QC xác nhận (Module Chất lượng).
+              Đã đủ {reqCount} mục kỹ thuật — chờ QC xác nhận (Module Chất lượng).
             </div>
           ) : (
             <div className="rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-              Mỗi bộ phận xác nhận mục của mình. Đủ 3 mục sẽ chuyển sang chờ QC.
+              Mỗi bộ phận xác nhận mục của mình. Đủ {reqCount} mục sẽ chuyển sang chờ QC.
+              {state.khuon_required === false && ' (Khách này không cần xác nhận Khuôn.)'}
             </div>
           )}
 
@@ -153,15 +158,15 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
             </Button>
           )}
 
-          {ITEMS.map((item) => renderItem(item))}
+          {items.map((item) => renderItem(item))}
 
           <div className="space-y-2 border-t border-line pt-4">
             <h3 className="text-xs font-bold uppercase tracking-wide text-ink-soft">Tiến trình</h3>
             <div className="flex items-center justify-between rounded-control border border-line px-3 py-2">
-              <span className="text-sm font-medium text-ink">Kỹ thuật (3 mục)</span>
+              <span className="text-sm font-medium text-ink">Kỹ thuật ({reqCount} mục)</span>
               {state.tech_done
                 ? <Badge tone="success">Hoàn tất</Badge>
-                : <Badge tone="warning">{[state.khuon_done, state.film_done, state.muc_done].filter(Boolean).length}/3</Badge>}
+                : <Badge tone="warning">{doneCount}/{reqCount}</Badge>}
             </div>
             <p className="flex items-center gap-1.5 text-xs text-ink-soft">
               <Icon name="shield-check" size={14} /> QC thực hiện tại Module Chất lượng → QC chuẩn bị kỹ thuật.

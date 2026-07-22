@@ -1,7 +1,9 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import SidePanel from './SidePanel';
 import DataTable from './DataTable';
+import Button from './Button';
 import Toast from './Toast';
+import exportPanelExcel from './exportPanelExcel';
 import useToast from '../../hooks/useToast';
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -13,6 +15,7 @@ export default function HistoryPanel({ open, onClose, title = 'Lịch sử', fet
   const [date, setDate] = useState(todayStr);
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   // Giữ fetcher trong ref: prop này thường là arrow-function nội tuyến (đổi identity mỗi lần
   // component cha re-render — vd cha dùng useNow(1000) chạy mỗi giây). Nếu đưa vào deps sẽ
@@ -44,6 +47,29 @@ export default function HistoryPanel({ open, onClose, title = 'Lịch sử', fet
     { key: 'chi_tiet', header: 'Chi tiết', render: (r) => r.chi_tiet || '—' },
   ];
 
+  const doExport = async () => {
+    setExporting(true);
+    try {
+      await exportPanelExcel({
+        cols: [
+          { header: 'Giờ', value: (r) => fmtTime(r.tg) },
+          { header: 'Người', value: (r) => r.nguoi || '' },
+          { header: 'Hành động', value: (r) => r.hanh_dong || '' },
+          { header: 'Đối tượng', value: (r) => r.doi_tuong || '' },
+          { header: 'Chi tiết', value: (r) => r.chi_tiet || '' },
+        ],
+        rows,
+        title: title.toUpperCase(),
+        subtitle: `Ngày ${date} · ${rows.length} lượt`,
+        fileName: 'lich-su',
+      });
+    } catch (e) {
+      show(e.message || 'Xuất Excel thất bại', 'error');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <SidePanel open={open} onClose={onClose} title={title} subtitle={`${rows.length} lượt trong ngày`} width="max-w-2xl">
       <div className="mb-4 flex items-center gap-2">
@@ -54,8 +80,10 @@ export default function HistoryPanel({ open, onClose, title = 'Lịch sử', fet
           onChange={(e) => setDate(e.target.value)}
           className="h-10 rounded-input border border-line px-3 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
         />
+        <Button variant="secondary" icon="file-spreadsheet" className="ml-auto" loading={exporting}
+          disabled={!rows.length} onClick={doExport}>Xuất Excel</Button>
       </div>
-      <DataTable columns={columns} rows={rows} loading={loading} rowKey="_k"
+      <DataTable columns={columns} rows={rows} loading={loading} rowKey="_k" sttStart={0}
         emptyText="Không có lượt xác nhận nào trong ngày" />
       <Toast toast={toast} />
     </SidePanel>

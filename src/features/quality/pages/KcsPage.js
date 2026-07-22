@@ -13,6 +13,8 @@ import DonePanel from '../../../components/common/DonePanel';
 import TemJourneyPanel from '../../../components/common/TemJourneyPanel';
 import QrScanner from '../../../components/common/QrScanner';
 import DateRangePicker from '../../../components/common/DateRangePicker';
+import TinhChatInCell from '../../../components/common/TinhChatInCell';
+import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import Icon from '../../../components/common/Icon';
 import { Field, Input } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
@@ -121,8 +123,10 @@ export default function KcsPage() {
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
     { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
+    { key: 'tinh_chat_in', header: 'Tính chất in', render: (r) => <TinhChatInCell value={r.tinh_chat_in} /> },
     { key: 'so_luong_kiem', header: 'SL kiểm', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong_kiem) },
     { key: 'so_luong', header: 'SL đạt', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
+    { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => <HanGiaoCell value={r.han_giao_hang} /> },
     { key: 'tg', header: 'Giờ', className: 'whitespace-nowrap tabular-nums', render: (r) => (r.tg ? new Date(r.tg).toLocaleTimeString('vi-VN') : '') },
     { key: 'in_tem', header: '', className: 'text-right', render: (r) => (
       r.tem_id ? <Button variant="secondary" className="!px-3 !py-1.5 !text-xs" onClick={() => printKcsGiao(r)}>In tem</Button> : null
@@ -402,7 +406,18 @@ export default function KcsPage() {
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}
         title="Lịch sử KCS" fetcher={kcsHistory} />
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
-        title="Tem đã KCS" maHeader="Tem" fetcher={kcsDone} columns={doneColumns} />
+        title="Tem đã KCS" maHeader="Tem" fetcher={kcsDone} columns={doneColumns}
+        excelColumns={[
+          { header: 'Tem', value: (r) => r.ma || '' },
+          { header: 'Khách hàng', value: (r) => r.ten_khach_hang || '' },
+          { header: 'Mã hàng', value: (r) => r.ma_hang || '' },
+          { header: 'Màu vải', value: (r) => r.mau_vai || '' },
+          { header: 'Tính chất in', value: (r) => r.tinh_chat_in || '' },
+          { header: 'SL kiểm', value: (r) => Number(r.so_luong_kiem) || 0, num: true },
+          { header: 'SL đạt', value: (r) => Number(r.so_luong) || 0, num: true },
+          { header: 'Hạn giao', value: (r) => r.han_giao_hang || '', type: 'date' },
+          { header: 'Người', value: (r) => r.nguoi || '' },
+        ]} />
       {journey && (
         <TemJourneyPanel temId={journey.temId} maTem={journey.maTem}
           fetcher={getTemHanhTrinh} onClose={() => setJourney(null)} side="left"

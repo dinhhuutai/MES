@@ -12,6 +12,8 @@ import QrScanner from '../../../components/common/QrScanner';
 import DateRangePicker from '../../../components/common/DateRangePicker';
 import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
+import TinhChatInCell from '../../../components/common/TinhChatInCell';
+import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import { Field, Input } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import useNow from '../../../hooks/useNow';
@@ -88,9 +90,11 @@ export default function SuaPage() {
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
     { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
+    { key: 'tinh_chat_in', header: 'Tính chất in', render: (r) => <TinhChatInCell value={r.tinh_chat_in} /> },
     { key: 'so_luong_kiem', header: 'SL sửa', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong_kiem) },
     { key: 'so_luong', header: 'Sửa đạt', className: 'text-right tabular-nums text-emerald-600', render: (r) => fmtNum(r.so_luong) },
     { key: 'so_luong_sua_huy', header: 'Sửa hủy', className: 'text-right tabular-nums text-rose-600', render: (r) => fmtNum(r.so_luong_sua_huy) },
+    { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => <HanGiaoCell value={r.han_giao_hang} /> },
     { key: 'tg', header: 'Giờ', className: 'whitespace-nowrap tabular-nums', render: (r) => (r.tg ? new Date(r.tg).toLocaleTimeString('vi-VN') : '') },
     { key: 'in_tem', header: '', className: 'text-right', render: (r) => (
       r.tem_id ? <Button variant="secondary" className="!px-3 !py-1.5 !text-xs" onClick={() => printOqc(r)}>In tem</Button> : null
@@ -253,7 +257,19 @@ export default function SuaPage() {
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}
         title="Lịch sử Sửa" fetcher={suaHistory} />
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
-        title="Tem đã sửa" maHeader="Tem" fetcher={suaDone} columns={doneColumns} />
+        title="Tem đã sửa" maHeader="Tem" fetcher={suaDone} columns={doneColumns}
+        excelColumns={[
+          { header: 'Tem', value: (r) => r.ma || '' },
+          { header: 'Khách hàng', value: (r) => r.ten_khach_hang || '' },
+          { header: 'Mã hàng', value: (r) => r.ma_hang || '' },
+          { header: 'Màu vải', value: (r) => r.mau_vai || '' },
+          { header: 'Tính chất in', value: (r) => r.tinh_chat_in || '' },
+          { header: 'SL sửa', value: (r) => Number(r.so_luong_kiem) || 0, num: true },
+          { header: 'Sửa đạt', value: (r) => Number(r.so_luong) || 0, num: true },
+          { header: 'Sửa hủy', value: (r) => Number(r.so_luong_sua_huy) || 0, num: true },
+          { header: 'Hạn giao', value: (r) => r.han_giao_hang || '', type: 'date' },
+          { header: 'Người', value: (r) => r.nguoi || '' },
+        ]} />
 
       <QrScanner open={scanOpen} onClose={() => setScanOpen(false)} onResult={onScan} />
 

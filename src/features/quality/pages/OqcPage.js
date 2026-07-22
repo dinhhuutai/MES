@@ -12,6 +12,8 @@ import { Field, Input, Textarea } from '../../../components/common/controls';
 import SearchableSelect from '../../../components/common/SearchableSelect';
 import QrScanner from '../../../components/common/QrScanner';
 import DateRangePicker from '../../../components/common/DateRangePicker';
+import TinhChatInCell from '../../../components/common/TinhChatInCell';
+import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import FieldFilters, { FilterToggle } from '../../../components/common/FieldFilters';
 import Icon from '../../../components/common/Icon';
 import useToast from '../../../hooks/useToast';
@@ -322,10 +324,27 @@ export default function OqcPage() {
           { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
           { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
           { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
+          { key: 'tinh_chat_in', header: 'Tính chất in', render: (r) => <TinhChatInCell value={r.tinh_chat_in} /> },
           { key: 'so_luong', header: 'SL đạt', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
           { key: 'sl_qua_giao', header: 'SL qua giao', className: 'text-right tabular-nums font-medium text-primary', render: (r) => fmtNum(r.sl_qua_giao) },
+          { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => <HanGiaoCell value={r.han_giao_hang} /> },
           { key: 'tg', header: 'Giờ HT', className: 'whitespace-nowrap tabular-nums', render: (r) => (r.tg ? new Date(r.tg).toLocaleTimeString('vi-VN') : '') },
           { key: 'nguoi', header: 'Người', render: (r) => r.nguoi || '—' },
+        ]}
+        excelColumns={[
+          { header: 'Tem', value: (r) => (r.nguon === 'SUA' ? '17-' : '15-') + (r.ma || '') },
+          { header: 'Nguồn', value: (r) => (r.nguon === 'SUA' ? 'Sửa' : 'KCS') },
+          { header: 'Khách hàng', value: (r) => r.ten_khach_hang || '' },
+          { header: 'Đơn hàng', value: (r) => r.ma_don_hang || '' },
+          { header: 'Mã hàng', value: (r) => r.ma_hang || '' },
+          { header: 'Màu vải', value: (r) => r.mau_vai || '' },
+          { header: 'Kích vải', value: (r) => r.kich_vai || '' },
+          { header: 'Kích phim', value: (r) => r.kich_phim || '' },
+          { header: 'Tính chất in', value: (r) => r.tinh_chat_in || '' },
+          { header: 'SL đạt', value: (r) => Number(r.so_luong) || 0, num: true },
+          { header: 'SL qua giao', value: (r) => Number(r.sl_qua_giao) || 0, num: true },
+          { header: 'Hạn giao', value: (r) => r.han_giao_hang || '', type: 'date' },
+          { header: 'Người', value: (r) => r.nguoi || '' },
         ]} />
 
       <QrScanner open={scanOpen} onClose={() => setScanOpen(false)} onResult={onScan} />

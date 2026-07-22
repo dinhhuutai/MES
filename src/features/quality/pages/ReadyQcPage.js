@@ -21,6 +21,7 @@ import LoaiDotVaiBadge from '../../planning/components/LoaiDotVaiBadge';
 import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import exportReadyQcExcel from '../utils/exportReadyQcExcel';
+import { khuonRequired } from '../../technical-ready/constants';
 
 // Thứ tự hiển thị: FILM → KHUÔN → MỰC (HSKT đã bỏ khỏi checklist READY).
 const TECH_ITEMS = [
@@ -144,8 +145,8 @@ export default function ReadyQcPage() {
   const byMa = (detail?.checkpoints || []).reduce((acc, c) => ({ ...acc, [c.ma_checkpoint]: c }), {});
   const techDone = detail?.state?.tech_done === true;
 
-  // QC chỉ xác nhận được khi kỹ thuật đã đủ 3 mục.
-  const isReady = (r) => (r.n_tech_done || 0) >= 3;
+  // QC chỉ xác nhận được khi kỹ thuật đã ĐỦ MỤC (backend tính theo khách: II/AD chỉ cần Film+Mực).
+  const isReady = (r) => r.tech_done === true;
   const readyRows = rows.filter(isReady);
 
   const toggleOne = (id) => setSelected((s) => {
@@ -209,7 +210,7 @@ export default function ReadyQcPage() {
     { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => <HanGiaoCell value={r.han_giao_hang} /> },
     { key: 'tech', header: 'Kỹ thuật', render: (r) => (
       <div className="flex flex-wrap items-center gap-1">
-        {TECH_ITEMS.map((it) => {
+        {TECH_ITEMS.filter((it) => it.ma !== 'KHUON' || khuonRequired(r.ten_khach_hang)).map((it) => {
           const done = r[`${it.ma.toLowerCase()}_done`];
           return <Badge key={it.ma} tone={done ? 'success' : 'default'}>{it.label}</Badge>;
         })}
@@ -219,7 +220,7 @@ export default function ReadyQcPage() {
 
   return (
     <div>
-      <Toolbar title="QC chuẩn bị kỹ thuật" subtitle="Toàn bộ phần in ở READY — QC xác nhận khi đủ Khuôn/Film/Mực (SLA nghẽn QC chỉ tính sau khi kỹ thuật đủ 3 mục)"
+      <Toolbar title="QC chuẩn bị kỹ thuật" subtitle="Toàn bộ phần in ở READY — QC xác nhận khi đủ mục kỹ thuật (khách II/AD chỉ cần Film + Mực). SLA nghẽn QC chỉ tính sau khi kỹ thuật đủ mục."
         search={search} onSearch={(v) => { setSearch(v); setPage(1); }}
         searchPlaceholder="Tìm code phần, mã hàng, màu/kích vải, kích phim...">
         {canQC && <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét / tích mã</Button>}
@@ -230,7 +231,7 @@ export default function ReadyQcPage() {
         <Button variant="secondary" icon="file-spreadsheet" loading={exporting} onClick={doExport}>Excel ({filtered.length})</Button>
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
-        <Badge tone="warning">{readyRows.length} đủ 3 mục · {meta.total} ở READY</Badge>
+        <Badge tone="warning">{readyRows.length} đủ mục · {meta.total} ở READY</Badge>
       </Toolbar>
 
       <FieldFilters fields={FILTER_FIELDS} values={filters} onField={(k, v) => setFilters((f) => ({ ...f, [k]: v }))} onClear={() => setFilters({})} open={showFilters} />
@@ -279,7 +280,7 @@ export default function ReadyQcPage() {
                 Tick các mục <b>không đạt</b> để trả về cho bộ phận kỹ thuật làm lại (kèm lý do bắt buộc).
               </p>
             )}
-            {TECH_ITEMS.map((it) => {
+            {TECH_ITEMS.filter((it) => it.ma !== 'KHUON' || detail?.state?.khuon_required !== false).map((it) => {
               const cp = byMa[it.ma];
               const done = cp?.trang_thai === 'DAT';
               return (
@@ -317,7 +318,7 @@ export default function ReadyQcPage() {
                 {techDone && <OwnerHint checkpoint="QC_XAC_NHAN" className="pt-1" />}
                 {techDone
                   ? <p className="pt-1 text-xs text-ink-soft">QC xác nhận → READY hoàn thành, cho phép Release 1.</p>
-                  : <p className="pt-1 text-xs font-medium text-warning">Kỹ thuật chưa xác nhận đủ 3 mục — QC chưa thể xác nhận.</p>}
+                  : <p className="pt-1 text-xs font-medium text-warning">Kỹ thuật chưa xác nhận đủ mục — QC chưa thể xác nhận.</p>}
               </>
             )}
           </div>

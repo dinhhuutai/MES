@@ -305,7 +305,14 @@ export default function GomSetPage() {
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}
         title="Lịch sử thao tác gom set" fetcher={gomHistory} />
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
-        title="Set đã tạo/release" columns={GOM_DONE_COLUMNS} fetcher={gomDone} />
+        title="Set đã tạo/release" columns={GOM_DONE_COLUMNS} fetcher={gomDone}
+        excelColumns={[
+          { header: 'Set', value: (r) => r.ma || '' },
+          { header: 'Thao tác', value: (r) => r.hanh_dong || '' },
+          { header: 'Số đợt vải', value: (r) => Number(r.so_luong) || 0, num: true },
+          { header: 'Màu', value: (r) => r.mau_list || '' },
+          { header: 'Người', value: (r) => r.nguoi || '' },
+        ]} />
 
       <Toast toast={toast} />
     </div>
