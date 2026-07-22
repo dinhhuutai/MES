@@ -165,8 +165,8 @@ export default function OqcPage() {
   const columns = [
     { key: 'ma_tem', header: 'Tem', render: (r) => (
       <div className="flex items-center gap-1.5">
-        <Badge tone={r.nguon === 'SUA' ? 'warning' : 'info'}>{r.ma_tem_display || r.ma_tem}</Badge>
-        <span className="text-[11px] text-ink-soft">{r.nguon === 'SUA' ? 'đã sửa' : 'từ KCS'}</span>
+        <Badge tone={r.la_gia_cong ? 'success' : r.nguon === 'SUA' ? 'warning' : 'info'}>{r.ma_tem_display || r.ma_tem}</Badge>
+        <span className="text-[11px] text-ink-soft">{r.la_gia_cong ? 'gia công' : r.nguon === 'SUA' ? 'đã sửa' : 'từ KCS'}</span>
       </div>
     ) },
     { key: 'khach_don', header: 'Khách hàng · Đơn hàng', render: (r) => (

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import Modal from './Modal';
 import Button from './Button';
 import Icon from './Icon';
+import { startCameraDecode, cameraErrorMessage } from './cameraDecoder';
 
 // So khớp mã: bỏ khoảng trắng + viết thường (khớp cả code phần có chữ lẫn barcode dãy số).
 const normStr = (s) => String(s ?? '').trim().toLowerCase().replace(/\s+/g, '');
@@ -28,15 +29,16 @@ function ScanViz() {
 }
 
 /**
- * Quét/tích NHIỀU mã. 2 cách nhập: QR (camera, quét code phần liên tục) + Barcode (đầu đọc mã vạch USB
- * = keyboard-wedge gõ dãy số + Enter, hoặc nhập tay). Mặc định theo thiết bị: điện thoại/pad → QR, máy tính → barcode.
+ * Quét/tích NHIỀU mã. Mặc định dùng CAMERA đa định dạng (đọc CẢ QR code phần lẫn mã vạch 1D).
+ * Riêng READY (`usbBarcode`) trên máy tính giữ đầu đọc mã vạch USB (keyboard-wedge gõ dãy số + Enter).
  *
  * 2 chế độ:
  *  - COLLECT (mặc định): dồn vào danh sách "Đã chọn" rồi bấm Xác nhận cùng lúc. `rowAction` = nút phụ mỗi dòng (vd Trả về).
  *  - IMMEDIATE (`immediate`): mỗi lần quét XÁC NHẬN NGAY (`onScanAction`), ghi vào "Lịch sử phiên này" + nút Hủy (`onUndo`).
  *
  * Props chung: open, onClose, title, help, rows, getId, getCodes, getBarcodes, matchMultiple,
- *   primaryLabel, secondaryLabel, renderHeader (node trên cùng, vd checkbox chọn mục ở READY), disabledScan.
+ *   primaryLabel, secondaryLabel, renderHeader (node trên cùng, vd checkbox chọn mục ở READY), disabledScan,
+ *   usbBarcode (chỉ READY — bật đầu đọc mã vạch USB trên máy tính).
  * COLLECT: isSelected, onToggle, onConfirm, confirmLabel, rowAction={label,icon,onClick(row)}.
  * IMMEDIATE: onScanAction(row)->Promise, onUndo(row)->Promise, actionLabel(row).
  */
@@ -51,23 +53,18 @@ export default function ScanCollectModal({
   rowAction,
   renderHeader, disabledScan = false,
   immediate = false, onScanAction, onUndo, actionLabel,
+  usbBarcode = false,
 }) {
-  // Bật chế độ barcode khi TRANG hỗ trợ (truyền getBarcodes) — KHÔNG phụ thuộc rows đã có barcode chưa.
-  // Máy tính dùng đầu đọc mã vạch (thiết bị) nên luôn hiện chế độ tích barcode + ảnh động (thay cho camera).
   const hasBarcode = typeof getBarcodes === 'function';
-  // Máy tính (không cảm ứng) + trang hỗ trợ barcode → chế độ TÍCH BARCODE (đầu đọc thiết bị); còn lại → QR camera.
-  // KHÔNG cho đổi qua lại (không toggle) theo yêu cầu.
-  const mode = hasBarcode && !IS_TOUCH ? 'barcode' : 'qr';
+  // READY (usbBarcode) trên máy tính → đầu đọc mã vạch USB. Còn lại → camera đa định dạng (QR + mã vạch).
+  const mode = usbBarcode && hasBarcode && !IS_TOUCH ? 'barcode' : 'camera';
   const [log, setLog] = useState([]);       // feedback tạm (không tìm thấy / lỗi)
   const [session, setSession] = useState([]); // immediate: đã xác nhận phiên này (có nút Hủy)
   const [error, setError] = useState('');
   const [ready, setReady] = useState(false);
 
   const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const streamRef = useRef(null);
-  const rafRef = useRef(null);
-  const jsqrRef = useRef(null);
+  const stopRef = useRef(null); // hàm dừng camera ZXing
   const recentRef = useRef(new Map()); // code → ts (chống lặp)
   const bufRef = useRef({ s: '', t: 0, timer: null }); // buffer bắt phím đầu đọc mã vạch
   const idRef = useRef(0);
@@ -90,11 +87,19 @@ export default function ScanCollectModal({
     const s = stateRef.current;
     const c = normStr(raw);
     if (!c) return [];
-    const getters = kind === 'barcode' ? s.getBarcodes : s.getCodes;
-    const exact = s.rows.filter((r) => (getters(r) || []).some((v) => v && normStr(v) === c));
-    const pool = exact.length ? exact : s.rows.filter((r) => (getters(r) || []).some((v) => v && normStr(v).includes(c)));
-    if (!pool.length) return [];
-    return s.matchMultiple ? pool : [pool[0]];
+    // barcode (đầu đọc USB) → khớp barcode. camera → khớp CẢ code phần lẫn barcode (không biết trước QR hay mã vạch).
+    const getterList = kind === 'barcode'
+      ? [s.getBarcodes]
+      : kind === 'camera'
+        ? [s.getCodes, s.getBarcodes]
+        : [s.getCodes];
+    for (const getters of getterList) {
+      if (typeof getters !== 'function') continue;
+      const exact = s.rows.filter((r) => (getters(r) || []).some((v) => v && normStr(v) === c));
+      const pool = exact.length ? exact : s.rows.filter((r) => (getters(r) || []).some((v) => v && normStr(v).includes(c)));
+      if (pool.length) return s.matchMultiple ? pool : [pool[0]];
+    }
+    return [];
   }, []);
 
   const doImmediate = useCallback(async (row) => {
@@ -127,58 +132,26 @@ export default function ScanCollectModal({
     pushLog(`＋ ${s.primaryLabel(matched[0])}${matched.length > 1 ? ` (${matched.length} dòng)` : ''}`, true);
   }, [matchRows, doImmediate, pushLog]);
 
-  // ---- Camera QR (liên tục) ----
+  // ---- Camera đa định dạng (QR + mã vạch 1D, liên tục) ----
   const stopCam = useCallback(() => {
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    rafRef.current = null;
-    if (streamRef.current) { streamRef.current.getTracks().forEach((t) => t.stop()); streamRef.current = null; }
+    if (stopRef.current) { stopRef.current(); stopRef.current = null; }
     setReady(false);
   }, []);
 
   useEffect(() => {
-    if (!open || mode !== 'qr') { stopCam(); return undefined; }
+    if (!open || mode !== 'camera') { stopCam(); return undefined; }
     let cancelled = false;
     setError('');
     setReady(false);
 
-    const tick = () => {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      if (video && canvas && video.readyState === video.HAVE_ENOUGH_DATA) {
-        const w = video.videoWidth; const h = video.videoHeight;
-        if (w && h) {
-          canvas.width = w; canvas.height = h;
-          const ctx = canvas.getContext('2d', { willReadFrequently: true });
-          ctx.drawImage(video, 0, 0, w, h);
-          const img = ctx.getImageData(0, 0, w, h);
-          const code = jsqrRef.current && jsqrRef.current(img.data, w, h, { inversionAttempts: 'dontInvert' });
-          if (code && code.data) processScan(code.data.trim(), 'qr');
-        }
-      }
-      rafRef.current = requestAnimationFrame(tick);
-    };
-
     (async () => {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        setError('Trình duyệt không hỗ trợ camera (cần chạy trên HTTPS).'); return;
-      }
       try {
-        if (!jsqrRef.current) jsqrRef.current = (await import('jsqr')).default;
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
-        streamRef.current = stream;
-        const video = videoRef.current;
-        video.srcObject = stream;
-        video.setAttribute('playsinline', 'true');
-        await video.play();
-        setReady(true);
-        rafRef.current = requestAnimationFrame(tick);
+        const stopFn = await startCameraDecode(videoRef.current, (text) => processScan(text, 'camera'));
+        if (cancelled) { stopFn(); return; }
+        stopRef.current = stopFn;
+        if (videoRef.current) videoRef.current.onplaying = () => setReady(true);
       } catch (e) {
-        setError(
-          e.name === 'NotAllowedError' ? 'Bạn đã từ chối quyền camera — cho phép rồi thử lại.'
-            : e.name === 'NotFoundError' ? 'Không tìm thấy camera trên thiết bị.'
-              : `Không mở được camera: ${e.message || e.name}`,
-        );
+        if (!cancelled) setError(cameraErrorMessage(e));
       }
     })();
 
@@ -255,8 +228,8 @@ export default function ScanCollectModal({
           </div>
         )}
 
-        {/* Camera */}
-        {mode === 'qr' && (
+        {/* Camera đa định dạng (QR + mã vạch) */}
+        {mode === 'camera' && (
           error ? (
             <div className="rounded-control border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300">{error}</div>
           ) : (
@@ -266,7 +239,7 @@ export default function ScanCollectModal({
                 <video ref={videoRef} className="h-full w-full object-cover" muted playsInline />
                 <div className="pointer-events-none absolute inset-6 rounded-lg border-2 border-white/80" />
               </div>
-              <p className="text-center text-xs text-ink-soft">{ready ? 'Đưa mã QR vào khung — quét liên tục' : 'Đang mở camera...'}</p>
+              <p className="text-center text-xs text-ink-soft">{ready ? 'Đưa mã QR hoặc mã vạch vào khung — quét liên tục' : 'Đang mở camera...'}</p>
             </div>
           )
         )}
@@ -344,7 +317,6 @@ export default function ScanCollectModal({
           </div>
         )}
       </div>
-      <canvas ref={canvasRef} className="hidden" />
     </Modal>
   );
 }

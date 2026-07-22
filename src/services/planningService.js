@@ -54,6 +54,15 @@ export const replan = (id, body) => client.post(`/planning/replan/${id}`, body);
 export const replanBatch = (body) => client.post('/planning/replan/batch', body);
 export const planHistory = (date) => client.get('/planning/plan-history', { params: { date } });
 
+// Gia công: Kế hoạch nhận lại hàng gia công → chuyển OQC
+export const listGiaCong = (params) => client.get('/planning/gia-cong', { params });
+export const giaCongToOqc = (lenhId) => client.post(`/planning/gia-cong/${lenhId}/chuyen-oqc`);
+
+// Kế hoạch tạm (lập kế hoạch sớm cho phần in chưa Ready)
+export const listKeHoachTam = (params) => client.get('/planning/ke-hoach-tam', { params });
+export const confirmKeHoachTam = (id) => client.post(`/planning/ke-hoach-tam/${id}/xac-nhan`);
+export const deleteKeHoachTam = (id) => client.delete(`/planning/ke-hoach-tam/${id}`);
+
 // Hủy lệnh / hoàn tác release
 export const listCancelableLenh = (params) => client.get('/planning/huy-lenh/candidates', { params });
 export const cancelLenh = (lenhId, body) => client.post(`/planning/huy-lenh/${lenhId}`, body);

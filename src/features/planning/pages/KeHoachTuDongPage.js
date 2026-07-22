@@ -162,12 +162,13 @@ export default function KeHoachTuDongPage() {
     if (!(qty > 0) || qty > con) { show(`SL release phải trong khoảng 1..${fmtNum(con)}`, 'error'); return; }
     setBusyId(it.dot_vai_id);
     try {
-      await createDotSanXuat({
+      const res = await createDotSanXuat({
         items: [{ dotVaiId: it.dot_vai_id, soLuong: qty }],
         chuyenId: it.best_chuyen.chuyen_id, ngayKeHoach: it.ngay_ke_hoach,
       });
       setQtyMap((m) => { const n = { ...m }; delete n[it.dot_vai_id]; return n; });
-      show(qty < con
+      if (res.data?.chi_tam) show(`Chưa Ready → lưu Kế hoạch tạm — ${it.ma_phan}`, 'success');
+      else show(qty < con
         ? `Đã Release 1 ${fmtNum(qty)}/${fmtNum(con)} — ${it.ma_phan} · còn ${fmtNum(con - qty)}`
         : `Đã Release 1 — ${it.ma_phan} · ${it.ma_dot_vai}`);
       load(); // nạp lại để cập nhật phần còn lại (đợt ở lại nếu release chưa đủ)
@@ -299,6 +300,7 @@ export default function KeHoachTuDongPage() {
                           <div className="truncate text-xs text-ink-soft">{[it.ma_hang, it.mau_vai, it.kich_vai, it.kich_phim].filter(Boolean).join(' · ')}{it.tinh_chat_in ? <> · <span className="text-ink">{it.tinh_chat_in}</span></> : null}</div>
                           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-soft">
                             <Badge tone="info">{it.ma_dot_vai}</Badge>
+                            {it.qc_done ? <Badge tone="success">Đã Ready</Badge> : <Badge tone="warning">Chờ Ready</Badge>}
                             <span>SL {fmtNum(it.so_luong_vai_ve)}</span>
                             <span className="font-medium text-primary">còn {fmtNum(conOf(it))}</span>
                             {bc.ten_chuyen && <span>· {bc.ten_chuyen}</span>}

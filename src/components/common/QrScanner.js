@@ -1,23 +1,19 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import Modal from './Modal';
 import Button from './Button';
-// jsQR lazy-import (chỉ tải khi mở quét) — tránh phình main bundle.
+import { startCameraDecode, cameraErrorMessage } from './cameraDecoder';
 
-// Quét QR bằng camera điện thoại → trả nội dung QR (ma_tem) qua onResult.
+// Quét bằng camera → trả nội dung (ma_tem) qua onResult. Đọc CẢ QR lẫn mã vạch 1D (ZXing đa định dạng).
 // Cần HTTPS (getUserMedia chỉ chạy trên secure context / localhost).
-export default function QrScanner({ open, onClose, onResult, title = 'Quét QR tem' }) {
+export default function QrScanner({ open, onClose, onResult, title = 'Quét QR / mã vạch' }) {
   const videoRef = useRef(null);
-  const canvasRef = useRef(null);
-  const streamRef = useRef(null);
-  const rafRef = useRef(null);
-  const jsqrRef = useRef(null);
+  const stopRef = useRef(null);
+  const doneRef = useRef(false);
   const [error, setError] = useState('');
   const [ready, setReady] = useState(false);
 
   const stop = useCallback(() => {
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    rafRef.current = null;
-    if (streamRef.current) { streamRef.current.getTracks().forEach((t) => t.stop()); streamRef.current = null; }
+    if (stopRef.current) { stopRef.current(); stopRef.current = null; }
     setReady(false);
   }, []);
 
@@ -26,54 +22,23 @@ export default function QrScanner({ open, onClose, onResult, title = 'Quét QR t
   useEffect(() => {
     if (!open) return undefined;
     let cancelled = false;
+    doneRef.current = false;
     setError('');
     setReady(false);
 
-    const tick = () => {
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      if (video && canvas && video.readyState === video.HAVE_ENOUGH_DATA) {
-        const w = video.videoWidth;
-        const h = video.videoHeight;
-        if (w && h) {
-          canvas.width = w;
-          canvas.height = h;
-          const ctx = canvas.getContext('2d', { willReadFrequently: true });
-          ctx.drawImage(video, 0, 0, w, h);
-          const img = ctx.getImageData(0, 0, w, h);
-          const code = jsqrRef.current && jsqrRef.current(img.data, w, h, { inversionAttempts: 'dontInvert' });
-          if (code && code.data) {
-            stop();
-            onResult(code.data.trim());
-            return;
-          }
-        }
-      }
-      rafRef.current = requestAnimationFrame(tick);
-    };
-
     (async () => {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        setError('Trình duyệt không hỗ trợ camera (cần chạy trên HTTPS).');
-        return;
-      }
       try {
-        if (!jsqrRef.current) { jsqrRef.current = (await import('jsqr')).default; }
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
-        streamRef.current = stream;
-        const video = videoRef.current;
-        video.srcObject = stream;
-        video.setAttribute('playsinline', 'true');
-        await video.play();
-        setReady(true);
-        rafRef.current = requestAnimationFrame(tick);
+        const stopFn = await startCameraDecode(videoRef.current, (text) => {
+          if (doneRef.current) return;
+          doneRef.current = true;
+          stop();
+          onResult(text);
+        });
+        if (cancelled) { stopFn(); return; }
+        stopRef.current = stopFn;
+        if (videoRef.current) videoRef.current.onplaying = () => setReady(true);
       } catch (e) {
-        setError(
-          e.name === 'NotAllowedError' ? 'Bạn đã từ chối quyền camera — cho phép rồi thử lại.'
-            : e.name === 'NotFoundError' ? 'Không tìm thấy camera trên thiết bị.'
-              : `Không mở được camera: ${e.message || e.name}`
-        );
+        if (!cancelled) setError(cameraErrorMessage(e));
       }
     })();
 
@@ -96,11 +61,10 @@ export default function QrScanner({ open, onClose, onResult, title = 'Quét QR t
             <div className="pointer-events-none absolute inset-6 rounded-lg border-2 border-white/80" />
           </div>
           <p className="text-center text-xs text-ink-soft">
-            {ready ? 'Đưa mã QR vào khung' : 'Đang mở camera...'}
+            {ready ? 'Đưa mã QR hoặc mã vạch vào khung' : 'Đang mở camera...'}
           </p>
         </div>
       )}
-      <canvas ref={canvasRef} className="hidden" />
     </Modal>
   );
 }

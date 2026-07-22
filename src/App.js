@@ -37,6 +37,8 @@ import CaiDatPage from './features/planning/pages/CaiDatPage';
 import Release1Page from './features/planning/pages/Release1Page';
 import Release2Page from './features/planning/pages/Release2Page';
 import ReplanPage from './features/planning/pages/ReplanPage';
+import GiaCongPage from './features/planning/pages/GiaCongPage';
+import KeHoachTamPage from './features/planning/pages/KeHoachTamPage';
 import TestRunPage from './features/planning/pages/TestRunPage';
 import XacNhanChayPage from './features/production/pages/XacNhanChayPage';
 import TheoDoiChuyenPage from './features/production/pages/TheoDoiChuyenPage';
@@ -69,6 +71,8 @@ const PAGES = {
   '/ke-hoach/release-1': <Release1Page />,
   '/ke-hoach/release-2': <Release2Page />,
   '/ke-hoach/lap-lai': <ReplanPage />,
+  '/ke-hoach/gia-cong': <GiaCongPage />,
+  '/ke-hoach/ke-hoach-tam': <KeHoachTamPage />,
   '/chat-luong/test-run': <TestRunPage />,
   '/san-xuat/xac-nhan-chay': <XacNhanChayPage />,
   '/san-xuat/theo-doi-chuyen': <TheoDoiChuyenPage />,

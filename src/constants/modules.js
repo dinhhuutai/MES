@@ -37,6 +37,8 @@ export const MODULES = [
       { ten: 'Kế hoạch tự động', route: '/ke-hoach/tu-dong', perm: 'RELEASE1' },
       { ten: 'Release 1', route: '/ke-hoach/release-1', perm: 'RELEASE1' },
       { ten: 'Release 2', route: '/ke-hoach/release-2', perm: 'RELEASE2' },
+      { ten: 'Gia công', route: '/ke-hoach/gia-cong', perm: ['RELEASE1', 'RELEASE2'] },
+      { ten: 'Kế hoạch tạm', route: '/ke-hoach/ke-hoach-tam', perm: ['RELEASE1', 'RELEASE2'] },
       { ten: 'Lập kế hoạch lại', route: '/ke-hoach/lap-lai', perm: 'RELEASE2' },
       { ten: 'Cài đặt', route: '/ke-hoach/cai-dat', perm: ['RELEASE1', 'RELEASE2'] },
     ],

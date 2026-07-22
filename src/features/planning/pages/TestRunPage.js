@@ -166,7 +166,7 @@ export default function TestRunPage() {
         open={scanOpen}
         onClose={() => setScanOpen(false)}
         title="Quét / tích lệnh Test Run — QA"
-        help="Máy tính: tích barcode. Điện thoại/pad: quét QR code phần. Quét nhiều lệnh (chưa QA) rồi nhập người test & bấm QA xác nhận đạt cùng lúc; mỗi dòng có nút Trả về Release 1 nếu test không đạt."
+        help="Đưa camera vào QR code phần hoặc mã vạch để quét. Quét nhiều lệnh (chưa QA) rồi nhập người test & bấm QA xác nhận đạt cùng lúc; mỗi dòng có nút Trả về Release 1 nếu test không đạt."
         rows={selRows}
         getId={(r) => r.id}
         getCodes={(r) => [r.ma_phan]}

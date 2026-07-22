@@ -329,7 +329,7 @@ export default function ReadyQcPage() {
         open={scanOpen}
         onClose={() => setScanOpen(false)}
         title="Quét / tích phần in — QC READY"
-        help="Máy tính: tích barcode. Điện thoại/pad: quét QR code phần. Chỉ chọn được phần in đã đủ 3 mục kỹ thuật. Quét nhiều rồi bấm QC xác nhận cùng lúc; mỗi dòng có nút Trả về nếu cần trả kỹ thuật."
+        help="Đưa camera vào QR code phần hoặc mã vạch để quét. Chỉ chọn được phần in đã đủ 3 mục kỹ thuật. Quét nhiều rồi bấm QC xác nhận cùng lúc; mỗi dòng có nút Trả về nếu cần trả kỹ thuật."
         rows={readyRows}
         getId={(r) => r.id}
         getCodes={(r) => [r.ma_phan]}

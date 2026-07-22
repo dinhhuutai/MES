@@ -59,6 +59,9 @@ function DataCells({ r }) {
           <div className="font-medium text-ink">{r.ten_khach_hang || '—'}</div>
           <div className="text-xs text-ink-soft">{r.ma_don_hang || '—'}</div>
         </div>
+        <div className="mt-1">
+          {r.qc_done ? <Badge tone="success">Đã Ready</Badge> : <Badge tone="warning">Chờ Ready → KH tạm</Badge>}
+        </div>
         {(r.tra_ve || r.tra_ve_ly_do) && <div className="mt-1"><TraVeBadge data={r.tra_ve || r.tra_ve_ly_do} label="Bị Test Run trả về" nguon="Test Run (QA)" /></div>}
       </td>
       <td className={TD}>{r.ma_hang || '—'}</td>
@@ -174,7 +177,10 @@ export default function Release1Page() {
         ngayKeHoach: form.ngayKeHoach || null,
       });
       const skipped = res?.data?.skipped_test_count || 0;
-      show(skipped > 0 ? `Đã tạo lệnh — ${skipped} đợt vải vào thẳng Release 2` : 'Đã Release 1 — tạo lệnh sản xuất');
+      const tam = res?.data?.ke_hoach_tam_count || 0;
+      const tamMsg = tam > 0 ? ` · ${tam} phần chưa Ready → lưu Kế hoạch tạm` : '';
+      if (res?.data?.chi_tam) show(`${tam} phần chưa Ready → đã lưu Kế hoạch tạm (xác nhận lại khi Ready xong)`, 'success');
+      else show((skipped > 0 ? `Đã tạo lệnh — ${skipped} đợt vải vào thẳng Release 2` : 'Đã Release 1 — tạo lệnh sản xuất') + tamMsg);
       setSelected((s) => { const n = { ...s }; dotVaiIds.forEach((id) => delete n[id]); return n; });
       setDetail(null);
       load();
@@ -203,7 +209,8 @@ export default function Release1Page() {
           dotVaiIds: looseList.map((r) => r.dot_vai_id),
           chuyenId: relForm.chuyenId, soLuongRelease: null, ngayKeHoach: relForm.ngayKeHoach || null,
         });
-        looseMsg = ` · ${res?.data?.created_count || looseList.length} lệnh lẻ`;
+        const tam = res?.data?.ke_hoach_tam_count || 0;
+        looseMsg = ` · ${res?.data?.created_count || 0} lệnh lẻ${tam > 0 ? ` · ${tam} → Kế hoạch tạm` : ''}`;
       }
       show(errs.length
         ? `Release set lỗi: ${errs.join('; ')}`

@@ -33,7 +33,12 @@ function weekRange(date) {
   const f = (x) => `${String(x.getDate()).padStart(2, '0')}/${String(x.getMonth() + 1).padStart(2, '0')}`;
   return `${f(mon)} – ${f(sun)}`;
 }
-const CA_LABEL = { NGAN: 'Ngắn (3 ca)', DAI: 'Dài (2 ca)' };
+const CA_LABEL = { NGAN: 'Ngắn (3 ca)', DAI: 'Dài (2 ca)', HANH_CHINH: 'Hành chính' };
+const CA_OPTIONS = [
+  { v: 'NGAN', label: 'Ngắn' },
+  { v: 'DAI', label: 'Dài' },
+  { v: 'HANH_CHINH', label: 'Hành chính' },
+];
 
 export default function CaiDatPage() {
   const { can } = usePermissions();
@@ -81,14 +86,14 @@ export default function CaiDatPage() {
     { key: 'tuan', header: 'Tuần', render: (r) => <span className="font-medium text-ink">Tuần {r.tuan}/{r.nam}</span> },
     { key: 'khoang', header: 'Khoảng ngày', render: (r) => weekRange(dateOfWeek(r.nam, r.tuan)) },
     { key: 'loai_ca', header: 'Loại ca', render: (r) => (
-      <Badge tone={r.loai_ca === 'DAI' ? 'warning' : 'info'}>{CA_LABEL[r.loai_ca] || r.loai_ca}</Badge>
+      <Badge tone={r.loai_ca === 'DAI' ? 'warning' : r.loai_ca === 'HANH_CHINH' ? 'success' : 'info'}>{CA_LABEL[r.loai_ca] || r.loai_ca}</Badge>
     ) },
     { key: 'ghi_chu', header: 'Ghi chú', render: (r) => r.ghi_chu || '—' },
   ];
 
   return (
     <div>
-      <Toolbar title="Cài đặt ca sản xuất" subtitle="Chọn tuần đi ca Ngắn hay Dài — ca của tem suy theo giờ sản xuất + loại ca tuần đó" />
+      <Toolbar title="Cài đặt ca sản xuất" subtitle="Chọn tuần đi ca Ngắn / Dài / Hành chính — ca của tem suy theo giờ sản xuất + loại ca tuần đó" />
 
       <div className="mb-4 grid gap-2 sm:grid-cols-3">
         <div className="rounded-control border border-line bg-surface p-3 text-xs">
@@ -100,9 +105,13 @@ export default function CaiDatPage() {
           <div className="text-ink-soft">Ca 1: 6h–18h · Ca 2: 18h–6h</div>
         </div>
         <div className="rounded-control border border-line bg-surface p-3 text-xs">
-          <div className="mb-1 font-semibold text-ink">Ghi chú</div>
-          <div className="text-ink-soft">Tuần chưa cài mặc định đi ca <b>Ngắn</b>. Sản xuất chỉ theo Ngắn/Dài.</div>
+          <div className="mb-1 font-semibold text-ink">Ca Hành chính</div>
+          <div className="text-ink-soft">Hành chính: 7h30–16h30 · Tăng ca: 16h30–20h</div>
         </div>
+      </div>
+      <div className="mb-4 rounded-control border border-line bg-surface p-3 text-xs">
+        <span className="font-semibold text-ink">Ghi chú: </span>
+        <span className="text-ink-soft">Tuần chưa cài mặc định đi ca <b>Ngắn</b>. Ca của tem suy theo giờ sản xuất + loại ca của tuần.</span>
       </div>
 
       {canEdit && (
@@ -119,11 +128,11 @@ export default function CaiDatPage() {
             </Field>
             <Field label="Loại ca">
               <div className="flex gap-2">
-                {['NGAN', 'DAI'].map((v) => (
-                  <button key={v} type="button" onClick={() => setLoaiCa(v)}
-                    className={`flex-1 rounded-control border px-3 py-2.5 text-sm font-semibold transition ${
-                      loaiCa === v ? 'border-primary bg-primary-wash text-primary' : 'border-line text-ink-soft'
-                    }`}>{v === 'NGAN' ? 'Ngắn' : 'Dài'}</button>
+                {CA_OPTIONS.map((o) => (
+                  <button key={o.v} type="button" onClick={() => setLoaiCa(o.v)}
+                    className={`flex-1 rounded-control border px-2 py-2.5 text-sm font-semibold transition ${
+                      loaiCa === o.v ? 'border-primary bg-primary-wash text-primary' : 'border-line text-ink-soft'
+                    }`}>{o.label}</button>
                 ))}
               </div>
             </Field>

@@ -18,7 +18,7 @@ const STATION_BUCKETS = [
   { label: 'Test Run', keys: ['TESTRUN_CNSP', 'TESTRUN_QA'], trams: ['TEST_RUN'], color: '#8b5cf6' },
   { label: 'Release 2', keys: ['RELEASE_2'], trams: ['RELEASE_2'], color: '#0ea5e9' },
   { label: 'Sản xuất', keys: ['CHO_SAN_XUAT', 'SAN_XUAT', 'CHO_KHO', 'KCS', 'SUA'], trams: ['SAN_XUAT', 'CHO_KHO', 'KIEM', 'SUA'], color: '#f59e0b' },
-  { label: 'OQC', keys: ['OQC'], trams: ['OQC'], color: '#a855f7' },
+  { label: 'OQC', keys: ['GIA_CONG', 'OQC'], trams: ['OQC'], color: '#a855f7' },
   { label: 'Giao', keys: ['DANG_GIAO'], trams: ['FINISH'], color: '#22c55e' }, // "chưa giao" = DANG_GIAO (loại DA_GIAO)
 ];
 
@@ -212,7 +212,7 @@ const TIER1_CELLS = [
   { label: 'Test Run', sub: ['TESTRUN_CNSP', 'TESTRUN_QA'], trams: ['TEST_RUN'], hn: ['CNSP xác nhận test', 'QA xác nhận test'] },
   { label: 'Release 2', sub: ['RELEASE_2'], trams: ['RELEASE_2'] },
   { label: 'Sản xuất', sub: ['CHO_SAN_XUAT', 'SAN_XUAT', 'CHO_KHO', 'KCS', 'SUA'], trams: ['SAN_XUAT', 'CHO_KHO', 'KIEM', 'SUA'], pcs: true, hn: ['KCS', 'Sửa'] },
-  { label: 'OQC', sub: ['OQC'], trams: ['OQC'], pcs: true, hn: ['OQC'] },
+  { label: 'OQC', sub: ['GIA_CONG', 'OQC'], trams: ['OQC'], pcs: true, hn: ['OQC'] },
   { label: 'Giao', sub: ['DANG_GIAO', 'DA_GIAO'], trams: ['FINISH'], pcs: true, hn: ['Giao'] },
 ];
 
@@ -672,7 +672,7 @@ export default function DashboardPage() {
       { label: 'Test Run', key: 'test', hn: ['QA xác nhận test'], keys: ['TESTRUN_CNSP', 'TESTRUN_QA'] },
       { label: 'Release 2', key: 'release_2', hn: ['Release 2'], keys: ['RELEASE_2'] },
       { label: 'Sản xuất', key: 'san_xuat', hn: ['KCS', 'Sửa'], keys: ['CHO_SAN_XUAT', 'SAN_XUAT', 'CHO_KHO', 'KCS', 'SUA'] },
-      { label: 'OQC', key: 'oqc', hn: ['OQC'], keys: ['OQC'] },
+      { label: 'OQC', key: 'oqc', hn: ['OQC'], keys: ['GIA_CONG', 'OQC'] },
       { label: 'Giao', key: 'giao', hn: ['Giao'], keys: ['DANG_GIAO'] },
     ];
     const sc = chartDetail?.station_confirmed || {};

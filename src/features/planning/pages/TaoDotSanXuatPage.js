@@ -132,7 +132,8 @@ export default function TaoDotSanXuatPage() {
         tgBdKh: mkTs(gioBd), tgKtKh: mkTs(gioKt),
       });
       const skip = res.data?.skipped_test;
-      show(skip ? 'Đã tạo đợt sản xuất — bỏ Test Run (vào thẳng Release 2)' : 'Đã tạo đợt sản xuất — chờ Test Run');
+      if (res.data?.chi_tam) show(`Phần in chưa Ready → đã lưu Kế hoạch tạm (${res.data.ke_hoach_tam_count || 0} đợt). Xác nhận lại ở màn Kế hoạch tạm khi Ready xong.`, 'success');
+      else show(skip ? 'Đã tạo đợt sản xuất — bỏ Test Run (vào thẳng Release 2)' : 'Đã tạo đợt sản xuất — chờ Test Run');
       setBasket([]); setChuyenId(''); setNgayKeHoach(tomorrowStr()); setGioBd(''); setGioKt('');
       load();
     } catch (e) {
@@ -186,6 +187,7 @@ export default function TaoDotSanXuatPage() {
                       <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-ink-soft">
                         <span>{[r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—'}</span>
                         <LoaiDotVaiBadge value={r.loai_dot_vai} />
+                        {r.qc_done ? <Badge tone="success">Đã Ready</Badge> : <Badge tone="warning">Chờ Ready</Badge>}
                         {r.han_giao_hang ? <span>· hạn {fmtDate(r.han_giao_hang)}</span> : null}
                       </div>
                     </div>
@@ -276,7 +278,7 @@ export default function TaoDotSanXuatPage() {
         open={scanOpen}
         onClose={() => setScanOpen(false)}
         title="Quét / tích mã — Tạo đợt sản xuất"
-        help="Máy tính: tích barcode (đầu đọc mã vạch USB). Điện thoại/pad: quét QR code phần. 1 code phần → thêm HẾT đợt vải của phần in đó vào đợt đang soạn (chỉ CÙNG phần in)."
+        help="Đưa camera vào QR code phần hoặc mã vạch để quét. 1 code phần → thêm HẾT đợt vải của phần in đó vào đợt đang soạn (chỉ CÙNG phần in)."
         rows={rows}
         getId={(r) => r.dot_vai_id}
         getCodes={(r) => [r.ma_phan]}

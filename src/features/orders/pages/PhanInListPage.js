@@ -32,6 +32,7 @@ const STAGES = [
   { code: 'CHO_KHO', label: 'Chờ khô' },
   { code: 'KCS', label: 'KCS' },
   { code: 'SUA', label: 'Sửa' },
+  { code: 'GIA_CONG', label: 'Gia công' },
   { code: 'OQC', label: 'OQC' },
   { code: 'GIAO', label: 'Đang giao' },
   { code: 'DA_GIAO', label: 'Đã giao' },
@@ -586,9 +587,15 @@ export default function PhanInListPage() {
                         <td className={TD}>
                           <div className="leading-tight">
                             <div className="text-ink">{g.cho_kt_giay == null ? '—' : fmtWait(g.cho_kt_giay)}</div>
-                            <Badge tone={g.da_chuyen ? 'success' : 'warning'} className="mt-0.5">
-                              {g.da_chuyen ? 'Đã chuyển' : 'Chưa chuyển'}
-                            </Badge>
+                            {(() => {
+                              const tong = g.so_dot ?? 0;
+                              const daChuyen = g.so_dot_da_chuyen ?? (g.da_chuyen ? tong : 0);
+                              const tone = daChuyen >= tong && tong > 0 ? 'success' : daChuyen > 0 ? 'warning' : 'danger';
+                              const label = tong <= 1
+                                ? (daChuyen > 0 ? 'Đã chuyển' : 'Chưa chuyển')
+                                : `Đã chuyển ${daChuyen}/${tong} đợt`;
+                              return <Badge tone={tone} className="mt-0.5">{label}</Badge>;
+                            })()}
                           </div>
                         </td>
                         <td className={`${TD} text-right tabular-nums`}>{fmtNum(a.slIn)}</td>

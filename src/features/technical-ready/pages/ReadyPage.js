@@ -233,6 +233,7 @@ export default function ReadyPage() {
         help="Máy tính: tích barcode (đầu đọc mã vạch). Điện thoại/pad: quét QR code phần. Mỗi lần quét XÁC NHẬN NGAY các mục đang chọn — không cần chọn mới/cũ/gia công. Tích lộn thì bấm Hủy ở dòng đó."
         rows={rows}
         immediate
+        usbBarcode
         getId={(r) => r.id}
         getCodes={(r) => [r.ma_phan]}
         getBarcodes={(r) => [r.barcode]}
