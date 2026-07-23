@@ -57,6 +57,7 @@ export const planHistory = (date) => client.get('/planning/plan-history', { para
 // Gia công: Kế hoạch nhận lại hàng gia công → chuyển OQC
 export const listGiaCong = (params) => client.get('/planning/gia-cong', { params });
 export const giaCongToOqc = (lenhId) => client.post(`/planning/gia-cong/${lenhId}/chuyen-oqc`);
+export const giaCongHistory = (date) => client.get('/planning/gia-cong/history', { params: { date } });
 
 // Kế hoạch tạm (lập kế hoạch sớm cho phần in chưa Ready)
 export const listKeHoachTam = (params) => client.get('/planning/ke-hoach-tam', { params });

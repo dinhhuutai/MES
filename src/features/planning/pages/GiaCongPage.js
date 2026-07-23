@@ -7,10 +7,28 @@ import Toast from '../../../components/common/Toast';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
+import GiaCongHistoryPanel from '../components/GiaCongHistoryPanel';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import { listGiaCong, giaCongToOqc } from '../../../services/planningService';
+import { printGiaCongVeTem } from '../../production/utils/printTemLabel';
 import { fmtNum, fmtDate } from '../../../utils/format';
+
+// Chuẩn hóa 1 dòng (lệnh gia công hoặc dòng lịch sử) → dữ liệu nhãn "TH VỀ" (đầu 13).
+const buildVeLabel = (r) => ({
+  ma_tem: r.ma_tem || r.ma_lenh_san_xuat,
+  so_luong: r.so_luong_release,
+  so_luong_don_hang: r.so_luong_don_hang,
+  ten_khach_hang: r.ten_khach_hang,
+  ma_don_hang: r.ma_don_hang,
+  ma_hang: r.ma_hang,
+  mau_vai: r.mau_vai,
+  kich_vai: r.kich_vai,
+  kich_phim: r.kich_phim,
+  ten_chuyen: r.ten_chuyen,
+  ma_chuyen: r.ma_chuyen,
+  created_date: r.created_date,
+});
 
 // Màn "Gia công" (Kế hoạch): lệnh đã Release 1 lên chuyền gia công đang chờ nhận lại → bấm "Chuyển OQC".
 export default function GiaCongPage() {
@@ -25,6 +43,12 @@ export default function GiaCongPage() {
   const [selected, setSelected] = useState(() => new Set());
   const [confirm, setConfirm] = useState(null); // { ids:[], label } — đang hỏi xác nhận chuyển OQC
   const [saving, setSaving] = useState(false);
+  const [histOpen, setHistOpen] = useState(false);
+
+  const printVe = async (r) => {
+    try { await printGiaCongVeTem(buildVeLabel(r)); }
+    catch (e) { show(e.message || 'In tem thất bại', 'error'); }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -88,11 +112,18 @@ export default function GiaCongPage() {
     { key: 'nguoi_release', header: 'Người release', render: (r) => r.nguoi_release || '—' },
     { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => fmtDate(r.han_giao_hang) },
     { key: 'ngay_ke_hoach', header: 'Ngày SX kế hoạch', render: (r) => fmtDate(r.ngay_ke_hoach) },
-    ...(canDo ? [{ key: 'act', header: '', className: 'text-right', render: (r) => (
-      <Button size="sm" icon="arrow-right" onClick={(e) => { e.stopPropagation(); setConfirm({ ids: [r.id], label: r.ma_lenh_san_xuat }); }}>
-        Chuyển OQC
-      </Button>
-    ) }] : []),
+    { key: 'act', header: '', className: 'text-right whitespace-nowrap', render: (r) => (
+      <div className="flex items-center justify-end gap-1">
+        <Button size="sm" variant="secondary" icon="printer" onClick={(e) => { e.stopPropagation(); printVe(r); }}>
+          In tem
+        </Button>
+        {canDo && (
+          <Button size="sm" icon="arrow-right" onClick={(e) => { e.stopPropagation(); setConfirm({ ids: [r.id], label: r.ma_lenh_san_xuat }); }}>
+            Chuyển OQC
+          </Button>
+        )}
+      </div>
+    ) },
   ];
 
   return (
@@ -105,6 +136,7 @@ export default function GiaCongPage() {
             Chuyển OQC ({selected.size})
           </Button>
         )}
+        <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử chuyển</Button>
         <Badge tone="info">{meta.total || rows.length} lệnh</Badge>
       </Toolbar>
 
@@ -120,6 +152,8 @@ export default function GiaCongPage() {
         confirmText="Chuyển OQC"
         message={confirm ? `Xác nhận đã nhận lại hàng gia công (${confirm.label}) và chuyển sang kiểm OQC? Hệ thống sẽ tạo tem coi như đã KCS đạt.` : ''}
       />
+
+      <GiaCongHistoryPanel open={histOpen} onClose={() => setHistOpen(false)} onPrint={printVe} />
 
       <Toast toast={toast} />
     </div>

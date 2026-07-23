@@ -201,3 +201,39 @@ export async function printOqcTem(label, suffix) {
   const l = leftLabel(d);
   openSheet(l + l, `Tem 17 ${label.ma_tem}`);
 }
+
+// Nhãn "hàng về" gia công = tem 13: bố cục PHIẾU GIAO HÀNG nhưng có BĂNG "TH VỀ" phía trên tiêu đề.
+function veLabel(d) {
+  return `
+    <div class="label">
+      <table class="hd"><tr><td class="brand">THLA</td><td class="title">TH VỀ</td><td class="dt">${d.ngayIn}</td></tr></table>
+      ${d.qrBand}
+      <table class="t"><colgroup><col style="width:9mm"><col><col><col style="width:17mm"></colgroup>
+        <tr><td class="v" colspan="3">${d.khach}</td><td class="v">${d.chuyen}</td></tr>
+        <tr><td class="lbl">PO</td><td class="v" colspan="3">${d.po}</td></tr>
+        <tr><td class="lbl">MH</td><td class="v" colspan="3">${d.mh}</td></tr>
+        <tr><td class="lbl">MV</td><td class="v" colspan="3">${d.mv}</td></tr>
+        <tr><td class="lbl">KV</td><td class="v" colspan="3">${d.kv}</td></tr>
+        <tr><td class="lbl">KP</td><td class="v" colspan="3">${d.kp}</td></tr>
+        <tr><td class="v big" colspan="2">${d.slTong}</td><td class="v sm" colspan="2">${d.tgBdPhoi} - ${d.tgKtPhoi}</td></tr>
+        <tr><td class="lbl">IN</td><td class="v big" colspan="2">${d.slIn}</td><td class="v">${d.ca}</td></tr>
+      </table>
+      <table class="t bot"><colgroup><col style="width:11mm"><col><col><col></colgroup>
+        <tr><td class="lbl">Lo</td><td></td><td></td><td></td></tr>
+        <tr><td class="lbl">SL Giao</td><td></td><td></td><td></td></tr>
+        <tr><td class="lbl">KCS</td><td></td><td></td><td></td></tr>
+        <tr><td class="lbl">N Kiểm</td><td></td><td></td><td></td></tr>
+      </table>
+      <div class="code">104-THLA-CM I-011 B3</div>
+    </div>`;
+}
+
+// In tem "hàng về" gia công = tem 13 ("TH VỀ"). Dựng từ dữ liệu LỆNH gia công (không cần bản ghi tem thật):
+// caller truyền label = { ma_tem (mã lệnh/tem), so_luong, ten_khach_hang, ma_don_hang, ma_hang, mau_vai, kich_vai,
+// kich_phim, ten_chuyen/ma_chuyen, so_luong_don_hang, created_date }. In 2 nhãn giống nhau cho vừa tờ 2-up.
+export async function printGiaCongVeTem(label) {
+  if (!label || !label.ma_tem) return;
+  const d = await buildData(label, temCode(label.ma_tem, 13));
+  const l = veLabel(d);
+  openSheet(l + l, `Tem TH VỀ ${label.ma_tem}`);
+}

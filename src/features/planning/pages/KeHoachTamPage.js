@@ -5,6 +5,7 @@ import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import Toast from '../../../components/common/Toast';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import useToast from '../../../hooks/useToast';
@@ -30,7 +31,9 @@ export default function KeHoachTamPage() {
   const [meta, setMeta] = useState({ total: 0 });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [confirm, setConfirm] = useState(null); // { id, label }
+  const [selected, setSelected] = useState(() => new Set());
+  const [scanOpen, setScanOpen] = useState(false);
+  const [confirm, setConfirm] = useState(null); // { ids:[], label } — xác nhận Release 1 (1 hoặc nhiều)
   const [del, setDel] = useState(null); // { id, label }
   const [saving, setSaving] = useState(false);
 
@@ -40,6 +43,7 @@ export default function KeHoachTamPage() {
       const res = await listKeHoachTam({ search, limit: 500 });
       setRows(res.data.items);
       setMeta(res.data.meta || { total: res.data.items.length });
+      setSelected(new Set());
     } catch (e) {
       show(e.message || 'Lỗi tải', 'error');
     } finally {
@@ -52,19 +56,28 @@ export default function KeHoachTamPage() {
     return () => clearTimeout(t);
   }, [load]);
 
+  // Chỉ phần in ĐÃ Ready (qc_done) mới xác nhận Release 1 được → chỉ những dòng này chọn được.
+  const readyRows = rows.filter((r) => r.qc_done);
+  const toggleOne = (id) => setSelected((s) => {
+    const next = new Set(s);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const allChecked = readyRows.length > 0 && readyRows.every((r) => selected.has(r.id));
+  const toggleAll = () => setSelected(() => (allChecked ? new Set() : new Set(readyRows.map((r) => r.id))));
+
   const doConfirm = async () => {
     if (!confirm) return;
     setSaving(true);
-    try {
-      await confirmKeHoachTam(confirm.id);
-      show(`Đã xác nhận Release 1 cho ${confirm.label}`);
-      setConfirm(null);
-      load();
-    } catch (e) {
-      show(e.message || 'Xác nhận thất bại', 'error');
-    } finally {
-      setSaving(false);
+    let okCount = 0; let failCount = 0;
+    for (const id of confirm.ids) {
+      try { await confirmKeHoachTam(id); okCount += 1; } catch (_) { failCount += 1; }
     }
+    setSaving(false);
+    setConfirm(null);
+    show(failCount ? `Đã xác nhận Release 1 ${okCount} phần in, ${failCount} lỗi` : `Đã xác nhận Release 1 ${okCount} phần in`,
+      failCount ? 'error' : 'success');
+    load();
   };
 
   const doDelete = async () => {
@@ -83,6 +96,13 @@ export default function KeHoachTamPage() {
   };
 
   const columns = [
+    ...(canDo ? [{ key: 'sel', className: 'w-10', selection: true,
+      header: <input type="checkbox" checked={allChecked} onChange={toggleAll} aria-label="Chọn tất cả" />,
+      render: (r) => (
+        <input type="checkbox" checked={selected.has(r.id)} disabled={!r.qc_done}
+          onClick={(e) => e.stopPropagation()} onChange={() => toggleOne(r.id)}
+          aria-label="Chọn phần in" title={r.qc_done ? '' : 'Chưa Ready — chưa xác nhận Release 1 được'} />
+      ) }] : []),
     { key: 'trang_thai', header: 'Tình trạng', render: (r) => (
       r.qc_done ? <Badge tone="success">Đã Ready</Badge> : <Badge tone="warning">Chờ Ready</Badge>
     ) },
@@ -103,7 +123,7 @@ export default function KeHoachTamPage() {
     ...(canDo ? [{ key: 'act', header: '', className: 'text-right whitespace-nowrap', render: (r) => (
       <div className="flex items-center justify-end gap-1">
         <Button size="sm" icon="check" disabled={!r.qc_done}
-          onClick={(e) => { e.stopPropagation(); setConfirm({ id: r.id, label: r.ma_phan }); }}>
+          onClick={(e) => { e.stopPropagation(); setConfirm({ ids: [r.id], label: r.ma_phan }); }}>
           Xác nhận Release 1
         </Button>
         <Button size="sm" variant="ghost" icon="trash-2"
@@ -117,11 +137,37 @@ export default function KeHoachTamPage() {
       <Toolbar title="Kế hoạch tạm" subtitle="Bản kế hoạch sớm cho phần in CHƯA Ready. Khi phần in Ready xong (QA xác nhận) → bấm 'Xác nhận Release 1' (dùng lại chuyền/giờ/ngày đã lưu)"
         search={search} onSearch={setSearch}
         searchPlaceholder="Tìm code phần, mã hàng, màu, khách...">
+        {canDo && (
+          <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét QR code phần</Button>
+        )}
+        {canDo && selected.size > 0 && (
+          <Button onClick={() => setConfirm({ ids: [...selected], label: `${selected.size} phần in` })}>
+            Xác nhận Release 1 ({selected.size})
+          </Button>
+        )}
         <Badge tone="info">{meta.total || rows.length} bản</Badge>
       </Toolbar>
 
       <DataTable columns={columns} rows={rows} loading={loading} sttStart={0}
         emptyText="Chưa có kế hoạch tạm nào" />
+
+      <ScanCollectModal
+        open={scanOpen}
+        onClose={() => setScanOpen(false)}
+        title="Quét QR code phần — Kế hoạch tạm"
+        help="Quét QR code phần (hoặc mã vạch) để chọn các bản kế hoạch tạm ĐÃ Ready của phần in đó. Quét nhiều rồi bấm Xác nhận Release 1 cùng lúc."
+        rows={readyRows}
+        getId={(r) => r.id}
+        getCodes={(r) => [r.ma_phan]}
+        getBarcodes={(r) => [r.barcode]}
+        matchMultiple
+        isSelected={(r) => selected.has(r.id)}
+        onToggle={(r) => toggleOne(r.id)}
+        primaryLabel={(r) => r.ma_phan || '—'}
+        secondaryLabel={(r) => [r.ten_khach_hang, r.mau_vai, r.ma_hang].filter(Boolean).join(' · ')}
+        onConfirm={() => { setScanOpen(false); setConfirm({ ids: [...selected], label: `${selected.size} phần in` }); }}
+        confirmLabel="Xác nhận Release 1"
+      />
 
       <ConfirmDialog
         open={!!confirm}
