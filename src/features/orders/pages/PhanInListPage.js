@@ -328,8 +328,8 @@ export default function PhanInListPage() {
   const AGG_STAGES = ['ALL', 'READY', 'RELEASE_1', 'TEST_RUN', 'RELEASE_2'];
   const showSxCols = !stage || AGG_STAGES.includes(stage);
   const showTemQuality = showTemRows && !['KCS', 'CHO_KHO'].includes(stage); // KCS/Chờ khô chưa có chất lượng → ẩn cột
-  // +1 ở cả 2 chế độ: cột "Tính chất in". Non-tem thêm +1 cột "Barcode"; showSxCols thêm +1 cột "Thời gian ở READY".
-  const COLS = showTemRows ? (11 + (showTemQuality ? 1 : 0)) : (13 + (showPcsCol ? 1 : 0) + (showSxCols ? 13 : 0));
+  // +1 ở cả 2 chế độ: cột "Tính chất in". Non-tem thêm +1 cột "Barcode"; showSxCols thêm 15 cột (gồm 2 cột TG ERP).
+  const COLS = showTemRows ? (11 + (showTemQuality ? 1 : 0)) : (13 + (showPcsCol ? 1 : 0) + (showSxCols ? 15 : 0));
 
   return (
     <div>
@@ -479,6 +479,8 @@ export default function PhanInListPage() {
                         <th className={TH}>TT OQC</th>
                         <th className={`${TH} text-right`}>SL giao</th>
                         <th className={`${TH} text-center`}>Chi tiết</th>
+                        <th className={`${TH} border-l border-line/60`}>TG lấy ERP (lấy trước)</th>
+                        <th className={TH}>TG qua READY</th>
                       </>
                     )}
                   </>
@@ -612,6 +614,8 @@ export default function PhanInListPage() {
                           <Button variant="ghost" className="!px-2.5 !py-1 !text-xs"
                             onClick={(e) => { e.stopPropagation(); setDetailModal(g); }}>Chi tiết</Button>
                         </td>
+                        <td className={`${TD} whitespace-nowrap border-l border-line/60 text-xs text-ink-soft`}>{fmtDateTime(g.tg_lay_new)}</td>
+                        <td className={`${TD} whitespace-nowrap text-xs text-ink-soft`}>{fmtDateTime(g.tg_qua_ready)}</td>
                       </tr>
                     );
                   }
