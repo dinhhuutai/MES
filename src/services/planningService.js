@@ -62,6 +62,7 @@ export const giaCongHistory = (date) => client.get('/planning/gia-cong/history',
 // Kế hoạch tạm (lập kế hoạch sớm cho phần in chưa Ready)
 export const listKeHoachTam = (params) => client.get('/planning/ke-hoach-tam', { params });
 export const confirmKeHoachTam = (id) => client.post(`/planning/ke-hoach-tam/${id}/xac-nhan`);
+export const updateKeHoachTam = (id, body) => client.patch(`/planning/ke-hoach-tam/${id}`, body);
 export const deleteKeHoachTam = (id) => client.delete(`/planning/ke-hoach-tam/${id}`);
 
 // Hủy lệnh / hoàn tác release

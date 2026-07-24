@@ -101,6 +101,7 @@ export default function Release1Page() {
   const [filters, setFilters] = useState({});
   const [showFilters, setShowFilters] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
+  const [cpage, setCpage] = useState(1);             // phân trang CLIENT (chọn-tất-cả vẫn spanning mọi trang)
 
   const [detail, setDetail] = useState(null);        // row lẻ đang xem
   const [form, setForm] = useState({ chuyenId: '', soLuongRelease: '', ngayKeHoach: '' });
@@ -131,8 +132,24 @@ export default function Release1Page() {
 
   // Lọc "chỉ hiện phần bị trả về": ẩn set (đợt vải bị trả về nằm ở pool lẻ), chỉ hiện đợt vải lẻ bị trả về.
   const activeCount = Object.values(filters).filter(Boolean).length;
-  const viewSets = (onlyReturned || activeCount > 0) ? [] : sets;
-  const viewRows = filterRows(onlyReturned ? rows.filter((r) => r.tra_ve_ly_do) : rows, filters, FILTER_FIELDS);
+  const viewSets = useMemo(() => ((onlyReturned || activeCount > 0) ? [] : sets), [onlyReturned, activeCount, sets]);
+  const viewRows = useMemo(
+    () => filterRows(onlyReturned ? rows.filter((r) => r.tra_ve_ly_do) : rows, filters, FILTER_FIELDS),
+    [onlyReturned, rows, filters],
+  );
+
+  // Phân trang CLIENT trên danh sách gộp (set + đợt vải lẻ) — mỗi SET/đợt lẻ = 1 "mục".
+  // Chọn-tất-cả (toggleAll) vẫn thao tác trên TOÀN BỘ viewRows/selectableSets nên chọn được mọi trang.
+  const PAGE_SIZE = 20;
+  const combined = useMemo(() => [
+    ...viewSets.map((s) => ({ kind: 'set', key: `set-${s.id}`, s })),
+    ...viewRows.map((r) => ({ kind: 'row', key: r.dot_vai_id, r })),
+  ], [viewSets, viewRows]);
+  const totalCPages = Math.max(1, Math.ceil(combined.length / PAGE_SIZE));
+  const safePage = Math.min(Math.max(cpage, 1), totalCPages);
+  useEffect(() => { setCpage(1); }, [combined.length]);
+  const pageItems = combined.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const sttBase = (safePage - 1) * PAGE_SIZE;
 
   const looseList = useMemo(() => Object.values(selected), [selected]);
   const selectedSetList = useMemo(() => sets.filter((s) => selectedSets.has(s.id)), [sets, selectedSets]);
@@ -144,19 +161,20 @@ export default function Release1Page() {
     if (next[row.dot_vai_id]) delete next[row.dot_vai_id]; else next[row.dot_vai_id] = row;
     return next;
   });
-  // Chọn tất cả ở header = chọn cả đợt vải lẻ + các set (chỉ set đủ QC mới chọn được).
-  const selectableSets = useMemo(() => sets.filter((s) => s.san_sang), [sets]);
-  const looseAll = rows.length === 0 || rows.every((r) => selected[r.dot_vai_id]);
+  // Chọn tất cả ở header = chọn MỌI đợt vải lẻ + set ĐANG HIỂN THỊ (sau lọc), spanning tất cả trang phân trang
+  // — không chỉ trang hiện tại. (chỉ set đủ QC mới chọn được.)
+  const selectableSets = useMemo(() => viewSets.filter((s) => s.san_sang), [viewSets]);
+  const looseAll = viewRows.length === 0 || viewRows.every((r) => selected[r.dot_vai_id]);
   const setsAll = selectableSets.length === 0 || selectableSets.every((s) => selectedSets.has(s.id));
-  const allChecked = (rows.length > 0 || selectableSets.length > 0) && looseAll && setsAll;
-  const someChecked = rows.some((r) => selected[r.dot_vai_id]) || selectableSets.some((s) => selectedSets.has(s.id));
+  const allChecked = (viewRows.length > 0 || selectableSets.length > 0) && looseAll && setsAll;
+  const someChecked = viewRows.some((r) => selected[r.dot_vai_id]) || selectableSets.some((s) => selectedSets.has(s.id));
   const toggleAll = () => {
     if (allChecked) {
-      setSelected((s) => { const n = { ...s }; rows.forEach((r) => delete n[r.dot_vai_id]); return n; });
-      setSelectedSets(new Set());
+      setSelected((s) => { const n = { ...s }; viewRows.forEach((r) => delete n[r.dot_vai_id]); return n; });
+      setSelectedSets((prev) => { const n = new Set(prev); selectableSets.forEach((s) => n.delete(s.id)); return n; });
     } else {
-      setSelected((s) => { const n = { ...s }; rows.forEach((r) => { n[r.dot_vai_id] = r; }); return n; });
-      setSelectedSets(new Set(selectableSets.map((s) => s.id)));
+      setSelected((s) => { const n = { ...s }; viewRows.forEach((r) => { n[r.dot_vai_id] = r; }); return n; });
+      setSelectedSets((prev) => { const n = new Set(prev); selectableSets.forEach((s) => n.add(s.id)); return n; });
     }
   };
   const toggleSet = (id) => setSelectedSets((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -265,46 +283,50 @@ export default function Release1Page() {
             <tbody>
               {loading ? (
                 <tr><td colSpan={colCount} className="px-4 py-12 text-center text-ink-soft"><Icon name="loader" size={22} className="mx-auto animate-spin" /></td></tr>
-              ) : (viewSets.length === 0 && viewRows.length === 0) ? (
+              ) : combined.length === 0 ? (
                 <tr><td colSpan={colCount} className="px-4 py-12 text-center text-ink-soft">Không có đợt vải nào sẵn sàng Release 1</td></tr>
               ) : (
-                <>
-                  {/* Các SET — gộp nhóm như 1 khối, 1 checkbox hợp nhất */}
-                  {viewSets.map((s, si) => s.members.map((m, i) => {
-                    const first = i === 0;
-                    const last = i === s.members.length - 1;
+                pageItems.map((item, idx) => {
+                  const stt = sttBase + idx + 1;
+                  // SET — gộp nhóm như 1 khối, 1 checkbox hợp nhất (mỗi set = 1 mục phân trang)
+                  if (item.kind === 'set') {
+                    const s = item.s;
                     const on = selectedSets.has(s.id);
-                    return (
-                      <tr key={m.dot_vai_id}
-                        className={`bg-primary-wash/30 ${last ? 'border-b border-line' : ''} ${on ? 'bg-primary-wash/70' : ''}`}>
-                        {first && (
-                          <td rowSpan={s.members.length}
-                            className={`w-28 border-l-[3px] px-2 py-3 align-middle text-center transition
-                              ${on ? 'border-primary bg-primary-wash' : 'border-primary/50'}`}>
-                            <label className={`flex flex-col items-center gap-1.5 ${s.san_sang ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
-                              <input type="checkbox" disabled={!s.san_sang} checked={on} onChange={() => toggleSet(s.id)}
-                                className="h-4 w-4 rounded border-line text-primary focus:ring-primary disabled:opacity-40" />
-                              <span className="flex items-center gap-1 text-xs font-bold text-primary">
-                                <Icon name="package" size={13} /> {s.ma_set}
-                              </span>
-                              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
-                                {s.so_dot_vai} đợt · in chung
-                              </span>
-                              {s.khac_mau && <span className="text-[10px] font-medium text-amber-600">⚠ khác màu</span>}
-                              {!s.san_sang && <span className="text-[10px] text-amber-600">{s.so_chua_ready} chưa QC</span>}
-                            </label>
-                          </td>
-                        )}
-                        {first && (
-                          <td rowSpan={s.members.length} className={`${TD} text-right tabular-nums text-ink-soft`}>{si + 1}</td>
-                        )}
-                        <DataCells r={m} />
-                      </tr>
-                    );
-                  }))}
-
-                  {/* Đợt vải lẻ */}
-                  {viewRows.map((r, ri) => (
+                    return s.members.map((m, i) => {
+                      const first = i === 0;
+                      const last = i === s.members.length - 1;
+                      return (
+                        <tr key={m.dot_vai_id}
+                          className={`bg-primary-wash/30 ${last ? 'border-b border-line' : ''} ${on ? 'bg-primary-wash/70' : ''}`}>
+                          {first && (
+                            <td rowSpan={s.members.length}
+                              className={`w-28 border-l-[3px] px-2 py-3 align-middle text-center transition
+                                ${on ? 'border-primary bg-primary-wash' : 'border-primary/50'}`}>
+                              <label className={`flex flex-col items-center gap-1.5 ${s.san_sang ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
+                                <input type="checkbox" disabled={!s.san_sang} checked={on} onChange={() => toggleSet(s.id)}
+                                  className="h-4 w-4 rounded border-line text-primary focus:ring-primary disabled:opacity-40" />
+                                <span className="flex items-center gap-1 text-xs font-bold text-primary">
+                                  <Icon name="package" size={13} /> {s.ma_set}
+                                </span>
+                                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                                  {s.so_dot_vai} đợt · in chung
+                                </span>
+                                {s.khac_mau && <span className="text-[10px] font-medium text-amber-600">⚠ khác màu</span>}
+                                {!s.san_sang && <span className="text-[10px] text-amber-600">{s.so_chua_ready} chưa QC</span>}
+                              </label>
+                            </td>
+                          )}
+                          {first && (
+                            <td rowSpan={s.members.length} className={`${TD} text-right tabular-nums text-ink-soft`}>{stt}</td>
+                          )}
+                          <DataCells r={m} />
+                        </tr>
+                      );
+                    });
+                  }
+                  // Đợt vải lẻ
+                  const r = item.r;
+                  return (
                     <tr key={r.dot_vai_id} onClick={() => openDetail(r)}
                       className={`cursor-pointer border-b border-line/70 transition hover:bg-surface-muted/40 ${slaRowClass(statusDot(r.dot_vai_id))}`}>
                       <td className={TD}>
@@ -312,17 +334,17 @@ export default function Release1Page() {
                           onClick={(e) => e.stopPropagation()} onChange={() => toggle(r)}
                           className="h-4 w-4 rounded border-line text-primary focus:ring-primary" />
                       </td>
-                      <td className={`${TD} text-right tabular-nums text-ink-soft`}>{viewSets.length + ri + 1}</td>
+                      <td className={`${TD} text-right tabular-nums text-ink-soft`}>{stt}</td>
                       <DataCells r={r} />
                     </tr>
-                  ))}
-                </>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
       </div>
-      <Pagination page={meta.page} totalPages={meta.totalPages} total={meta.total} onPage={setPage} />
+      <Pagination page={safePage} totalPages={totalCPages} total={combined.length} onPage={setCpage} />
 
       {totalSel > 0 && (
         <div className="sticky bottom-4 mt-4 flex items-center justify-between rounded-card border border-line bg-surface px-5 py-3 shadow-card-hover">

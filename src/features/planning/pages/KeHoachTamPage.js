@@ -6,12 +6,23 @@ import Button from '../../../components/common/Button';
 import Toast from '../../../components/common/Toast';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
+import SidePanel from '../../../components/common/SidePanel';
+import ChuyenPicker from '../../../components/common/ChuyenPicker';
+import { Field, Input } from '../../../components/common/controls';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import { listKeHoachTam, confirmKeHoachTam, deleteKeHoachTam } from '../../../services/planningService';
+import { listKeHoachTam, confirmKeHoachTam, updateKeHoachTam, deleteKeHoachTam, listChuyen } from '../../../services/planningService';
 import { fmtNum, fmtDate } from '../../../utils/format';
+
+// timestamptz → 'YYYY-MM-DD' cho ô <input type="date"> (ngày local).
+const toDateInput = (t) => {
+  if (!t) return '';
+  const d = new Date(t);
+  if (Number.isNaN(d.getTime())) return '';
+  return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+};
 
 const hhmm = (t) => {
   if (!t) return '';
@@ -36,6 +47,9 @@ export default function KeHoachTamPage() {
   const [confirm, setConfirm] = useState(null); // { ids:[], label } — xác nhận Release 1 (1 hoặc nhiều)
   const [del, setDel] = useState(null); // { id, label }
   const [saving, setSaving] = useState(false);
+  const [chuyen, setChuyen] = useState([]);
+  const [edit, setEdit] = useState(null); // dòng đang sửa
+  const [editForm, setEditForm] = useState({ chuyenId: '', soLuongRelease: '', ngayKeHoach: '' });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -55,6 +69,36 @@ export default function KeHoachTamPage() {
     const t = setTimeout(load, 250);
     return () => clearTimeout(t);
   }, [load]);
+
+  useEffect(() => { listChuyen().then((r) => setChuyen(r.data)).catch(() => {}); }, []);
+
+  const openEdit = (r) => {
+    setEdit(r);
+    setEditForm({
+      chuyenId: r.chuyen_id || '',
+      soLuongRelease: r.so_luong != null ? String(r.so_luong) : '',
+      ngayKeHoach: toDateInput(r.ngay_ke_hoach),
+    });
+  };
+
+  const doSaveEdit = async () => {
+    if (!edit) return;
+    setSaving(true);
+    try {
+      await updateKeHoachTam(edit.id, {
+        chuyenId: editForm.chuyenId || null,
+        soLuong: editForm.soLuongRelease ? Number(editForm.soLuongRelease) : null,
+        ngayKeHoach: editForm.ngayKeHoach || null,
+      });
+      show(`Đã cập nhật kế hoạch tạm ${edit.ma_phan || ''}`);
+      setEdit(null);
+      load();
+    } catch (e) {
+      show(e.message || 'Cập nhật thất bại', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   // Chỉ phần in ĐÃ Ready (qc_done) mới xác nhận Release 1 được → chỉ những dòng này chọn được.
   const readyRows = rows.filter((r) => r.qc_done);
@@ -127,7 +171,8 @@ export default function KeHoachTamPage() {
           Xác nhận Release 1
         </Button>
         <Button size="sm" variant="ghost" icon="trash-2"
-          onClick={(e) => { e.stopPropagation(); setDel({ id: r.id, label: r.ma_phan }); }} aria-label="Xóa" />
+          onClick={(e) => { e.stopPropagation(); setDel({ id: r.id, label: r.ma_phan }); }} aria-label="Xóa"
+          title="Xóa kế hoạch tạm — đợt vải quay lại Release 1" />
       </div>
     ) }] : []),
   ];
@@ -149,6 +194,7 @@ export default function KeHoachTamPage() {
       </Toolbar>
 
       <DataTable columns={columns} rows={rows} loading={loading} sttStart={0}
+        onRowClick={(r) => openEdit(r)}
         emptyText="Chưa có kế hoạch tạm nào" />
 
       <ScanCollectModal
@@ -189,7 +235,60 @@ export default function KeHoachTamPage() {
         message={del ? `Xóa bản kế hoạch tạm của ${del.label}?` : ''}
       />
 
+      {/* SidePanel chỉnh sửa kế hoạch tạm (chuyền / SL release / ngày kế hoạch) — như bên Release 1 */}
+      <SidePanel
+        open={!!edit}
+        onClose={() => setEdit(null)}
+        title={edit ? `Sửa kế hoạch tạm — ${edit.ma_phan || ''}` : 'Chỉnh sửa kế hoạch tạm'}
+        subtitle={edit ? `${edit.ten_khach_hang || ''} · ${edit.mau_vai || ''}` : ''}
+        footer={(
+          <>
+            <Button variant="ghost" onClick={() => setEdit(null)}>Đóng</Button>
+            <Button onClick={doSaveEdit} loading={saving} disabled={!editForm.chuyenId}>Lưu</Button>
+          </>
+        )}
+      >
+        {edit && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+              <Info label="Khách hàng" value={edit.ten_khach_hang} />
+              <Info label="Đơn hàng" value={edit.ma_don_hang} />
+              <Info label="Mã hàng" value={edit.ma_hang} />
+              <Info label="Code phần" value={edit.ma_phan} />
+              <Info label="Màu vải" value={edit.mau_vai} />
+              <Info label="Đợt vải" value={edit.ma_dot_vai} />
+              <Info label="SL nhận vải" value={fmtNum(edit.so_luong_vai_ve)} />
+              <Info label="Hạn giao" value={fmtDate(edit.han_giao_hang)} />
+            </div>
+            <div className="space-y-3 border-t border-line pt-4">
+              <Field label="Chuyền in" required>
+                <ChuyenPicker chuyen={chuyen} value={editForm.chuyenId} onChange={(id) => setEditForm((f) => ({ ...f, chuyenId: id }))} />
+              </Field>
+              <div className="grid grid-cols-2 gap-x-4">
+                <Field label="Số lượng release" hint={edit.so_luong_vai_ve != null ? `SL nhận vải ${fmtNum(edit.so_luong_vai_ve)}` : undefined}>
+                  <Input type="number" min="1" max={edit.so_luong_vai_ve || undefined}
+                    value={editForm.soLuongRelease} onChange={(e) => setEditForm((f) => ({ ...f, soLuongRelease: e.target.value }))} />
+                </Field>
+                <Field label="Ngày kế hoạch">
+                  <Input type="date" value={editForm.ngayKeHoach} onChange={(e) => setEditForm((f) => ({ ...f, ngayKeHoach: e.target.value }))} />
+                </Field>
+              </div>
+              <p className="text-xs text-ink-soft">Giờ bắt đầu/kết thúc kế hoạch giữ nguyên như đã lập.</p>
+            </div>
+          </div>
+        )}
+      </SidePanel>
+
       <Toast toast={toast} />
+    </div>
+  );
+}
+
+function Info({ label, value }) {
+  return (
+    <div>
+      <div className="text-xs uppercase tracking-wide text-ink-soft">{label}</div>
+      <div className="mt-0.5 font-medium text-ink">{value || '—'}</div>
     </div>
   );
 }

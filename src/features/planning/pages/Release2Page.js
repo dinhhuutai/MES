@@ -69,8 +69,9 @@ export default function Release2Page() {
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
-  const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.id));
-  const toggleAll = () => setSelected(() => (allChecked ? new Set() : new Set(rows.map((r) => r.id))));
+  // Chọn tất cả = mọi dòng SAU LỌC (spanning mọi trang phân trang client của DataTable), không chỉ trang hiện tại.
+  const allChecked = filtered.length > 0 && filtered.every((r) => selected.has(r.id));
+  const toggleAll = () => setSelected(() => (allChecked ? new Set() : new Set(filtered.map((r) => r.id))));
 
   const doApprove = async () => {
     setBusy(true);

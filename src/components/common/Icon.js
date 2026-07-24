@@ -50,6 +50,7 @@ import {
   Camera,
   Check,
   Trash2,
+  Pencil,
 } from 'lucide-react';
 
 // Map tên kebab → component Lucide.
@@ -102,6 +103,7 @@ const MAP = {
   camera: Camera,
   check: Check,
   'trash-2': Trash2,
+  pencil: Pencil,
   'chevron-up': ChevronUp,
   'chevron-down': ChevronDown,
   'chevrons-up-down': ChevronsUpDown,
