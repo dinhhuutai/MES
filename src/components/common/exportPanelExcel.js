@@ -3,7 +3,8 @@
 // cột STT tự thêm, cột kiểu 'date' tô đỏ (trễ) / cam (gấp). Lazy import exceljs.
 //
 // exportPanelExcel({ cols, rows, title, subtitle, fileName })
-//   cols: [{ header, value: (r,i)=>any, num?:bool, center?:bool, type?:'date' }]
+//   cols: [{ header, value: (r,i)=>any, num?:bool, center?:bool, type?:'date',
+//            red?:(r,i)=>bool (tô ĐỎ đậm — vd lần test không đạt), ok?:(r,i)=>bool (tô XANH — vd đạt) }]
 //   (STT được TỰ thêm làm cột đầu — không cần khai báo.)
 
 const pad = (n) => String(n).padStart(2, '0');
@@ -68,6 +69,8 @@ export default async function exportPanelExcel({ cols = [], rows = [], title = '
         if (d != null && d < 0) cell.font = { bold: true, color: { argb: 'FFDC2626' } };
         else if (d != null && d <= 1) cell.font = { bold: true, color: { argb: 'FFB45309' } };
       }
+      if (typeof c.red === 'function' && c.red(r, i)) cell.font = { bold: true, color: { argb: 'FFDC2626' } };
+      else if (typeof c.ok === 'function' && c.ok(r, i)) cell.font = { color: { argb: 'FF16A34A' } };
     });
   });
 

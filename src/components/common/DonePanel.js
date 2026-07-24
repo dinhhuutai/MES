@@ -18,8 +18,11 @@ const fmtTime = (t) => (t ? new Date(t).toLocaleTimeString('vi-VN') : '');
 //                                kich_phim, so_luong, tg, nguoi }] }.
 // maHeader: nhãn cột mã (Tem / Phần in / Lệnh / Set...). columns: override toàn bộ cột nếu cần.
 // showChuyen: chèn thêm cột "Chuyền" NGAY SAU "Tính chất in" (cả bảng lẫn Excel) — cần fetcher trả `ten_chuyen`.
+// extraColumns / extraExcelColumns: cột PHỤ nối vào CUỐI bộ cột mặc định. Nhận mảng HOẶC hàm (rows)=>mảng
+// (dùng khi số cột phụ thuộc dữ liệu — vd "Lần test 1..N" ở Test Run).
 export default function DonePanel({
   open, onClose, title = 'Đã hoàn thành', maHeader = 'Mã', fetcher, columns, excelColumns, showChuyen = false,
+  extraColumns, extraExcelColumns,
 }) {
   const { toast, show } = useToast();
   const [date, setDate] = useState(todayStr);
@@ -80,11 +83,15 @@ export default function DonePanel({
     { header: 'Người', value: (r) => r.nguoi || '' },
   ];
 
+  const resolveExtra = (x) => (typeof x === 'function' ? x(rows) : x) || [];
+  const tableCols = columns || [...defaultColumns, ...resolveExtra(extraColumns)];
+  const xlsCols = excelColumns || [...defaultExcelCols, ...resolveExtra(extraExcelColumns)];
+
   const doExport = async () => {
     setExporting(true);
     try {
       await exportPanelExcel({
-        cols: excelColumns || defaultExcelCols,
+        cols: xlsCols,
         rows,
         title: title.toUpperCase(),
         subtitle: `Ngày ${date} · ${rows.length} dòng`,
@@ -111,7 +118,7 @@ export default function DonePanel({
         <Button variant="secondary" icon="file-spreadsheet" className="ml-auto" loading={exporting}
           disabled={!rows.length} onClick={doExport}>Xuất Excel</Button>
       </div>
-      <DataTable columns={columns || defaultColumns} rows={rows} loading={loading} rowKey="_k" sttStart={0}
+      <DataTable columns={tableCols} rows={rows} loading={loading} rowKey="_k" sttStart={0}
         emptyText="Chưa có mục nào hoàn thành trong ngày" />
       <Toast toast={toast} />
     </SidePanel>

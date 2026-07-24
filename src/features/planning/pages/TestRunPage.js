@@ -27,6 +27,33 @@ const FILTER_FIELDS = [
   { key: 'kichPhim', label: 'Kích phim', col: 'kich_phim' },
 ];
 
+// --- Cột "Lần test 1..N" cho sidebar "Đã hoàn thành" (số cột = số lần test NHIỀU NHẤT trong danh sách).
+// Đạt → "Đạt"; không đạt → hiện NGUYÊN NHÂN (ghi_chu) chữ ĐỎ. Đặt ở MODULE SCOPE (không lồng trong
+// component) để không remount mỗi lần cha render.
+const maxTests = (rows) => rows.reduce((m, r) => Math.max(m, (r.tests || []).length), 0);
+const testAt = (r, i) => (r.tests || [])[i];
+const testText = (t) => (t.ket_qua === 'DAT' ? 'Đạt' : (t.ghi_chu || '').trim() || 'Không đạt');
+
+const testRunColumns = (rows) => Array.from({ length: maxTests(rows) }, (_, i) => ({
+  key: `test_${i + 1}`,
+  header: `Lần test ${i + 1}`,
+  render: (r) => {
+    const t = testAt(r, i);
+    if (!t) return <span className="text-ink-soft">—</span>;
+    return t.ket_qua === 'DAT'
+      ? <span className="font-medium text-success">Đạt</span>
+      : <span className="font-medium text-danger">{testText(t)}</span>;
+  },
+}));
+
+const testRunExcelColumns = (rows) => Array.from({ length: maxTests(rows) }, (_, i) => ({
+  header: `Lần test ${i + 1}`,
+  width: 26,
+  value: (r) => { const t = testAt(r, i); return t ? testText(t) : ''; },
+  red: (r) => { const t = testAt(r, i); return !!t && t.ket_qua !== 'DAT'; },
+  ok: (r) => { const t = testAt(r, i); return !!t && t.ket_qua === 'DAT'; },
+}));
+
 export default function TestRunPage() {
   const { can } = usePermissions();
   const { toast, show } = useToast();
@@ -196,7 +223,8 @@ export default function TestRunPage() {
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}
         title="Lịch sử Test Run" fetcher={testRunHistory} />
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
-        title="Lệnh đã QA xác nhận" maHeader="Lệnh" fetcher={testQaDone} showChuyen />
+        title="Lệnh đã QA xác nhận" maHeader="Lệnh" fetcher={testQaDone} showChuyen
+        extraColumns={testRunColumns} extraExcelColumns={testRunExcelColumns} />
 
       <Toast toast={toast} />
     </div>
