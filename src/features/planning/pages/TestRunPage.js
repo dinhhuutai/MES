@@ -196,7 +196,7 @@ export default function TestRunPage() {
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}
         title="Lịch sử Test Run" fetcher={testRunHistory} />
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
-        title="Lệnh đã QA xác nhận" maHeader="Lệnh" fetcher={testQaDone} />
+        title="Lệnh đã QA xác nhận" maHeader="Lệnh" fetcher={testQaDone} showChuyen />
 
       <Toast toast={toast} />
     </div>

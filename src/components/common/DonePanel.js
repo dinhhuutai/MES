@@ -17,8 +17,9 @@ const fmtTime = (t) => (t ? new Date(t).toLocaleTimeString('vi-VN') : '');
 // fetcher(dateStr) -> { data: [{ ma, ten_khach_hang, ma_don_hang, ma_hang, mau_vai, kich_vai,
 //                                kich_phim, so_luong, tg, nguoi }] }.
 // maHeader: nhãn cột mã (Tem / Phần in / Lệnh / Set...). columns: override toàn bộ cột nếu cần.
+// showChuyen: chèn thêm cột "Chuyền" NGAY SAU "Tính chất in" (cả bảng lẫn Excel) — cần fetcher trả `ten_chuyen`.
 export default function DonePanel({
-  open, onClose, title = 'Đã hoàn thành', maHeader = 'Mã', fetcher, columns, excelColumns,
+  open, onClose, title = 'Đã hoàn thành', maHeader = 'Mã', fetcher, columns, excelColumns, showChuyen = false,
 }) {
   const { toast, show } = useToast();
   const [date, setDate] = useState(todayStr);
@@ -56,6 +57,7 @@ export default function DonePanel({
     { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
     { key: 'tinh_chat_in', header: 'Tính chất in', render: (r) => <TinhChatInCell value={r.tinh_chat_in} /> },
+    ...(showChuyen ? [{ key: 'ten_chuyen', header: 'Chuyền', render: (r) => r.ten_chuyen || '—' }] : []),
     { key: 'so_luong', header: 'SL', className: 'text-right tabular-nums', render: (r) => (r.so_luong != null ? fmtNum(r.so_luong) : '—') },
     { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => <HanGiaoCell value={r.han_giao_hang} /> },
     { key: 'tg', header: 'Giờ HT', className: 'whitespace-nowrap tabular-nums', render: (r) => fmtTime(r.tg) },
@@ -72,6 +74,7 @@ export default function DonePanel({
     { header: 'Kích vải', value: (r) => r.kich_vai || '' },
     { header: 'Kích phim', value: (r) => r.kich_phim || '' },
     { header: 'Tính chất in', value: (r) => r.tinh_chat_in || '' },
+    ...(showChuyen ? [{ header: 'Chuyền', value: (r) => r.ten_chuyen || '' }] : []),
     { header: 'SL', value: (r) => (r.so_luong != null ? Number(r.so_luong) : ''), num: true },
     { header: 'Hạn giao', value: (r) => r.han_giao_hang || '', type: 'date' },
     { header: 'Người', value: (r) => r.nguoi || '' },
