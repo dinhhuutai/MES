@@ -26,6 +26,7 @@ import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import { fmtDateTime } from '../../../utils/format';
 import { khuonRequired } from '../constants';
+import exportReadyExcel from '../utils/exportReadyExcel';
 
 const FILTER_FIELDS = [
   { key: 'codePhan', label: 'Code phần', col: 'ma_phan' }, { key: 'khach', label: 'Khách hàng', col: 'ten_khach_hang' },
@@ -120,6 +121,16 @@ export default function ReadyPage() {
 
   const openBulk = () => setBulk({ ma: permItems[0]?.ma || '' });
 
+  // Xuất Excel ĐÚNG danh sách đang lọc trên màn (viewRows) — kèm người + giờ xác nhận từng mục.
+  const [exporting, setExporting] = useState(false);
+  const doExport = async () => {
+    if (viewRows.length === 0) { show('Không có dòng nào để xuất', 'error'); return; }
+    setExporting(true);
+    try { await exportReadyExcel(viewRows); }
+    catch (e) { show(e.message || 'Xuất Excel thất bại', 'error'); }
+    finally { setExporting(false); }
+  };
+
   const doBulk = async () => {
     setBulkSaving(true);
     try {
@@ -190,6 +201,7 @@ export default function ReadyPage() {
           Chỉ hiện phần bị trả về
         </label>
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
+        <Button variant="secondary" icon="file-spreadsheet" loading={exporting} onClick={doExport}>Excel ({viewRows.length})</Button>
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="warning">{activeCount ? `${viewRows.length}/` : ''}{meta.total} chưa READY</Badge>
