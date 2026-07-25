@@ -31,7 +31,6 @@ import VaiVeUpdatePage from './features/system/pages/VaiVeUpdatePage';
 import PhanInListPage from './features/orders/pages/PhanInListPage';
 import ReadyPage from './features/technical-ready/pages/ReadyPage';
 import GomSetPage from './features/technical-ready/pages/GomSetPage';
-import KeHoachTuDongPage from './features/planning/pages/KeHoachTuDongPage';
 import TaoDotSanXuatPage from './features/planning/pages/TaoDotSanXuatPage';
 import CaiDatPage from './features/planning/pages/CaiDatPage';
 import Release1Page from './features/planning/pages/Release1Page';
@@ -66,7 +65,6 @@ const PAGES = {
   '/ky-thuat/ready': <ReadyPage />,
   '/ky-thuat/gom-set': <GomSetPage />,
   '/ke-hoach/tao-dot-san-xuat': <TaoDotSanXuatPage />,
-  '/ke-hoach/tu-dong': <KeHoachTuDongPage />,
   '/ke-hoach/cai-dat': <CaiDatPage />,
   '/ke-hoach/release-1': <Release1Page />,
   '/ke-hoach/release-2': <Release2Page />,

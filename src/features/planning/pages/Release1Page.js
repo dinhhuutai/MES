@@ -98,6 +98,8 @@ export default function Release1Page() {
   const [histOpen, setHistOpen] = useState(false);
   const [doneOpen, setDoneOpen] = useState(false);
   const [onlyReturned, setOnlyReturned] = useState(false); // lọc đợt vải bị QC trả về
+  const [showReady, setShowReady] = useState(false); // lọc: hiện đợt "Đã Ready" (qc_done) — mặc định KHÔNG tick (hiện tất cả)
+  const [showWait, setShowWait] = useState(false);   // lọc: hiện đợt "Chờ Ready" (chưa QC) — mặc định KHÔNG tick (hiện tất cả)
   const [filters, setFilters] = useState({});
   const [showFilters, setShowFilters] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
@@ -132,10 +134,18 @@ export default function Release1Page() {
 
   // Lọc "chỉ hiện phần bị trả về": ẩn set (đợt vải bị trả về nằm ở pool lẻ), chỉ hiện đợt vải lẻ bị trả về.
   const activeCount = Object.values(filters).filter(Boolean).length;
-  const viewSets = useMemo(() => ((onlyReturned || activeCount > 0) ? [] : sets), [onlyReturned, activeCount, sets]);
+  // Lọc theo tình trạng Ready: cả 2 tick (hoặc cùng bỏ) = hiện tất cả; chỉ 1 tick = lọc theo tick đó.
+  const readyPass = (isReady) => (showReady === showWait) || (showReady ? isReady : !isReady);
+  const viewSets = useMemo(
+    () => ((onlyReturned || activeCount > 0) ? [] : sets.filter((s) => readyPass(!!s.san_sang))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [onlyReturned, activeCount, sets, showReady, showWait],
+  );
   const viewRows = useMemo(
-    () => filterRows(onlyReturned ? rows.filter((r) => r.tra_ve_ly_do) : rows, filters, FILTER_FIELDS),
-    [onlyReturned, rows, filters],
+    () => filterRows(onlyReturned ? rows.filter((r) => r.tra_ve_ly_do) : rows, filters, FILTER_FIELDS)
+      .filter((r) => readyPass(!!r.qc_done)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [onlyReturned, rows, filters, showReady, showWait],
   );
 
   // Phân trang CLIENT trên danh sách gộp (set + đợt vải lẻ) — mỗi SET/đợt lẻ = 1 "mục".
@@ -252,6 +262,11 @@ export default function Release1Page() {
           <input type="checkbox" checked={onlyReturned} onChange={(e) => setOnlyReturned(e.target.checked)} />
           Chỉ hiện phần bị trả về
         </label>
+        <span className="flex items-center gap-2 rounded-control border border-line px-2 py-1 text-xs text-ink-soft">
+          <span className="font-medium">Tình trạng:</span>
+          <label className="flex items-center gap-1"><input type="checkbox" checked={showReady} onChange={(e) => setShowReady(e.target.checked)} />Đã Ready</label>
+          <label className="flex items-center gap-1"><input type="checkbox" checked={showWait} onChange={(e) => setShowWait(e.target.checked)} />Chờ Ready</label>
+        </span>
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
