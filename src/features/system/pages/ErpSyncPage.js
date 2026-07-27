@@ -9,14 +9,12 @@ import SidePanel from '../../../components/common/SidePanel';
 import Toast from '../../../components/common/Toast';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import { syncPhieuNhanVai, syncPhieuNhanVaiNew, syncHistory, syncRaw } from '../../../services/erpService';
+import { syncPhieuNhanVai, syncHistory, syncRaw } from '../../../services/erpService';
 import { fmtNum } from '../../../utils/format';
 
 const fmtDt = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '—');
 const TONE = { THANH_CONG: 'success', DANG_CHAY: 'warning', LOI: 'danger' };
 const LABEL = { THANH_CONG: 'Thành công', DANG_CHAY: 'Đang chạy', LOI: 'Lỗi' };
-// Nhãn nguồn API. -new = lấy trước (chờ chuyển READY); -60 = chính thức (chuyển READY).
-const NGUON_LABEL = { phieu_nhan_vai_60: 'Chính thức (→READY)', phieu_nhan_vai_60_new: 'Lấy trước' };
 
 function downloadText(text, name) {
   const blob = new Blob([text || ''], { type: 'application/json' });
@@ -70,9 +68,7 @@ export default function ErpSyncPage() {
     }
   };
   const doSync = () => runSync(syncPhieuNhanVai,
-    (d) => `Đồng bộ chính thức: ${d.soMoi} mới · ${d.soCapNhat} chuyển READY · ${d.soLoi} lỗi (tổng ${d.tong})`);
-  const doSyncNew = () => runSync(syncPhieuNhanVaiNew,
-    (d) => `Đồng bộ lấy trước: ${d.soMoi} mới (${d.soChoChuyen || 0} chờ chuyển) · ${d.soCapNhat} cập nhật · ${d.soLoi} lỗi (tổng ${d.tong})`);
+    (d) => `Đồng bộ ERP: ${d.soMoi} mới · ${d.soCapNhat} cập nhật · ${d.soLoi} lỗi (tổng ${d.tong})`);
 
   const openRaw = async (log) => {
     setRaw({ log, text: '', loading: true });
@@ -87,7 +83,6 @@ export default function ErpSyncPage() {
 
   const columns = [
     { key: 'tg_bd', header: 'Bắt đầu', render: (r) => fmtDt(r.tg_bd) },
-    { key: 'nguon', header: 'Nguồn', render: (r) => <Badge tone={r.nguon === 'phieu_nhan_vai_60' ? 'success' : 'info'}>{NGUON_LABEL[r.nguon] || r.nguon}</Badge> },
     { key: 'tg_kt', header: 'Kết thúc', render: (r) => fmtDt(r.tg_kt) },
     { key: 'tu_dong', header: 'Kiểu', render: (r) => r.tu_dong ? <Badge tone="info">Tự động</Badge> : <Badge tone="default">Thủ công</Badge> },
     { key: 'tong_ban_ghi', header: 'Tổng', className: 'text-right tabular-nums', render: (r) => fmtNum(r.tong_ban_ghi) },
@@ -100,7 +95,7 @@ export default function ErpSyncPage() {
 
   return (
     <div>
-      <Toolbar title="Đồng bộ ERP" subtitle="2 API: 'Lấy trước' (chờ chuyển READY, trừ 5I) → 'Chính thức' (chuyển phần in qua READY). Tự động chạy cả 2. Bấm 1 phiên để xem dữ liệu gốc.">
+      <Toolbar title="Đồng bộ ERP" subtitle="1 API /phieu-nhan-vai-60: đợt vải vào thẳng READY (KTCankiemtra=0 thì đi tiếp Release 1). Job tự chạy theo chu kỳ. Bấm 1 phiên để xem dữ liệu gốc.">
         <div className="flex items-center gap-1.5 text-xs text-ink-soft">
           <span>Ngày</span>
           <input type="date" value={date} onChange={(e) => { setDate(e.target.value); setPage(1); }}
@@ -108,8 +103,7 @@ export default function ErpSyncPage() {
           {date && <button type="button" onClick={() => { setDate(''); setPage(1); }}
             className="text-ink-soft hover:text-danger" aria-label="Xóa lọc ngày"><Icon name="x" size={14} /></button>}
         </div>
-        {canSync && <Button variant="secondary" icon="loader" loading={busy} onClick={doSyncNew}>Đồng bộ lấy trước</Button>}
-        {canSync && <Button icon="loader" loading={busy} onClick={doSync}>Đồng bộ chính thức</Button>}
+        {canSync && <Button icon="loader" loading={busy} onClick={doSync}>Đồng bộ ngay</Button>}
         <Badge tone="info">{meta.total} lần</Badge>
       </Toolbar>
 

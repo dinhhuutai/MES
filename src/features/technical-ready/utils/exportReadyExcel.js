@@ -51,7 +51,7 @@ const COLS = [
   { h: 'Tiến độ KT', w: 13, center: true, key: (r) => `${r.n_tech_done || 0}/${reqCount(r)} mục`, tienDo: true },
   { h: 'Trạng thái', w: 16, center: true, key: (r) => STATUS_LABEL[r.trang_thai_ready] || 'Chưa làm', tt: true },
   { h: 'Hạn giao', w: 14, center: true, key: (r) => fmtDMY(r.han_giao_hang), han: true },
-  { h: 'Thời gian ERP (qua READY)', w: 22, center: true, key: (r) => fmtDT(r.tg_qua_ready) },
+  { h: 'Thời gian ERP lên MES', w: 22, center: true, key: (r) => fmtDT(r.tg_qua_ready) },
 ];
 
 export default async function exportReadyExcel(rows, fileName = 'chuan-bi-ky-thuat-ready') {

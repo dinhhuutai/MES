@@ -97,17 +97,6 @@ const STAGE_TEM_STATUS = {
 };
 const N0 = (v) => Number(v) || 0;
 
-// Thời gian CHỜ từ khi tt60 chuyển vào READY → tới lúc kỹ thuật xử lý (xác nhận Khuôn/Film/Mực đầu tiên),
-// hoặc tới hiện tại nếu kỹ thuật chưa làm. Backend trả sẵn số GIÂY (cho_kt_giay). null = chưa chuyển sang KT.
-function fmtWait(sec) {
-  if (sec == null) return null;
-  const mins = Math.max(0, Math.round(Number(sec) / 60));
-  if (mins < 60) return `${mins} phút`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs} giờ`;
-  return `${Math.floor(hrs / 24)} ngày`;
-}
-
 // Dựng danh sách dòng hiển thị của 1 tem theo giai đoạn: {key, prefix, ma, qty, tm}.
 //  - KCS/Chờ khô: SL in (so_luong), không tiền tố.
 //  - Sửa: tem 16-, SL = số lượng quyết định sửa.
@@ -206,7 +195,6 @@ export default function PhanInListPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState({ key: '', dir: '' }); // sắp xếp cột (màn "Tất cả")
-  const [daChuyen, setDaChuyen] = useState(''); // lọc đã chuyển / chưa chuyển READY (chỉ chip "Tất cả")
   const [menuKey, setMenuKey] = useState(null); // header đang mở menu sắp xếp
   const [exporting, setExporting] = useState(false);
   const [detailModal, setDetailModal] = useState(null); // phần in đang mở modal chi tiết theo đợt
@@ -222,7 +210,7 @@ export default function PhanInListPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await listVaiVe({ search, stage, ...filters, daChuyen, page, limit: LIMIT, sortKey: sort.key, sortDir: sort.dir });
+      const res = await listVaiVe({ search, stage, ...filters, page, limit: LIMIT, sortKey: sort.key, sortDir: sort.dir });
       setRows(res.data.items);
       setMeta(res.data.meta);
     } catch (e) {
@@ -231,7 +219,7 @@ export default function PhanInListPage() {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, stage, filtersKey, daChuyen, page, sort.key, sort.dir, show]);
+  }, [search, stage, filtersKey, page, sort.key, sort.dir, show]);
 
   // Chọn kiểu sắp xếp cho 1 cột: '' = mặc định, 'asc' = tăng, 'desc' = giảm.
   const applySort = (key, dir) => { setSort(dir ? { key, dir } : { key: '', dir: '' }); setPage(1); setMenuKey(null); };
@@ -240,7 +228,7 @@ export default function PhanInListPage() {
   const doExport = async (mode) => {
     setExporting(true);
     try {
-      const res = await listVaiVe({ search, stage, ...filters, daChuyen, page: 1, limit: 100000, sortKey: sort.key, sortDir: sort.dir });
+      const res = await listVaiVe({ search, stage, ...filters, page: 1, limit: 100000, sortKey: sort.key, sortDir: sort.dir });
       const items = res.data.items || [];
       if (!items.length) { show('Không có dữ liệu để xuất', 'error'); return; }
       await exportPhanInVaiVeExcel(items, `danh-sach-phan-in-${mode === 'tong' ? 'tong-hop' : 'chi-tiet'}`, mode);
@@ -329,7 +317,7 @@ export default function PhanInListPage() {
   const showSxCols = !stage || AGG_STAGES.includes(stage);
   const showTemQuality = showTemRows && !['KCS', 'CHO_KHO'].includes(stage); // KCS/Chờ khô chưa có chất lượng → ẩn cột
   // +1 ở cả 2 chế độ: cột "Tính chất in". Non-tem thêm +1 cột "Barcode"; showSxCols thêm 15 cột (gồm 2 cột TG ERP).
-  const COLS = showTemRows ? (11 + (showTemQuality ? 1 : 0)) : (13 + (showPcsCol ? 1 : 0) + (showSxCols ? 15 : 0));
+  const COLS = showTemRows ? (11 + (showTemQuality ? 1 : 0)) : (13 + (showPcsCol ? 1 : 0) + (showSxCols ? 13 : 0));
 
   return (
     <div>
@@ -374,18 +362,6 @@ export default function PhanInListPage() {
             <label className="mb-1 block text-xs font-medium text-ink-soft">Ngày vải về</label>
             <DateRangePicker value={{ from: filters.ngayVaiTu, to: filters.ngayVaiDen }}
               onChange={(r) => { setFilters((f) => ({ ...f, ngayVaiTu: r.from || '', ngayVaiDen: r.to || '' })); setPage(1); }} />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-ink-soft">Chuyển sang kỹ thuật</label>
-            <div className="flex gap-1.5">
-              {[['', 'Tất cả'], ['DA', 'Đã chuyển'], ['CHUA', 'Chưa chuyển']].map(([v, lb]) => (
-                <button key={v || 'all'} type="button" onClick={() => { setDaChuyen(v); setPage(1); }}
-                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-                    daChuyen === v ? 'border-primary bg-primary text-white' : 'border-line text-ink-soft hover:bg-surface-muted'}`}>
-                  {lb}
-                </button>
-              ))}
-            </div>
           </div>
         </div>
       )}
@@ -467,7 +443,6 @@ export default function PhanInListPage() {
                     {showSxCols && (
                       <>
                         <th className={`${TH} border-l border-line/60`}>Đợt SX</th>
-                        <th className={TH}>Chờ sang kỹ thuật</th>
                         {sortTh('SL in', 'slIn', 'text-right')}
                         {sortTh('Kiểm đạt', 'kiemDat', 'text-right')}
                         {sortTh('Sửa', 'sua', 'text-right')}
@@ -479,8 +454,7 @@ export default function PhanInListPage() {
                         <th className={TH}>TT OQC</th>
                         <th className={`${TH} text-right`}>SL giao</th>
                         <th className={`${TH} text-center`}>Chi tiết</th>
-                        <th className={`${TH} border-l border-line/60`}>TG lấy ERP (lấy trước)</th>
-                        <th className={TH}>TG qua READY</th>
+                        <th className={`${TH} border-l border-line/60`}>Thời gian ERP lên MES</th>
                       </>
                     )}
                   </>
@@ -586,20 +560,6 @@ export default function PhanInListPage() {
                         <td className={`${TD} border-l border-line/60 font-medium text-ink`}>
                           {a.soDotSx > 0 ? <Badge tone="info">{a.soDotSx} đợt SX</Badge> : <span className="text-xs italic text-ink-soft">Chưa có đợt SX</span>}
                         </td>
-                        <td className={TD}>
-                          <div className="leading-tight">
-                            <div className="text-ink">{g.cho_kt_giay == null ? '—' : fmtWait(g.cho_kt_giay)}</div>
-                            {(() => {
-                              const tong = g.so_dot ?? 0;
-                              const daChuyen = g.so_dot_da_chuyen ?? (g.da_chuyen ? tong : 0);
-                              const tone = daChuyen >= tong && tong > 0 ? 'success' : daChuyen > 0 ? 'warning' : 'danger';
-                              const label = tong <= 1
-                                ? (daChuyen > 0 ? 'Đã chuyển' : 'Chưa chuyển')
-                                : `Đã chuyển ${daChuyen}/${tong} đợt`;
-                              return <Badge tone={tone} className="mt-0.5">{label}</Badge>;
-                            })()}
-                          </div>
-                        </td>
                         <td className={`${TD} text-right tabular-nums`}>{fmtNum(a.slIn)}</td>
                         <td className={`${TD} text-right tabular-nums`}>{fmtNum(a.slKcsDat)}</td>
                         <td className={`${TD} text-right tabular-nums`}>{fmtNum(a.slSua)}</td>
@@ -614,8 +574,7 @@ export default function PhanInListPage() {
                           <Button variant="ghost" className="!px-2.5 !py-1 !text-xs"
                             onClick={(e) => { e.stopPropagation(); setDetailModal(g); }}>Chi tiết</Button>
                         </td>
-                        <td className={`${TD} whitespace-nowrap border-l border-line/60 text-xs text-ink-soft`}>{fmtDateTime(g.tg_lay_new)}</td>
-                        <td className={`${TD} whitespace-nowrap text-xs text-ink-soft`}>{fmtDateTime(g.tg_qua_ready)}</td>
+                        <td className={`${TD} whitespace-nowrap border-l border-line/60 text-xs text-ink-soft`}>{fmtDateTime(g.tg_len_mes)}</td>
                       </tr>
                     );
                   }

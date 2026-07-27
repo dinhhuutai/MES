@@ -182,7 +182,7 @@ export default function ReadyPage() {
       return <Badge tone={s.tone}>{s.label}</Badge>;
     } },
     { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => <HanGiaoCell value={r.han_giao_hang} /> },
-    { key: 'tg_qua_ready', header: 'Thời gian ERP (qua READY)', className: 'whitespace-nowrap', render: (r) => (
+    { key: 'tg_qua_ready', header: 'Thời gian ERP lên MES', className: 'whitespace-nowrap', render: (r) => (
       <span className="text-ink-soft">{fmtDateTime(r.tg_qua_ready)}</span>
     ) },
   ];
