@@ -19,3 +19,13 @@ root.render(
     </Provider>
   </React.StrictMode>
 );
+
+// PWA: đăng ký service worker (network-first) để app cài màn hình chính TỰ CẬP NHẬT khi có build mới
+// (không cần xóa & thêm lại). Chỉ chạy ở production build; dev không đăng ký để tránh cache gây rối.
+if ('serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register(`${process.env.PUBLIC_URL || ''}/service-worker.js`)
+      .then((reg) => { try { reg.update(); } catch (e) { /* noop */ } })
+      .catch(() => { /* SW không bắt buộc — bỏ qua nếu lỗi */ });
+  });
+}

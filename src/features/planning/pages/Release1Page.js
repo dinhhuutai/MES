@@ -11,17 +11,18 @@ import Toast from '../../../components/common/Toast';
 import Icon from '../../../components/common/Icon';
 import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
-import { Field, Input } from '../../../components/common/controls';
+import { Field, Input, Textarea } from '../../../components/common/controls';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
+import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
 import useToast from '../../../hooks/useToast';
 import useNghenMap from '../../../hooks/useNghenMap';
 import { slaRowClass } from '../../../utils/sla';
 import {
   listRelease1Candidates, createRelease1, listChuyen, release1History,
-  listReleaseSets, releaseSet, release1Done,
+  listReleaseSets, releaseSet, release1Done, release1TraVeKyThuat,
 } from '../../../services/planningService';
 import { fmtNum, fmtDate } from '../../../utils/format';
 
@@ -72,6 +73,7 @@ function DataCells({ r }) {
         </div>
       </td>
       <td className={TD}><TinhChatInCell value={r.tinh_chat_in} /></td>
+      <td className={TD}><PhuongAnInBadge value={r.phuong_an_in} /></td>
       <td className={TD}><LoaiDotVaiBadge value={r.loai_dot_vai} /></td>
       <td className={`${TD} text-right tabular-nums whitespace-nowrap`}>
         <b className="text-ink">{fmtNum(r.so_luong_vai_ve)}</b><span className="text-ink-soft"> / {fmtNum(r.so_luong_don_hang)}</span>
@@ -110,6 +112,8 @@ export default function Release1Page() {
   const [releaseOpen, setReleaseOpen] = useState(false); // modal release gộp
   const [relForm, setRelForm] = useState({ chuyenId: '', ngayKeHoach: '' });
   const [saving, setSaving] = useState(false);
+  const [traVeOpen, setTraVeOpen] = useState(false);     // modal "Trả về Kỹ thuật" (lý do bắt buộc)
+  const [traVeReason, setTraVeReason] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -217,6 +221,24 @@ export default function Release1Page() {
     } finally { setSaving(false); }
   };
 
+  // Trả đợt vải ở Release 1 ngược về Kỹ thuật (mở lại READY) — lý do BẮT BUỘC, nhập trong modal
+  // (không dùng window.prompt) và hiện lại ở màn READY để kỹ thuật biết vì sao phải làm lại.
+  const doTraVeKyThuat = async () => {
+    if (!detail) return;
+    const lyDo = traVeReason.trim();
+    if (!lyDo) { show('Nhập lý do trả về Kỹ thuật', 'error'); return; }
+    setSaving(true);
+    try {
+      await release1TraVeKyThuat({ dotVaiId: detail.dot_vai_id, lyDo });
+      show('Đã trả về Kỹ thuật — phần in quay lại READY');
+      setTraVeOpen(false); setTraVeReason('');
+      setDetail(null);
+      load();
+    } catch (e) {
+      show(e.message || 'Trả về Kỹ thuật thất bại', 'error');
+    } finally { setSaving(false); }
+  };
+
   const openReleaseAll = () => {
     setRelForm({ chuyenId: chuyen[0]?.id || '', ngayKeHoach: dateOffsetStr(1) });
     setReleaseOpen(true);
@@ -250,7 +272,7 @@ export default function Release1Page() {
     } finally { setSaving(false); }
   };
 
-  const colCount = 11; // +1: cột "Tính chất in"
+  const colCount = 12; // +1: cột "Tính chất in", +1: cột "Phương án in"
 
   return (
     <div>
@@ -288,6 +310,7 @@ export default function Release1Page() {
                 <th className={TH}>Mã hàng</th>
                 <th className={TH}>Màu · Kích (vải/phim)</th>
                 <th className={TH}>Tính chất in</th>
+                <th className={TH}>Phương án in</th>
                 <th className={TH}>Loại đợt vải</th>
                 <th className={`${TH} text-right`}>SL vải về / đơn</th>
                 <th className={`${TH} text-right`}>Còn release</th>
@@ -408,6 +431,11 @@ export default function Release1Page() {
         footer={
           <>
             <Button variant="ghost" onClick={() => setDetail(null)}>Đóng</Button>
+            {/* Chỉ phần in ĐÃ READY (QC xác nhận) mới trả về Kỹ thuật được — phần "Chờ Ready" vẫn đang ở READY. */}
+            {detail?.qc_done && (
+              <Button variant="danger" icon="chevron-left"
+                onClick={() => { setTraVeReason(''); setTraVeOpen(true); }}>Trả về Kỹ thuật</Button>
+            )}
             <Button onClick={() => submitRelease([detail.dot_vai_id])} loading={saving} disabled={!form.chuyenId}>Xác nhận Release 1</Button>
           </>
         }
@@ -447,6 +475,31 @@ export default function Release1Page() {
           </div>
         )}
       </SidePanel>
+
+      {/* Trả về Kỹ thuật — lý do bắt buộc (hiện lại ở màn READY / QC READY) */}
+      <Modal
+        open={traVeOpen}
+        onClose={() => setTraVeOpen(false)}
+        title={`Trả về Kỹ thuật — ${detail?.ma_phan || ''}`}
+        size="sm"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setTraVeOpen(false)}>Hủy</Button>
+            <Button variant="danger" onClick={doTraVeKyThuat} loading={saving} disabled={!traVeReason.trim()}>
+              Xác nhận trả về
+            </Button>
+          </>
+        }
+      >
+        <p className="mb-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
+          Phần in sẽ quay lại <b>READY</b>: hủy xác nhận Khuôn/Film/Mực + QC, kỹ thuật phải làm lại.
+          Lý do sẽ hiện ở màn Chuẩn bị kỹ thuật.
+        </p>
+        <Field label="Lý do trả về" required>
+          <Textarea rows={3} value={traVeReason} onChange={(e) => setTraVeReason(e.target.value)}
+            placeholder="Vì sao trả về kỹ thuật (vd: sai film, khuôn chưa đạt...)" />
+        </Field>
+      </Modal>
 
       <ScanCollectModal
         open={scanOpen}

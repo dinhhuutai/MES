@@ -61,7 +61,7 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
   const printLabelFor = async (temId) => {
     if (!temId) return;
     try { const res = await getTemLabel(temId); await printTemLabel(res.data); }
-    catch (e) { show('Không lấy được dữ liệu tem để in', 'error'); }
+    catch (e) { show(e.message || 'Không lấy được dữ liệu tem để in', 'error'); }
   };
 
   const doPrint = async () => {

@@ -189,7 +189,7 @@ export default function GomSetPage() {
             <div className="card flex flex-col p-4" onDragOver={(e) => e.preventDefault()} onDrop={(e) => onDrop(e, 'left')}>
               <div className="mb-3 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-ink">Đợt vải ở READY ({left.length})</h3>
-                <Badge tone="default">chưa xác nhận khuôn/phim</Badge>
+                <Badge tone="default">QC chưa xác nhận</Badge>
               </div>
               <Input value={search} onChange={(e) => setSearch(e.target.value)} className="mb-3"
                 placeholder="Tìm code phần, màu, kích, mã hàng, đợt vải..." />

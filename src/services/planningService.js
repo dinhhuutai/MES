@@ -12,6 +12,8 @@ export const autoPlanCandidates = (params) => client.get('/planning/auto-plan/ca
 // Release 1
 export const listRelease1Candidates = (params) => client.get('/planning/release1/candidates', { params });
 export const createRelease1 = (body) => client.post('/planning/release1', body);
+// Trả đợt vải ở Release 1 ngược về Kỹ thuật (mở lại READY).
+export const release1TraVeKyThuat = (body) => client.post('/planning/release1/tra-ve-ky-thuat', body);
 // Tạo đợt sản xuất (gộp/tách nhiều đợt vải + SL từng đợt) — màn "Tạo đợt sản xuất"
 export const createDotSanXuat = (body) => client.post('/planning/dot-san-xuat', body);
 export const release1History = (date) => client.get('/planning/release1/history', { params: { date } });

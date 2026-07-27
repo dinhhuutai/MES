@@ -21,6 +21,7 @@ export const MODULES = [
     mau: 'bg-amber-50 text-amber-600',
     children: [
       { ten: 'Xác nhận READY', route: '/ky-thuat/ready', perm: 'READY_VIEW' },
+      { ten: 'Hồ sơ kỹ thuật', route: '/ky-thuat/ho-so-ky-thuat', perm: 'READY_VIEW' },
       { ten: 'Gom set', route: '/ky-thuat/gom-set', perm: 'READY_GOMSET' },
       // Test Run - CNSP đã GỘP về màn Test Run QA (điểm 11) — bỏ menu.
     ],

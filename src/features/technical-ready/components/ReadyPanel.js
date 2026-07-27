@@ -21,6 +21,28 @@ const ITEMS = [
 
 const fmt = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '');
 
+// Banner "bị trả về" + LÝ DO (nguồn: Kế hoạch/Release 1 hoặc QC READY).
+function ReturnNote({ info, nguon }) {
+  const checklist = (info.checklist_list || '').split(',').map((s) => s.trim()).filter(Boolean);
+  return (
+    <div className="rounded-control border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-200">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs font-semibold uppercase tracking-wide">
+        <Icon name="undo-2" size={13} /> {nguon} trả về
+        {info.so_lan > 1 && <span className="font-normal normal-case">({info.so_lan} lần)</span>}
+      </div>
+      <div className="mt-1">{info.ly_do || 'Không có lý do ghi chú.'}</div>
+      {checklist.length > 0 && (
+        <div className="mt-1 flex flex-wrap gap-1.5">
+          {checklist.map((c) => <Badge key={c} tone="warning">{c}</Badge>)}
+        </div>
+      )}
+      {(info.nguoi || info.tg) && (
+        <div className="mt-1 text-xs opacity-80">{[info.nguoi, fmt(info.tg)].filter(Boolean).join(' · ')}</div>
+      )}
+    </div>
+  );
+}
+
 export default function ReadyPanel({ phanInId, onClose, onChanged }) {
   const { can } = usePermissions();
   const { toast, show } = useToast();
@@ -137,6 +159,10 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
         <div className="py-10 text-center text-ink-soft">Đang tải...</div>
       ) : (
         <div className="space-y-4">
+          {/* Lý do bị trả về — để kỹ thuật biết PHẢI LÀM LẠI GÌ (Kế hoạch/Release 1 & QC READY). */}
+          {detail.tra_ve_kh && <ReturnNote info={detail.tra_ve_kh} nguon="Kế hoạch (Release 1)" />}
+          {detail.tra_ve && <ReturnNote info={detail.tra_ve} nguon="QC chuẩn bị kỹ thuật" />}
+
           {state.qc_done ? (
             <div className="rounded-control border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
               READY hoàn thành — đã QC xác nhận, sẵn sàng Release 1.

@@ -46,6 +46,8 @@ export default function ScanCollectModal({
   open, onClose, title = 'Quét / tích mã', help,
   rows = [], getId = (r) => r.id,
   getCodes = (r) => [r.ma_phan], getBarcodes,
+  // Barcode HSKT: quét trúng → chọn TẤT CẢ phần in/đợt cùng HSKT (dù matchMultiple=false). Mặc định đọc r.barcode_hskt.
+  getHsktBarcodes = (r) => (r && r.barcode_hskt ? [r.barcode_hskt] : []),
   matchMultiple = false,
   isSelected, onToggle,
   primaryLabel = (r) => r.ma_phan, secondaryLabel,
@@ -70,7 +72,7 @@ export default function ScanCollectModal({
   const idRef = useRef(0);
   // Giữ props mới nhất cho vòng lặp camera (effect chỉ chạy lại theo open/mode).
   const stateRef = useRef({});
-  stateRef.current = { rows, getCodes, getBarcodes, matchMultiple, isSelected, onToggle, immediate, onScanAction, actionLabel, primaryLabel, disabledScan };
+  stateRef.current = { rows, getCodes, getBarcodes, getHsktBarcodes, matchMultiple, isSelected, onToggle, immediate, onScanAction, actionLabel, primaryLabel, disabledScan };
 
   useEffect(() => {
     if (open) { setLog([]); setSession([]); recentRef.current = new Map(); }
@@ -88,16 +90,17 @@ export default function ScanCollectModal({
     const c = normStr(raw);
     if (!c) return [];
     // barcode (đầu đọc USB) → khớp barcode. camera → khớp CẢ code phần lẫn barcode (không biết trước QR hay mã vạch).
+    // getHsktBarcodes (forceMulti): quét barcode HSKT → CHỌN CẢ NHÓM phần in/đợt cùng HSKT (dù matchMultiple=false).
     const getterList = kind === 'barcode'
-      ? [s.getBarcodes]
+      ? [[s.getBarcodes, false], [s.getHsktBarcodes, true]]
       : kind === 'camera'
-        ? [s.getCodes, s.getBarcodes]
-        : [s.getCodes];
-    for (const getters of getterList) {
+        ? [[s.getCodes, false], [s.getBarcodes, false], [s.getHsktBarcodes, true]]
+        : [[s.getCodes, false], [s.getHsktBarcodes, true]];
+    for (const [getters, forceMulti] of getterList) {
       if (typeof getters !== 'function') continue;
       const exact = s.rows.filter((r) => (getters(r) || []).some((v) => v && normStr(v) === c));
       const pool = exact.length ? exact : s.rows.filter((r) => (getters(r) || []).some((v) => v && normStr(v).includes(c)));
-      if (pool.length) return s.matchMultiple ? pool : [pool[0]];
+      if (pool.length) return (s.matchMultiple || forceMulti) ? pool : [pool[0]];
     }
     return [];
   }, []);

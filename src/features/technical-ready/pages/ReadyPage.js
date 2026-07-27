@@ -87,7 +87,8 @@ export default function ReadyPage() {
     const n = new Set(s); if (n.has(ma)) n.delete(ma); else n.add(ma); return n;
   });
   const activeCount = Object.values(filters).filter(Boolean).length;
-  const viewRows = filterRows(onlyReturned ? rows.filter((r) => r.tra_ve_ly_do) : rows, filters, FILTER_FIELDS);
+  // "Chỉ hiện phần bị trả về" gồm CẢ 2 nguồn: QC READY trả về + Kế hoạch (Release 1) trả về Kỹ thuật.
+  const viewRows = filterRows(onlyReturned ? rows.filter((r) => r.tra_ve_ly_do || r.tra_ve_kh) : rows, filters, FILTER_FIELDS);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -160,6 +161,7 @@ export default function ReadyPage() {
         <div>{r.ma_phan || '—'}</div>
         {r.gom_set_list && <Badge tone="info" className="mt-1" title="Gom set: phần in này được gom in chung với các phần in KHÁC (cùng màu). ≠ Gộp đợt (cùng phần in, khác đợt)."><Icon name="git-branch" size={12} className="mr-1" />Gom set {r.gom_set_list}</Badge>}
         {(r.tra_ve || r.tra_ve_ly_do) && <div className="mt-1"><TraVeBadge data={r.tra_ve || r.tra_ve_ly_do} label="Bị QC trả về" nguon="QC" /></div>}
+        {r.tra_ve_kh && <div className="mt-1"><TraVeBadge data={r.tra_ve_kh} label="Kế hoạch trả về" nguon="Kế hoạch (Release 1)" /></div>}
       </div>
     ) },
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
@@ -252,7 +254,7 @@ export default function ReadyPage() {
         usbBarcode
         getId={(r) => r.id}
         getCodes={(r) => [r.ma_phan]}
-        getBarcodes={(r) => [r.barcode]}
+        getBarcodes={(r) => String(r.barcode || '').split(',').map((s) => s.trim()).filter(Boolean)}
         matchMultiple={false}
         primaryLabel={(r) => r.ma_phan || r.barcode || '—'}
         secondaryLabel={(r) => [r.ten_khach_hang, r.ma_hang, r.mau_vai].filter(Boolean).join(' · ')}

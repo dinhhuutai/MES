@@ -3,6 +3,7 @@ import { Outlet, useLocation, Link } from 'react-router-dom';
 import { useDispatch } from 'react-redux';
 import Topbar from './Topbar';
 import Sidebar from './Sidebar';
+import BottomNav from './BottomNav';
 import Icon from '../common/Icon';
 import { openMobileNav, closeMobileNav } from '../../store/uiSlice';
 import { findModuleByPath } from '../../constants/modules';
@@ -22,7 +23,7 @@ export default function ModuleLayout() {
       <Topbar />
       <div className="flex flex-1">
         <Sidebar module={module} />
-        <main className="min-w-0 flex-1 overflow-x-hidden px-4 py-4 md:px-6 md:py-6">
+        <main className="min-w-0 flex-1 overflow-x-hidden px-4 py-4 pb-24 md:px-6 md:py-6 lg:pb-6">
           {/* Thanh mobile: nút mở menu + tên module */}
           <div className="mb-3 flex items-center gap-2 md:hidden">
             <button onClick={() => dispatch(openMobileNav())}
@@ -48,6 +49,7 @@ export default function ModuleLayout() {
           <Outlet />
         </main>
       </div>
+      <BottomNav />
     </div>
   );
 }

@@ -30,6 +30,7 @@ import ManualEntryPage from './features/system/pages/ManualEntryPage';
 import VaiVeUpdatePage from './features/system/pages/VaiVeUpdatePage';
 import PhanInListPage from './features/orders/pages/PhanInListPage';
 import ReadyPage from './features/technical-ready/pages/ReadyPage';
+import HoSoKyThuatPage from './features/technical-ready/pages/HoSoKyThuatPage';
 import GomSetPage from './features/technical-ready/pages/GomSetPage';
 import TaoDotSanXuatPage from './features/planning/pages/TaoDotSanXuatPage';
 import CaiDatPage from './features/planning/pages/CaiDatPage';
@@ -63,6 +64,7 @@ import { MODULES } from './constants/modules';
 const PAGES = {
   '/don-hang/phan-in': <PhanInListPage />,
   '/ky-thuat/ready': <ReadyPage />,
+  '/ky-thuat/ho-so-ky-thuat': <HoSoKyThuatPage />,
   '/ky-thuat/gom-set': <GomSetPage />,
   '/ke-hoach/tao-dot-san-xuat': <TaoDotSanXuatPage />,
   '/ke-hoach/cai-dat': <CaiDatPage />,

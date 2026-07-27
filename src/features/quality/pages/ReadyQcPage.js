@@ -8,6 +8,7 @@ import Icon from '../../../components/common/Icon';
 import Button from '../../../components/common/Button';
 import SidePanel from '../../../components/common/SidePanel';
 import OwnerHint from '../../../components/common/OwnerHint';
+import TraVeBadge from '../../../components/common/TraVeBadge';
 import Toast from '../../../components/common/Toast';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
@@ -191,7 +192,12 @@ export default function ReadyQcPage() {
           onClick={(e) => e.stopPropagation()}
           onChange={() => toggleOne(r.id)} aria-label="Chọn phần in" />
       ) },
-    { key: 'ma_phan', header: 'Code phần', className: 'font-medium text-ink', render: (r) => r.ma_phan || '—' },
+    { key: 'ma_phan', header: 'Code phần', className: 'font-medium text-ink', render: (r) => (
+      <div>
+        <div>{r.ma_phan || '—'}</div>
+        {r.tra_ve_kh && <div className="mt-1"><TraVeBadge data={r.tra_ve_kh} label="Kế hoạch trả về" nguon="Kế hoạch (Release 1)" /></div>}
+      </div>
+    ) },
     { key: 'khach_don', header: 'Khách hàng · Đơn hàng', render: (r) => (
       <div className="leading-tight">
         <div className="font-medium text-ink">{r.ten_khach_hang || '—'}</div>

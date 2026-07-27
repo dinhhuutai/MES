@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef, useLayoutEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Icon from '../../../components/common/Icon';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
@@ -437,6 +438,9 @@ export default function TinhTrangTramPage() {
   const [search, setSearch] = useState('');
   const [graph, setGraph] = useState(null);
   const [scanOpen, setScanOpen] = useState(false);
+  // Deep-link từ nút Quét (bottom nav): ?q=<code phần> → tự điền ô tìm kiếm → hiện sơ đồ.
+  const [searchParams] = useSearchParams();
+  useEffect(() => { const q = searchParams.get('q'); if (q) setSearch(q); }, [searchParams]);
   // Overlay SVG: nối ô "Trả về" → ô "KCS tổng" (khác nhánh) theo vị trí DOM thật.
   const graphWrapRef = useRef(null);
   const boxRefs = useRef({});

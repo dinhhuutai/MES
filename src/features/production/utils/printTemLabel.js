@@ -166,11 +166,9 @@ function openSheet(inner, title) {
     if (img && !img.complete) { img.onload = go; img.onerror = go; } else { setTimeout(go, 100); }
   </script>
 </body></html>`;
+  // KHÔNG dùng alert() — ném lỗi để trang gọi hiện Toast theo design system.
   const w = window.open('', '_blank', 'width=500,height=460');
-  if (!w) {
-    alert('Trình duyệt đang chặn cửa sổ in. Hãy cho phép popup cho trang này rồi in lại.');
-    return;
-  }
+  if (!w) throw new Error('Trình duyệt đang chặn cửa sổ in. Hãy cho phép popup cho trang này rồi in lại.');
   w.document.write(html);
   w.document.close();
 }

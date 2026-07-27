@@ -11,6 +11,8 @@ export const getHoanThanhHomNay = () => client.get('/dashboard/hoan-thanh-hom-na
 
 // Kiosk: tình trạng đơn hàng theo trạm
 export const getTinhTrangSummary = () => client.get('/dashboard/tinh-trang/summary');
+// Giải mã mã quét (QR code phần / tem / barcode đợt vải / barcode HSKT) → { type, ma_phan|barcode_hskt }.
+export const resolveScan = (code) => client.get('/dashboard/tinh-trang/resolve', { params: { code } });
 export const listTinhTrangPhanIn = (params) => client.get('/dashboard/tinh-trang/phan-in', { params });
 export const getTinhTrangPhanIn = (id) => client.get(`/dashboard/tinh-trang/phan-in/${id}`);
 export const getTinhTrangGraph = (id) => client.get(`/dashboard/tinh-trang/phan-in/${id}/graph`);
