@@ -66,6 +66,9 @@ export const listKeHoachTam = (params) => client.get('/planning/ke-hoach-tam', {
 export const confirmKeHoachTam = (id) => client.post(`/planning/ke-hoach-tam/${id}/xac-nhan`);
 export const updateKeHoachTam = (id, body) => client.patch(`/planning/ke-hoach-tam/${id}`, body);
 export const deleteKeHoachTam = (id) => client.delete(`/planning/ke-hoach-tam/${id}`);
+// Lịch sử thao tác (lập/sửa/xóa/xác nhận) + Đã hoàn thành (đã xác nhận Release 1) — theo ngày.
+export const keHoachTamHistory = (date) => client.get('/planning/ke-hoach-tam/history', { params: { date } });
+export const keHoachTamDone = (date) => client.get('/planning/ke-hoach-tam/done', { params: { date } });
 
 // Hủy lệnh / hoàn tác release
 export const listCancelableLenh = (params) => client.get('/planning/huy-lenh/candidates', { params });

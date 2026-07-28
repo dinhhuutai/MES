@@ -6,6 +6,8 @@ import Button from '../../../components/common/Button';
 import Toast from '../../../components/common/Toast';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
+import HistoryPanel from '../../../components/common/HistoryPanel';
+import DonePanel from '../../../components/common/DonePanel';
 import SidePanel from '../../../components/common/SidePanel';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import { Field, Input } from '../../../components/common/controls';
@@ -14,7 +16,10 @@ import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import { listKeHoachTam, confirmKeHoachTam, updateKeHoachTam, deleteKeHoachTam, listChuyen } from '../../../services/planningService';
+import {
+  listKeHoachTam, confirmKeHoachTam, updateKeHoachTam, deleteKeHoachTam, listChuyen,
+  keHoachTamHistory, keHoachTamDone,
+} from '../../../services/planningService';
 import { fmtNum, fmtDate } from '../../../utils/format';
 
 // timestamptz → 'YYYY-MM-DD' cho ô <input type="date"> (ngày local).
@@ -45,6 +50,8 @@ export default function KeHoachTamPage() {
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(() => new Set());
   const [scanOpen, setScanOpen] = useState(false);
+  const [histOpen, setHistOpen] = useState(false);
+  const [doneOpen, setDoneOpen] = useState(false);
   const [confirm, setConfirm] = useState(null); // { ids:[], label } — xác nhận Release 1 (1 hoặc nhiều)
   const [del, setDel] = useState(null); // { id, label }
   const [saving, setSaving] = useState(false);
@@ -192,6 +199,8 @@ export default function KeHoachTamPage() {
             Xác nhận Release 1 ({selected.size})
           </Button>
         )}
+        <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
+        <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="info">{meta.total || rows.length} bản</Badge>
       </Toolbar>
 
@@ -280,6 +289,11 @@ export default function KeHoachTamPage() {
           </div>
         )}
       </SidePanel>
+
+      <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}
+        title="Lịch sử kế hoạch tạm" fetcher={keHoachTamHistory} />
+      <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
+        title="Kế hoạch tạm đã xác nhận Release 1" maHeader="Lệnh" showChuyen fetcher={keHoachTamDone} />
 
       <Toast toast={toast} />
     </div>

@@ -10,6 +10,13 @@ function loadZxing() {
 // Bắt đầu quét liên tục trên 1 <video>; onDecode(text) mỗi lần đọc được (QR hoặc barcode).
 // Trả về hàm stop(). Ném lỗi khi không mở được camera (caller hiện thông báo qua cameraErrorMessage).
 export async function startCameraDecode(videoEl, onDecode) {
+  // ⚠ BẮT BUỘC có thẻ <video> THẬT trong DOM. ZXing `prepareVideoElement(null)` sẽ âm thầm TỰ TẠO
+  // một <video> KHÔNG gắn DOM rồi phát stream vào đó ⇒ camera bật nhưng khung trên màn hình ĐEN,
+  // không lỗi, không cách nào biết (lỗi đã gặp thật: Modal Headless UI mount qua Portal nên lần
+  // render đầu chưa có thẻ video → ref còn null). Chặn tại đây để lỗi hiện ra tường minh.
+  if (!videoEl) {
+    const e = new Error('no-video-el'); e.name = 'NoVideoElementError'; throw e;
+  }
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
     const e = new Error('no-media'); e.name = 'NoMediaError'; throw e;
   }
@@ -28,5 +35,6 @@ export function cameraErrorMessage(e) {
   if (name === 'NotAllowedError') return 'Bạn đã từ chối quyền camera — cho phép rồi thử lại.';
   if (name === 'NotFoundError') return 'Không tìm thấy camera trên thiết bị.';
   if (name === 'NoMediaError') return 'Trình duyệt không hỗ trợ camera (cần chạy trên HTTPS).';
+  if (name === 'NoVideoElementError') return 'Chưa dựng được khung hình — đóng rồi mở lại giúp mình.';
   return `Không mở được camera: ${(e && (e.message || e.name)) || ''}`;
 }
