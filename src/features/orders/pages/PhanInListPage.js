@@ -8,6 +8,7 @@ import SidePanel from '../../../components/common/SidePanel';
 import Modal from '../../../components/common/Modal';
 import Toast from '../../../components/common/Toast';
 import Icon from '../../../components/common/Icon';
+import Spinner from '../../../components/common/Spinner';
 import DateRangePicker from '../../../components/common/DateRangePicker';
 import KcsBreakdown from '../../../components/common/KcsBreakdown';
 import useToast from '../../../hooks/useToast';
@@ -464,7 +465,7 @@ export default function PhanInListPage() {
             <tbody>
               {loading ? (
                 <tr><td colSpan={COLS} className="px-4 py-12 text-center text-ink-soft">
-                  <Icon name="loader" size={22} className="mx-auto animate-spin" />
+                  <Spinner size={22} className="mx-auto" />
                 </td></tr>
               ) : rows.length === 0 ? (
                 <tr><td colSpan={COLS} className="px-4 py-12 text-center text-ink-soft">Chưa có phần in / đợt vải về</td></tr>
@@ -611,7 +612,7 @@ export default function PhanInListPage() {
       {/* Thẻ (mobile/tablet) */}
       <div className="space-y-2.5 md:hidden">
         {loading ? (
-          <div className="card p-8 text-center text-ink-soft"><Icon name="loader" size={22} className="mx-auto animate-spin" /></div>
+          <div className="card p-8 text-center text-ink-soft"><Spinner size={22} className="mx-auto" /></div>
         ) : rows.length === 0 ? (
           <div className="card p-8 text-center text-ink-soft">Chưa có phần in / đợt vải về</div>
         ) : (

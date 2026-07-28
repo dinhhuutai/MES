@@ -51,10 +51,18 @@ module.exports = {
           '0%, 100%': { backgroundColor: '#fef3c7', borderColor: '#fcd34d', boxShadow: '0 0 0 0 rgba(245,158,11,0)', transform: 'scale(1)' },
           '50%': { backgroundColor: '#f59e0b', borderColor: '#b45309', boxShadow: '0 0 0 4px rgba(245,158,11,0.4)', transform: 'scale(1.02)' },
         },
+        // Spinner "đang tải" = bông hoa logo (components/common/Spinner.js): quay đủ 1 vòng
+        // mỗi chu kỳ, phình to nhất ở giữa vòng cho giống hoa đang "thở".
+        'flower-spin': {
+          '0%': { transform: 'rotate(0deg) scale(1)' },
+          '50%': { transform: 'rotate(180deg) scale(1.12)' },
+          '100%': { transform: 'rotate(360deg) scale(1)' },
+        },
       },
       animation: {
         'blink-danger': 'blink-danger 0.7s ease-in-out infinite',
         'blink-warning': 'blink-warning 0.9s ease-in-out infinite',
+        'flower-spin': 'flower-spin 1.4s ease-in-out infinite',
       },
     },
   },

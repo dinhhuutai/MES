@@ -1,4 +1,5 @@
 import Icon from './Icon';
+import Spinner from './Spinner';
 
 const VARIANTS = {
   primary: 'bg-primary text-white hover:bg-primary-hover',
@@ -25,7 +26,7 @@ export default function Button({
         transition disabled:opacity-50 disabled:cursor-not-allowed ${VARIANTS[variant]} ${className}`}
       {...rest}
     >
-      {loading ? <Icon name="loader" size={16} className="animate-spin" /> : icon ? <Icon name={icon} size={16} /> : null}
+      {loading ? <Spinner size={16} /> : icon ? <Icon name={icon} size={16} /> : null}
       {children}
     </button>
   );

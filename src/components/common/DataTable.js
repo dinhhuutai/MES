@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import Icon from './Icon';
+import Spinner from './Spinner';
 import Pagination from './Pagination';
 
 // columns: [{ key, header, render?(row), className?, headerClassName?, selection? }]
@@ -63,7 +63,7 @@ export default function DataTable({ columns, rows, loading, rowKey = 'id', empty
             <tbody>
               {loading ? (
                 <tr><td colSpan={totalCols} className="px-4 py-12 text-center text-ink-soft">
-                  <Icon name="loader" size={22} className="mx-auto animate-spin" />
+                  <Spinner size={22} className="mx-auto" />
                 </td></tr>
               ) : allRows.length === 0 ? (
                 <tr><td colSpan={totalCols} className="px-4 py-12 text-center text-ink-soft">{emptyText}</td></tr>
@@ -88,7 +88,7 @@ export default function DataTable({ columns, rows, loading, rowKey = 'id', empty
       {/* ===== THẺ (dưới md — mobile/tablet) ===== */}
       <div className="space-y-2.5 md:hidden">
         {loading ? (
-          <div className="card p-8 text-center text-ink-soft"><Icon name="loader" size={22} className="mx-auto animate-spin" /></div>
+          <div className="card p-8 text-center text-ink-soft"><Spinner size={22} className="mx-auto" /></div>
         ) : allRows.length === 0 ? (
           <div className="card p-8 text-center text-ink-soft">{emptyText}</div>
         ) : (

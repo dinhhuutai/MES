@@ -4,7 +4,7 @@ import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
 import Toast from '../../../components/common/Toast';
-import Icon from '../../../components/common/Icon';
+import Spinner from '../../../components/common/Spinner';
 import HistoryPanel from '../../../components/common/HistoryPanel';
 import { Input } from '../../../components/common/controls';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
@@ -127,7 +127,7 @@ export default function GopDotVaiPage() {
       </div>
 
       {loading ? (
-        <div className="card p-10 text-center text-ink-soft"><Icon name="loader" size={22} className="mx-auto animate-spin" /></div>
+        <div className="card p-10 text-center text-ink-soft"><Spinner size={22} className="mx-auto" /></div>
       ) : groups.length === 0 ? (
         <div className="card p-10 text-center text-ink-soft">Không có phần in nào có ≥2 đợt vải chờ release để gộp.</div>
       ) : (

@@ -9,6 +9,7 @@ import Modal from '../../../components/common/Modal';
 import SidePanel from '../../../components/common/SidePanel';
 import Toast from '../../../components/common/Toast';
 import Icon from '../../../components/common/Icon';
+import Spinner from '../../../components/common/Spinner';
 import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
 import { Field, Input, Textarea } from '../../../components/common/controls';
@@ -320,7 +321,7 @@ export default function Release1Page() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={colCount} className="px-4 py-12 text-center text-ink-soft"><Icon name="loader" size={22} className="mx-auto animate-spin" /></td></tr>
+                <tr><td colSpan={colCount} className="px-4 py-12 text-center text-ink-soft"><Spinner size={22} className="mx-auto" /></td></tr>
               ) : combined.length === 0 ? (
                 <tr><td colSpan={colCount} className="px-4 py-12 text-center text-ink-soft">Không có đợt vải nào sẵn sàng Release 1</td></tr>
               ) : (
