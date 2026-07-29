@@ -175,7 +175,8 @@ export default function HoSoKyThuatPage() {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3 rounded-control border border-line p-3 text-sm">
               <div><div className="text-xs text-ink-soft">Mã vạch HSKT</div><div className="font-medium text-ink">{detail.hskt.barcode_hskt || '—'}</div></div>
-              <div><div className="text-xs text-ink-soft">Gom set</div><div className="mt-1">{detail.hskt.inset ? <Badge tone="warning">Có gom set</Badge> : <Badge tone="default">Không</Badge>}</div></div>
+              {/* ERP `Inset` = SỐ NHÓM gom set trong phạm vi đợt ready (ma_don_ready), 0 = không gom. */}
+              <div><div className="text-xs text-ink-soft">Gom set</div><div className="mt-1">{Number(detail.hskt.inset) > 0 ? <Badge tone="warning">Nhóm set {detail.hskt.inset}</Badge> : <Badge tone="default">Không</Badge>}</div></div>
               <div>
                 <div className="text-xs text-ink-soft">Phương án in</div>
                 <div className="mt-1 flex items-center gap-2">
