@@ -21,6 +21,7 @@ import { listReadyQcCandidates, getReadyDetail, confirmReadyQC, confirmReadyQcBa
 import LoaiDotVaiBadge from '../../planning/components/LoaiDotVaiBadge';
 import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
+import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
 import exportReadyQcExcel from '../utils/exportReadyQcExcel';
 import { khuonRequired } from '../../technical-ready/constants';
 
@@ -69,6 +70,36 @@ export default function ReadyQcPage() {
   const [scanOpen, setScanOpen] = useState(false);
   const activeCount = Object.values(filters).filter(Boolean).length;
   const filtered = useMemo(() => filterRows(rows, filters, FILTER_FIELDS), [rows, filters]);
+
+  // GOM SET hiển thị GIỐNG MÀN RELEASE 1: các phần in cùng set xếp LIỀN NHAU thành một khối
+  // (ô set bên trái + viền trái xanh). (1 dòng ở đây = 1 PHẦN IN, còn Release 1 = 1 đợt vải —
+  // nên gom theo `gom_set_list` của phần in.)
+  // ⚠ GOM TẠI CHỖ, KHÔNG đẩy set lên đầu bảng: đẩy lên đầu thì trang 1 toàn phần in chưa đủ mục
+  // (không có checkbox chọn) ⇒ trông như "mất cột checkbox". Giữ nguyên thứ tự cũ, chỉ kéo các
+  // thành viên còn lại của set lên ngay sau thành viên ĐẦU TIÊN xuất hiện.
+  const viewRows = useMemo(() => {
+    const bySet = new Map();
+    filtered.forEach((r) => {
+      const k = (r.gom_set_list || '').trim();
+      if (!k) return;
+      if (!bySet.has(k)) bySet.set(k, []);
+      bySet.get(k).push(r);
+    });
+    const done = new Set();
+    const out = [];
+    filtered.forEach((r) => {
+      const k = (r.gom_set_list || '').trim();
+      if (!k) { out.push(r); return; }
+      if (done.has(k)) return;      // đã đổ cả nhóm ở vị trí thành viên đầu tiên
+      done.add(k);
+      const list = bySet.get(k);
+      const chuaDu = list.filter((x) => x.tech_done !== true).length;
+      list.forEach((m, i) => out.push({
+        ...m, _set: k, _setFirst: i === 0, _setSize: list.length, _setChuaQc: chuaDu,
+      }));
+    });
+    return out;
+  }, [filtered]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -187,11 +218,35 @@ export default function ReadyQcPage() {
       header: canQC ? (
         <input type="checkbox" checked={allChecked} onChange={toggleAll} aria-label="Chọn tất cả (đủ kỹ thuật)" />
       ) : '',
-      render: (r) => canQC && isReady(r) && (
-        <input type="checkbox" checked={selected.has(r.id)}
+      // Phần in CHƯA đủ mục kỹ thuật vẫn hiện ô checkbox nhưng KHÓA (trước đây để trống hẳn nên
+      // nhìn như bảng bị mất cột chọn) — kèm tooltip nói rõ vì sao chưa chọn được.
+      render: (r) => canQC && (
+        <input type="checkbox" checked={selected.has(r.id)} disabled={!isReady(r)}
           onClick={(e) => e.stopPropagation()}
-          onChange={() => toggleOne(r.id)} aria-label="Chọn phần in" />
+          onChange={() => toggleOne(r.id)}
+          className="disabled:cursor-not-allowed disabled:opacity-40"
+          title={isReady(r) ? 'Chọn phần in' : 'Chưa đủ mục kỹ thuật — QC chưa xác nhận được'}
+          aria-label="Chọn phần in" />
       ) },
+    // Ô GOM SET (giống Release 1): dòng đầu của set hiện mã set + số phần in in chung; dòng sau nối tiếp.
+    { key: 'gom_set', header: 'Gom set', className: 'w-32', render: (r) => {
+      if (!r._set) return <span className="text-ink-soft">—</span>;
+      if (!r._setFirst) return <span className="block h-full border-l-2 border-primary/40 pl-2 text-[10px] text-primary/70">↳ cùng set</span>;
+      return (
+        <div className="flex flex-col items-start gap-1"
+          title="Gom set: các phần in KHÁC NHAU (cùng màu) in chung 1 lần. Kế hoạch chỉ release được khi CẢ SET đã Ready.">
+          <span className="flex items-center gap-1 text-xs font-bold text-primary">
+            <Icon name="package" size={13} /> {r._set}
+          </span>
+          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+            {r._setSize} phần in · in chung
+          </span>
+          {r._setChuaQc > 0 && (
+            <span className="text-[10px] font-medium text-amber-600">{r._setChuaQc} chưa đủ mục</span>
+          )}
+        </div>
+      );
+    } },
     { key: 'ma_phan', header: 'Code phần', className: 'font-medium text-ink', render: (r) => (
       <div>
         <div>{r.ma_phan || '—'}</div>
@@ -202,7 +257,6 @@ export default function ReadyQcPage() {
       <div className="leading-tight">
         <div className="font-medium text-ink">{r.ten_khach_hang || '—'}</div>
         <div className="text-xs text-ink-soft">{r.ma_don_hang || '—'}</div>
-        {r.gom_set_list && <Badge tone="info" className="mt-1" title="Gom set: phần in này được gom in chung với các phần in KHÁC (cùng màu). ≠ Gộp đợt (cùng phần in, khác đợt)."><Icon name="git-branch" size={12} className="mr-1" />Gom set {r.gom_set_list}</Badge>}
       </div>
     ) },
     { key: 'ma_hang', header: 'Mã hàng' },
@@ -213,6 +267,8 @@ export default function ReadyQcPage() {
       </div>
     ) },
     { key: 'loai_dot_vai', header: 'Loại đợt vải', render: (r) => <LoaiDotVaiBadge value={r.loai_dot_vai} /> },
+    // Phương án in (ERP `Pain` trên HSKT): 1 Bàn · 2 Máy · 3 Robot.
+    { key: 'phuong_an_in', header: 'Phương án in', render: (r) => <PhuongAnInBadge value={r.phuong_an_in} /> },
     { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => <HanGiaoCell value={r.han_giao_hang} /> },
     { key: 'tech', header: 'Kỹ thuật', render: (r) => (
       <div className="flex flex-wrap items-center gap-1">
@@ -242,8 +298,8 @@ export default function ReadyQcPage() {
 
       <FieldFilters fields={FILTER_FIELDS} values={filters} onField={(k, v) => setFilters((f) => ({ ...f, [k]: v }))} onClear={() => setFilters({})} open={showFilters} />
 
-      <DataTable columns={columns} rows={filtered} loading={loading} onRowClick={(r) => open(r)} sttStart={0}
-        rowClassName={(r) => slaRowClass(evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status)}
+      <DataTable columns={columns} rows={viewRows} loading={loading} onRowClick={(r) => open(r)} sttStart={0}
+        rowClassName={(r) => `${slaRowClass(evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status)} ${r._set ? 'border-l-[3px] border-l-primary/60' : ''}`}
         emptyText="Không có phần in nào ở READY" />
       <Pagination page={meta.page} totalPages={meta.totalPages} total={meta.total} onPage={setPage} />
 

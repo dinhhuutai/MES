@@ -5,6 +5,7 @@ import Badge from '../../../components/common/Badge';
 import GomBadge from '../../../components/common/GomBadge';
 import Button from '../../../components/common/Button';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import SidePanel from '../../../components/common/SidePanel';
 import Toast from '../../../components/common/Toast';
 import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
@@ -15,7 +16,7 @@ import useNghenMap from '../../../hooks/useNghenMap';
 import { slaRowClass } from '../../../utils/sla';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
-import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
+import PhuongAnInBadge, { PHUONG_AN_IN } from '../../../components/common/PhuongAnInBadge';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import { listRelease2Candidates, approveRelease2, approveRelease2Batch, planHistory, release2Done } from '../../../services/planningService';
 import { fmtNum, fmtDate } from '../../../utils/format';
@@ -26,6 +27,16 @@ const FILTER_FIELDS = [
   { key: 'mauVai', label: 'Màu vải', col: 'mau_vai' }, { key: 'kichVai', label: 'Kích vải', col: 'kich_vai' },
   { key: 'kichPhim', label: 'Kích phim', col: 'kich_phim' },
 ];
+
+// Ô thông tin trong SidePanel chi tiết (cùng kiểu màn Release 1).
+function Info({ label, value }) {
+  return (
+    <div>
+      <div className="text-xs uppercase tracking-wide text-ink-soft">{label}</div>
+      <div className="mt-0.5 font-medium text-ink">{value == null || value === '' ? '—' : value}</div>
+    </div>
+  );
+}
 
 export default function Release2Page() {
   const { can } = usePermissions();
@@ -44,6 +55,7 @@ export default function Release2Page() {
   const [filters, setFilters] = useState({});
   const [showFilters, setShowFilters] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
+  const [detail, setDetail] = useState(null); // bấm vào hàng → SidePanel chi tiết lệnh
   const filtered = useMemo(() => filterRows(rows, filters, FILTER_FIELDS), [rows, filters]);
   const activeCount = Object.values(filters).filter(Boolean).length;
 
@@ -153,8 +165,48 @@ export default function Release2Page() {
       <FieldFilters fields={FILTER_FIELDS} values={filters} onField={(k, v) => setFilters((f) => ({ ...f, [k]: v }))} onClear={() => setFilters({})} open={showFilters} />
 
       <DataTable columns={columns} rows={filtered} loading={loading} sttStart={0}
+        onRowClick={(r) => setDetail(r)}
         rowClassName={(r) => slaRowClass(statusLenh(r.id))}
         emptyText="Không có lệnh nào chờ Release 2" />
+
+      {/* Bấm vào HÀNG (không phải ô chọn / nút) → SidePanel chi tiết lệnh, duyệt được ngay tại đây. */}
+      <SidePanel
+        open={!!detail}
+        onClose={() => setDetail(null)}
+        title={detail ? `Release 2 — ${detail.ma_lenh_san_xuat || ''}` : 'Chi tiết lệnh'}
+        subtitle={detail ? [detail.ten_khach_hang, detail.ma_don_hang, detail.ma_phan].filter(Boolean).join(' · ') : ''}
+        footer={(
+          <>
+            <Button variant="ghost" onClick={() => setDetail(null)}>Đóng</Button>
+            {canApprove && detail && (
+              <Button onClick={() => { const r = detail; setDetail(null); setConfirm(r); }}>Duyệt Release 2</Button>
+            )}
+          </>
+        )}
+      >
+        {detail && (
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+            <Info label="Mã lệnh" value={detail.ma_lenh_san_xuat} />
+            <Info label="Chuyền" value={detail.ten_chuyen} />
+            <Info label="Khách hàng" value={detail.ten_khach_hang} />
+            <Info label="Đơn hàng" value={detail.ma_don_hang} />
+            <Info label="Mã hàng" value={detail.ma_hang} />
+            <Info label="Code phần" value={detail.ma_phan} />
+            <Info label="Màu vải" value={detail.mau_vai} />
+            <Info label="Kích vải / phim" value={[detail.kich_vai, detail.kich_phim].filter(Boolean).join(' / ')} />
+            <Info label="Tính chất in" value={detail.tinh_chat_in} />
+            <Info label="Phương án in" value={PHUONG_AN_IN[Number(detail.phuong_an_in)] || null} />
+            <Info label="Loại đợt vải" value={detail.loai_dot_vai} />
+            <Info label="Số đợt vải trong lệnh" value={detail.so_dot_vai} />
+            <Info label="SL vải về" value={fmtNum(detail.so_luong_vai_ve)} />
+            <Info label="SL đơn hàng" value={fmtNum(detail.so_luong_don_hang)} />
+            <Info label="SL release" value={fmtNum(detail.so_luong_release)} />
+            <Info label="Ngày nhận vải" value={fmtDate(detail.ngay_vai_ve)} />
+            <Info label="Hạn giao" value={fmtDate(detail.han_giao_hang)} />
+            <Info label="Ngày SX kế hoạch" value={fmtDate(detail.ngay_ke_hoach)} />
+          </div>
+        )}
+      </SidePanel>
 
       <ConfirmDialog
         open={!!confirm}

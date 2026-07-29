@@ -23,7 +23,7 @@ import useNghenMap from '../../../hooks/useNghenMap';
 import { slaRowClass } from '../../../utils/sla';
 import {
   listRelease1Candidates, createRelease1, listChuyen, release1History,
-  listReleaseSets, releaseSet, release1Done, release1TraVeKyThuat,
+  listReleaseSets, releaseSet, release1Done, release1TraVeKyThuat, keHoachTamSet,
 } from '../../../services/planningService';
 import { fmtNum, fmtDate } from '../../../utils/format';
 
@@ -178,7 +178,8 @@ export default function Release1Page() {
   });
   // Chọn tất cả ở header = chọn MỌI đợt vải lẻ + set ĐANG HIỂN THỊ (sau lọc), spanning tất cả trang phân trang
   // — không chỉ trang hiện tại. (chỉ set đủ QC mới chọn được.)
-  const selectableSets = useMemo(() => viewSets.filter((s) => s.san_sang), [viewSets]);
+  // Mọi set đang hiển thị đều chọn được: đủ QC → release thật · chưa đủ → lưu Kế hoạch tạm cho cả set.
+  const selectableSets = viewSets;
   const looseAll = viewRows.length === 0 || viewRows.every((r) => selected[r.dot_vai_id]);
   const setsAll = selectableSets.length === 0 || selectableSets.every((s) => selectedSets.has(s.id));
   const allChecked = (viewRows.length > 0 || selectableSets.length > 0) && looseAll && setsAll;
@@ -194,8 +195,9 @@ export default function Release1Page() {
   };
   const toggleSet = (id) => setSelectedSets((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
-  const openDetail = (row) => {
-    setDetail(row);
+  // `set` != null ⇒ đợt vải thuộc gom set: panel chỉ xem, release phải làm cho CẢ SET.
+  const openDetail = (row, set = null) => {
+    setDetail(set ? { ...row, _setMa: set.ma_set, _setSanSang: set.san_sang, _setChuaReady: set.so_chua_ready } : row);
     // Mặc định release phần CÒN LẠI (SL vải về − đã release); release theo số lượng, giữ phần còn.
     setForm({ chuyenId: chuyen[0]?.id || '', soLuongRelease: String(row.con_release ?? row.so_luong_vai_ve ?? ''), ngayKeHoach: dateOffsetStr(1) });
   };
@@ -249,10 +251,19 @@ export default function Release1Page() {
   const doReleaseAll = async () => {
     setSaving(true);
     try {
-      let okSets = 0; const errs = [];
+      let okSets = 0; let tamSets = 0; const errs = [];
       for (const s of selectedSetList) {
-        try { await releaseSet(s.id, { chuyenId: relForm.chuyenId, ngayKeHoach: relForm.ngayKeHoach || null }); okSets += 1; }
-        catch (e) { errs.push(`${s.ma_set}: ${e.message}`); }
+        try {
+          // Set đủ QC → release thật (1 lệnh chung). Set CHƯA đủ Ready → lưu KẾ HOẠCH TẠM cho cả set
+          // (không tạo lệnh, không tách lẻ) — khi cả set Ready xong mới release chung ở màn Kế hoạch tạm.
+          if (s.san_sang) {
+            await releaseSet(s.id, { chuyenId: relForm.chuyenId, ngayKeHoach: relForm.ngayKeHoach || null });
+            okSets += 1;
+          } else {
+            await keHoachTamSet(s.id, { chuyenId: relForm.chuyenId, ngayKeHoach: relForm.ngayKeHoach || null });
+            tamSets += 1;
+          }
+        } catch (e) { errs.push(`${s.ma_set}: ${e.message}`); }
       }
       let looseMsg = '';
       if (looseList.length) {
@@ -263,9 +274,11 @@ export default function Release1Page() {
         const tam = res?.data?.ke_hoach_tam_count || 0;
         looseMsg = ` · ${res?.data?.created_count || 0} lệnh lẻ${tam > 0 ? ` · ${tam} → Kế hoạch tạm` : ''}`;
       }
+      const setMsg = [okSets ? `${okSets} set` : '', tamSets ? `${tamSets} set chưa Ready → Kế hoạch tạm` : '']
+        .filter(Boolean).join(' · ') || '0 set';
       show(errs.length
         ? `Release set lỗi: ${errs.join('; ')}`
-        : `Đã release ${okSets} set${looseMsg}`, errs.length ? 'error' : 'success');
+        : `Đã xử lý ${setMsg}${looseMsg}`, errs.length ? 'error' : 'success');
       setSelected({}); setSelectedSets(new Set()); setReleaseOpen(false);
       load();
     } catch (e) {
@@ -335,15 +348,19 @@ export default function Release1Page() {
                       const first = i === 0;
                       const last = i === s.members.length - 1;
                       return (
-                        <tr key={m.dot_vai_id}
-                          className={`bg-primary-wash/30 ${last ? 'border-b border-line' : ''} ${on ? 'bg-primary-wash/70' : ''}`}>
+                        // Bấm vào HÀNG (không phải ô chọn) → mở SidePanel xem chi tiết đợt vải, như hàng lẻ.
+                        // Đợt thuộc set thì panel CHỈ XEM (không có nút Release lẻ — set phải release chung).
+                        <tr key={m.dot_vai_id} onClick={() => openDetail(m, s)}
+                          className={`cursor-pointer bg-primary-wash/30 ${last ? 'border-b border-line' : ''} ${on ? 'bg-primary-wash/70' : ''}`}>
                           {first && (
                             <td rowSpan={s.members.length}
                               className={`w-28 border-l-[3px] px-2 py-3 align-middle text-center transition
                                 ${on ? 'border-primary bg-primary-wash' : 'border-primary/50'}`}>
-                              <label className={`flex flex-col items-center gap-1.5 ${s.san_sang ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
-                                <input type="checkbox" disabled={!s.san_sang} checked={on} onChange={() => toggleSet(s.id)}
-                                  className="h-4 w-4 rounded border-line text-primary focus:ring-primary disabled:opacity-40" />
+                              {/* Set CHƯA đủ Ready vẫn CHỌN được — xác nhận sẽ lưu Kế hoạch tạm cho cả set
+                                  (trước đây bị khóa nên không lập kế hoạch sớm cho set được). */}
+                              <label className="flex cursor-pointer flex-col items-center gap-1.5">
+                                <input type="checkbox" checked={on} onChange={() => toggleSet(s.id)}
+                                  className="h-4 w-4 rounded border-line text-primary focus:ring-primary" />
                                 <span className="flex items-center gap-1 text-xs font-bold text-primary">
                                   <Icon name="package" size={13} /> {s.ma_set}
                                 </span>
@@ -351,7 +368,9 @@ export default function Release1Page() {
                                   {s.so_dot_vai} đợt · in chung
                                 </span>
                                 {s.khac_mau && <span className="text-[10px] font-medium text-amber-600">⚠ khác màu</span>}
-                                {!s.san_sang && <span className="text-[10px] text-amber-600">{s.so_chua_ready} chưa QC</span>}
+                                {!s.san_sang && (
+                                  <span className="text-[10px] font-medium text-amber-600">{s.so_chua_ready} chưa QC → KH tạm</span>
+                                )}
                               </label>
                             </td>
                           )}
@@ -437,12 +456,22 @@ export default function Release1Page() {
               <Button variant="danger" icon="chevron-left"
                 onClick={() => { setTraVeReason(''); setTraVeOpen(true); }}>Trả về Kỹ thuật</Button>
             )}
-            <Button onClick={() => submitRelease([detail.dot_vai_id])} loading={saving} disabled={!form.chuyenId}>Xác nhận Release 1</Button>
+            {!detail?._setMa && (
+              <Button onClick={() => submitRelease([detail.dot_vai_id])} loading={saving} disabled={!form.chuyenId}>Xác nhận Release 1</Button>
+            )}
           </>
         }
       >
         {detail && (
           <div className="space-y-4">
+            {detail._setMa && (
+              <div className="rounded-control border border-primary/30 bg-primary-wash px-3 py-2 text-sm text-primary">
+                Đợt vải thuộc <b>{detail._setMa}</b> — gom set phải <b>release chung cả set</b>, không release lẻ từng đợt.
+                {detail._setSanSang
+                  ? ' Chọn ô set ở bảng rồi bấm Release.'
+                  : ` Còn ${detail._setChuaReady || 0} đợt trong set chưa Ready — chọn set để lưu Kế hoạch tạm.`}
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
               <Info label="Khách hàng" value={detail.ten_khach_hang} />
               <Info label="Đơn hàng" value={detail.ma_don_hang} />
@@ -459,7 +488,8 @@ export default function Release1Page() {
               <Info label="Ngày nhận vải" value={fmtDate(detail.ngay_vai_ve)} />
               <Info label="Hạn giao" value={fmtDate(detail.han_giao_hang)} />
             </div>
-            <div className="space-y-3 border-t border-line pt-4">
+            {/* Đợt thuộc gom set: ẩn form release lẻ (release chung ở cấp set). */}
+            <div className={`space-y-3 border-t border-line pt-4 ${detail._setMa ? 'hidden' : ''}`}>
               <Field label="Chuyền in" required>
                 <ChuyenPicker chuyen={chuyen} value={form.chuyenId} onChange={(id) => setForm({ ...form, chuyenId: id })} />
               </Field>

@@ -8,6 +8,7 @@ import Toast from '../../../components/common/Toast';
 import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
+import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
 import { Input, Textarea } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
@@ -53,6 +54,8 @@ function DotVaiCard({ row, dir, onMove }) {
           <span className="text-ink-soft">·</span>
           <span className="font-medium text-ink">{row.mau_vai || '—'}</span>
           {nhomSetKey(row) && <Badge tone="warning">Gom set {row.hskt_inset}</Badge>}
+          {/* Phương án in (ERP `Pain` trên HSKT): 1 Bàn · 2 Máy · 3 Robot */}
+          <PhuongAnInBadge value={row.phuong_an_in} />
         </div>
         <div className="truncate text-xs text-ink-soft">
           {row.ma_don_hang} · Kích {row.kich_vai || '—'}/{row.kich_phim || '—'} · SLĐH {fmtNum(row.so_luong_don_hang)} · SLNV {fmtNum(row.so_luong_vai_ve)}

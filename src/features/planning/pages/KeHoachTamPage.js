@@ -121,14 +121,18 @@ export default function KeHoachTamPage() {
   const doConfirm = async () => {
     if (!confirm) return;
     setSaving(true);
-    let okCount = 0; let failCount = 0;
+    let okCount = 0; let failCount = 0; let firstErr = '';
     for (const id of confirm.ids) {
-      try { await confirmKeHoachTam(id); okCount += 1; } catch (_) { failCount += 1; }
+      try { await confirmKeHoachTam(id); okCount += 1; }
+      catch (e) { failCount += 1; if (!firstErr) firstErr = e.message || ''; }
     }
     setSaving(false);
     setConfirm(null);
-    show(failCount ? `Đã xác nhận Release 1 ${okCount} phần in, ${failCount} lỗi` : `Đã xác nhận Release 1 ${okCount} phần in`,
-      failCount ? 'error' : 'success');
+    // Giữ LÝ DO lỗi đầu tiên (vd đợt thuộc gom set chưa đủ Ready) — trước chỉ đếm số lỗi nên không ai biết vì sao.
+    show(failCount
+      ? `Đã xác nhận Release 1 ${okCount} phần in, ${failCount} lỗi${firstErr ? ` — ${firstErr}` : ''}`
+      : `Đã xác nhận Release 1 ${okCount} phần in`,
+    failCount ? 'error' : 'success');
     load();
   };
 
@@ -158,6 +162,10 @@ export default function KeHoachTamPage() {
     { key: 'trang_thai', header: 'Tình trạng', render: (r) => (
       r.qc_done ? <Badge tone="success">Đã Ready</Badge> : <Badge tone="warning">Chờ Ready</Badge>
     ) },
+    // Đợt thuộc GOM SET: xác nhận sẽ release CẢ SET thành 1 lệnh chung, và chỉ khi mọi đợt trong set đã Ready.
+    { key: 'ma_set', header: 'Gom set', render: (r) => (r.ma_set
+      ? <Badge tone="info" title="Release chung cả set khi mọi đợt trong set đã Ready">{r.ma_set}</Badge>
+      : <span className="text-ink-soft">—</span>) },
     { key: 'ma_phan', header: 'Code phần', className: 'font-medium text-ink', render: (r) => r.ma_phan || '—' },
     { key: 'ten_khach_hang', header: 'Khách hàng', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },

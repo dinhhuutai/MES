@@ -24,6 +24,7 @@ import ReadyPanel from '../components/ReadyPanel';
 import LoaiDotVaiBadge from '../../planning/components/LoaiDotVaiBadge';
 import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
+import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
 import { fmtDateTime } from '../../../utils/format';
 import { khuonRequired } from '../constants';
 import exportReadyExcel from '../utils/exportReadyExcel';
@@ -171,6 +172,8 @@ export default function ReadyPage() {
     { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
     { key: 'loai_dot_vai', header: 'Loại đợt vải', render: (r) => <LoaiDotVaiBadge value={r.loai_dot_vai} /> },
+    // Phương án in (ERP `Pain`, lấy từ HSKT đang hoạt động): 1 Bàn · 2 Máy · 3 Robot.
+    { key: 'phuong_an_in', header: 'Phương án in', render: (r) => <PhuongAnInBadge value={r.phuong_an_in} /> },
     { key: 'film_done', header: `Film${counts.film ? ` (${counts.film})` : ''}`, className: 'text-center', render: (r) => DoneCell(r.film_done) },
     { key: 'khuon_done', header: `Khuôn${counts.khuon ? ` (${counts.khuon})` : ''}`, className: 'text-center',
       render: (r) => (khuonRequired(r.ten_khach_hang)
