@@ -110,20 +110,28 @@ export default function ScanCollectModal({
     const s = stateRef.current;
     const c = normStr(raw);
     if (!c) return [];
-    // barcode (đầu đọc USB) → khớp barcode. camera → khớp CẢ code phần lẫn barcode (không biết trước QR hay mã vạch).
-    // getHsktBarcodes (forceMulti): quét barcode HSKT → CHỌN CẢ NHÓM phần in/đợt cùng HSKT (dù matchMultiple=false).
+    // Thứ tự tra cột theo LOẠI MÃ quét được:
+    //  • 'qr'      → QR = CODE PHẦN (ưu tiên code phần)
+    //  • 'barcode' → mã vạch 1D = BARCODE HSKT (ưu tiên HSKT), rồi barcode đợt vải (đầu đọc USB ở READY)
+    //  • 'camera'/khác (nhập tay, không rõ loại) → thử lần lượt cả ba
+    // getHsktBarcodes (forceMulti): trúng barcode HSKT → CHỌN CẢ NHÓM phần in cùng HSKT (dù matchMultiple=false).
     const getterList = kind === 'barcode'
-      ? [[s.getBarcodes, false], [s.getHsktBarcodes, true]]
-      : kind === 'camera'
-        ? [[s.getCodes, false], [s.getBarcodes, false], [s.getHsktBarcodes, true]]
-        : [[s.getCodes, false], [s.getHsktBarcodes, true]];
-    for (const [getters, forceMulti] of getterList) {
-      if (typeof getters !== 'function') continue;
-      const exact = s.rows.filter((r) => (getters(r) || []).some((v) => v && normStr(v) === c));
-      const pool = exact.length ? exact : s.rows.filter((r) => (getters(r) || []).some((v) => v && normStr(v).includes(c)));
-      if (pool.length) return withGomSet((s.matchMultiple || forceMulti) ? pool : [pool[0]]);
-    }
-    return [];
+      ? [[s.getHsktBarcodes, true], [s.getBarcodes, false], [s.getCodes, false]]
+      : kind === 'qr'
+        ? [[s.getCodes, false], [s.getHsktBarcodes, true], [s.getBarcodes, false]]
+        : [[s.getCodes, false], [s.getBarcodes, false], [s.getHsktBarcodes, true]];
+    const list = getterList.filter(([g]) => typeof g === 'function');
+    // 2 LƯỢT: khớp CHÍNH XÁC trên mọi cột trước, rồi mới tới khớp CHỨA —
+    // để một cột ưu tiên khớp "chứa" không cướp mất cột sau khớp chính xác.
+    const test = (exactOnly) => {
+      for (const [getters, forceMulti] of list) {
+        const pool = s.rows.filter((r) => (getters(r) || []).some((v) => v
+          && (exactOnly ? normStr(v) === c : normStr(v).includes(c))));
+        if (pool.length) return withGomSet((s.matchMultiple || forceMulti) ? pool : [pool[0]]);
+      }
+      return null;
+    };
+    return test(true) || test(false) || [];
   }, [withGomSet]);
 
   const doImmediate = useCallback(async (row) => {
@@ -172,7 +180,8 @@ export default function ScanCollectModal({
 
     (async () => {
       try {
-        const stopFn = await startCameraDecode(videoEl, (text) => processScan(text, 'camera'));
+        // kieu = 'qr' (code phần) | 'barcode' (mã vạch HSKT) — do cameraDecoder nhận diện theo định dạng mã.
+        const stopFn = await startCameraDecode(videoEl, (text, kieu) => processScan(text, kieu || 'camera'));
         if (cancelled) { stopFn(); return; }
         stopRef.current = stopFn;
         videoEl.onplaying = () => setReady(true);
@@ -268,7 +277,7 @@ export default function ScanCollectModal({
               </div>
               <p className="text-center text-xs text-ink-soft">
                 {ready
-                  ? 'Đưa mã QR hoặc mã vạch vào khung — quét liên tục'
+                  ? 'Quét liên tục — QR = code phần · Mã vạch = HSKT (chọn cả nhóm gom set)'
                   : slow
                     ? 'Camera chưa hiện hình — đóng rồi mở lại, hoặc kiểm tra quyền camera của trình duyệt.'
                     : 'Đang mở camera...'}

@@ -7,7 +7,8 @@ function loadZxing() {
   return modPromise;
 }
 
-// Bắt đầu quét liên tục trên 1 <video>; onDecode(text) mỗi lần đọc được (QR hoặc barcode).
+// Bắt đầu quét liên tục trên 1 <video>; **onDecode(text, kieu)** mỗi lần đọc được —
+// `kieu` = 'qr' (QR code → quy ước: CODE PHẦN) hoặc 'barcode' (mã vạch 1D → quy ước: BARCODE HSKT).
 // Trả về hàm stop(). Ném lỗi khi không mở được camera (caller hiện thông báo qua cameraErrorMessage).
 export async function startCameraDecode(videoEl, onDecode) {
   // ⚠ BẮT BUỘC có thẻ <video> THẬT trong DOM. ZXing `prepareVideoElement(null)` sẽ âm thầm TỰ TẠO
@@ -21,11 +22,29 @@ export async function startCameraDecode(videoEl, onDecode) {
     const e = new Error('no-media'); e.name = 'NoMediaError'; throw e;
   }
   const zx = await loadZxing();
-  const reader = new zx.BrowserMultiFormatReader();
+  // Giới hạn danh sách định dạng + TRY_HARDER: điện thoại đọc mã vạch 1D (HSKT) nhạy hơn hẳn so với
+  // để ZXing dò TẤT CẢ định dạng (dò thừa vừa chậm vừa hay trượt vạch mảnh).
+  const F = zx.BarcodeFormat;
+  const hints = new Map([
+    [zx.DecodeHintType.POSSIBLE_FORMATS, [
+      F.QR_CODE,                                    // QR → code phần
+      F.CODE_128, F.CODE_39, F.ITF, F.CODABAR,      // mã vạch 1D → barcode HSKT
+      F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E,
+    ]],
+    [zx.DecodeHintType.TRY_HARDER, true],
+  ]);
+  const reader = new zx.BrowserMultiFormatReader(hints);
   await reader.decodeFromConstraints(
     { video: { facingMode: 'environment' } },
     videoEl,
-    (result) => { if (result) { const t = result.getText(); if (t) onDecode(String(t).trim()); } },
+    (result) => {
+      if (!result) return;
+      const t = result.getText();
+      if (!t) return;
+      // QR → code phần · còn lại (1D) → barcode HSKT. Caller dùng `kieu` để tra đúng cột.
+      const kieu = result.getBarcodeFormat && result.getBarcodeFormat() === F.QR_CODE ? 'qr' : 'barcode';
+      onDecode(String(t).trim(), kieu);
+    },
   );
   return () => { try { reader.reset(); } catch (_) { /* noop */ } };
 }
