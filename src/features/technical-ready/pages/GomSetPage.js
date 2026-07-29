@@ -7,6 +7,7 @@ import Icon from '../../../components/common/Icon';
 import Toast from '../../../components/common/Toast';
 import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
+import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import { Input, Textarea } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
@@ -68,6 +69,7 @@ export default function GomSetPage() {
   const [view, setView] = useState('create'); // 'create' | 'sets'
   const [histOpen, setHistOpen] = useState(false);
   const [doneOpen, setDoneOpen] = useState(false);
+  const [scanOpen, setScanOpen] = useState(false);
 
   // --- Tạo set (transfer list) ---
   const [cands, setCands] = useState([]);
@@ -116,6 +118,8 @@ export default function GomSetPage() {
   const stageRow = (row) => setStaged((s) => (s.some((x) => x.dot_vai_id === row.dot_vai_id) ? s : [...s, row]));
   const unstage = (row) => setStaged((s) => s.filter((x) => x.dot_vai_id !== row.dot_vai_id));
   const stageById = (id) => { const r = cands.find((c) => c.dot_vai_id === id); if (r) stageRow(r); };
+  // Quét/tích: đã chọn thì bỏ, chưa chọn thì đưa vào khung "Chọn gom set".
+  const toggleStage = (row) => (stagedIds.has(row.dot_vai_id) ? unstage(row) : stageRow(row));
 
   const onDrop = (e, target) => {
     e.preventDefault();
@@ -178,6 +182,9 @@ export default function GomSetPage() {
             Đã gom set
           </button>
         </div>
+        {view === 'create' && (
+          <Button variant="ghost" icon="qr-code" onClick={() => setScanOpen(true)}>Quét QR code phần</Button>
+        )}
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
       </Toolbar>
@@ -301,6 +308,23 @@ export default function GomSetPage() {
           </div>
         )}
       </SidePanel>
+
+      {/* Quét QR code phần / mã vạch đợt vải (IDDotVai) → nhảy thẳng vào khung "Chọn gom set" */}
+      <ScanCollectModal
+        open={scanOpen}
+        onClose={() => setScanOpen(false)}
+        title="Quét mã — Gom set"
+        help="Đưa camera vào QR code phần hoặc mã vạch đợt vải (IDDotVai). Quét code phần → thêm HẾT đợt vải của phần in đó vào khung Chọn gom set."
+        rows={cands}
+        getId={(r) => r.dot_vai_id}
+        getCodes={(r) => [r.ma_phan]}
+        getBarcodes={(r) => [r.barcode, r.ma_dot_vai]}
+        matchMultiple
+        isSelected={(r) => stagedIds.has(r.dot_vai_id)}
+        onToggle={toggleStage}
+        primaryLabel={(r) => r.ma_phan || r.barcode || '—'}
+        secondaryLabel={(r) => [r.ma_dot_vai, r.ten_khach_hang, r.mau_vai, r.kich_vai].filter(Boolean).join(' · ')}
+      />
 
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}
         title="Lịch sử thao tác gom set" fetcher={gomHistory} />
