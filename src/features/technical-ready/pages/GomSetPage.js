@@ -27,9 +27,10 @@ const GOM_DONE_COLUMNS = [
   { key: 'nguoi', header: 'Người', render: (r) => r.nguoi || '—' },
 ];
 
-// Nhóm gom set do ERP chỉ định: `Inset` là SỐ NHÓM, phạm vi trong 1 ĐỢT READY (dot_vai_ve.barcode).
-// Inset = 0/rỗng → không gom set. Cùng đợt ready + cùng Inset = gom chung.
-const nhomSetKey = (r) => (r && Number(r.inset) > 0 && r.barcode ? `${r.barcode}#${r.inset}` : null);
+// NHÓM GOM SET do ERP chỉ định: `Inset` ≠ 0 = CÓ gom set → xem tiếp `BarcodeHKT`: các phần in dùng
+// CHUNG 1 barcode HSKT là gom chung (1 HSKT ↔ nhiều code phần). Inset = 0 → không gom set.
+const nhomSetKey = (r) => (r && r.barcode_hskt && r.hskt_inset != null && Number(r.hskt_inset) !== 0
+  ? `HSKT#${r.barcode_hskt}` : null);
 
 // Thẻ 1 đợt vải (dùng cho cả 2 cột). dir: 'right' (nút →) | 'left' (nút ←).
 function DotVaiCard({ row, dir, onMove }) {
@@ -51,7 +52,7 @@ function DotVaiCard({ row, dir, onMove }) {
           <span className="font-medium text-ink">{row.ma_hang}</span>
           <span className="text-ink-soft">·</span>
           <span className="font-medium text-ink">{row.mau_vai || '—'}</span>
-          {nhomSetKey(row) && <Badge tone="warning">Set {row.inset}</Badge>}
+          {nhomSetKey(row) && <Badge tone="warning">Gom set {row.hskt_inset}</Badge>}
         </div>
         <div className="truncate text-xs text-ink-soft">
           {row.ma_don_hang} · Kích {row.kich_vai || '—'}/{row.kich_phim || '—'} · SLĐH {fmtNum(row.so_luong_don_hang)} · SLNV {fmtNum(row.so_luong_vai_ve)}
@@ -126,29 +127,6 @@ export default function GomSetPage() {
   // Quét/tích: đã chọn thì bỏ, chưa chọn thì đưa vào khung "Chọn gom set".
   const toggleStage = (row) => (stagedIds.has(row.dot_vai_id) ? unstage(row) : stageRow(row));
 
-  // Bản đồ NHÓM GOM SET của ERP: khóa (đợt ready + Inset) → mọi code phần & barcode HSKT trong nhóm.
-  // Nhờ vậy quét 1 barcode HSKT (hoặc 1 code phần) là kéo CẢ NHÓM gom set vào khung chọn.
-  const nhomMap = useMemo(() => {
-    const m = new Map();
-    cands.forEach((r) => {
-      const k = nhomSetKey(r);
-      if (!k) return;
-      if (!m.has(k)) m.set(k, { codes: new Set(), hskt: new Set() });
-      const g = m.get(k);
-      if (r.ma_phan) g.codes.add(r.ma_phan);
-      if (r.barcode_hskt) g.hskt.add(r.barcode_hskt);
-    });
-    return m;
-  }, [cands]);
-  const codesOf = useCallback((r) => {
-    const g = nhomMap.get(nhomSetKey(r));
-    return g ? [...g.codes] : [r.ma_phan];
-  }, [nhomMap]);
-  const hsktOf = useCallback((r) => {
-    const g = nhomMap.get(nhomSetKey(r));
-    if (g) return [...g.hskt];
-    return r.barcode_hskt ? [r.barcode_hskt] : [];
-  }, [nhomMap]);
 
   const onDrop = (e, target) => {
     e.preventDefault();
@@ -343,17 +321,16 @@ export default function GomSetPage() {
         open={scanOpen}
         onClose={() => setScanOpen(false)}
         title="Quét mã — Gom set"
-        help="Quét mã vạch HSKT hoặc QR code phần → thêm CẢ NHÓM GOM SET của phần in đó (ERP Inset, cùng đợt ready) vào khung Chọn gom set. Quét mã vạch đợt ready → thêm mọi đợt vải của đợt ready đó."
+        help="Quét QR code phần hoặc mã vạch HSKT → nhảy thẳng vào khung Chọn gom set. Phần in CÓ GOM SET (Inset≠0, cùng barcode HSKT) thì cả nhóm cùng vào theo. Quét mã vạch đợt ready → thêm mọi đợt vải của đợt ready đó."
         rows={cands}
         getId={(r) => r.dot_vai_id}
-        getCodes={codesOf}
+        getCodes={(r) => [r.ma_phan]}
         getBarcodes={(r) => [r.barcode, r.ma_dot_vai]}
-        getHsktBarcodes={hsktOf}
         matchMultiple
         isSelected={(r) => stagedIds.has(r.dot_vai_id)}
         onToggle={toggleStage}
         primaryLabel={(r) => r.ma_phan || r.barcode || '—'}
-        secondaryLabel={(r) => [nhomSetKey(r) ? `Set ${r.inset}` : null, r.ma_dot_vai, r.ten_khach_hang, r.mau_vai, r.kich_vai].filter(Boolean).join(' · ')}
+        secondaryLabel={(r) => [nhomSetKey(r) ? `Gom set ${r.hskt_inset}` : null, r.ma_dot_vai, r.ten_khach_hang, r.mau_vai, r.kich_vai].filter(Boolean).join(' · ')}
       />
 
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}

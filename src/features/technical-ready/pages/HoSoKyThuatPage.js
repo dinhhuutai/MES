@@ -14,7 +14,13 @@ import usePermissions from '../../../hooks/usePermissions';
 import { listHskt, getHskt, getHsktByBarcode, changePhuongAnIn, PHUONG_AN_IN } from '../../../services/hsktService';
 import { fmtNum } from '../../../utils/format';
 
-const COLS = 12; // số cột bảng (cho colSpan hàng trống)
+const COLS = 13; // số cột bảng (cho colSpan hàng trống)
+// GOM SET: ERP `Inset` ≠ 0 = có gom set; các phần in dùng CHUNG 1 barcode HSKT là gom chung
+// ⇒ danh sách phần in của HSKT CHÍNH LÀ nhóm gom set (không cần tra thêm bảng nào).
+const laGomSet = (h) => h && h.inset != null && Number(h.inset) !== 0;
+const gomSetBadge = (h, soPhanIn) => (laGomSet(h)
+  ? <Badge tone="warning">Gom set {h.inset}{soPhanIn > 1 ? ` · ${soPhanIn} phần in` : ''}</Badge>
+  : <Badge tone="default">Không</Badge>);
 const fmtDateTime = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '—');
 const paBadge = (v) => (v == null ? <span className="text-ink-soft">—</span>
   : <Badge tone="info">{PHUONG_AN_IN[Number(v)] || v}</Badge>);
@@ -126,6 +132,7 @@ export default function HoSoKyThuatPage() {
                 <th className="px-3 py-2">STT</th>
                 <th className="px-3 py-2">Mã vạch HSKT</th>
                 <th className="px-3 py-2">Phương án in</th>
+                <th className="px-3 py-2">Gom set</th>
                 <th className="px-3 py-2 text-right">Số phần in</th>
                 <th className="px-3 py-2">Code phần</th>
                 <th className="px-3 py-2">Khách hàng</th>
@@ -148,8 +155,10 @@ export default function HoSoKyThuatPage() {
                   <td className="px-3 py-2 text-ink-soft">{i + 1}</td>
                   <td className="px-3 py-2 font-medium text-ink">{r.barcode_hskt || '—'}</td>
                   <td className="px-3 py-2">{paBadge(r.phuong_an_in)}</td>
+                  <td className="px-3 py-2">{gomSetBadge(r, r.so_phan_in)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{r.so_phan_in}</td>
-                  <td className="px-3 py-2 text-ink-soft max-w-[18rem] truncate">{r.code_phan_list || '—'}</td>
+                  {/* Có gom set → các code phần này in CHUNG 1 lần (cùng 1 HSKT). */}
+                  <td className={`px-3 py-2 max-w-[18rem] truncate ${laGomSet(r) ? 'font-medium text-ink' : 'text-ink-soft'}`}>{r.code_phan_list || '—'}</td>
                   <td className="px-3 py-2 font-medium text-ink">{r.ten_khach_hang || '—'}</td>
                   <td className="px-3 py-2">{r.ma_don_hang || '—'}</td>
                   <td className="px-3 py-2">{r.ma_hang || '—'}</td>
@@ -175,8 +184,8 @@ export default function HoSoKyThuatPage() {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3 rounded-control border border-line p-3 text-sm">
               <div><div className="text-xs text-ink-soft">Mã vạch HSKT</div><div className="font-medium text-ink">{detail.hskt.barcode_hskt || '—'}</div></div>
-              {/* ERP `Inset` = SỐ NHÓM gom set trong phạm vi đợt ready (ma_don_ready), 0 = không gom. */}
-              <div><div className="text-xs text-ink-soft">Gom set</div><div className="mt-1">{Number(detail.hskt.inset) > 0 ? <Badge tone="warning">Nhóm set {detail.hskt.inset}</Badge> : <Badge tone="default">Không</Badge>}</div></div>
+              {/* ERP `Inset` ≠ 0 = có gom set; nhóm gom set = các phần in cùng HSKT này. */}
+              <div><div className="text-xs text-ink-soft">Gom set</div><div className="mt-1">{gomSetBadge(detail.hskt, detail.phan_in?.length || 0)}</div></div>
               <div>
                 <div className="text-xs text-ink-soft">Phương án in</div>
                 <div className="mt-1 flex items-center gap-2">
@@ -193,7 +202,15 @@ export default function HoSoKyThuatPage() {
             </div>
 
             <div>
-              <h4 className="mb-2 text-sm font-semibold text-ink">Phần in trong HSKT ({detail.phan_in.length})</h4>
+              <h4 className="mb-2 text-sm font-semibold text-ink">
+                {laGomSet(detail.hskt) ? `Phần in GOM SET CHUNG (${detail.phan_in.length})` : `Phần in trong HSKT (${detail.phan_in.length})`}
+              </h4>
+              {laGomSet(detail.hskt) && (
+                <div className="mb-2 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300">
+                  ERP báo <b>Inset = {detail.hskt.inset}</b> (có gom set) — {detail.phan_in.length} phần in dưới đây dùng CHUNG hồ sơ kỹ thuật này nên <b>in chung 1 lần</b>.
+                  {detail.phan_in.length < 2 && ' Hiện mới nhận được 1 phần in — các phần in còn lại sẽ hiện ở đây khi ERP đồng bộ về cùng mã vạch HSKT.'}
+                </div>
+              )}
               <PhanInList rows={detail.phan_in} />
             </div>
 

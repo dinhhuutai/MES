@@ -48,6 +48,10 @@ export default function ScanCollectModal({
   getCodes = (r) => [r.ma_phan], getBarcodes,
   // Barcode HSKT: quét trúng → chọn TẤT CẢ phần in/đợt cùng HSKT (dù matchMultiple=false). Mặc định đọc r.barcode_hskt.
   getHsktBarcodes = (r) => (r && r.barcode_hskt ? [r.barcode_hskt] : []),
+  // NHÓM GOM SET (ERP): `hskt_inset` ≠ 0 ⇒ phần in CÙNG HSKT là một nhóm gom set. Quét TRÚNG bất kỳ
+  // mã nào của nhóm (code phần / barcode đợt / barcode HSKT) ⇒ chọn–xác nhận CẢ NHÓM.
+  getGomSetKey = (r) => (r && r.barcode_hskt && r.hskt_inset != null && Number(r.hskt_inset) !== 0
+    ? `HSKT#${r.barcode_hskt}` : null),
   matchMultiple = false,
   isSelected, onToggle,
   primaryLabel = (r) => r.ma_phan, secondaryLabel,
@@ -62,6 +66,7 @@ export default function ScanCollectModal({
   const mode = usbBarcode && hasBarcode && !IS_TOUCH ? 'barcode' : 'camera';
   const [log, setLog] = useState([]);       // feedback tạm (không tìm thấy / lỗi)
   const [session, setSession] = useState([]); // immediate: đã xác nhận phiên này (có nút Hủy)
+  const [manual, setManual] = useState('');  // ô nhập tay / đầu đọc USB (mọi màn)
   const [error, setError] = useState('');
   const [ready, setReady] = useState(false);
   const [slow, setSlow] = useState(false); // quá lâu chưa có hình → gợi ý người dùng
@@ -76,10 +81,10 @@ export default function ScanCollectModal({
   const idRef = useRef(0);
   // Giữ props mới nhất cho vòng lặp camera (effect chỉ chạy lại theo open/mode).
   const stateRef = useRef({});
-  stateRef.current = { rows, getCodes, getBarcodes, getHsktBarcodes, matchMultiple, isSelected, onToggle, immediate, onScanAction, actionLabel, primaryLabel, disabledScan };
+  stateRef.current = { rows, getCodes, getBarcodes, getHsktBarcodes, getGomSetKey, matchMultiple, isSelected, onToggle, immediate, onScanAction, actionLabel, primaryLabel, disabledScan };
 
   useEffect(() => {
-    if (open) { setLog([]); setSession([]); recentRef.current = new Map(); }
+    if (open) { setLog([]); setSession([]); setManual(''); recentRef.current = new Map(); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -88,6 +93,18 @@ export default function ScanCollectModal({
     const id = idRef.current;
     setLog((l) => [{ id, text, ok: okFlag }, ...l].slice(0, 6));
   }, []);
+
+  // Mở rộng kết quả quét sang CẢ NHÓM GOM SET: quét 1 code phần (hoặc barcode HSKT/đợt vải) của phần in
+  // có gom set ⇒ mọi phần in cùng nhóm cũng hiện lên / được xác nhận theo.
+  const withGomSet = useCallback((matched) => {
+    const s = stateRef.current;
+    if (typeof s.getGomSetKey !== 'function' || !matched.length) return matched;
+    const keys = new Set(matched.map((r) => s.getGomSetKey(r)).filter(Boolean));
+    if (!keys.size) return matched;
+    const seenIds = new Set(matched.map((r) => getId(r)));
+    const extra = s.rows.filter((r) => !seenIds.has(getId(r)) && keys.has(s.getGomSetKey(r)));
+    return extra.length ? [...matched, ...extra] : matched;
+  }, [getId]);
 
   const matchRows = useCallback((raw, kind) => {
     const s = stateRef.current;
@@ -104,10 +121,10 @@ export default function ScanCollectModal({
       if (typeof getters !== 'function') continue;
       const exact = s.rows.filter((r) => (getters(r) || []).some((v) => v && normStr(v) === c));
       const pool = exact.length ? exact : s.rows.filter((r) => (getters(r) || []).some((v) => v && normStr(v).includes(c)));
-      if (pool.length) return (s.matchMultiple || forceMulti) ? pool : [pool[0]];
+      if (pool.length) return withGomSet((s.matchMultiple || forceMulti) ? pool : [pool[0]]);
     }
     return [];
-  }, []);
+  }, [withGomSet]);
 
   const doImmediate = useCallback(async (row) => {
     const s = stateRef.current;
@@ -259,6 +276,24 @@ export default function ScanCollectModal({
             </div>
           )
         )}
+
+        {/* Ô NHẬP TAY / ĐẦU ĐỌC USB — LUÔN có ở mọi màn, mọi chế độ.
+            Lý do: chỉ màn READY (usbBarcode) mới bắt phím đầu đọc toàn cục, còn các màn khác dùng camera —
+            máy tính không có camera thì trước đây KHÔNG quét được mã vạch HSKT. Ô này nhận cả đầu đọc USB
+            (gõ xong tự Enter) lẫn gõ tay, cho mọi loại mã: code phần · barcode đợt vải · barcode HSKT. */}
+        <form
+          onSubmit={(e) => { e.preventDefault(); processScan(manual, 'camera'); setManual(''); }}
+          className="flex items-center gap-2"
+        >
+          <Icon name="scan" size={16} className="shrink-0 text-ink-soft" />
+          <input
+            value={manual}
+            onChange={(e) => setManual(e.target.value)}
+            placeholder="Quét đầu đọc / nhập mã: code phần · barcode HSKT · barcode đợt vải"
+            className="min-w-0 flex-1 rounded-control border border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-primary"
+          />
+          <Button type="submit" variant="secondary" disabled={!manual.trim()}>Thêm</Button>
+        </form>
 
         {/* Feedback tạm */}
         {log.length > 0 && (
