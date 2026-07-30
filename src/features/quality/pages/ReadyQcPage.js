@@ -251,6 +251,8 @@ export default function ReadyQcPage() {
       <div>
         <div>{r.ma_phan || '—'}</div>
         {r.tra_ve_kh && <div className="mt-1"><TraVeBadge data={r.tra_ve_kh} label="Kế hoạch trả về" nguon="Kế hoạch (Release 1)" /></div>}
+        {/* Test Run không đạt → QA trả về; modal hiện MỤC RỚT (Khuôn/Film/Mực) + lý do. */}
+        {r.tra_ve_test && <div className="mt-1"><TraVeBadge data={r.tra_ve_test} label="Test Run trả về" nguon="Test Run (QA)" /></div>}
       </div>
     ) },
     { key: 'khach_don', header: 'Khách hàng · Đơn hàng', render: (r) => (

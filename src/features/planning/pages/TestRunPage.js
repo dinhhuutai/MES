@@ -20,6 +20,7 @@ import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
 import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
+import TraVeBadge from '../../../components/common/TraVeBadge';
 
 const FILTER_FIELDS = [
   { key: 'codePhan', label: 'Code phần', col: 'ma_phan' }, { key: 'khach', label: 'Khách hàng', col: 'ten_khach_hang' },
@@ -99,8 +100,8 @@ export default function TestRunPage() {
     return () => clearTimeout(t);
   }, [load]);
 
-  // Chỉ chọn được lệnh chưa QA đạt.
-  const selectable = (r) => !r.qa_done;
+  // Chỉ chọn được lệnh chưa QA đạt VÀ không đang chờ kỹ thuật làm lại (đã bị trả về READY).
+  const selectable = (r) => !r.qa_done && !r.cho_ky_thuat;
   const toggleOne = (id) => setSelected((s) => {
     const next = new Set(s);
     if (next.has(id)) next.delete(id); else next.add(id);
@@ -139,6 +140,12 @@ export default function TestRunPage() {
       <div className="leading-tight">
         <div className="font-medium text-ink">{r.ten_khach_hang || '—'}</div>
         <div className="text-xs text-ink-soft">{r.ma_don_hang || '—'}</div>
+        {/* Test không đạt → đã trả về Kỹ thuật; lệnh GIỮ NGUYÊN, chờ QC xác nhận READY để tự về Test Run. */}
+        {r.cho_ky_thuat && (
+          <div className="mt-1">
+            <TraVeBadge data={r.tra_ve} label="Chờ kỹ thuật làm lại" nguon="Test Run (QA)" />
+          </div>
+        )}
       </div>
     ) },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => (

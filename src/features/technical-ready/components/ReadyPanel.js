@@ -162,6 +162,9 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
           {/* Lý do bị trả về — để kỹ thuật biết PHẢI LÀM LẠI GÌ (Kế hoạch/Release 1 & QC READY). */}
           {detail.tra_ve_kh && <ReturnNote info={detail.tra_ve_kh} nguon="Kế hoạch (Release 1)" />}
           {detail.tra_ve && <ReturnNote info={detail.tra_ve} nguon="QC chuẩn bị kỹ thuật" />}
+          {/* Test Run không đạt: mục rớt hiện ở phần checklist — làm lại đúng mục đó rồi QC xác nhận là
+              lệnh tự quay lại Test Run (Kế hoạch không phải Release 1 lại). */}
+          {detail.tra_ve_test && <ReturnNote info={detail.tra_ve_test} nguon="Test Run (QA)" />}
 
           {state.qc_done ? (
             <div className="rounded-control border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">

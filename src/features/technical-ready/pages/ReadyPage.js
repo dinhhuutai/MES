@@ -89,7 +89,11 @@ export default function ReadyPage() {
   });
   const activeCount = Object.values(filters).filter(Boolean).length;
   // "Chỉ hiện phần bị trả về" gồm CẢ 2 nguồn: QC READY trả về + Kế hoạch (Release 1) trả về Kỹ thuật.
-  const viewRows = filterRows(onlyReturned ? rows.filter((r) => r.tra_ve_ly_do || r.tra_ve_kh) : rows, filters, FILTER_FIELDS);
+  // "Chỉ hiện phần bị trả về" gộp CẢ 3 nguồn: QC READY · Kế hoạch (Release 1) · Test Run (QA).
+  const viewRows = filterRows(
+    onlyReturned ? rows.filter((r) => r.tra_ve_ly_do || r.tra_ve_kh || r.tra_ve_test) : rows,
+    filters, FILTER_FIELDS,
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -163,6 +167,8 @@ export default function ReadyPage() {
         {r.gom_set_list && <Badge tone="info" className="mt-1" title="Gom set: phần in này được gom in chung với các phần in KHÁC (cùng màu). ≠ Gộp đợt (cùng phần in, khác đợt)."><Icon name="git-branch" size={12} className="mr-1" />Gom set {r.gom_set_list}</Badge>}
         {(r.tra_ve || r.tra_ve_ly_do) && <div className="mt-1"><TraVeBadge data={r.tra_ve || r.tra_ve_ly_do} label="Bị QC trả về" nguon="QC" /></div>}
         {r.tra_ve_kh && <div className="mt-1"><TraVeBadge data={r.tra_ve_kh} label="Kế hoạch trả về" nguon="Kế hoạch (Release 1)" /></div>}
+        {/* Test Run không đạt → QA trả về; modal hiện MỤC RỚT (Khuôn/Film/Mực) + lý do. */}
+        {r.tra_ve_test && <div className="mt-1"><TraVeBadge data={r.tra_ve_test} label="Test Run trả về" nguon="Test Run (QA)" /></div>}
       </div>
     ) },
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
