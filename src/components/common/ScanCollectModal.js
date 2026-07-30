@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import Modal from './Modal';
 import Button from './Button';
 import Icon from './Icon';
-import { startCameraDecode, cameraErrorMessage } from './cameraDecoder';
+import { startCameraDecode, cameraErrorMessage, playVideo } from './cameraDecoder';
 
 // So khớp mã: bỏ khoảng trắng + viết thường (khớp cả code phần có chữ lẫn barcode dãy số).
 const normStr = (s) => String(s ?? '').trim().toLowerCase().replace(/\s+/g, '');
@@ -57,6 +57,12 @@ export default function ScanCollectModal({
   getGomSetKey = (r) => (r && r.barcode_hskt && r.hskt_inset != null && Number(r.hskt_inset) !== 0
     ? `HSKT#${r.barcode_hskt}` : null),
   matchMultiple = false,
+  // Dòng có được CHỌN không: trả `true`, hoặc CHUỖI LÝ DO để báo cho người quét.
+  // ⚠ Vì sao cần: các màn có điều kiện chọn (QC READY đòi đủ mục KT · Test Run đòi chưa QA & không chờ
+  // kỹ thuật · Kế hoạch tạm đòi đã Ready) trước đây truyền TẬP CON đã lọc vào `rows` ⇒ quét phần in
+  // ĐANG HIỆN trên bảng nhưng chưa đủ điều kiện thì báo "Không thấy" — người dùng tưởng máy quét hỏng.
+  // Nay truyền ĐỦ rows + `canSelect` để nói rõ TẠI SAO không chọn được.
+  canSelect,
   isSelected, onToggle,
   primaryLabel = (r) => r.ma_phan, secondaryLabel,
   onConfirm, confirmLabel = 'Xác nhận',
@@ -66,14 +72,18 @@ export default function ScanCollectModal({
   usbBarcode = false,
 }) {
   const hasBarcode = typeof getBarcodes === 'function';
-  // Chế độ MẶC ĐỊNH: READY (usbBarcode) trên máy tính → đầu đọc mã vạch USB; còn lại → camera đa định dạng.
-  const autoMode = usbBarcode && hasBarcode && !IS_TOUCH ? 'barcode' : 'camera';
-  // ⚠ Ở mode 'barcode' modal KHÔNG dựng thẻ <video> ⇒ KHÔNG có camera ⇒ **không đọc được QR** (đầu đọc
-  // 1D chỉ đọc mã vạch). Đó là lý do "ở READY trên máy tính quét QR code phần không được, còn tích
-  // barcode HSKT thì được". Nay cho ĐỔI CHẾ ĐỘ bằng tay để máy tính có webcam vẫn quét QR ở READY.
+  // ⚠⚠ 2 CHẾ ĐỘ TÁCH RIÊNG (chốt 2026-07-30) — 'qr' | 'barcode'. Trước đây camera quét CHUNG QR + 1D
+  // trong cùng một vòng nên **QR rất khó "qua"** (thực tế iPhone quét mãi không ra QR, còn reader 1D
+  // đọc bừa ra rác từ đường kẻ bảng của phiếu). Mỗi chế độ chỉ 1 nhóm reader ⇒ nhanh & chắc hơn nhiều.
+  //   · 'qr'      → CAMERA chỉ đọc QR (code phần / mã tem)
+  //   · 'barcode' → đầu đọc USB (READY trên máy tính) HOẶC camera chỉ đọc mã vạch 1D (HSKT / đợt vải)
   const [modeSel, setModeSel] = useState(null); // null = theo mặc định của thiết bị/màn hình
+  // Mặc định: điện thoại/pad → QR (hay dùng nhất). Máy tính ở READY có đầu đọc USB → mã vạch.
+  const autoMode = !IS_TOUCH && usbBarcode && hasBarcode ? 'barcode' : 'qr';
   const mode = modeSel || autoMode;
-  const canToggleMode = usbBarcode && hasBarcode; // chỉ READY mới có CẢ 2 cách nhập
+  // Đầu đọc mã vạch USB (keyboard-wedge) chỉ dùng ở READY trên MÁY TÍNH; còn lại 'barcode' = camera 1D.
+  const usbMode = mode === 'barcode' && usbBarcode && hasBarcode && !IS_TOUCH;
+  const camMode = !usbMode; // luôn có camera, trừ khi đang dùng đầu đọc USB
   const [log, setLog] = useState([]);       // feedback tạm (không tìm thấy / lỗi)
   const [session, setSession] = useState([]); // immediate: đã xác nhận phiên này (có nút Hủy)
   const [manual, setManual] = useState('');  // ô nhập tay / đầu đọc USB (mọi màn)
@@ -91,7 +101,7 @@ export default function ScanCollectModal({
   const idRef = useRef(0);
   // Giữ props mới nhất cho vòng lặp camera (effect chỉ chạy lại theo open/mode).
   const stateRef = useRef({});
-  stateRef.current = { rows, getCodes, getBarcodes, getHsktBarcodes, getGomSetKey, matchMultiple, isSelected, onToggle, immediate, onScanAction, actionLabel, primaryLabel, disabledScan };
+  stateRef.current = { rows, getCodes, getBarcodes, getHsktBarcodes, getGomSetKey, matchMultiple, canSelect, isSelected, onToggle, immediate, onScanAction, actionLabel, primaryLabel, disabledScan };
 
   useEffect(() => {
     if (open) { setLog([]); setSession([]); setManual(''); recentRef.current = new Map(); }
@@ -192,7 +202,20 @@ export default function ScanCollectModal({
     const last = recentRef.current.get(c);
     if (last && now - last < 1500) return; // chống lặp cùng mã
     recentRef.current.set(c, now);
-    const matched = matchRows(raw, kind);
+    let matched = matchRows(raw, kind);
+    // Khớp được nhưng dòng KHÔNG đủ điều kiện chọn → nêu RÕ lý do (đừng để im lặng như "không thấy").
+    if (matched.length && typeof s.canSelect === 'function') {
+      const blocked = [];
+      const okRows = [];
+      matched.forEach((r) => {
+        const v = s.canSelect(r);
+        if (v === true) okRows.push(r);
+        else blocked.push(`${s.primaryLabel(r)}: ${typeof v === 'string' && v ? v : 'chưa đủ điều kiện chọn'}`);
+      });
+      blocked.slice(0, 3).forEach((m) => pushLog(`✗ ${m}`, false));
+      matched = okRows;
+      if (!matched.length) return;
+    }
     if (!matched.length) {
       // Hiện RÕ loại mã + nguyên văn payload đọc được: nếu quét QR mà dòng này KHÔNG hiện thì camera
       // chưa đọc được QR; hiện mà báo "không thấy" thì payload khác dữ liệu trong danh sách.
@@ -212,7 +235,7 @@ export default function ScanCollectModal({
   }, []);
 
   useEffect(() => {
-    if (!open || mode !== 'camera' || !videoEl) { stopCam(); return undefined; }
+    if (!open || !camMode || !videoEl) { stopCam(); return undefined; }
     let cancelled = false;
     setError('');
     setReady(false);
@@ -221,12 +244,14 @@ export default function ScanCollectModal({
 
     (async () => {
       try {
-        // kieu = 'qr' (code phần) | 'barcode' (mã vạch HSKT) — do cameraDecoder nhận diện theo định dạng mã.
-        const stopFn = await startCameraDecode(videoEl, (text, kieu) => processScan(text, kieu || 'camera'));
+        // Chỉ quét đúng loại mã đang chọn ('qr' | 'barcode') — xem ghi chú ở cameraDecoder.
+        const stopFn = await startCameraDecode(videoEl, (text, kieu) => processScan(text, kieu || mode), mode);
         if (cancelled) { stopFn(); return; }
         stopRef.current = stopFn;
         videoEl.onplaying = () => setReady(true);
         if (!videoEl.paused && videoEl.readyState >= 2) setReady(true); // đã chạy trước khi kịp gắn
+        // iOS chặn autoplay (hay gặp trong PWA) → mời bấm vào khung để phát (bấm = user-gesture thật).
+        if (stopFn.autoplayBlocked) setSlow(true);
       } catch (e) {
         if (!cancelled) setError(cameraErrorMessage(e));
       }
@@ -234,12 +259,12 @@ export default function ScanCollectModal({
 
     return () => { cancelled = true; clearTimeout(slowTimer); stopCam(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, mode, videoEl]);
+  }, [open, mode, camMode, videoEl]);
 
   // BẮT PHÍM đầu đọc mã vạch toàn cục (không cần ô nhập): buffer ký tự, xử lý khi Enter hoặc khi ngừng gõ 120ms.
   // Bỏ qua khi đang gõ trong 1 field (INPUT/TEXTAREA/SELECT — vd ô "Người test") để không nuốt phím.
   useEffect(() => {
-    if (!open || mode !== 'barcode') return undefined;
+    if (!open || !usbMode) return undefined;
     const b = bufRef.current; // object ổn định (không reassign) — dùng chung cho flush/onKey/cleanup
     const flush = () => {
       const code = b.s; b.s = '';
@@ -265,7 +290,7 @@ export default function ScanCollectModal({
     };
     document.addEventListener('keydown', onKey);
     return () => { document.removeEventListener('keydown', onKey); if (b.timer) clearTimeout(b.timer); };
-  }, [open, mode, processScan]);
+  }, [open, usbMode, processScan]);
 
   const undoEntry = async (entry) => {
     try {
@@ -295,55 +320,55 @@ export default function ScanCollectModal({
         {help && <p className="rounded-control bg-surface-muted px-3 py-2 text-xs text-ink-soft">{help}</p>}
         {renderHeader}
 
-        {/* ĐỔI CÁCH QUÉT (chỉ READY — nơi có cả đầu đọc USB lẫn camera).
-            Đầu đọc mã vạch 1D KHÔNG đọc được QR ⇒ muốn quét QR code phần thì phải chuyển sang Camera. */}
-        {canToggleMode && (
-          <div className="flex gap-2">
-            {[
-              { v: 'barcode', label: 'Đầu đọc mã vạch', icon: 'barcode' },
-              { v: 'camera', label: 'Camera (QR + mã vạch)', icon: 'camera' },
-            ].map((o) => (
-              <button key={o.v} type="button" onClick={() => setModeSel(o.v)}
-                className={`flex flex-1 items-center justify-center gap-1.5 rounded-control border px-3 py-1.5 text-sm font-medium transition-colors ${
-                  mode === o.v ? 'border-primary bg-primary-wash/50 text-primary' : 'border-line text-ink-soft hover:text-ink'
-                }`}>
-                <Icon name={o.icon} size={14} />{o.label}
-              </button>
-            ))}
-          </div>
-        )}
+        {/* CHỌN LOẠI MÃ — hiện ở MỌI màn quét. Mỗi chế độ chỉ dò 1 nhóm reader (xem ghi chú ở đầu
+            component + cameraDecoder): quét chung QR + 1D làm QR rất khó "qua". */}
+        <div className="flex gap-2">
+          {[
+            { v: 'qr', label: 'QR', icon: 'scan-line' },
+            { v: 'barcode', label: 'Mã vạch', icon: 'barcode' },
+          ].map((o) => (
+            <button key={o.v} type="button" onClick={() => setModeSel(o.v)}
+              className={`flex flex-1 items-center justify-center gap-1.5 rounded-control border px-3 py-1.5 text-sm font-medium transition-colors ${
+                mode === o.v ? 'border-primary bg-primary-wash/50 text-primary' : 'border-line text-ink-soft hover:text-ink'
+              }`}>
+              <Icon name={o.icon} size={14} />{o.label}
+            </button>
+          ))}
+        </div>
 
-        {/* Barcode (máy tính): chỉ hình ảnh động — đầu đọc mã vạch được bắt phím tự động, tự xác nhận. */}
-        {mode === 'barcode' && (
+        {/* ĐẦU ĐỌC USB (chỉ READY trên máy tính): không có camera, bắt phím tự động → tự xác nhận. */}
+        {usbMode && (
           <div className="space-y-1">
             <ScanViz />
             <p className="flex items-center justify-center gap-1.5 text-center text-xs text-ink-soft">
               <Icon name="barcode" size={14} /> Dùng đầu đọc mã vạch để tích — tự động xác nhận, hiện ngay bên dưới.
             </p>
-            {canToggleMode && (
-              <p className="text-center text-xs text-amber-600">
-                Đầu đọc mã vạch KHÔNG đọc được QR — muốn quét <b>QR code phần</b> thì bấm <b>Camera</b> ở trên.
-              </p>
-            )}
+            <p className="text-center text-xs text-amber-600">
+              Đầu đọc mã vạch KHÔNG đọc được QR — muốn quét <b>QR code phần</b> thì bấm <b>QR</b> ở trên.
+            </p>
           </div>
         )}
 
-        {/* Camera đa định dạng (QR + mã vạch) */}
-        {mode === 'camera' && (
+        {/* CAMERA — chỉ đọc đúng loại mã đang chọn (QR hoặc mã vạch 1D) */}
+        {camMode && (
           error ? (
             <div className="rounded-control border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300">{error}</div>
           ) : (
             <div className="space-y-1">
-              <div className="relative mx-auto aspect-square w-full max-w-xs overflow-hidden rounded-card bg-black">
+              {/* BẤM vào khung = user-gesture thật → iOS cho phát video khi autoplay bị chặn (PWA). */}
+              <div className="relative mx-auto aspect-square w-full max-w-xs overflow-hidden rounded-card bg-black"
+                onClick={() => playVideo(videoEl).then((ok) => { if (ok) { setReady(true); setSlow(false); } })}>
                 {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-                <video ref={setVideoEl} className="h-full w-full object-cover" muted playsInline />
+                <video ref={setVideoEl} className="h-full w-full object-cover" muted playsInline autoPlay />
                 <div className="pointer-events-none absolute inset-6 rounded-lg border-2 border-white/80" />
               </div>
               <p className="text-center text-xs text-ink-soft">
                 {ready
-                  ? 'Quét liên tục — QR = code phần · Mã vạch = HSKT (chọn cả nhóm gom set)'
+                  ? (mode === 'qr'
+                    ? 'Đang quét QR (code phần) — chỉ đọc QR, bấm "Mã vạch" nếu cần quét mã vạch'
+                    : 'Đang quét MÃ VẠCH (HSKT / đợt vải) — chọn cả nhóm gom set')
                   : slow
-                    ? 'Camera chưa hiện hình — đóng rồi mở lại, hoặc kiểm tra quyền camera của trình duyệt.'
+                    ? 'Chưa thấy hình? BẤM vào khung để bật camera (iOS chặn tự phát), hoặc kiểm tra quyền camera.'
                     : 'Đang mở camera...'}
               </p>
             </div>
@@ -359,11 +384,15 @@ export default function ScanCollectModal({
           className="flex items-center gap-2"
         >
           <Icon name="scan" size={16} className="shrink-0 text-ink-soft" />
+          {/* ⚠ `text-base` (16px) là BẮT BUỘC, KHÔNG hạ xuống text-sm: iOS Safari TỰ PHÓNG TO cả trang
+              khi focus input có font-size < 16px, và vì viewport không đặt `maximum-scale` nên nó
+              KHÔNG tự thu lại ⇒ đang mở camera quét mà bấm vào ô này là giao diện phóng to kẹt luôn
+              (lỗi đã gặp thật trên PWA iPhone). Cách chuẩn là để font ≥ 16px, không phải chặn zoom. */}
           <input
             value={manual}
             onChange={(e) => setManual(e.target.value)}
             placeholder="Quét đầu đọc / nhập mã: code phần · barcode HSKT · barcode đợt vải"
-            className="min-w-0 flex-1 rounded-control border border-line bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-primary"
+            className="min-w-0 flex-1 rounded-control border border-line bg-surface px-3 py-2 text-base md:text-sm text-ink outline-none focus:border-primary"
           />
           <Button type="submit" variant="secondary" disabled={!manual.trim()}>Thêm</Button>
         </form>

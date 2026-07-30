@@ -216,16 +216,19 @@ export default function KeHoachTamPage() {
         onRowClick={(r) => openEdit(r)}
         emptyText="Chưa có kế hoạch tạm nào" />
 
+      {/* ĐỦ `rows` (không phải `readyRows`) — quét dòng đang hiện trên bảng cũng khớp; dòng chưa Ready
+          thì `canSelect` nói rõ lý do thay vì báo "Không thấy". */}
       <ScanCollectModal
         open={scanOpen}
         onClose={() => setScanOpen(false)}
         title="Quét QR code phần — Kế hoạch tạm"
         help="Quét QR code phần (hoặc mã vạch) để chọn các bản kế hoạch tạm ĐÃ Ready của phần in đó. Quét nhiều rồi bấm Xác nhận Release 1 cùng lúc."
-        rows={readyRows}
+        rows={rows}
         getId={(r) => r.id}
         getCodes={(r) => [r.ma_phan]}
         getBarcodes={(r) => [r.barcode]}
         matchMultiple
+        canSelect={(r) => r.qc_done === true || 'chưa Ready (QC chưa xác nhận) — chưa Release 1 được'}
         isSelected={(r) => selected.has(r.id)}
         onToggle={(r) => toggleOne(r.id)}
         primaryLabel={(r) => r.ma_phan || '—'}

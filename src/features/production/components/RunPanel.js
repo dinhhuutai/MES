@@ -18,8 +18,9 @@ const TEM_TONE = { IN: 'warning', DANG_PHOI: 'info', DA_KHO: 'success', HUY: 'da
 const TEM_LABEL = { IN: 'Chờ phơi', DANG_PHOI: 'Đang phơi', DA_KHO: 'Đã khô', HUY: 'Đã hủy' };
 const fmtDt = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '');
 
-// Ô nhập số trong bảng modal (gọn, canh phải).
-const numCls = 'w-24 rounded-control border border-line bg-surface px-2 py-1.5 text-right text-sm text-ink outline-none focus:border-primary';
+// Ô nhập số trong bảng modal (gọn, canh phải). `text-base md:text-sm`: iOS phóng to trang khi focus
+// input có font < 16px và không tự thu lại (xem ghi chú ở `components/common/controls.js`).
+const numCls = 'w-24 rounded-control border border-line bg-surface px-2 py-1.5 text-right text-base md:text-sm text-ink outline-none focus:border-primary';
 const TH = 'whitespace-nowrap px-2.5 py-2 text-left text-[11px] font-bold uppercase tracking-wide text-ink-soft';
 const TD = 'whitespace-nowrap px-2.5 py-2 text-sm text-ink';
 
@@ -198,7 +199,7 @@ function PhanCongModal({ open, onClose, rows, users, initial, onSave, busy }) {
                   <td className={TD}>
                     <input value={f.thoIn || ''} placeholder="Tên thợ in"
                       onChange={(e) => setCell(r.dot_vai_ve_id, 'thoIn', e.target.value)}
-                      className="w-40 rounded-control border border-line bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-primary" />
+                      className="w-40 rounded-control border border-line bg-surface px-2 py-1.5 text-base md:text-sm text-ink outline-none focus:border-primary" />
                   </td>
                 </tr>
               );

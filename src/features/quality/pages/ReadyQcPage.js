@@ -389,16 +389,19 @@ export default function ReadyQcPage() {
         )}
       </SidePanel>
 
+      {/* Truyền ĐỦ `rows` (không phải `readyRows`) để quét phần in nào ĐANG HIỆN trên bảng cũng khớp;
+          phần in chưa đủ mục kỹ thuật thì `canSelect` báo rõ lý do thay vì "Không thấy". */}
       <ScanCollectModal
         open={scanOpen}
         onClose={() => setScanOpen(false)}
         title="Quét / tích phần in — QC READY"
-        help="Đưa camera vào QR code phần hoặc mã vạch để quét. Chỉ chọn được phần in đã đủ 3 mục kỹ thuật. Quét nhiều rồi bấm QC xác nhận cùng lúc; mỗi dòng có nút Trả về nếu cần trả kỹ thuật."
-        rows={readyRows}
+        help="Chọn QR (code phần) hoặc Mã vạch ở trên rồi đưa vào khung camera. Chỉ chọn được phần in đã đủ 3 mục kỹ thuật. Quét nhiều rồi bấm QC xác nhận cùng lúc; mỗi dòng có nút Trả về nếu cần trả kỹ thuật."
+        rows={rows}
         getId={(r) => r.id}
         getCodes={(r) => [r.ma_phan]}
         getBarcodes={(r) => [r.barcode]}
         matchMultiple={false}
+        canSelect={(r) => isReady(r) || 'chưa đủ mục kỹ thuật (Khuôn/Film/Mực) — QC chưa xác nhận được'}
         isSelected={(r) => selected.has(r.id)}
         onToggle={(r) => toggleOne(r.id)}
         primaryLabel={(r) => r.ma_phan || r.barcode || '—'}

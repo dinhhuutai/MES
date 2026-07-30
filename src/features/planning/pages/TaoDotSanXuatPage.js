@@ -278,7 +278,7 @@ export default function TaoDotSanXuatPage() {
         open={scanOpen}
         onClose={() => setScanOpen(false)}
         title="Quét / tích mã — Tạo đợt sản xuất"
-        help="Đưa camera vào QR code phần hoặc mã vạch để quét. 1 code phần → thêm HẾT đợt vải của phần in đó vào đợt đang soạn (chỉ CÙNG phần in)."
+        help="Chọn QR (code phần) hoặc Mã vạch ở trên rồi đưa vào khung camera. 1 code phần → thêm HẾT đợt vải của phần in đó vào đợt đang soạn (chỉ CÙNG phần in)."
         rows={rows}
         getId={(r) => r.dot_vai_id}
         getCodes={(r) => [r.ma_phan]}

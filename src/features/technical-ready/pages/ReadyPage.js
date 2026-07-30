@@ -257,7 +257,7 @@ export default function ReadyPage() {
         open={scanOpen}
         onClose={() => { setScanOpen(false); load(); }}
         title="Quét / tích phần in — READY"
-        help="Máy tính mặc định dùng đầu đọc mã vạch; muốn quét QR code phần thì bấm Camera ở trên (đầu đọc 1D không đọc được QR). Điện thoại/pad mặc định là camera. Mỗi lần quét XÁC NHẬN NGAY các mục đang chọn. Tích lộn thì bấm Hủy ở dòng đó."
+        help="Chọn loại mã ở trên: QR (code phần) hoặc Mã vạch (HSKT). Máy tính mặc định là Mã vạch qua đầu đọc USB — muốn quét QR thì bấm QR để dùng camera. Mỗi lần quét XÁC NHẬN NGAY các mục đang chọn. Tích lộn thì bấm Hủy ở dòng đó."
         rows={rows}
         immediate
         usbBarcode

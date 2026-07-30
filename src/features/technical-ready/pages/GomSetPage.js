@@ -324,7 +324,7 @@ export default function GomSetPage() {
         open={scanOpen}
         onClose={() => setScanOpen(false)}
         title="Quét mã — Gom set"
-        help="Quét QR code phần hoặc mã vạch HSKT → nhảy thẳng vào khung Chọn gom set. Phần in CÓ GOM SET (Inset≠0, cùng barcode HSKT) thì cả nhóm cùng vào theo. Quét mã vạch đợt ready → thêm mọi đợt vải của đợt ready đó."
+        help="Chọn QR (code phần) hoặc Mã vạch (HSKT) ở trên rồi quét → nhảy thẳng vào khung Chọn gom set. Phần in CÓ GOM SET (Inset≠0, cùng barcode HSKT) thì cả nhóm cùng vào theo. Quét mã vạch đợt ready → thêm mọi đợt vải của đợt ready đó."
         rows={cands}
         getId={(r) => r.dot_vai_id}
         getCodes={(r) => [r.ma_phan]}

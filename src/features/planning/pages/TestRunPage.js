@@ -198,16 +198,21 @@ export default function TestRunPage() {
 
       {sel && <TestRunPanel lenhId={sel} onClose={() => setSel(null)} onChanged={load} />}
 
+      {/* ĐỦ `rows` (không phải `selRows`) — quét lệnh đang hiện trên bảng cũng khớp; lệnh không chọn
+          được thì `canSelect` nói rõ lý do thay vì báo "Không thấy". */}
       <ScanCollectModal
         open={scanOpen}
         onClose={() => setScanOpen(false)}
         title="Quét / tích lệnh Test Run — QA"
-        help="Đưa camera vào QR code phần hoặc mã vạch để quét. Quét nhiều lệnh (chưa QA) rồi nhập người test & bấm QA xác nhận đạt cùng lúc; mỗi dòng có nút Trả về Release 1 nếu test không đạt."
-        rows={selRows}
+        help="Chọn QR (code phần) hoặc Mã vạch ở trên rồi đưa vào khung camera. Quét nhiều lệnh (chưa QA) rồi nhập người test & bấm QA xác nhận đạt cùng lúc; mỗi dòng có nút Trả về Release 1 nếu test không đạt."
+        rows={rows}
         getId={(r) => r.id}
         getCodes={(r) => [r.ma_phan]}
         getBarcodes={(r) => [r.barcode]}
         matchMultiple
+        canSelect={(r) => (r.cho_ky_thuat
+          ? 'đang chờ kỹ thuật làm lại (Test Run đã trả về) — không test được'
+          : r.qa_done ? 'QA đã xác nhận đạt rồi' : true)}
         isSelected={(r) => selected.has(r.id)}
         onToggle={(r) => toggleOne(r.id)}
         primaryLabel={(r) => r.ma_phan || r.barcode || '—'}
