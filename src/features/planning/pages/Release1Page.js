@@ -353,7 +353,9 @@ export default function Release1Page() {
                         <tr key={m.dot_vai_id} onClick={() => openDetail(m, s)}
                           className={`cursor-pointer bg-primary-wash/30 ${last ? 'border-b border-line' : ''} ${on ? 'bg-primary-wash/70' : ''}`}>
                           {first && (
-                            <td rowSpan={s.members.length}
+                            // Ô CHỌN của set: chặn nổi bọt → bấm vào cột này (checkbox, mã set, badge)
+                            // chỉ tick/bỏ tick, KHÔNG mở SidePanel.
+                            <td rowSpan={s.members.length} onClick={(e) => e.stopPropagation()}
                               className={`w-28 border-l-[3px] px-2 py-3 align-middle text-center transition
                                 ${on ? 'border-primary bg-primary-wash' : 'border-primary/50'}`}>
                               {/* Set CHƯA đủ Ready vẫn CHỌN được — xác nhận sẽ lưu Kế hoạch tạm cho cả set
@@ -387,9 +389,11 @@ export default function Release1Page() {
                   return (
                     <tr key={r.dot_vai_id} onClick={() => openDetail(r)}
                       className={`cursor-pointer border-b border-line/70 transition hover:bg-surface-muted/40 ${slaRowClass(statusDot(r.dot_vai_id))}`}>
-                      <td className={TD}>
+                      {/* Ô CHỌN: chặn ở cấp <td> (không chỉ trên <input>) — bấm vào phần đệm quanh
+                          checkbox trước đây vẫn mở SidePanel. */}
+                      <td className={TD} onClick={(e) => e.stopPropagation()}>
                         <input type="checkbox" checked={!!selected[r.dot_vai_id]}
-                          onClick={(e) => e.stopPropagation()} onChange={() => toggle(r)}
+                          onChange={() => toggle(r)}
                           className="h-4 w-4 rounded border-line text-primary focus:ring-primary" />
                       </td>
                       <td className={`${TD} text-right tabular-nums text-ink-soft`}>{stt}</td>
@@ -404,18 +408,25 @@ export default function Release1Page() {
       </div>
       <Pagination page={safePage} totalPages={totalCPages} total={combined.length} onPage={setCpage} />
 
+      {/* Thanh "Đã chọn" GHIM CỐ ĐỊNH (fixed) ở đáy màn hình — luôn thấy dù bảng dài hay đang cuộn.
+          · desktop: cách đáy 5px · dưới lg: nâng lên trên BottomNav (nav fixed z-40, lg:hidden)
+          · z-30 để KHÔNG đè Modal/SidePanel (Headless UI z-50) và không che BottomNav
+          · căn giữa + rộng theo nội dung ⇒ không phủ lên Sidebar bên trái */}
       {totalSel > 0 && (
-        <div className="sticky bottom-4 mt-4 flex items-center justify-between rounded-card border border-line bg-surface px-5 py-3 shadow-card-hover">
-          <span className="text-sm text-ink">
-            {selectedSetList.length > 0 && <>Đã chọn <b>{selectedSetList.length}</b> set</>}
-            {selectedSetList.length > 0 && looseList.length > 0 && ' · '}
-            {looseList.length > 0 && <>Đã chọn <b>{looseList.length}</b> đợt vải lẻ (SL {fmtNum(tongVai)})</>}
-          </span>
-          <div className="flex gap-2">
-            <Button variant="ghost" onClick={() => { setSelected({}); setSelectedSets(new Set()); }}>Bỏ chọn</Button>
-            <Button onClick={openReleaseAll}>Release ({totalSel})</Button>
+        <>
+          <div className="h-20 lg:h-16" aria-hidden="true" />{/* chừa chỗ để thanh không che phân trang */}
+          <div className="fixed bottom-[4.75rem] left-1/2 z-30 flex max-w-[95vw] -translate-x-1/2 flex-wrap items-center justify-between gap-x-6 gap-y-2 rounded-card border border-line bg-surface px-5 py-3 shadow-card-hover lg:bottom-[5px]">
+            <span className="text-sm text-ink">
+              {selectedSetList.length > 0 && <>Đã chọn <b>{selectedSetList.length}</b> set</>}
+              {selectedSetList.length > 0 && looseList.length > 0 && ' · '}
+              {looseList.length > 0 && <>Đã chọn <b>{looseList.length}</b> đợt vải lẻ (SL {fmtNum(tongVai)})</>}
+            </span>
+            <div className="flex gap-2">
+              <Button variant="ghost" onClick={() => { setSelected({}); setSelectedSets(new Set()); }}>Bỏ chọn</Button>
+              <Button onClick={openReleaseAll}>Release ({totalSel})</Button>
+            </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* Modal release gộp (set + lẻ) */}

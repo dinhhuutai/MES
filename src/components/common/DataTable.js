@@ -38,8 +38,13 @@ export default function DataTable({ columns, rows, loading, rowKey = 'id', empty
       {c.header}
     </th>
   );
+  // ⚠ Ô CHỌN (selection) phải CHẶN nổi bọt click: các trang chỉ đặt stopPropagation trên chính thẻ
+  // <input>, nên bấm vào PHẦN ĐỆM quanh checkbox vẫn kích onRowClick → mở SidePanel ngoài ý muốn.
+  // Chặn ở cấp <td> để cả cột chọn không bao giờ mở panel (vd Release 2, Kế hoạch tạm, Giao hàng…).
+  const stopSel = onRowClick ? (e) => e.stopPropagation() : undefined;
   const renderCell = (c, row, sticky) => (
-    <td key={c.key} className={`${PAD_C} ${sticky ? 'sticky right-0 z-10 bg-surface shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.15)]' : ''} ${c.className || ''}`}>
+    <td key={c.key} onClick={c.selection ? stopSel : undefined}
+      className={`${PAD_C} ${sticky ? 'sticky right-0 z-10 bg-surface shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.15)]' : ''} ${c.className || ''}`}>
       {cellValue(c, row)}
     </td>
   );
@@ -101,7 +106,8 @@ export default function DataTable({ columns, rows, loading, rowKey = 'id', empty
                 className={`card p-3.5 ${onRowClick ? 'cursor-pointer active:bg-surface-muted/60' : ''} ${rowClassName ? rowClassName(row) : ''}`}>
                 {(selCols.length > 0 || showStt) && (
                   <div className="mb-2 flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
+                    {/* Thẻ mobile: cũng chặn nổi bọt ở vùng ô chọn (xem ghi chú renderCell) */}
+                    <div className="flex items-center gap-2" onClick={stopSel}>
                       {selCols.map((c) => <span key={c.key}>{cellValue(c, row)}</span>)}
                     </div>
                     {showStt && <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs font-medium text-ink-soft">#{sttBase + i + 1}</span>}

@@ -66,8 +66,14 @@ export default function ScanCollectModal({
   usbBarcode = false,
 }) {
   const hasBarcode = typeof getBarcodes === 'function';
-  // READY (usbBarcode) trên máy tính → đầu đọc mã vạch USB. Còn lại → camera đa định dạng (QR + mã vạch).
-  const mode = usbBarcode && hasBarcode && !IS_TOUCH ? 'barcode' : 'camera';
+  // Chế độ MẶC ĐỊNH: READY (usbBarcode) trên máy tính → đầu đọc mã vạch USB; còn lại → camera đa định dạng.
+  const autoMode = usbBarcode && hasBarcode && !IS_TOUCH ? 'barcode' : 'camera';
+  // ⚠ Ở mode 'barcode' modal KHÔNG dựng thẻ <video> ⇒ KHÔNG có camera ⇒ **không đọc được QR** (đầu đọc
+  // 1D chỉ đọc mã vạch). Đó là lý do "ở READY trên máy tính quét QR code phần không được, còn tích
+  // barcode HSKT thì được". Nay cho ĐỔI CHẾ ĐỘ bằng tay để máy tính có webcam vẫn quét QR ở READY.
+  const [modeSel, setModeSel] = useState(null); // null = theo mặc định của thiết bị/màn hình
+  const mode = modeSel || autoMode;
+  const canToggleMode = usbBarcode && hasBarcode; // chỉ READY mới có CẢ 2 cách nhập
   const [log, setLog] = useState([]);       // feedback tạm (không tìm thấy / lỗi)
   const [session, setSession] = useState([]); // immediate: đã xác nhận phiên này (có nút Hủy)
   const [manual, setManual] = useState('');  // ô nhập tay / đầu đọc USB (mọi màn)
@@ -289,6 +295,24 @@ export default function ScanCollectModal({
         {help && <p className="rounded-control bg-surface-muted px-3 py-2 text-xs text-ink-soft">{help}</p>}
         {renderHeader}
 
+        {/* ĐỔI CÁCH QUÉT (chỉ READY — nơi có cả đầu đọc USB lẫn camera).
+            Đầu đọc mã vạch 1D KHÔNG đọc được QR ⇒ muốn quét QR code phần thì phải chuyển sang Camera. */}
+        {canToggleMode && (
+          <div className="flex gap-2">
+            {[
+              { v: 'barcode', label: 'Đầu đọc mã vạch', icon: 'barcode' },
+              { v: 'camera', label: 'Camera (QR + mã vạch)', icon: 'camera' },
+            ].map((o) => (
+              <button key={o.v} type="button" onClick={() => setModeSel(o.v)}
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-control border px-3 py-1.5 text-sm font-medium transition-colors ${
+                  mode === o.v ? 'border-primary bg-primary-wash/50 text-primary' : 'border-line text-ink-soft hover:text-ink'
+                }`}>
+                <Icon name={o.icon} size={14} />{o.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Barcode (máy tính): chỉ hình ảnh động — đầu đọc mã vạch được bắt phím tự động, tự xác nhận. */}
         {mode === 'barcode' && (
           <div className="space-y-1">
@@ -296,6 +320,11 @@ export default function ScanCollectModal({
             <p className="flex items-center justify-center gap-1.5 text-center text-xs text-ink-soft">
               <Icon name="barcode" size={14} /> Dùng đầu đọc mã vạch để tích — tự động xác nhận, hiện ngay bên dưới.
             </p>
+            {canToggleMode && (
+              <p className="text-center text-xs text-amber-600">
+                Đầu đọc mã vạch KHÔNG đọc được QR — muốn quét <b>QR code phần</b> thì bấm <b>Camera</b> ở trên.
+              </p>
+            )}
           </div>
         )}
 
