@@ -113,6 +113,7 @@ function ReadyCancelSection({ show }) {
 const TT = {
   RELEASE_1: { tone: 'info', label: 'Test Run (Release 1)' },
   RELEASE_2: { tone: 'warning', label: 'Release 2 (chờ sản xuất)' },
+  GIA_CONG: { tone: 'default', label: 'Gia công (chờ chuyển OQC)' },
 };
 
 // Các checkpoint đích có thể đưa về, tùy trạng thái hiện tại của lệnh.
@@ -121,7 +122,8 @@ function targetsFor(trangThai) {
   const REL1 = { v: 'RELEASE_1', label: 'Về "chờ release" (Release 1)', desc: 'Hủy lệnh, giữ QC → sẵn sàng release lại' };
   const TEST = { v: 'TEST_RUN', label: 'Về Test Run', desc: 'Bỏ duyệt Release 2, giữ lệnh → quay lại Test Run' };
   if (trangThai === 'RELEASE_2') return [TEST, REL1, READY];
-  return [REL1, READY]; // RELEASE_1 (đang ở Test Run)
+  // GIA_CONG (lỡ chọn chuyền gia công ở Release 1) & RELEASE_1: không có bước Test Run để quay về.
+  return [REL1, READY];
 }
 
 function LenhCancelSection({ show }) {
@@ -202,14 +204,15 @@ function LenhCancelSection({ show }) {
   return (
     <div>
       <Toolbar title="Hủy lệnh sản xuất"
-        subtitle="Lỡ release/chuyển qua Test Run hoặc Release 2 — hủy lệnh để đưa về checkpoint mong muốn (chỉ khi CHƯA in tem)"
+        subtitle="Lỡ release/chuyển qua Test Run, Release 2 hoặc Gia công — hủy lệnh để đưa về checkpoint mong muốn (chỉ khi CHƯA in tem)"
         search={search} onSearch={(v) => { setSearch(v); setPage(1); }}
         searchPlaceholder="Tìm mã lệnh, code phần, mã hàng, màu/kích...">
         <Badge tone="info">{meta.total} lệnh hủy được</Badge>
       </Toolbar>
 
       <div className="mb-3 rounded-control border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700">
-        Hủy lệnh an toàn cho các bước <b>trước sản xuất</b> (READY · Release 1 · Test Run · Release 2). Sau khi <b>đã in tem</b>
+        Hủy lệnh an toàn cho các bước <b>trước sản xuất</b> (READY · Release 1 · Test Run · Release 2 · <b>Gia công</b> chưa
+        chuyển OQC). Sau khi <b>đã in tem</b>
         (Sản xuất → Giao hàng) chưa hỗ trợ hủy tự động vì liên quan tách tem/giao hàng.
       </div>
 

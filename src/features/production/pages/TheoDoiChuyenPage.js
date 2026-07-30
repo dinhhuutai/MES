@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import Modal from '../../../components/common/Modal';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
@@ -11,6 +11,16 @@ import usePermissions from '../../../hooks/usePermissions';
 import { getMonitor, stopLine, resumeLine } from '../../../services/productionService';
 
 const ROTATE_MS = 30000;
+// Lọc theo LOẠI CHUYỀN (bảng loai_chuyen.ma_loai) — '' = tất cả.
+const LOAI_TABS = [
+  { v: '', label: 'Tất cả' },
+  { v: 'BAN', label: 'Bàn' },
+  { v: 'MAY', label: 'Máy' },
+  { v: 'ROBOT', label: 'Robot' },
+  { v: 'EP', label: 'Ép' },
+  { v: 'LOGO', label: 'Logo' },
+  { v: 'GIA_CONG', label: 'Gia công' },
+];
 const nf = (n) => Number(n || 0).toLocaleString('vi-VN');
 const pad = (n) => String(n).padStart(2, '0');
 const hhmm = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -33,6 +43,7 @@ export default function TheoDoiChuyenPage() {
   const [stopFor, setStopFor] = useState(null);
   const [stopReason, setStopReason] = useState('');
   const [busy, setBusy] = useState(false);
+  const [loai, setLoai] = useState(''); // loại chuyền đang lọc ('' = tất cả)
 
   const load = useCallback(async () => {
     try {
@@ -51,7 +62,17 @@ export default function TheoDoiChuyenPage() {
     return () => clearInterval(t);
   }, [load]);
 
-  const running = data.running || [];
+  const allRunning = useMemo(() => data.running || [], [data.running]);
+  // Đếm số chuyền đang chạy theo từng loại (cho badge trên toggle).
+  const countByLoai = useMemo(() => {
+    const m = {};
+    allRunning.forEach((x) => { m[x.ma_loai_chuyen || ''] = (m[x.ma_loai_chuyen || ''] || 0) + 1; });
+    return m;
+  }, [allRunning]);
+  const running = useMemo(
+    () => (loai ? allRunning.filter((x) => x.ma_loai_chuyen === loai) : allRunning),
+    [allRunning, loai]
+  );
   const count = running.length;
   const cur = count ? idx % count : 0;
 
@@ -111,6 +132,29 @@ export default function TheoDoiChuyenPage() {
 
   return (
     <div>
+      {/* Toggle LOẠI CHUYỀN — lọc danh sách chuyền đang chạy */}
+      <div className="mb-4 flex flex-wrap gap-2">
+        {LOAI_TABS.map((t) => {
+          const n = t.v ? (countByLoai[t.v] || 0) : allRunning.length;
+          const active = loai === t.v;
+          return (
+            <button
+              key={t.v || 'all'}
+              type="button"
+              onClick={() => { setLoai(t.v); setIdx(0); }}
+              className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                active
+                  ? 'border-primary bg-primary text-white'
+                  : 'border-line bg-surface text-ink-soft hover:border-primary/50 hover:text-ink'
+              }`}
+            >
+              {t.label}
+              <span className={`ml-1.5 text-xs ${active ? 'text-white/80' : 'text-ink-soft'}`}>({n})</span>
+            </button>
+          );
+        })}
+      </div>
+
       <div className={`card p-6 sm:p-7 ${risk === 'red' ? 'ring-2 ring-danger' : risk === 'yellow' ? 'ring-2 ring-warning' : ''}`}>
         {/* Top bar */}
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -120,8 +164,13 @@ export default function TheoDoiChuyenPage() {
                 className="h-10 rounded-input border border-line bg-surface px-3 text-sm font-semibold text-ink outline-none focus:border-primary focus:ring-4 focus:ring-primary/10">
                 {running.map((x, i) => <option key={x.phieu_id} value={i}>{x.ma_chuyen} · {x.ten_chuyen}</option>)}
               </select>
-            ) : <span className="text-sm text-ink-soft">Không có chuyền đang chạy</span>}
+            ) : (
+              <span className="text-sm text-ink-soft">
+                Không có chuyền đang chạy{loai ? ` — loại "${LOAI_TABS.find((t) => t.v === loai)?.label}"` : ''}
+              </span>
+            )}
             {r && (r.dang_ngung ? <Badge tone="danger">● Đang ngừng</Badge> : <Badge tone="success">● Đang chạy</Badge>)}
+            {r?.ten_loai_chuyen && <Badge tone="default">{r.ten_loai_chuyen}</Badge>}
           </div>
           <div className="flex items-center gap-4">
             {count > 1 && (
@@ -139,7 +188,11 @@ export default function TheoDoiChuyenPage() {
         {loading ? (
           <div className="py-16 text-center text-ink-soft">Đang tải...</div>
         ) : !r ? (
-          <div className="py-16 text-center text-ink-soft">Không có chuyền nào đang chạy</div>
+          <div className="py-16 text-center text-ink-soft">
+            {loai
+              ? `Không có chuyền loại "${LOAI_TABS.find((t) => t.v === loai)?.label}" nào đang chạy`
+              : 'Không có chuyền nào đang chạy'}
+          </div>
         ) : (
           <>
             <div className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-ink-soft">Đang sản xuất</div>

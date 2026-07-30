@@ -6,6 +6,10 @@ import { startCameraDecode, cameraErrorMessage } from './cameraDecoder';
 
 // So khớp mã: bỏ khoảng trắng + viết thường (khớp cả code phần có chữ lẫn barcode dãy số).
 const normStr = (s) => String(s ?? '').trim().toLowerCase().replace(/\s+/g, '');
+// Chuẩn hóa LỎNG: chỉ giữ chữ + số (bỏ - _ . / # …) — dùng ở lượt khớp cuối, vì QR trên phiếu giấy
+// hay ghi code phần khác dấu phân cách với DB (vd "CP-000-006" ↔ "CP000006").
+const looseStr = (s) => normStr(s).replace(/[^a-z0-9]/g, '');
+const KIND_LABEL = { qr: 'QR', barcode: 'mã vạch' };
 // Thiết bị cảm ứng (điện thoại/pad) → mặc định quét QR; máy tính → mặc định tích barcode.
 const IS_TOUCH = typeof window !== 'undefined' && window.matchMedia
   ? window.matchMedia('(pointer: coarse)').matches : false;
@@ -121,17 +125,42 @@ export default function ScanCollectModal({
         ? [[s.getCodes, false], [s.getHsktBarcodes, true], [s.getBarcodes, false]]
         : [[s.getCodes, false], [s.getBarcodes, false], [s.getHsktBarcodes, true]];
     const list = getterList.filter(([g]) => typeof g === 'function');
-    // 2 LƯỢT: khớp CHÍNH XÁC trên mọi cột trước, rồi mới tới khớp CHỨA —
-    // để một cột ưu tiên khớp "chứa" không cướp mất cột sau khớp chính xác.
-    const test = (exactOnly) => {
+    const lc = looseStr(raw);
+    // 3 LƯỢT (mỗi lượt quét HẾT các cột theo thứ tự ưu tiên trên, rồi mới xuống lượt sau) —
+    // để một cột ưu tiên khớp "lỏng" không cướp mất cột sau khớp chính xác:
+    //  1. 'exact'      : bằng nhau (kể cả sau khi bỏ dấu phân cách)
+    //  2. 'rowHasScan' : giá trị trong DB CHỨA mã vừa quét (gõ tay thiếu, quét được phần đầu)
+    //  3. 'scanHasRow' : mã vừa quét CHỨA giá trị trong DB — ⚠ CA CHÍNH của lỗi "quét QR code phần
+    //     không ra": QR trên phiếu giấy thường mang THÊM dữ liệu quanh code phần (tiền tố/hậu tố/
+    //     URL/nhiều trường ghép), payload DÀI HƠN code phần nên 2 lượt trên đều trượt.
+    const test = (mode) => {
       for (const [getters, forceMulti] of list) {
-        const pool = s.rows.filter((r) => (getters(r) || []).some((v) => v
-          && (exactOnly ? normStr(v) === c : normStr(v).includes(c))));
+        let best = 0;
+        let pool = [];
+        for (const r of s.rows) {
+          let score = 0;
+          for (const v of (getters(r) || [])) {
+            if (!v) continue;
+            const nv = normStr(v);
+            const lv = looseStr(v);
+            if (!nv) continue;
+            const hit = mode === 'exact'
+              ? (nv === c || (!!lv && lv === lc))
+              : mode === 'rowHasScan'
+                ? nv.includes(c)
+                // Chặn khớp rác: chỉ nhận giá trị đủ dài (≥4) mới cho phép "mã quét chứa giá trị DB".
+                : nv.length >= 4 && (c.includes(nv) || (lv.length >= 4 && lc.includes(lv)));
+            if (hit && nv.length > score) score = nv.length;
+          }
+          if (!score) continue;
+          // Giữ các dòng khớp bằng giá trị DÀI NHẤT (khớp cụ thể nhất) → giảm khớp nhầm ở lượt 3.
+          if (score > best) { best = score; pool = [r]; } else if (score === best) pool.push(r);
+        }
         if (pool.length) return withGomSet((s.matchMultiple || forceMulti) ? pool : [pool[0]]);
       }
       return null;
     };
-    return test(true) || test(false) || [];
+    return test('exact') || test('rowHasScan') || test('scanHasRow') || [];
   }, [withGomSet]);
 
   const doImmediate = useCallback(async (row) => {
@@ -158,7 +187,13 @@ export default function ScanCollectModal({
     if (last && now - last < 1500) return; // chống lặp cùng mã
     recentRef.current.set(c, now);
     const matched = matchRows(raw, kind);
-    if (!matched.length) { pushLog(`Không thấy "${String(raw).trim()}"`, false); return; }
+    if (!matched.length) {
+      // Hiện RÕ loại mã + nguyên văn payload đọc được: nếu quét QR mà dòng này KHÔNG hiện thì camera
+      // chưa đọc được QR; hiện mà báo "không thấy" thì payload khác dữ liệu trong danh sách.
+      const k = KIND_LABEL[kind];
+      pushLog(`Không thấy${k ? ` (${k})` : ''} "${String(raw).trim()}"`, false);
+      return;
+    }
     if (s.immediate) { matched.forEach((row) => doImmediate(row)); return; }
     matched.forEach((row) => { if (!s.isSelected(row)) s.onToggle(row); });
     pushLog(`＋ ${s.primaryLabel(matched[0])}${matched.length > 1 ? ` (${matched.length} dòng)` : ''}`, true);

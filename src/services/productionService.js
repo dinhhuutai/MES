@@ -6,13 +6,19 @@ export const startProduction = (lenhId, chuyenId) => client.post(`/production/${
 export const listChuyen = () => client.get('/catalog/chuyen');
 export const getRun = (lenhId) => client.get(`/production/run/${lenhId}`);
 export const printTem = (phieuId, soLuong) => client.post(`/production/phieu/${phieuId}/tem`, { soLuong });
+// In tem NHIỀU phần in 1 lượt (lệnh gom set): items = [{ dotVaiId, soLuong }]
+export const printTemBatch = (phieuId, items) => client.post(`/production/phieu/${phieuId}/tem-batch`, { items });
 export const reprintTem = (temId, lyDo) => client.post(`/production/tem/${temId}/in-lai`, { lyDo });
-export const getTemLabel = (temId) => client.get(`/production/tem/${temId}/label`);
+// dotVaiId (tùy chọn) → nhãn lấy đúng phần in của đợt vải đó (in tem lệnh gom set)
+export const getTemLabel = (temId, dotVaiId) =>
+  client.get(`/production/tem/${temId}/label`, { params: dotVaiId ? { dotVaiId } : undefined });
 export const getTemLogs = (phieuId) => client.get(`/production/phieu/${phieuId}/tem-logs`);
 export const finishRun = (phieuId) => client.post(`/production/phieu/${phieuId}/finish`);
 export const stopLine = (phieuId, lyDo) => client.post(`/production/phieu/${phieuId}/ngung`, { lyDo });
-// Ghi vải hủy trong sản xuất (theo đợt vải / phần in của lệnh)
+// Ghi vải hủy (= vải hư) / vải THIẾU trong sản xuất — body.loai: 'HUY' | 'THIEU' (theo đợt vải/phần in)
 export const addVaiHuy = (phieuId, body) => client.post(`/production/phieu/${phieuId}/vai-huy`, body);
+// Phân công sản xuất: { caTruongId, chuyenTruong, items: [{ dotVaiId, thoIn, soLuongHuy, soLuongThieu }] }
+export const savePhanCong = (phieuId, body) => client.post(`/production/phieu/${phieuId}/phan-cong`, body);
 export const resumeLine = (phieuId) => client.post(`/production/phieu/${phieuId}/hoat-dong-lai`);
 
 // Theo dõi chuyền
