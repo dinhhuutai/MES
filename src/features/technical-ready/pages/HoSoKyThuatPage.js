@@ -7,6 +7,7 @@ import Button from '../../../components/common/Button';
 import Icon from '../../../components/common/Icon';
 import Toast from '../../../components/common/Toast';
 import QrScanner from '../../../components/common/QrScanner';
+import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import LoaiDotVaiBadge from '../../planning/components/LoaiDotVaiBadge';
 import { Input, Select } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
@@ -18,6 +19,11 @@ const COLS = 13; // số cột bảng (cho colSpan hàng trống)
 // GOM SET: ERP `Inset` ≠ 0 = có gom set; các phần in dùng CHUNG 1 barcode HSKT là gom chung
 // ⇒ danh sách phần in của HSKT CHÍNH LÀ nhóm gom set (không cần tra thêm bảng nào).
 const laGomSet = (h) => h && h.inset != null && Number(h.inset) !== 0;
+// SỐ CUỐI mã vạch HSKT = phương án in (1 Bàn · 2 Máy · 3 Robot) — khớp `backend/src/utils/hskt.js`.
+// Chỉ đổi được khi mã vạch đúng dạng 11 số + số cuối 1..3; sai dạng thì giữ nguyên.
+const BARCODE_PA_RE = /^\d{11}[1-3]$/;
+const maVachTheoPa = (barcode, pa) => (BARCODE_PA_RE.test(String(barcode || ''))
+  ? String(barcode).slice(0, 11) + String(Number(pa)) : null);
 const gomSetBadge = (h, soPhanIn) => (laGomSet(h)
   ? <Badge tone="warning">Gom set {h.inset}{soPhanIn > 1 ? ` · ${soPhanIn} phần in` : ''}</Badge>
   : <Badge tone="default">Không</Badge>);
@@ -95,13 +101,26 @@ export default function HoSoKyThuatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
-  const onChangePa = async (val) => {
+  // Đổi phương án in KÉO THEO đổi số cuối mã vạch ⇒ phải hỏi xác nhận, vì phiếu giấy đã in mang mã
+  // vạch CŨ sẽ không quét được nữa (chốt nghiệp vụ: chỉ khớp mã vạch mới).
+  const [paConfirm, setPaConfirm] = useState(null); // { pa, maCu, maMoi }
+  const onChangePa = (val) => {
     if (!detail?.hskt?.id) return;
+    const pa = Number(val);
+    if (!pa || pa === Number(detail.hskt.phuong_an_in)) return;
+    setPaConfirm({ pa, maCu: detail.hskt.barcode_hskt || null, maMoi: maVachTheoPa(detail.hskt.barcode_hskt, pa) });
+  };
+
+  const doChangePa = async () => {
+    const pa = paConfirm?.pa;
+    if (!pa || !detail?.hskt?.id) return;
     setSavingPa(true);
     try {
-      const res = await changePhuongAnIn(detail.hskt.id, Number(val));
+      const res = await changePhuongAnIn(detail.hskt.id, pa);
       setDetail(res.data); load();
-      show('Đã đổi phương án in (tạo phiên bản mới)');
+      const m = res.data?.barcode_moi;
+      show(`Đã đổi phương án in (phiên bản mới)${m && m !== res.data?.barcode_cu ? ` · mã vạch → ${m}` : ''}`);
+      setPaConfirm(null);
     } catch (e) { show(e.message || 'Đổi phương án in thất bại', 'error'); }
     finally { setSavingPa(false); }
   };
@@ -183,7 +202,15 @@ export default function HoSoKyThuatPage() {
         ) : (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3 rounded-control border border-line p-3 text-sm">
-              <div><div className="text-xs text-ink-soft">Mã vạch HSKT</div><div className="font-medium text-ink">{detail.hskt.barcode_hskt || '—'}</div></div>
+              <div>
+                <div className="text-xs text-ink-soft">Mã vạch HSKT</div>
+                <div className="font-medium text-ink">{detail.hskt.barcode_hskt || '—'}</div>
+                {/* Số cuối mã vạch = phương án in. Sau khi sửa tay, mã vạch LỆCH với mã ERP gửi sang
+                    → hiện mã gốc để người dùng đối chiếu khi cần. */}
+                {detail.hskt.barcode_hskt_goc && detail.hskt.barcode_hskt_goc !== detail.hskt.barcode_hskt && (
+                  <div className="mt-0.5 text-xs text-ink-soft">Mã vạch gốc (ERP): {detail.hskt.barcode_hskt_goc}</div>
+                )}
+              </div>
               {/* ERP `Inset` ≠ 0 = có gom set; nhóm gom set = các phần in cùng HSKT này. */}
               <div><div className="text-xs text-ink-soft">Gom set</div><div className="mt-1">{gomSetBadge(detail.hskt, detail.phan_in?.length || 0)}</div></div>
               <div>
@@ -197,7 +224,11 @@ export default function HoSoKyThuatPage() {
                     <option value={3}>Robot</option>
                   </Select>
                   {savingPa && <span className="text-xs text-ink-soft">Đang lưu...</span>}
+                  {detail.hskt.pa_in_sua_tay && <Badge tone="warning">Đã sửa tay</Badge>}
                 </div>
+                {detail.hskt.pa_in_sua_tay && (
+                  <div className="mt-1 text-xs text-ink-soft">Đồng bộ ERP sẽ KHÔNG ghi đè phương án in này.</div>
+                )}
               </div>
             </div>
 
@@ -240,6 +271,33 @@ export default function HoSoKyThuatPage() {
       {/* Quét mã vạch HSKT bằng camera (QR + barcode) → mở SidePanel HSKT */}
       <QrScanner open={camOpen} onClose={() => setCamOpen(false)} onResult={doScan}
         title="Quét mã vạch HSKT" />
+
+      {/* Xác nhận đổi phương án in — nêu RÕ mã vạch sẽ đổi + phiếu giấy cũ hết quét được. */}
+      <ConfirmDialog
+        open={!!paConfirm}
+        onClose={() => setPaConfirm(null)}
+        onConfirm={doChangePa}
+        loading={savingPa}
+        title="Đổi phương án in"
+        confirmText="Đổi phương án in"
+        message={!paConfirm ? '' : (
+          <span className="block space-y-2">
+            <span className="block">
+              Đổi phương án in sang <b className="text-ink">{PHUONG_AN_IN[paConfirm.pa] || paConfirm.pa}</b> —
+              tạo phiên bản mới, giữ lịch sử.
+            </span>
+            {paConfirm.maMoi ? (
+              <span className="block">
+                Số cuối mã vạch HSKT đổi theo: <b className="text-ink">{paConfirm.maCu}</b> → <b className="text-ink">{paConfirm.maMoi}</b>.
+                <span className="block text-danger">Phiếu giấy đã in mã vạch cũ sẽ KHÔNG quét được nữa — cần in lại phiếu.</span>
+              </span>
+            ) : (
+              <span className="block">Mã vạch HSKT giữ nguyên (không đúng định dạng 11 số + số cuối 1..3).</span>
+            )}
+            <span className="block">Sau khi sửa tay, đồng bộ ERP sẽ không ghi đè phương án in này nữa.</span>
+          </span>
+        )}
+      />
 
       <Toast toast={toast} />
     </div>
