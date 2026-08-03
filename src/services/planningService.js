@@ -60,8 +60,13 @@ export const planHistory = (date) => client.get('/planning/plan-history', { para
 
 // Gia công: Kế hoạch nhận lại hàng gia công → chuyển OQC
 export const listGiaCong = (params) => client.get('/planning/gia-cong', { params });
-export const giaCongToOqc = (lenhId) => client.post(`/planning/gia-cong/${lenhId}/chuyen-oqc`);
+// Hàng gia công có thể về NHIỀU LẦN: `soLuong` = SL của lần nhận này; bỏ trống = nhận nốt phần còn lại.
+export const giaCongToOqc = (lenhId, soLuong) =>
+  client.post(`/planning/gia-cong/${lenhId}/chuyen-oqc`, soLuong == null ? {} : { so_luong: soLuong });
 export const giaCongHistory = (date) => client.get('/planning/gia-cong/history', { params: { date } });
+// Hủy tem gia công (tab ở trang "Hủy lệnh xác nhận") — SL quay lại phần chờ nhận của lệnh.
+export const giaCongTemCancelable = (params) => client.get('/planning/gia-cong/tem/cancelable', { params });
+export const huyGiaCongTem = (temId, lyDo) => client.post(`/planning/gia-cong/tem/${temId}/huy`, { lyDo });
 
 // Kế hoạch tạm (lập kế hoạch sớm cho phần in chưa Ready)
 export const listKeHoachTam = (params) => client.get('/planning/ke-hoach-tam', { params });

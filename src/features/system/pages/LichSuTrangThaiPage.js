@@ -14,7 +14,7 @@ import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import { listConfirmHistory, cancelReadyItem, listReopenReadyCandidates, reopenReady } from '../../../services/readyService';
 import { searchPhanInForCancel, huyPhanIn, listDeletedPhanIn, moPhanIn } from '../../../services/orderService';
-import { listCancelableLenh, cancelLenh } from '../../../services/planningService';
+import { listCancelableLenh, cancelLenh, giaCongTemCancelable, huyGiaCongTem } from '../../../services/planningService';
 import { listCancelableTem, cancelPrintTem, listCloseCandidates, closeProduction, listReopenCandidates, reopenProduction, listUndoStartCandidates, undoStartProduction } from '../../../services/productionService';
 import { listCancelKcs, cancelKcs, listCancelSua, cancelSua, listCancelOqc, cancelOqc,
   listTemSuaCancelable, listTemSuaDeleted, huyTemSua, moTemSua } from '../../../services/qualityService';
@@ -362,6 +362,113 @@ function TemCancelSection({ show }) {
         <Field label="Lý do (khuyến nghị)">
           <Textarea rows={2} value={lyDo} onChange={(e) => setLyDo(e.target.value)}
             placeholder="Vd: in nhầm số lượng, sai phần in..." />
+        </Field>
+      </Modal>
+    </div>
+  );
+}
+
+// ─── Hủy tem gia công ───────────────────────────────────────────────────────
+// Hàng gia công về NHIỀU LẦN, mỗi lần "Chuyển OQC" tạo 1 tem riêng. Bấm nhầm / nhập sai SL thì hủy
+// tem đó: SL quay lại phần CHƯA nhận của lệnh (KHÔNG cộng thêm vào SL release) và lệnh hiện lại ở
+// màn Kế hoạch > Gia công để nhận tiếp.
+function GiaCongTemCancelSection({ show }) {
+  const [rows, setRows] = useState([]);
+  const [meta, setMeta] = useState({ page: 1, totalPages: 1, total: 0 });
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [target, setTargetRow] = useState(null);
+  const [lyDo, setLyDo] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await giaCongTemCancelable({ search, page, limit: 20 });
+      setRows(res.data.items);
+      setMeta(res.data.meta);
+    } catch (e) {
+      show(e.message || 'Lỗi tải', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [search, page, show]);
+
+  useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
+
+  const doCancel = async () => {
+    if (!lyDo.trim()) { show('Nhập lý do hủy tem gia công', 'error'); return; }
+    setBusy(true);
+    try {
+      const res = await huyGiaCongTem(target.tem_id, lyDo.trim());
+      const d = res.data || {};
+      show(`Đã hủy tem ${d.ma_tem} (${fmtNum(d.so_luong)} cái) — lệnh ${d.ma_lenh} còn lại ${fmtNum(d.con_lai)} chờ nhận.`);
+      setTargetRow(null); setLyDo('');
+      load();
+    } catch (e) {
+      show(e.message || 'Hủy tem gia công thất bại', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const columns = [
+    { key: 'ma_tem', header: 'Mã tem', render: (r) => <Badge tone="info">{r.ma_tem}</Badge> },
+    { key: 'so_luong', header: 'SL đã chuyển', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
+    { key: 'ma_lenh_san_xuat', header: 'Mã đợt SX', render: (r) => r.ma_lenh_san_xuat || '—' },
+    { key: 'so_luong_release', header: 'SL release', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong_release) },
+    { key: 'da_chuyen', header: 'Đã nhận', className: 'text-right tabular-nums', render: (r) => fmtNum(r.da_chuyen) },
+    { key: 'ten_chuyen', header: 'Chuyền gia công', render: (r) => r.ten_chuyen || '—' },
+    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
+    { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
+    { key: 'ma_phan', header: 'Code phần', render: (r) => r.ma_phan || '—' },
+    { key: 'mau_vai', header: 'Màu · Kích', render: (r) => [r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—' },
+    { key: 'nguoi_chuyen', header: 'Người chuyển', render: (r) => r.nguoi_chuyen || '—' },
+    { key: 'tg_chuyen', header: 'Giờ chuyển', render: (r) => fmtTime(r.tg_chuyen) },
+    { key: 'actions', header: '', className: 'text-right whitespace-nowrap', render: (r) =>
+      <Button variant="danger" className="px-2.5 py-1 text-xs"
+        onClick={() => { setTargetRow(r); setLyDo(''); }}>Hủy tem gia công</Button> },
+  ];
+
+  return (
+    <div>
+      <Toolbar title="Hủy tem gia công"
+        subtitle="Bấm 'Chuyển OQC' nhầm hoặc nhập sai số lượng nhận về — hủy tem để trả số lượng đó về phần chờ nhận của lệnh"
+        search={search} onSearch={(v) => { setSearch(v); setPage(1); }}
+        searchPlaceholder="Tìm mã tem, mã đợt SX, code phần, mã hàng...">
+        <Badge tone="info">{meta.total} tem hủy được</Badge>
+      </Toolbar>
+
+      <div className="mb-3 rounded-control border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700">
+        Chỉ hủy được tem gia công <b>chưa qua OQC và chưa giao</b>. Hủy xong: số lượng của tem quay lại phần
+        <b> chờ nhận</b> của lệnh (SL release <b>giữ nguyên</b>, không cộng thêm) và lệnh hiện lại ở màn
+        <b> Kế hoạch → Gia công</b> để nhận tiếp.
+      </div>
+
+      <DataTable columns={columns} rows={rows} loading={loading} rowKey="tem_id" sttStart={(meta.page - 1) * 20}
+        emptyText="Không có tem gia công nào hủy được" />
+      <Pagination page={meta.page} totalPages={meta.totalPages} total={meta.total} onPage={setPage} />
+
+      <Modal
+        open={!!target}
+        onClose={() => setTargetRow(null)}
+        title={`Hủy tem gia công ${target?.ma_tem || ''}`}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setTargetRow(null)}>Đóng</Button>
+            <Button variant="danger" onClick={doCancel} loading={busy}>Xác nhận hủy tem</Button>
+          </>
+        }
+      >
+        <div className="mb-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          Tem <b>{target?.ma_tem}</b> ({fmtNum(target?.so_luong)} cái) sẽ bị <b>hủy</b> và rời khỏi màn OQC.
+          Lệnh <b>{target?.ma_lenh_san_xuat}</b> quay lại màn Gia công với phần còn lại là
+          <b> {fmtNum((Number(target?.so_luong_release) || 0) - (Number(target?.da_chuyen) || 0) + (Number(target?.so_luong) || 0))}</b>.
+        </div>
+        <Field label="Lý do (bắt buộc)">
+          <Textarea rows={2} value={lyDo} onChange={(e) => setLyDo(e.target.value)}
+            placeholder="Vd: bấm nhầm, nhập sai số lượng nhận về..." />
         </Field>
       </Modal>
     </div>
@@ -917,6 +1024,9 @@ function PhanInCancelSection({ show }) {
     { key: 'mau_vai', header: 'Màu · Kích', render: (r) => [r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—' },
     { key: 'giai_doan', header: 'Trạm hiện tại', render: (r) => <Badge tone="info">{STAGE_LABEL[r.giai_doan] || r.giai_doan || '—'}</Badge> },
     { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => <HanGiaoCell value={r.han_giao_hang} /> },
+    // Thời điểm đợt vải ĐẦU TIÊN của phần in được ERP đẩy lên MES (min dot_vai_ve.created_date).
+    { key: 'tg_len_mes', header: 'Ngày/giờ lên từ ERP', className: 'whitespace-nowrap',
+      render: (r) => fmtTime(r.tg_len_mes) },
     { key: 'so_dot_vai', header: 'Đợt vải', className: 'text-right tabular-nums', render: (r) => r.so_dot_vai },
     { key: 'da_san_xuat', header: 'SX', render: (r) => (r.da_san_xuat ? <Badge tone="warning">Đã có SX</Badge> : <Badge tone="default">Chưa</Badge>) },
   ];
@@ -1316,6 +1426,7 @@ export default function LichSuTrangThaiPage() {
     can('READY_CANCEL') && { key: 'huyphanin', label: 'Hủy phần in' },
     can('READY_CANCEL') && { key: 'mophanin', label: 'Mở phần in' },
     (can('RELEASE1') || can('RELEASE2')) && { key: 'lenh', label: 'Hủy lệnh sản xuất' },
+    (can('RELEASE1') || can('RELEASE2')) && { key: 'huytemgiacong', label: 'Hủy tem gia công' },
     can('PROD_RUN') && { key: 'tem', label: 'Hủy lệnh in tem' },
     can('PROD_RUN') && { key: 'dong', label: 'Đóng lệnh sản xuất' },
     can('PROD_RUN') && { key: 'huychay', label: 'Hủy lệnh đang chạy' },
@@ -1351,6 +1462,7 @@ export default function LichSuTrangThaiPage() {
       {tab === 'huyphanin' && <PhanInCancelSection show={show} />}
       {tab === 'mophanin' && <PhanInReopenSection show={show} />}
       {tab === 'lenh' && <LenhCancelSection show={show} />}
+      {tab === 'huytemgiacong' && <GiaCongTemCancelSection show={show} />}
       {tab === 'tem' && <TemCancelSection show={show} />}
       {tab === 'dong' && <CloseProductionSection show={show} />}
       {tab === 'huychay' && <UndoStartSection show={show} />}

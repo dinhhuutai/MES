@@ -10,18 +10,33 @@ import QrScanner from '../../../components/common/QrScanner';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import LoaiDotVaiBadge from '../../planning/components/LoaiDotVaiBadge';
 import { Input, Select } from '../../../components/common/controls';
+import FieldFilters, { FilterToggle } from '../../../components/common/FieldFilters';
+import Pagination from '../../../components/common/Pagination';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import { listHskt, getHskt, getHsktByBarcode, changePhuongAnIn, PHUONG_AN_IN } from '../../../services/hsktService';
 import { fmtNum } from '../../../utils/format';
 
 const COLS = 13; // số cột bảng (cho colSpan hàng trống)
+// Ô lọc dạng CHỮ (khớp `FILTER_KEYS` ở hskt.controller — lọc chạy ở server, xem load()).
+const HSKT_FILTER_FIELDS = [
+  { key: 'codePhan', label: 'Code phần' },
+  { key: 'khach', label: 'Khách hàng' },
+  { key: 'don', label: 'Đơn hàng' },
+  { key: 'maHang', label: 'Mã hàng' },
+  { key: 'mauVai', label: 'Màu vải' },
+  { key: 'kichVai', label: 'Kích vải' },
+  { key: 'kichPhim', label: 'Kích phim' },
+  { key: 'loaiDotVai', label: 'Loại đợt vải' },
+];
+const HSKT_TEXT_KEYS = HSKT_FILTER_FIELDS.map((f) => f.key);
 // GOM SET: ERP `Inset` ≠ 0 = có gom set; các phần in dùng CHUNG 1 barcode HSKT là gom chung
 // ⇒ danh sách phần in của HSKT CHÍNH LÀ nhóm gom set (không cần tra thêm bảng nào).
 const laGomSet = (h) => h && h.inset != null && Number(h.inset) !== 0;
-// SỐ CUỐI mã vạch HSKT = phương án in (1 Bàn · 2 Máy · 3 Robot) — khớp `backend/src/utils/hskt.js`.
-// Chỉ đổi được khi mã vạch đúng dạng 11 số + số cuối 1..3; sai dạng thì giữ nguyên.
-const BARCODE_PA_RE = /^\d{11}[1-3]$/;
+// SỐ CUỐI mã vạch HSKT = phương án in (1 Bàn · 2 Máy · 3 Robot, 0 = chưa xác định — ERP CÓ gửi
+// Pain=0) — khớp `backend/src/utils/hskt.js`.
+// Chỉ đổi được khi mã vạch đúng dạng 11 số + số cuối 0..3; sai dạng thì giữ nguyên.
+const BARCODE_PA_RE = /^\d{11}[0-3]$/;
 const maVachTheoPa = (barcode, pa) => (BARCODE_PA_RE.test(String(barcode || ''))
   ? String(barcode).slice(0, 11) + String(Number(pa)) : null);
 const gomSetBadge = (h, soPhanIn) => (laGomSet(h)
@@ -29,7 +44,7 @@ const gomSetBadge = (h, soPhanIn) => (laGomSet(h)
   : <Badge tone="default">Không</Badge>);
 const fmtDateTime = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '—');
 const paBadge = (v) => (v == null ? <span className="text-ink-soft">—</span>
-  : <Badge tone="info">{PHUONG_AN_IN[Number(v)] || v}</Badge>);
+  : <Badge tone={Number(v) === 0 ? 'default' : 'info'}>{PHUONG_AN_IN[Number(v)] || v}</Badge>);
 
 // Danh sách phần in trong 1 HSKT.
 function PhanInList({ rows }) {
@@ -55,6 +70,10 @@ export default function HoSoKyThuatPage() {
 
   const [search, setSearch] = useState('');
   const [rows, setRows] = useState([]);
+  const [meta, setMeta] = useState({ page: 1, totalPages: 1, total: 0 });
+  const [page, setPage] = useState(1);
+  const [filters, setFilters] = useState({});
+  const [showFilter, setShowFilter] = useState(false);
   const [loading, setLoading] = useState(true);
   const [scanVal, setScanVal] = useState('');
 
@@ -63,15 +82,24 @@ export default function HoSoKyThuatPage() {
   const [camOpen, setCamOpen] = useState(false);   // quét mã vạch HSKT bằng camera
   const [savingPa, setSavingPa] = useState(false);
 
+  // Lọc + phân trang chạy Ở SERVER: trước đây tải `limit:100` không phân trang nên khi có nhiều HSKT
+  // (thực tế >200) danh sách bị CẮT ÂM THẦM. Lọc client cũng sai vì chỉ lọc được trang đang xem.
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await listHskt({ search, limit: 100 });
+      const res = await listHskt({ search, page, limit: 20, ...filters });
       setRows(res.data.items);
+      setMeta(res.data.meta || { page: 1, totalPages: 1, total: res.data.items.length });
     } catch (e) { show(e.message || 'Lỗi tải', 'error'); } finally { setLoading(false); }
-  }, [search, show]);
+  }, [search, page, filters, show]);
 
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
+
+  // Đổi ô lọc / ô tìm → về trang 1 (đang ở trang 5 mà lọc còn 2 trang thì sẽ ra bảng rỗng).
+  const setField = (k, v) => { setFilters((s) => ({ ...s, [k]: v })); setPage(1); };
+  const clearFilters = () => { setFilters({}); setPage(1); };
+  const filterCount = Object.values(filters).filter(Boolean).length;
+  const textFilters = Object.fromEntries(HSKT_TEXT_KEYS.map((k) => [k, filters[k] || '']));
 
   const openDetail = async (id) => {
     setLoadingDetail(true); setDetail({ hskt: { id } });
@@ -138,10 +166,35 @@ export default function HoSoKyThuatPage() {
         </div>
       </Toolbar>
 
-      <div className="mb-3">
-        <Input value={search} onChange={(e) => setSearch(e.target.value)}
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <Input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
           placeholder="Tìm mã vạch HSKT / code phần..." className="max-w-md" />
+        {/* Select cho các trường có GIÁ TRỊ CỐ ĐỊNH — FieldFilters chỉ dựng ô nhập chữ. */}
+        <Select value={filters.phuongAnIn || ''} onChange={(e) => setField('phuongAnIn', e.target.value)} className="w-44">
+          <option value="">Phương án in: tất cả</option>
+          <option value="0">Chưa xác định</option>
+          <option value="1">Bàn</option>
+          <option value="2">Máy</option>
+          <option value="3">Robot</option>
+        </Select>
+        <Select value={filters.gomSet || ''} onChange={(e) => setField('gomSet', e.target.value)} className="w-40">
+          <option value="">Gom set: tất cả</option>
+          <option value="co">Có gom set</option>
+          <option value="khong">Không gom set</option>
+        </Select>
+        <Select value={filters.suaTay || ''} onChange={(e) => setField('suaTay', e.target.value)} className="w-44">
+          <option value="">Sửa tay: tất cả</option>
+          <option value="co">Đã sửa tay</option>
+          <option value="khong">Chưa sửa tay</option>
+        </Select>
+        <FilterToggle open={showFilter} count={filterCount} onClick={() => setShowFilter((v) => !v)} />
+        <Badge tone="info">{meta.total} hồ sơ</Badge>
       </div>
+
+      {/* Chỉ đưa ô CHỮ vào FieldFilters: 3 Select ở trên tự hiện nhãn, nếu để chung thì chip sẽ ra
+          "Phương án in: 2" (giá trị thô) khó hiểu. Nút "Xóa lọc" vẫn xóa sạch cả 3 Select. */}
+      <FieldFilters fields={HSKT_FILTER_FIELDS} values={textFilters} onField={setField}
+        onClear={clearFilters} open={showFilter} />
 
       <div className="card overflow-hidden">
         <div className="overflow-auto max-h-[calc(100vh-16rem)]">
@@ -167,11 +220,13 @@ export default function HoSoKyThuatPage() {
               {loading ? (
                 <tr><td colSpan={COLS} className="py-10 text-center text-ink-soft">Đang tải...</td></tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={COLS} className="py-10 text-center text-ink-soft">Chưa có HSKT</td></tr>
+                <tr><td colSpan={COLS} className="py-10 text-center text-ink-soft">
+                  {filterCount || search ? 'Không có HSKT khớp bộ lọc' : 'Chưa có HSKT'}
+                </td></tr>
               ) : rows.map((r, i) => (
                 <tr key={r.id} onClick={() => openDetail(r.id)}
                   className="cursor-pointer border-t border-line hover:bg-surface-muted/50">
-                  <td className="px-3 py-2 text-ink-soft">{i + 1}</td>
+                  <td className="px-3 py-2 text-ink-soft">{(meta.page - 1) * 20 + i + 1}</td>
                   <td className="px-3 py-2 font-medium text-ink">{r.barcode_hskt || '—'}</td>
                   <td className="px-3 py-2">{paBadge(r.phuong_an_in)}</td>
                   <td className="px-3 py-2">{gomSetBadge(r, r.so_phan_in)}</td>
@@ -191,6 +246,7 @@ export default function HoSoKyThuatPage() {
           </table>
         </div>
       </div>
+      <Pagination page={meta.page} totalPages={meta.totalPages} total={meta.total} onPage={setPage} />
 
       {/* Chi tiết HSKT */}
       <SidePanel open={!!detail} onClose={() => setDetail(null)}
@@ -216,9 +272,13 @@ export default function HoSoKyThuatPage() {
               <div>
                 <div className="text-xs text-ink-soft">Phương án in</div>
                 <div className="mt-1 flex items-center gap-2">
-                  <Select value={detail.hskt.phuong_an_in || ''} disabled={!canManage || savingPa}
+                  {/* `?? ''` chứ KHÔNG `|| ''`: Pain = 0 (chưa xác định) là giá trị THẬT của ERP,
+                      dùng `||` sẽ rơi về "— Chọn —" làm tưởng chưa có dữ liệu. Option 0 để `disabled`
+                      vì không cho phép đặt ngược về "chưa xác định" (khớp `isValidPain` ở backend). */}
+                  <Select value={detail.hskt.phuong_an_in ?? ''} disabled={!canManage || savingPa}
                     onChange={(e) => onChangePa(e.target.value)} className="w-40">
                     <option value="" disabled>— Chọn —</option>
+                    <option value={0} disabled>Chưa xác định</option>
                     <option value={1}>Bàn</option>
                     <option value={2}>Máy</option>
                     <option value={3}>Robot</option>
@@ -292,7 +352,7 @@ export default function HoSoKyThuatPage() {
                 <span className="block text-danger">Phiếu giấy đã in mã vạch cũ sẽ KHÔNG quét được nữa — cần in lại phiếu.</span>
               </span>
             ) : (
-              <span className="block">Mã vạch HSKT giữ nguyên (không đúng định dạng 11 số + số cuối 1..3).</span>
+              <span className="block">Mã vạch HSKT giữ nguyên (không đúng định dạng 11 số + số cuối 0..3).</span>
             )}
             <span className="block">Sau khi sửa tay, đồng bộ ERP sẽ không ghi đè phương án in này nữa.</span>
           </span>

@@ -5,6 +5,8 @@ import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import Toast from '../../../components/common/Toast';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
+import Modal from '../../../components/common/Modal';
+import { Input } from '../../../components/common/controls';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import GiaCongHistoryPanel from '../components/GiaCongHistoryPanel';
@@ -15,9 +17,11 @@ import { printGiaCongVeTem } from '../../production/utils/printTemLabel';
 import { fmtNum, fmtDate } from '../../../utils/format';
 
 // Chuẩn hóa 1 dòng (lệnh gia công hoặc dòng lịch sử) → dữ liệu nhãn "TH VỀ" (đầu 13).
+// SL trên tem = SL của ĐÚNG lần nhận (`so_luong_lan_nay`, hàng gia công về nhiều lần); dòng lịch sử cũ
+// không có khóa này → lùi về SL release của cả lệnh như trước.
 const buildVeLabel = (r) => ({
   ma_tem: r.ma_tem || r.ma_lenh_san_xuat,
-  so_luong: r.so_luong_release,
+  so_luong: r.so_luong_lan_nay != null ? r.so_luong_lan_nay : r.so_luong_release,
   so_luong_don_hang: r.so_luong_don_hang,
   ten_khach_hang: r.ten_khach_hang,
   ma_don_hang: r.ma_don_hang,
@@ -41,7 +45,8 @@ export default function GiaCongPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState(() => new Set());
-  const [confirm, setConfirm] = useState(null); // { ids:[], label } — đang hỏi xác nhận chuyển OQC
+  const [confirm, setConfirm] = useState(null); // { ids:[], label } — chuyển HÀNG LOẠT (nhận nốt phần còn lại)
+  const [nhan, setNhan] = useState(null); // { row, qty } — nhận 1 lệnh, nhập SL của lần này
   const [saving, setSaving] = useState(false);
   const [histOpen, setHistOpen] = useState(false);
 
@@ -77,6 +82,7 @@ export default function GiaCongPage() {
   const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.id));
   const toggleAll = () => setSelected(() => (allChecked ? new Set() : new Set(rows.map((r) => r.id))));
 
+  // Hàng loạt: mỗi lệnh nhận NỐT phần còn lại (không nhập SL từng dòng).
   const doConfirm = async () => {
     if (!confirm) return;
     setSaving(true);
@@ -89,6 +95,34 @@ export default function GiaCongPage() {
     show(failCount ? `Đã chuyển ${okCount} lệnh sang OQC, ${failCount} lỗi` : `Đã chuyển ${okCount} lệnh sang OQC`,
       failCount ? 'error' : 'success');
     load();
+  };
+
+  // Còn lại của 1 lệnh = SL release − SL đã chuyển (BE trả sẵn `con_lai`; fallback tự tính cho dữ liệu cũ).
+  const conLaiCua = (r) => (r?.con_lai != null
+    ? Number(r.con_lai)
+    : (Number(r?.so_luong_release) || 0) - (Number(r?.da_chuyen) || 0));
+
+  const openNhan = (r) => setNhan({ row: r, qty: String(conLaiCua(r)) });
+
+  // Nhận 1 lần: SL nhập ≤ phần còn lại. Chưa đủ SL thì lệnh VẪN ở màn này để nhận tiếp.
+  const doNhan = async () => {
+    if (!nhan) return;
+    const conLai = conLaiCua(nhan.row);
+    const qty = Math.trunc(Number(nhan.qty));
+    if (!Number.isFinite(qty) || qty <= 0) { show('Nhập số lượng nhận về lớn hơn 0', 'error'); return; }
+    if (qty > conLai) { show(`Số lượng nhận về vượt phần còn lại (${fmtNum(conLai)})`, 'error'); return; }
+    setSaving(true);
+    try {
+      const res = await giaCongToOqc(nhan.row.id, qty);
+      const d = res.data || {};
+      show(d.hoan_tat
+        ? `Đã nhận đủ ${fmtNum(d.da_chuyen)} — lệnh chuyển sang OQC`
+        : `Đã chuyển ${fmtNum(d.so_luong)} sang OQC — còn lại ${fmtNum(d.con_lai)}`);
+      setNhan(null);
+      load();
+    } catch (e) {
+      show(e.message || 'Chuyển OQC thất bại', 'error');
+    } finally { setSaving(false); }
   };
 
   const columns = [
@@ -109,6 +143,13 @@ export default function GiaCongPage() {
     { key: 'tinh_chat_in', header: 'Tính chất in', render: (r) => <TinhChatInCell value={r.tinh_chat_in} /> },
     { key: 'loai_dot_vai', header: 'Loại đợt vải', render: (r) => <LoaiDotVaiBadge value={r.loai_dot_vai} /> },
     { key: 'so_luong_release', header: 'SL release', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong_release) },
+    // Hàng gia công về nhiều lần → theo dõi phần đã nhận / còn phải nhận.
+    { key: 'da_chuyen', header: 'Đã chuyển OQC', className: 'text-right tabular-nums', render: (r) => fmtNum(r.da_chuyen || 0) },
+    { key: 'con_lai', header: 'Còn lại', className: 'text-right tabular-nums',
+      render: (r) => {
+        const c = conLaiCua(r);
+        return c > 0 ? <span className="font-medium text-warning">{fmtNum(c)}</span> : fmtNum(0);
+      } },
     { key: 'nguoi_release', header: 'Người release', render: (r) => r.nguoi_release || '—' },
     { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => fmtDate(r.han_giao_hang) },
     { key: 'ngay_ke_hoach', header: 'Ngày SX kế hoạch', render: (r) => fmtDate(r.ngay_ke_hoach) },
@@ -118,8 +159,8 @@ export default function GiaCongPage() {
           In tem
         </Button>
         {canDo && (
-          <Button size="sm" icon="arrow-right" onClick={(e) => { e.stopPropagation(); setConfirm({ ids: [r.id], label: r.ma_lenh_san_xuat }); }}>
-            Chuyển OQC
+          <Button size="sm" icon="arrow-right" onClick={(e) => { e.stopPropagation(); openNhan(r); }}>
+            Nhận hàng → OQC
           </Button>
         )}
       </div>
@@ -128,7 +169,7 @@ export default function GiaCongPage() {
 
   return (
     <div>
-      <Toolbar title="Gia công" subtitle="Lệnh đã release lên chuyền gia công — Kế hoạch nhận lại hàng rồi bấm 'Chuyển OQC' để đưa sang kiểm OQC"
+      <Toolbar title="Gia công" subtitle="Lệnh đã release lên chuyền gia công — nhận lại hàng (có thể NHIỀU LẦN) rồi chuyển sang kiểm OQC; đủ số lượng thì lệnh mới rời màn này"
         search={search} onSearch={setSearch}
         searchPlaceholder="Tìm mã lệnh, code phần, mã hàng, màu/kích...">
         {canDo && selected.size > 0 && (
@@ -150,8 +191,41 @@ export default function GiaCongPage() {
         loading={saving}
         title="Chuyển gia công sang OQC"
         confirmText="Chuyển OQC"
-        message={confirm ? `Xác nhận đã nhận lại hàng gia công (${confirm.label}) và chuyển sang kiểm OQC? Hệ thống sẽ tạo tem coi như đã KCS đạt.` : ''}
+        message={confirm ? `Xác nhận đã nhận NỐT phần còn lại của ${confirm.label} và chuyển sang kiểm OQC? Mỗi lệnh tạo 1 tem coi như đã KCS đạt. Muốn nhận từng phần thì bấm "Nhận hàng → OQC" ở từng dòng.` : ''}
       />
+
+      {/* Nhận hàng gia công từng lần: nhập SL của lần này (≤ phần còn lại). */}
+      <Modal open={!!nhan} onClose={() => setNhan(null)} title="Nhận hàng gia công → OQC" size="sm">
+        {nhan && (
+          <div className="space-y-4">
+            <div className="rounded-xl bg-surface-muted p-3 text-sm">
+              <div className="font-medium text-ink">{nhan.row.ma_lenh_san_xuat}</div>
+              <div className="mt-1 text-ink-soft">
+                {[nhan.row.ten_khach_hang, nhan.row.ma_hang, nhan.row.mau_vai].filter(Boolean).join(' · ') || '—'}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 tabular-nums">
+                <span>SL release: <b className="text-ink">{fmtNum(nhan.row.so_luong_release)}</b></span>
+                <span>Đã chuyển: <b className="text-ink">{fmtNum(nhan.row.da_chuyen || 0)}</b></span>
+                <span>Còn lại: <b className="text-warning">{fmtNum(conLaiCua(nhan.row))}</b></span>
+              </div>
+            </div>
+            <div>
+              <div className="mb-1 text-sm font-medium text-ink">Số lượng nhận về lần này</div>
+              <Input type="number" min={1} max={conLaiCua(nhan.row)} value={nhan.qty}
+                onChange={(e) => setNhan((s) => ({ ...s, qty: e.target.value }))}
+                onKeyDown={(e) => { if (e.key === 'Enter') doNhan(); }} autoFocus />
+              <div className="mt-1 text-xs text-ink-soft">
+                Tạo 1 tem riêng cho lần nhận này (coi như đã KCS đạt) rồi sang OQC.
+                Chưa đủ số lượng thì lệnh vẫn ở màn Gia công để nhận tiếp.
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setNhan(null)} disabled={saving}>Hủy</Button>
+              <Button onClick={doNhan} loading={saving}>Chuyển OQC</Button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       <GiaCongHistoryPanel open={histOpen} onClose={() => setHistOpen(false)} onPrint={printVe} />
 
