@@ -12,7 +12,8 @@ import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import GiaCongHistoryPanel from '../components/GiaCongHistoryPanel';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import { listGiaCong, giaCongToOqc } from '../../../services/planningService';
+import TraVeBadge from '../../../components/common/TraVeBadge';
+import { listGiaCong, giaCongToOqc, giaCongTraLai } from '../../../services/planningService';
 import { printGiaCongVeTem } from '../../production/utils/printTemLabel';
 import { fmtNum, fmtDate } from '../../../utils/format';
 
@@ -47,6 +48,7 @@ export default function GiaCongPage() {
   const [selected, setSelected] = useState(() => new Set());
   const [confirm, setConfirm] = useState(null); // { ids:[], label } — chuyển HÀNG LOẠT (nhận nốt phần còn lại)
   const [nhan, setNhan] = useState(null); // { row, qty } — nhận 1 lệnh, nhập SL của lần này
+  const [traLai, setTraLai] = useState(null); // { row, ghiChu } — trả hàng bị OQC trả về cho nhà gia công
   const [saving, setSaving] = useState(false);
   const [histOpen, setHistOpen] = useState(false);
 
@@ -79,8 +81,10 @@ export default function GiaCongPage() {
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
-  const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.id));
-  const toggleAll = () => setSelected(() => (allChecked ? new Set() : new Set(rows.map((r) => r.id))));
+  // Lệnh đang CHỜ TRẢ LẠI nhà gia công không nhận hàng tiếp được ⇒ loại khỏi chọn hàng loạt.
+  const rowsChon = rows.filter((r) => !r.cho_tra_lai);
+  const allChecked = rowsChon.length > 0 && rowsChon.every((r) => selected.has(r.id));
+  const toggleAll = () => setSelected(() => (allChecked ? new Set() : new Set(rowsChon.map((r) => r.id))));
 
   // Hàng loạt: mỗi lệnh nhận NỐT phần còn lại (không nhập SL từng dòng).
   const doConfirm = async () => {
@@ -125,14 +129,32 @@ export default function GiaCongPage() {
     } finally { setSaving(false); }
   };
 
+  const doTraLai = async () => {
+    if (!traLai) return;
+    setSaving(true);
+    try {
+      await giaCongTraLai(traLai.row.id, traLai.ghiChu);
+      show(`Đã ghi nhận trả lại nhà gia công (${traLai.row.ma_lenh_san_xuat})`);
+      setTraLai(null);
+      load();
+    } catch (e) {
+      show(e.message || 'Ghi nhận trả lại thất bại', 'error');
+    } finally { setSaving(false); }
+  };
+
   const columns = [
     ...(canDo ? [{ key: 'sel', className: 'w-10', selection: true,
       header: <input type="checkbox" checked={allChecked} onChange={toggleAll} aria-label="Chọn tất cả" />,
       render: (r) => (
-        <input type="checkbox" checked={selected.has(r.id)}
+        <input type="checkbox" checked={selected.has(r.id)} disabled={r.cho_tra_lai}
+          title={r.cho_tra_lai ? 'Đang chờ trả lại nhà gia công' : undefined}
           onClick={(e) => e.stopPropagation()} onChange={() => toggleOne(r.id)} aria-label="Chọn lệnh" />
       ) }] : []),
     { key: 'ma_lenh_san_xuat', header: 'Mã đợt SX', render: (r) => <Badge tone="info">{r.ma_lenh_san_xuat}</Badge> },
+    // Hàng bị OQC kiểm không đạt → trả về Kế hoạch; badge đỏ bấm ra lý do/người/giờ.
+    { key: 'tra_ve', header: 'Tình trạng', render: (r) => (r.cho_tra_lai
+      ? <TraVeBadge data={r.tra_ve} label="OQC trả về" nguon="OQC" />
+      : <span className="text-xs text-ink-soft">Đang gia công</span>) },
     { key: 'ten_chuyen', header: 'Chuyền gia công', render: (r) => r.ten_chuyen || '—' },
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
@@ -158,7 +180,14 @@ export default function GiaCongPage() {
         <Button size="sm" variant="secondary" icon="printer" onClick={(e) => { e.stopPropagation(); printVe(r); }}>
           In tem
         </Button>
-        {canDo && (
+        {/* Bị OQC trả về → phải ghi nhận ĐÃ TRẢ LẠI nhà gia công trước, rồi mới nhận hàng về lượt sau. */}
+        {canDo && r.cho_tra_lai && (
+          <Button size="sm" variant="danger" icon="undo-2"
+            onClick={(e) => { e.stopPropagation(); setTraLai({ row: r, ghiChu: '' }); }}>
+            Trả lại nhà gia công
+          </Button>
+        )}
+        {canDo && !r.cho_tra_lai && (
           <Button size="sm" icon="arrow-right" onClick={(e) => { e.stopPropagation(); openNhan(r); }}>
             Nhận hàng → OQC
           </Button>
@@ -222,6 +251,35 @@ export default function GiaCongPage() {
             <div className="flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setNhan(null)} disabled={saving}>Hủy</Button>
               <Button onClick={doNhan} loading={saving}>Chuyển OQC</Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Ghi nhận đã mang hàng bị OQC trả về giao lại cho nhà gia công (người + giờ vào lịch sử). */}
+      <Modal open={!!traLai} onClose={() => setTraLai(null)} title="Trả lại nhà gia công" size="sm">
+        {traLai && (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm dark:border-rose-900 dark:bg-rose-950/30">
+              <div className="font-medium text-ink">{traLai.row.ma_lenh_san_xuat} — OQC kiểm không đạt</div>
+              <div className="mt-1 text-ink-soft">Lý do OQC: {traLai.row.tra_ve?.ly_do || '—'}</div>
+              <div className="mt-1 text-ink-soft">
+                Số lượng chờ gia công lại: <b className="text-ink">{fmtNum(conLaiCua(traLai.row))}</b>
+              </div>
+            </div>
+            <div>
+              <div className="mb-1 text-sm font-medium text-ink">Ghi chú (không bắt buộc)</div>
+              <Input value={traLai.ghiChu}
+                onChange={(e) => setTraLai((s) => ({ ...s, ghiChu: e.target.value }))}
+                onKeyDown={(e) => { if (e.key === 'Enter') doTraLai(); }}
+                placeholder="Vd: đã giao lại cho nhà gia công X ngày..." autoFocus />
+              <div className="mt-1 text-xs text-ink-soft">
+                Ghi nhận xong, lệnh trở lại trạng thái đang gia công và nhận hàng về bằng nút "Nhận hàng → OQC".
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setTraLai(null)} disabled={saving}>Hủy</Button>
+              <Button onClick={doTraLai} loading={saving}>Xác nhận đã trả lại</Button>
             </div>
           </div>
         )}

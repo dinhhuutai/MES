@@ -64,6 +64,9 @@ export const listGiaCong = (params) => client.get('/planning/gia-cong', { params
 export const giaCongToOqc = (lenhId, soLuong) =>
   client.post(`/planning/gia-cong/${lenhId}/chuyen-oqc`, soLuong == null ? {} : { so_luong: soLuong });
 export const giaCongHistory = (date) => client.get('/planning/gia-cong/history', { params: { date } });
+// Hàng bị OQC trả về → Kế hoạch mang trả lại nhà gia công (tắt badge, ghi người + giờ).
+export const giaCongTraLai = (lenhId, ghiChu) =>
+  client.post(`/planning/gia-cong/${lenhId}/tra-lai`, { ghiChu });
 // Hủy tem gia công (tab ở trang "Hủy lệnh xác nhận") — SL quay lại phần chờ nhận của lệnh.
 export const giaCongTemCancelable = (params) => client.get('/planning/gia-cong/tem/cancelable', { params });
 export const huyGiaCongTem = (temId, lyDo) => client.post(`/planning/gia-cong/tem/${temId}/huy`, { lyDo });

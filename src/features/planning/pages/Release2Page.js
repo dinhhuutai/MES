@@ -20,6 +20,7 @@ import PhuongAnInBadge, { PHUONG_AN_IN } from '../../../components/common/Phuong
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import { listRelease2Candidates, approveRelease2, approveRelease2Batch, planHistory, release2Done } from '../../../services/planningService';
 import { fmtNum, fmtDate } from '../../../utils/format';
+import exportCheckpointExcel, { COT_LENH, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
 
 const FILTER_FIELDS = [
   { key: 'codePhan', label: 'Code phần', col: 'ma_phan' }, { key: 'khach', label: 'Khách hàng', col: 'ten_khach_hang' },
@@ -58,6 +59,15 @@ export default function Release2Page() {
   const [detail, setDetail] = useState(null); // bấm vào hàng → SidePanel chi tiết lệnh
   const filtered = useMemo(() => filterRows(rows, filters, FILTER_FIELDS), [rows, filters]);
   const activeCount = Object.values(filters).filter(Boolean).length;
+
+  // Xuất Excel TOÀN BỘ lệnh sau bộ lọc (trang tải-hết rồi phân trang client ⇒ không giới hạn trang xem).
+  const doExcel = () => exportCheckpointExcel({
+    cols: COT_LENH,
+    rows: filtered,
+    title: 'Release 2 — chờ duyệt cuối',
+    fileName: 'release-2',
+    moTaLoc: moTaBoLoc({ 'tìm kiếm': search, ...filters }),
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -157,6 +167,9 @@ export default function Release2Page() {
           <Button onClick={() => setConfirm({ batch: true })}>Duyệt Release 2 ({selected.size})</Button>
         )}
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
+        <Button variant="secondary" icon="download" onClick={doExcel} disabled={!filtered.length}>
+          Excel ({filtered.length})
+        </Button>
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="info">{filtered.length} chờ duyệt</Badge>

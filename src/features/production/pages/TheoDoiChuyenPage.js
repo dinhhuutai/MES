@@ -9,18 +9,29 @@ import useToast from '../../../hooks/useToast';
 import useNow from '../../../hooks/useNow';
 import usePermissions from '../../../hooks/usePermissions';
 import { getMonitor, stopLine, resumeLine } from '../../../services/productionService';
+import { KHU_BAN, khuCuaChuyen, thuocKhu } from '../../../utils/khuChuyen';
+import ChipTabs from '../../../components/common/ChipTabs';
 
 const ROTATE_MS = 30000;
 // Lọc theo LOẠI CHUYỀN (bảng loai_chuyen.ma_loai) — '' = tất cả.
+// Chip lọc: loại chuyền + các KHU của chuyền Bàn (khu = tập `ma_chuyen`, xem utils/khuChuyen.js).
+// Giữ chip "Bàn" tổng để vẫn xem được toàn bộ Bàn; 5 chip khu nằm ngay sau nó.
 const LOAI_TABS = [
   { v: '', label: 'Tất cả' },
   { v: 'BAN', label: 'Bàn' },
+  ...KHU_BAN.map((k) => ({ v: `KHU:${k.key}`, label: k.label, khu: k.key })),
   { v: 'MAY', label: 'Máy' },
   { v: 'ROBOT', label: 'Robot' },
   { v: 'EP', label: 'Ép' },
   { v: 'LOGO', label: 'Logo' },
   { v: 'GIA_CONG', label: 'Gia công' },
 ];
+// 1 hàng (chuyền) có khớp chip đang chọn không: chip khu lọc theo ma_chuyen, còn lại theo loại chuyền.
+const hopChip = (row, v) => {
+  if (!v) return true;
+  if (v.startsWith('KHU:')) return thuocKhu(row.ma_chuyen, v.slice(4));
+  return row.ma_loai_chuyen === v;
+};
 const nf = (n) => Number(n || 0).toLocaleString('vi-VN');
 const pad = (n) => String(n).padStart(2, '0');
 const hhmm = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -66,11 +77,15 @@ export default function TheoDoiChuyenPage() {
   // Đếm số chuyền đang chạy theo từng loại (cho badge trên toggle).
   const countByLoai = useMemo(() => {
     const m = {};
-    allRunning.forEach((x) => { m[x.ma_loai_chuyen || ''] = (m[x.ma_loai_chuyen || ''] || 0) + 1; });
+    allRunning.forEach((x) => {
+      m[x.ma_loai_chuyen || ''] = (m[x.ma_loai_chuyen || ''] || 0) + 1;
+      const k = khuCuaChuyen(x.ma_chuyen);
+      if (k) m[`KHU:${k}`] = (m[`KHU:${k}`] || 0) + 1;
+    });
     return m;
   }, [allRunning]);
   const running = useMemo(
-    () => (loai ? allRunning.filter((x) => x.ma_loai_chuyen === loai) : allRunning),
+    () => (loai ? allRunning.filter((x) => hopChip(x, loai)) : allRunning),
     [allRunning, loai]
   );
   const count = running.length;
@@ -132,28 +147,9 @@ export default function TheoDoiChuyenPage() {
 
   return (
     <div>
-      {/* Toggle LOẠI CHUYỀN — lọc danh sách chuyền đang chạy */}
-      <div className="mb-4 flex flex-wrap gap-2">
-        {LOAI_TABS.map((t) => {
-          const n = t.v ? (countByLoai[t.v] || 0) : allRunning.length;
-          const active = loai === t.v;
-          return (
-            <button
-              key={t.v || 'all'}
-              type="button"
-              onClick={() => { setLoai(t.v); setIdx(0); }}
-              className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
-                active
-                  ? 'border-primary bg-primary text-white'
-                  : 'border-line bg-surface text-ink-soft hover:border-primary/50 hover:text-ink'
-              }`}
-            >
-              {t.label}
-              <span className={`ml-1.5 text-xs ${active ? 'text-white/80' : 'text-ink-soft'}`}>({n})</span>
-            </button>
-          );
-        })}
-      </div>
+      {/* Toggle LOẠI CHUYỀN + KHU BÀN — lọc danh sách chuyền đang chạy */}
+      <ChipTabs tabs={LOAI_TABS} value={loai} counts={{ ...countByLoai, '': allRunning.length }}
+        onChange={(v) => { setLoai(v); setIdx(0); }} />
 
       <div className={`card p-6 sm:p-7 ${risk === 'red' ? 'ring-2 ring-danger' : risk === 'yellow' ? 'ring-2 ring-warning' : ''}`}>
         {/* Top bar */}

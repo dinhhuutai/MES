@@ -18,6 +18,7 @@ import {
   listProductionCandidates, startProduction, getMonitor, listChuyen,
 } from '../../../services/productionService';
 import { fmtNum, fmtDate } from '../../../utils/format';
+import exportCheckpointExcel, { COT_LENH, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
 import RunPanel from '../components/RunPanel';
 
 export default function XacNhanChayPage() {
@@ -41,7 +42,9 @@ export default function XacNhanChayPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [c, m] = await Promise.all([listProductionCandidates({ search, limit: 50 }), getMonitor()]);
+      // limit 200 = trần của `getPaging` (backend). Trang lọc + phân trang CLIENT nên phải tải-hết,
+      // nếu không nút Excel chỉ xuất được phần đã tải.
+      const [c, m] = await Promise.all([listProductionCandidates({ search, limit: 200 }), getMonitor()]);
       setCandidates(c.data.items);
       setRunning(m.data.running);
     } catch (e) {
@@ -81,6 +84,42 @@ export default function XacNhanChayPage() {
   const candFiltered = useMemo(() => applyFilters(candidates), [applyFilters, candidates]);
   const runFiltered = useMemo(() => applyFilters(running), [applyFilters, running]);
   const clearFilters = () => setFilters({ khach: '', don: '', maHang: '', mauVai: '', kichVai: '', kichPhim: '', chuyenId: '' });
+
+  // Xuất Excel 2 bảng RIÊNG (đang chạy / chờ chạy) — theo đúng bộ lọc đang bật, hết mọi dòng.
+  const moTa = () => moTaBoLoc({
+    'tìm kiếm': search, khách: filters.khach, đơn: filters.don, 'mã hàng': filters.maHang,
+    'màu vải': filters.mauVai, 'kích vải': filters.kichVai, 'kích phim': filters.kichPhim,
+    chuyền: selChuyen ? (selChuyen.ten_chuyen || selChuyen.ma_chuyen) : '',
+  });
+  // Bảng "Đang chạy" lấy từ `monitorRunning` — bộ cột KHÁC danh sách lệnh (không có tính chất in /
+  // loại đợt vải / SL đơn hàng), nên khai riêng thay vì dùng COT_LENH cho có rồi để trống.
+  const doExcelRunning = () => exportCheckpointExcel({
+    cols: [
+      { header: 'Mã đợt SX', width: 16, value: (r) => r.ma_lenh_san_xuat || '' },
+      { header: 'Chuyền', width: 16, value: (r) => r.ten_chuyen || r.ma_chuyen || '' },
+      { header: 'Code phần', width: 24, value: (r) => r.ma_phan || r.phan_list || '' },
+      { header: 'Khách hàng', width: 18, value: (r) => r.ten_khach_hang || '' },
+      { header: 'Đơn hàng', width: 18, value: (r) => r.ma_don_hang || '' },
+      { header: 'Mã hàng', width: 18, value: (r) => r.ma_hang || '' },
+      { header: 'Màu vải', width: 18, value: (r) => r.mau_vai || '' },
+      { header: 'Kích vải', width: 14, value: (r) => r.kich_vai || '' },
+      { header: 'Kích phim', width: 14, value: (r) => r.kich_phim || '' },
+      { header: 'SL release', width: 12, num: true, value: (r) => (r.target == null ? null : Number(r.target)) },
+      { header: 'Đã in', width: 12, num: true, value: (r) => (r.printed == null ? null : Number(r.printed)) },
+      { header: 'Số tem', width: 10, num: true, value: (r) => (r.so_tem == null ? null : Number(r.so_tem)) },
+      { header: 'Trạng thái', width: 13, center: true, value: (r) => (r.dang_ngung ? 'Đang ngừng' : 'Đang chạy'),
+        red: (r) => !!r.dang_ngung },
+      { header: 'Ngừng (phút)', width: 12, num: true, value: (r) => (r.ngung_phut ? Number(r.ngung_phut) : null) },
+      { header: 'Hạn giao', width: 13, type: 'date', center: true, value: (r) => r.han_giao_hang },
+      { header: 'Ngày SX kế hoạch', width: 15, type: 'date', center: true, value: (r) => r.ngay_ke_hoach },
+    ],
+    rows: runFiltered, title: 'Đang sản xuất', fileName: 'dang-san-xuat', moTaLoc: moTa(),
+  });
+  const doExcelCand = () => exportCheckpointExcel({
+    cols: [...COT_LENH,
+      { header: 'Đã in trước đó', width: 13, num: true, value: (r) => r.da_in_truoc || null }],
+    rows: candFiltered, title: 'Đang chờ chạy', fileName: 'cho-chay', moTaLoc: moTa(),
+  });
 
   // Mở hộp xác nhận: kế thừa chuyền kế hoạch, cho đổi chuyền thực tế.
   const openConfirm = (lenh) => { setConfirmRun(lenh); setRunChuyenId(lenh.chuyen_id || ''); };
@@ -181,12 +220,22 @@ export default function XacNhanChayPage() {
         </div>
       )}
 
-      <h3 className="mb-2 mt-1 text-sm font-semibold text-ink">Đang chạy ({runFiltered.length}{hasFilter ? `/${running.length}` : ''})</h3>
+      <div className="mb-2 mt-1 flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-ink">Đang chạy ({runFiltered.length}{hasFilter ? `/${running.length}` : ''})</h3>
+        <Button variant="secondary" icon="download" onClick={doExcelRunning} disabled={!runFiltered.length}>
+          Excel ({runFiltered.length})
+        </Button>
+      </div>
       <DataTable columns={runCols} rows={runFiltered} loading={loading} rowKey="phieu_id" sttStart={0}
         rowClassName={(r) => slaRowClass(statusLenh(r.lenh_id))}
         onRowClick={(r) => setSel(r.lenh_id)} emptyText="Không có lệnh đang chạy" />
 
-      <h3 className="mb-2 mt-6 text-sm font-semibold text-ink">Chờ chạy ({candFiltered.length}{hasFilter ? `/${candidates.length}` : ''})</h3>
+      <div className="mb-2 mt-6 flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-ink">Chờ chạy ({candFiltered.length}{hasFilter ? `/${candidates.length}` : ''})</h3>
+        <Button variant="secondary" icon="download" onClick={doExcelCand} disabled={!candFiltered.length}>
+          Excel ({candFiltered.length})
+        </Button>
+      </div>
       <DataTable columns={candCols} rows={candFiltered} loading={loading} sttStart={0}
         rowClassName={(r) => slaRowClass(statusLenh(r.id))}
         emptyText="Không có lệnh nào chờ chạy" />

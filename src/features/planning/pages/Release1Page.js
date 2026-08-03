@@ -26,6 +26,7 @@ import {
   listReleaseSets, releaseSet, release1Done, release1TraVeKyThuat, keHoachTamSet,
 } from '../../../services/planningService';
 import { fmtNum, fmtDate } from '../../../utils/format';
+import exportCheckpointExcel, { COT_DOT_VAI, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
 
 const dateOffsetStr = (n) => {
   const d = new Date();
@@ -152,6 +153,22 @@ export default function Release1Page() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [onlyReturned, rows, filters, showReady, showWait],
   );
+
+  // Xuất Excel: gộp đợt vải LẺ + đợt vải trong các SET đang hiện, lấy TOÀN BỘ sau bộ lọc
+  // (trang phân trang client nên `viewRows`/`viewSets` đã là "hết mọi trang").
+  const doExcel = () => {
+    const setRows = viewSets.flatMap((s) => (s.members || []).map((m) => ({ ...m, _ma_set: s.ma_set })));
+    exportCheckpointExcel({
+      cols: [{ header: 'Gom set', width: 12, value: (r) => r._ma_set || '' }, ...COT_DOT_VAI],
+      rows: [...setRows, ...viewRows],
+      title: 'Release 1 — chờ release',
+      fileName: 'release-1',
+      moTaLoc: moTaBoLoc({
+        'tìm kiếm': search, 'chỉ bị trả về': onlyReturned ? 'có' : '',
+        'đã Ready': showReady ? 'có' : '', 'chờ Ready': showWait ? 'có' : '', ...filters,
+      }),
+    });
+  };
 
   // Phân trang CLIENT trên danh sách gộp (set + đợt vải lẻ) — mỗi SET/đợt lẻ = 1 "mục".
   // Chọn-tất-cả (toggleAll) vẫn thao tác trên TOÀN BỘ viewRows/selectableSets nên chọn được mọi trang.
@@ -304,6 +321,8 @@ export default function Release1Page() {
           <label className="flex items-center gap-1"><input type="checkbox" checked={showWait} onChange={(e) => setShowWait(e.target.checked)} />Chờ Ready</label>
         </span>
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
+        <Button variant="secondary" icon="download" onClick={doExcel}
+          disabled={!viewRows.length && !viewSets.length}>Excel</Button>
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="info">{activeCount ? `${viewRows.length}/` : ''}{meta.total} đợt vải · {sets.length} set</Badge>

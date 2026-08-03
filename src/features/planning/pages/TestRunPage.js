@@ -21,6 +21,27 @@ import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
 import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import TraVeBadge from '../../../components/common/TraVeBadge';
+import { KHU_BAN, khuCuaChuyen, thuocKhu } from '../../../utils/khuChuyen';
+import ChipTabs from '../../../components/common/ChipTabs';
+import exportCheckpointExcel, { COT_LENH, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
+
+// Chip lọc theo LOẠI CHUYỀN + KHU của chuyền Bàn — cùng bộ với màn "Theo dõi chuyền"
+// (nguồn chung `utils/khuChuyen.js`, sửa 1 chỗ 2 màn cùng đổi).
+const LOAI_TABS = [
+  { v: '', label: 'Tất cả' },
+  { v: 'BAN', label: 'Bàn' },
+  ...KHU_BAN.map((k) => ({ v: `KHU:${k.key}`, label: k.label })),
+  { v: 'MAY', label: 'Máy' },
+  { v: 'ROBOT', label: 'Robot' },
+  { v: 'EP', label: 'Ép' },
+  { v: 'LOGO', label: 'Logo' },
+  { v: 'GIA_CONG', label: 'Gia công' },
+];
+const hopChip = (row, v) => {
+  if (!v) return true;
+  if (v.startsWith('KHU:')) return thuocKhu(row.ma_chuyen, v.slice(4));
+  return row.ma_loai_chuyen === v;
+};
 
 const FILTER_FIELDS = [
   { key: 'codePhan', label: 'Code phần', col: 'ma_phan' }, { key: 'khach', label: 'Khách hàng', col: 'ten_khach_hang' },
@@ -75,12 +96,43 @@ export default function TestRunPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const [onlyPending, setOnlyPending] = useState(true); // mặc định chỉ hiện lệnh CHƯA QA xong (khớp Test Run ở dashboard)
+  const [loai, setLoai] = useState(''); // chip loại chuyền / khu Bàn ('' = tất cả)
   const filtered = useMemo(() => {
-    const base = onlyPending ? rows.filter((r) => !r.qa_done) : rows;
+    let base = onlyPending ? rows.filter((r) => !r.qa_done) : rows;
+    if (loai) base = base.filter((r) => hopChip(r, loai));
     return filterRows(base, filters, FILTER_FIELDS);
-  }, [rows, filters, onlyPending]);
+  }, [rows, filters, onlyPending, loai]);
+  // Đếm cho badge chip — tính trên tập ĐANG XÉT (theo ô "Chỉ chờ QA") để số khớp bảng.
+  const countChip = useMemo(() => {
+    const base = onlyPending ? rows.filter((r) => !r.qa_done) : rows;
+    const m = { '': base.length };
+    base.forEach((x) => {
+      m[x.ma_loai_chuyen || ''] = (m[x.ma_loai_chuyen || ''] || 0) + 1;
+      const k = khuCuaChuyen(x.ma_chuyen);
+      if (k) m[`KHU:${k}`] = (m[`KHU:${k}`] || 0) + 1;
+    });
+    return m;
+  }, [rows, onlyPending]);
   const activeCount = Object.values(filters).filter(Boolean).length;
   const doneCount = useMemo(() => rows.filter((r) => r.qa_done).length, [rows]);
+
+  // Xuất Excel: lấy `filtered` = TOÀN BỘ lệnh sau bộ lọc (trang tải-hết rồi phân trang client
+  // ⇒ không bị giới hạn ở trang đang xem).
+  const doExcel = () => exportCheckpointExcel({
+    cols: [...COT_LENH,
+      { header: 'QA đã xác nhận', width: 14, center: true, value: (r) => (r.qa_done ? 'Đã QA' : 'Chờ QA'),
+        ok: (r) => !!r.qa_done },
+      { header: 'Số lần test', width: 11, num: true, value: (r) => r.so_lan_test },
+      { header: 'Chờ kỹ thuật', width: 13, center: true, value: (r) => (r.cho_ky_thuat ? 'Chờ KT làm lại' : ''),
+        red: (r) => !!r.cho_ky_thuat }],
+    rows: filtered,
+    title: 'Test Run - QA',
+    fileName: 'test-run',
+    moTaLoc: moTaBoLoc({
+      'tìm kiếm': search, 'chỉ chờ QA': onlyPending ? 'có' : '',
+      khu: (LOAI_TABS.find((t) => t.v === loai) || {}).label, ...filters,
+    }),
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -185,10 +237,16 @@ export default function TestRunPage() {
           Chỉ chờ QA{doneCount ? ` (ẩn ${doneCount} đã xong)` : ''}
         </label>
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
+        <Button variant="secondary" icon="download" onClick={doExcel} disabled={!filtered.length}>
+          Excel ({filtered.length})
+        </Button>
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="info">{filtered.length} lệnh</Badge>
       </Toolbar>
+
+      {/* Chip LOẠI CHUYỀN + KHU BÀN — cùng bộ với màn "Theo dõi chuyền" */}
+      <ChipTabs tabs={LOAI_TABS} value={loai} counts={countChip} onChange={setLoai} />
 
       <FieldFilters fields={FILTER_FIELDS} values={filters} onField={(k, v) => setFilters((f) => ({ ...f, [k]: v }))} onClear={() => setFilters({})} open={showFilters} />
 
