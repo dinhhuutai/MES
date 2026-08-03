@@ -38,11 +38,14 @@ export default function QrScanner({ open, onClose, onResult, title = 'Quét QR /
 
     (async () => {
       try {
-        const stopFn = await startCameraDecode(videoEl, (text) => {
+        // onResult(text, kieu) — `kieu` ('qr' | 'barcode') để trang gọi biết quét loại mã nào mà tra
+        // đúng cột (vd Hồ sơ kỹ thuật: QR = code phần, mã vạch = barcode HSKT). Lùi về `mode` khi
+        // decoder không nói rõ; caller cũ chỉ nhận 1 tham số nên không ảnh hưởng.
+        const stopFn = await startCameraDecode(videoEl, (text, kieu) => {
           if (doneRef.current) return;
           doneRef.current = true;
           stop();
-          onResult(text);
+          onResult(text, kieu || mode);
         }, mode);
         if (cancelled) { stopFn(); return; }
         stopRef.current = stopFn;

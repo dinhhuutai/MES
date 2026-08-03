@@ -108,14 +108,16 @@ export default function HoSoKyThuatPage() {
     finally { setLoadingDetail(false); }
   };
 
-  // Quét / nhập mã vạch HSKT (đầu đọc USB, camera hoặc gõ tay) → MỞ THẲNG SidePanel của HSKT đó
-  // để xem thông tin & cập nhật phương án in.
-  const doScan = async (code) => {
+  // Quét / nhập mã (đầu đọc USB, camera hoặc gõ tay) → MỞ THẲNG SidePanel của HSKT đó.
+  // Camera trả kèm LOẠI MÃ: **QR = code phần** · **mã vạch = barcode HSKT (server so 11 SỐ ĐẦU** nên
+  // phiếu giấy in mã CŨ — trước khi đổi phương án in — vẫn quét ra đúng hồ sơ). Gõ tay không rõ loại
+  // → để server tự dò (barcode chính xác → 11 số đầu → code phần).
+  const doScan = async (code, kieu) => {
     const bc = String(code || '').trim();
     if (!bc) return;
     setCamOpen(false);
     try {
-      const res = await getHsktByBarcode(bc);
+      const res = await getHsktByBarcode(bc, kieu);
       setScanVal('');
       await openDetail(res.data.hskt.id);
     } catch (e) { show(e.message || 'Không tìm thấy HSKT', 'error'); }
@@ -161,7 +163,7 @@ export default function HoSoKyThuatPage() {
           <Icon name="scan" size={16} className="text-ink-soft" />
           <Input value={scanVal} onChange={(e) => setScanVal(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') doScan(scanVal); }}
-            placeholder="Quét / nhập mã vạch HSKT..." className="w-56" />
+            placeholder="Quét / nhập mã vạch HSKT hoặc code phần..." className="w-64" />
           <Button variant="secondary" icon="scan-line" onClick={() => setCamOpen(true)}>Quét camera</Button>
         </div>
       </Toolbar>
@@ -328,9 +330,9 @@ export default function HoSoKyThuatPage() {
         )}
       </SidePanel>
 
-      {/* Quét mã vạch HSKT bằng camera (QR + barcode) → mở SidePanel HSKT */}
+      {/* Camera: chế độ QR quét CODE PHẦN · chế độ Mã vạch quét BARCODE HSKT (so 11 số đầu) */}
       <QrScanner open={camOpen} onClose={() => setCamOpen(false)} onResult={doScan}
-        title="Quét mã vạch HSKT" />
+        title="Quét QR code phần / mã vạch HSKT" />
 
       {/* Xác nhận đổi phương án in — nêu RÕ mã vạch sẽ đổi + phiếu giấy cũ hết quét được. */}
       <ConfirmDialog

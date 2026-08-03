@@ -4,7 +4,9 @@ import client from './axiosClient';
 export const listHskt = (params) => client.get('/hskt', { params });
 export const getHskt = (id) => client.get(`/hskt/${id}`);
 export const getHsktByPhanIn = (phanInId) => client.get(`/hskt/phan-in/${phanInId}`);
-export const getHsktByBarcode = (barcode) => client.get(`/hskt/by-barcode/${encodeURIComponent(barcode)}`);
+// `kieu`: 'qr' = nội dung là CODE PHẦN · 'barcode' = barcode HSKT (server so 11 SỐ ĐẦU) · bỏ trống = tự dò.
+export const getHsktByBarcode = (barcode, kieu) =>
+  client.get(`/hskt/by-barcode/${encodeURIComponent(barcode)}`, { params: kieu ? { kieu } : undefined });
 export const changePhuongAnIn = (id, phuongAnIn) =>
   client.patch(`/hskt/${id}/phuong-an-in`, { phuong_an_in: phuongAnIn });
 
