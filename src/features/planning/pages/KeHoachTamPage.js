@@ -121,17 +121,25 @@ export default function KeHoachTamPage() {
   const doConfirm = async () => {
     if (!confirm) return;
     setSaving(true);
-    let okCount = 0; let failCount = 0; let firstErr = '';
+    let okCount = 0; let donCount = 0; let failCount = 0; let firstErr = ''; let lenhDaCo = '';
     for (const id of confirm.ids) {
-      try { await confirmKeHoachTam(id); okCount += 1; }
-      catch (e) { failCount += 1; if (!firstErr) firstErr = e.message || ''; }
+      try {
+        const res = await confirmKeHoachTam(id);
+        // `da_don` = đợt đã được release ở đường khác (thường là release cả gom set ở màn Release 1),
+        // dòng kế hoạch tạm chỉ còn là rác và BE vừa dọn — KHÔNG phải lỗi, đừng đếm vào `failCount`.
+        if (res?.data?.da_don) { donCount += 1; if (!lenhDaCo) lenhDaCo = res.data.ma_lenh || ''; }
+        else okCount += 1;
+      } catch (e) { failCount += 1; if (!firstErr) firstErr = e.message || ''; }
     }
     setSaving(false);
     setConfirm(null);
     // Giữ LÝ DO lỗi đầu tiên (vd đợt thuộc gom set chưa đủ Ready) — trước chỉ đếm số lỗi nên không ai biết vì sao.
+    const phanDon = donCount
+      ? ` · dọn ${donCount} dòng đã release trước đó${lenhDaCo ? ` (vd lệnh ${lenhDaCo})` : ''}`
+      : '';
     show(failCount
-      ? `Đã xác nhận Release 1 ${okCount} phần in, ${failCount} lỗi${firstErr ? ` — ${firstErr}` : ''}`
-      : `Đã xác nhận Release 1 ${okCount} phần in`,
+      ? `Đã xác nhận Release 1 ${okCount} phần in, ${failCount} lỗi${firstErr ? ` — ${firstErr}` : ''}${phanDon}`
+      : `Đã xác nhận Release 1 ${okCount} phần in${phanDon}`,
     failCount ? 'error' : 'success');
     load();
   };

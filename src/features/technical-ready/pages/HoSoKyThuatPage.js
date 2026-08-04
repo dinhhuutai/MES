@@ -11,13 +11,14 @@ import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import LoaiDotVaiBadge from '../../planning/components/LoaiDotVaiBadge';
 import { Input, Select } from '../../../components/common/controls';
 import FieldFilters, { FilterToggle } from '../../../components/common/FieldFilters';
+import DateRangePicker from '../../../components/common/DateRangePicker';
 import Pagination from '../../../components/common/Pagination';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import { listHskt, getHskt, getHsktByBarcode, changePhuongAnIn, PHUONG_AN_IN } from '../../../services/hsktService';
 import { fmtNum } from '../../../utils/format';
 
-const COLS = 13; // số cột bảng (cho colSpan hàng trống)
+const COLS = 14; // số cột bảng (cho colSpan hàng trống)
 // Ô lọc dạng CHỮ (khớp `FILTER_KEYS` ở hskt.controller — lọc chạy ở server, xem load()).
 const HSKT_FILTER_FIELDS = [
   { key: 'codePhan', label: 'Code phần' },
@@ -97,8 +98,13 @@ export default function HoSoKyThuatPage() {
 
   // Đổi ô lọc / ô tìm → về trang 1 (đang ở trang 5 mà lọc còn 2 trang thì sẽ ra bảng rỗng).
   const setField = (k, v) => { setFilters((s) => ({ ...s, [k]: v })); setPage(1); };
+  // Khoảng ngày LÊN MES: 1 ô chọn cả từ→đến ⇒ set 2 khóa cùng lúc (server lọc `tuNgay`/`denNgay`).
+  const setNgay = ({ from, to }) => {
+    setFilters((s) => ({ ...s, tuNgay: from || '', denNgay: to || '' })); setPage(1);
+  };
   const clearFilters = () => { setFilters({}); setPage(1); };
-  const filterCount = Object.values(filters).filter(Boolean).length;
+  // Bỏ `denNgay` khi đếm: khoảng ngày là MỘT bộ lọc, không phải hai.
+  const filterCount = Object.entries(filters).filter(([k, v]) => v && k !== 'denNgay').length;
   const textFilters = Object.fromEntries(HSKT_TEXT_KEYS.map((k) => [k, filters[k] || '']));
 
   const openDetail = async (id) => {
@@ -168,27 +174,41 @@ export default function HoSoKyThuatPage() {
         </div>
       </Toolbar>
 
+      {/* 1 HÀNG: tìm · khoảng ngày lên MES · 3 select (thu gọn) · bộ lọc chữ · tổng.
+          ⚠⚠ BỀ RỘNG SELECT PHẢI ĐẶT Ở DIV BỌC NGOÀI, không truyền `w-36` vào `Select`:
+          `inputClass` có sẵn **`w-full`** mà Tailwind sinh `.w-full` SAU `.w-36`/`.w-44` ⇒ class truyền
+          thêm VÔ TÁC DỤNG, mỗi Select ăn 100% bề rộng và rớt xuống dòng riêng (đúng triệu chứng
+          "3 ô lọc mỗi ô một dòng"). Cùng lý do: đừng chỉnh chiều cao bằng `h-10` (`.h-11` sinh sau). */}
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <Input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          placeholder="Tìm mã vạch HSKT / code phần..." className="max-w-md" />
+          placeholder="Tìm mã vạch HSKT / code phần..." className="max-w-xs" />
+        {/* Ngày HSKT lên MES = ngày tạo PHIÊN BẢN ĐẦU (đổi phương án in không làm nhảy ngày). */}
+        <DateRangePicker value={{ from: filters.tuNgay || '', to: filters.denNgay || '' }}
+          onChange={setNgay} placeholder="Ngày lên MES" />
         {/* Select cho các trường có GIÁ TRỊ CỐ ĐỊNH — FieldFilters chỉ dựng ô nhập chữ. */}
-        <Select value={filters.phuongAnIn || ''} onChange={(e) => setField('phuongAnIn', e.target.value)} className="w-44">
-          <option value="">Phương án in: tất cả</option>
-          <option value="0">Chưa xác định</option>
-          <option value="1">Bàn</option>
-          <option value="2">Máy</option>
-          <option value="3">Robot</option>
-        </Select>
-        <Select value={filters.gomSet || ''} onChange={(e) => setField('gomSet', e.target.value)} className="w-40">
-          <option value="">Gom set: tất cả</option>
-          <option value="co">Có gom set</option>
-          <option value="khong">Không gom set</option>
-        </Select>
-        <Select value={filters.suaTay || ''} onChange={(e) => setField('suaTay', e.target.value)} className="w-44">
-          <option value="">Sửa tay: tất cả</option>
-          <option value="co">Đã sửa tay</option>
-          <option value="khong">Chưa sửa tay</option>
-        </Select>
+        <div className="w-36 shrink-0">
+          <Select value={filters.phuongAnIn || ''} onChange={(e) => setField('phuongAnIn', e.target.value)}>
+            <option value="">PA in: tất cả</option>
+            <option value="0">Chưa xác định</option>
+            <option value="1">Bàn</option>
+            <option value="2">Máy</option>
+            <option value="3">Robot</option>
+          </Select>
+        </div>
+        <div className="w-36 shrink-0">
+          <Select value={filters.gomSet || ''} onChange={(e) => setField('gomSet', e.target.value)}>
+            <option value="">Gom set: tất cả</option>
+            <option value="co">Có gom set</option>
+            <option value="khong">Không gom set</option>
+          </Select>
+        </div>
+        <div className="w-36 shrink-0">
+          <Select value={filters.suaTay || ''} onChange={(e) => setField('suaTay', e.target.value)}>
+            <option value="">Sửa tay: tất cả</option>
+            <option value="co">Đã sửa tay</option>
+            <option value="khong">Chưa sửa tay</option>
+          </Select>
+        </div>
         <FilterToggle open={showFilter} count={filterCount} onClick={() => setShowFilter((v) => !v)} />
         <Badge tone="info">{meta.total} hồ sơ</Badge>
       </div>
@@ -216,6 +236,7 @@ export default function HoSoKyThuatPage() {
                 <th className="px-3 py-2">Kích vải</th>
                 <th className="px-3 py-2">Kích phim</th>
                 <th className="px-3 py-2">Loại đợt vải</th>
+                <th className="px-3 py-2">Ngày lên MES</th>
               </tr>
             </thead>
             <tbody>
@@ -242,6 +263,8 @@ export default function HoSoKyThuatPage() {
                   <td className="px-3 py-2">{r.kich_vai || '—'}</td>
                   <td className="px-3 py-2">{r.kich_phim || '—'}</td>
                   <td className="px-3 py-2"><LoaiDotVaiBadge value={r.loai_dot_vai} /></td>
+                  {/* Ngày tạo PHIÊN BẢN ĐẦU — chính là khoảng ngày mà ô lọc phía trên đang dùng. */}
+                  <td className="px-3 py-2 whitespace-nowrap text-ink-soft">{fmtDateTime(r.tg_len_mes)}</td>
                 </tr>
               ))}
             </tbody>
