@@ -114,6 +114,10 @@ const TT = {
   RELEASE_1: { tone: 'info', label: 'Test Run (Release 1)' },
   RELEASE_2: { tone: 'warning', label: 'Release 2 (chờ sản xuất)' },
   GIA_CONG: { tone: 'default', label: 'Gia công (chờ chuyển OQC)' },
+  // Chỉ xuất hiện ở chế độ HỦY TÙY CHỌN (quyền LENH_CANCEL_ANY) — các trạng thái đã vào sản xuất.
+  SAN_XUAT: { tone: 'danger', label: 'Đang sản xuất' },
+  HOAN_TAT: { tone: 'success', label: 'Đã hoàn tất SX' },
+  CHO_IN_XONG: { tone: 'default', label: 'Ép ủi (chờ in xong)' },
 };
 
 // Các checkpoint đích có thể đưa về, tùy trạng thái hiện tại của lệnh.
@@ -136,19 +140,25 @@ function LenhCancelSection({ show }) {
   const [chon, setChon] = useState('RELEASE_1');
   const [lyDo, setLyDo] = useState('');
   const [busy, setBusy] = useState(false);
+  // HỦY TÙY CHỌN (quyền `LENH_CANCEL_ANY`, mig 065): mở danh sách ra MỌI trạng thái, kể cả lệnh đã in
+  // tem. `choPhep` do SERVER trả (khỏi đoán từ danh sách permission ở FE).
+  const [moRong, setMoRong] = useState(false);
+  const [choPhep, setChoPhep] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await listCancelableLenh({ search, page, limit: 20 });
+      const res = await listCancelableLenh({ search, page, limit: 20, moRong });
       setRows(res.data.items);
       setMeta(res.data.meta);
+      setChoPhep(!!res.data.cho_phep_tuy_chon);
+      if (!res.data.cho_phep_tuy_chon) setMoRong(false); // hết quyền thì tự tắt
     } catch (e) {
       show(e.message || 'Lỗi tải', 'error');
     } finally {
       setLoading(false);
     }
-  }, [search, page, show]);
+  }, [search, page, moRong, show]);
 
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
 
@@ -159,12 +169,18 @@ function LenhCancelSection({ show }) {
     setLyDo('');
   };
 
+  // Lệnh cần chế độ TÙY CHỌN: ngoài 3 trạng thái an toàn, hoặc đã có phiếu/tem.
+  const canForce = (r) => !!r && (!['RELEASE_1', 'RELEASE_2', 'GIA_CONG'].includes(r.trang_thai) || r.co_phieu);
+
   const doRollback = async () => {
+    const force = canForce(target);
+    if (force && !lyDo.trim()) { show('Hủy tùy chọn phải nhập lý do', 'error'); return; }
     setBusy(true);
     try {
-      const res = await cancelLenh(target.id, { target: chon, lyDo: lyDo.trim() || null });
+      const res = await cancelLenh(target.id, { target: chon, lyDo: lyDo.trim() || null, force });
       const map = { READY: 'về READY kỹ thuật', RELEASE_1: 'về chờ release (Release 1)', TEST_RUN: 'về Test Run' };
       show(`Đã hủy lệnh ${target.ma_lenh_san_xuat} — ${map[res.data.target] || res.data.target}`
+        + (res.data.so_tem_huy ? ` · hủy kèm ${res.data.so_tem_huy} tem` : '')
         + (res.data.tu_set ? ' (set đã mở lại)' : ''));
       setTargetRow(null); setLyDo('');
       load();
@@ -195,8 +211,20 @@ function LenhCancelSection({ show }) {
     { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
     { key: 'so_luong_release', header: 'SL release', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong_release) },
-    { key: 'actions', header: '', className: 'text-right whitespace-nowrap', render: (r) =>
-      <Button variant="danger" className="px-2.5 py-1 text-xs" onClick={() => openRow(r)}>Hủy lệnh</Button> },
+    // Chỉ có nghĩa ở chế độ tùy chọn (lệnh đã in tem mới lọt vào danh sách).
+    ...(moRong ? [{ key: 'tem', header: 'Tem đã in', className: 'text-right tabular-nums', render: (r) => (
+      r.so_tem ? (
+        <div className="leading-tight">
+          <div className="tabular-nums text-ink">{fmtNum(r.so_tem)}</div>
+          {r.tem_da_xu_ly && <div className="text-xs font-medium text-danger">đã KCS/OQC</div>}
+        </div>
+      ) : <span className="text-ink-soft">0</span>
+    ) }] : []),
+    { key: 'actions', header: '', className: 'text-right whitespace-nowrap', render: (r) => (
+      r.tem_da_xu_ly
+        ? <span className="text-xs text-ink-soft" title="Tem đã qua KCS/Sửa/OQC hoặc đã giao — hủy sẽ sai sổ cái">Không hủy được</span>
+        : <Button variant="danger" className="px-2.5 py-1 text-xs" onClick={() => openRow(r)}>Hủy lệnh</Button>
+    ) },
   ];
 
   const options = target ? targetsFor(target.trang_thai) : [];
@@ -207,14 +235,29 @@ function LenhCancelSection({ show }) {
         subtitle="Lỡ release/chuyển qua Test Run, Release 2 hoặc Gia công — hủy lệnh để đưa về checkpoint mong muốn (chỉ khi CHƯA in tem)"
         search={search} onSearch={(v) => { setSearch(v); setPage(1); }}
         searchPlaceholder="Tìm mã lệnh, code phần, mã hàng, màu/kích...">
+        {choPhep && (
+          <label className="flex cursor-pointer items-center gap-1.5 rounded-control border border-line px-2 py-1 text-xs font-medium text-ink-soft">
+            <input type="checkbox" checked={moRong}
+              onChange={(e) => { setMoRong(e.target.checked); setPage(1); }} />
+            Hủy tùy chọn (mọi trạng thái)
+          </label>
+        )}
         <Badge tone="info">{meta.total} lệnh hủy được</Badge>
       </Toolbar>
 
-      <div className="mb-3 rounded-control border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700">
-        Hủy lệnh an toàn cho các bước <b>trước sản xuất</b> (READY · Release 1 · Test Run · Release 2 · <b>Gia công</b> chưa
-        chuyển OQC). Sau khi <b>đã in tem</b>
-        (Sản xuất → Giao hàng) chưa hỗ trợ hủy tự động vì liên quan tách tem/giao hàng.
-      </div>
+      {moRong ? (
+        <div className="mb-3 rounded-control border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+          <b>Chế độ HỦY TÙY CHỌN</b> — đang hiện <b>MỌI lệnh chưa hủy</b>, kể cả đang sản xuất / đã hoàn tất.
+          Hủy lệnh đã in tem sẽ <b>hủy luôn tem + phiếu sản xuất</b> của lệnh đó và gỡ tem khỏi xe phơi.
+          Lệnh có tem <b>đã qua KCS/Sửa/OQC hoặc đã giao</b> vẫn KHÔNG hủy được (sẽ làm sai sổ cái số lượng) —
+          muốn gỡ thì hủy xác nhận từng công đoạn ở các tab KCS/Sửa/OQC trước. <b>Lý do bắt buộc.</b>
+        </div>
+      ) : (
+        <div className="mb-3 rounded-control border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700">
+          Hủy lệnh an toàn cho các bước <b>trước sản xuất</b> (READY · Release 1 · Test Run · Release 2 · <b>Gia công</b> chưa
+          chuyển OQC). Lệnh <b>đã in tem</b> chỉ hủy được ở <b>chế độ "Hủy tùy chọn"</b> (cần quyền riêng).
+        </div>
+      )}
 
       <DataTable columns={columns} rows={rows} loading={loading} sttStart={(meta.page - 1) * 50}
         emptyText="Không có lệnh nào hủy được (chỉ lệnh chưa in tem)" />
@@ -252,7 +295,16 @@ function LenhCancelSection({ show }) {
               : 'Hủy lệnh → đợt vải về "chờ release" (giữ QC), có thể release lại.'}
           {target?.so_dot_vai > 1 && ' Set gom sẽ được mở lại.'}
         </div>
-        <Field label="Lý do (khuyến nghị)">
+        {canForce(target) && (
+          <div className="mb-3 rounded-control border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+            <b>Hủy tùy chọn</b> — lệnh đang ở <b>{TT[target.trang_thai]?.label || target.trang_thai}</b>
+            {target.so_tem > 0
+              ? <> và đã in <b>{fmtNum(target.so_tem)} tem</b>. Toàn bộ tem + phiếu sản xuất của lệnh sẽ bị <b>HỦY</b> và gỡ khỏi xe phơi.</>
+              : <>. Lệnh sẽ bị hủy dù đã qua bước sản xuất.</>}
+            {' '}Thao tác này không tự phục hồi.
+          </div>
+        )}
+        <Field label={canForce(target) ? 'Lý do (BẮT BUỘC)' : 'Lý do (khuyến nghị)'}>
           <Textarea rows={2} value={lyDo} onChange={(e) => setLyDo(e.target.value)}
             placeholder="Vd: bấm nhầm qua Test Run, cần điều chỉnh..." />
         </Field>
@@ -1425,7 +1477,8 @@ export default function LichSuTrangThaiPage() {
     can('READY_CANCEL') && { key: 'moready', label: 'Mở READY' },
     can('READY_CANCEL') && { key: 'huyphanin', label: 'Hủy phần in' },
     can('READY_CANCEL') && { key: 'mophanin', label: 'Mở phần in' },
-    (can('RELEASE1') || can('RELEASE2')) && { key: 'lenh', label: 'Hủy lệnh sản xuất' },
+    // `LENH_CANCEL_ANY` (mig 065) vào được tab này dù không có RELEASE1/2 — quyền hủy tùy chọn.
+    (can('RELEASE1') || can('RELEASE2') || can('LENH_CANCEL_ANY')) && { key: 'lenh', label: 'Hủy lệnh sản xuất' },
     (can('RELEASE1') || can('RELEASE2')) && { key: 'huytemgiacong', label: 'Hủy tem gia công' },
     can('PROD_RUN') && { key: 'tem', label: 'Hủy lệnh in tem' },
     can('PROD_RUN') && { key: 'dong', label: 'Đóng lệnh sản xuất' },

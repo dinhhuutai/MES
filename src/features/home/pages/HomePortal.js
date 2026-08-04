@@ -1,14 +1,15 @@
 import { Link } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import Icon from '../../../components/common/Icon';
-import { MODULES } from '../../../constants/modules';
+import { MODULES, coTheVaoModule, trangDauTien } from '../../../constants/modules';
 import { selectAuth } from '../../../store/authSlice';
 import usePermissions from '../../../hooks/usePermissions';
 
 export default function HomePortal() {
   const { user } = useSelector(selectAuth);
   const { can } = usePermissions();
-  const visibleModules = MODULES.filter((m) => !m.perm || can(m.perm));
+  // Hiện module khi có quyền cấp module HOẶC vào được ít nhất 1 trang con (xem `coTheVaoModule`).
+  const visibleModules = MODULES.filter((m) => coTheVaoModule(m, can));
 
   return (
     <div>
@@ -21,7 +22,9 @@ export default function HomePortal() {
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {visibleModules.map((m) => {
-          const target = m.children?.[0]?.route || m.base;
+          // Vào trang con ĐẦU TIÊN MÀ NGƯỜI DÙNG CÓ QUYỀN — lấy cứng `children[0]` sẽ đá người chỉ
+          // có 1 quyền lẻ vào trang họ không được xem (vd Hệ thống → "Người dùng" cần USER_VIEW).
+          const target = trangDauTien(m, can);
           return (
             <Link
               key={m.ma}

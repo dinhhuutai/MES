@@ -125,7 +125,7 @@ export const MODULES = [
       { ten: 'Điều kiện chuyển checkpoint', route: '/he-thong/dieu-kien', perm: 'WORKFLOW_VIEW' },
       { ten: 'Owner checkpoint/checklist', route: '/he-thong/owner', perm: 'WORKFLOW_VIEW' },
       { ten: 'Trạng thái', route: '/he-thong/trang-thai', perm: 'STATUS_VIEW' },
-      { ten: 'Hủy lệnh xác nhận', route: '/he-thong/lich-su-trang-thai', perm: ['READY_CANCEL', 'RELEASE1', 'RELEASE2', 'PROD_RUN', 'KCS', 'SUA', 'OQC'] },
+      { ten: 'Hủy lệnh xác nhận', route: '/he-thong/lich-su-trang-thai', perm: ['READY_CANCEL', 'RELEASE1', 'RELEASE2', 'PROD_RUN', 'KCS', 'SUA', 'OQC', 'LENH_CANCEL_ANY'] },
       { ten: 'Đồng bộ ERP', route: '/he-thong/erp-sync', perm: 'ERP_SYNC' },
       { ten: 'Nhập tay đơn → đợt vải', route: '/he-thong/nhap-tay', perm: 'ERP_SYNC' },
       { ten: 'Cập nhật SL nhận vải / release', route: '/he-thong/cap-nhat-vai', perm: 'ERP_SYNC' },
@@ -138,3 +138,33 @@ export const MODULES = [
 
 export const findModuleByPath = (pathname) =>
   MODULES.find((m) => pathname === m.base || pathname.startsWith(m.base + '/')) || null;
+
+// Quyền của 1 mục menu (chuỗi hoặc mảng) → mảng.
+const permList = (p) => (Array.isArray(p) ? p : (p ? [p] : []));
+
+// CÓ ĐƯỢC VÀO MODULE KHÔNG = có quyền cấp module **HOẶC** vào được ÍT NHẤT 1 trang con.
+// ⚠ Trước đây Home Portal chỉ xét `m.perm` cấp module, nên vd module "Hệ thống" đòi `USER_VIEW`:
+// người chỉ được cấp 1 quyền lẻ (vd `LENH_CANCEL_ANY` để hủy lệnh) KHÔNG thấy module đâu mà vào,
+// mà cấp thêm `USER_VIEW` thì lại mở luôn trang Người dùng — thừa quyền. Xét theo trang con thì
+// chỉ cần cấp đúng quyền của trang đó: module hiện ra, và Sidebar vốn đã lọc nên CHỈ thấy trang ấy.
+// Trang con ĐẦU TIÊN người dùng vào được (đích khi bấm ô module ở Home Portal).
+export const trangDauTien = (m, can) => {
+  const c = (m?.children || []).find((x) => {
+    const cp = permList(x.perm);
+    return cp.length === 0 || can(...cp);
+  });
+  return c ? c.route : (m?.children?.[0]?.route || m?.base);
+};
+
+export const coTheVaoModule = (m, can) => {
+  if (!m) return false;
+  const mp = permList(m.perm);
+  if (mp.length && can(...mp)) return true;
+  const children = m.children || [];
+  // Module không khai quyền và không có trang con nào khai quyền → ai cũng vào được (giữ như cũ).
+  if (!mp.length && children.every((c) => permList(c.perm).length === 0)) return true;
+  return children.some((c) => {
+    const cp = permList(c.perm);
+    return cp.length === 0 ? false : can(...cp);
+  });
+};
