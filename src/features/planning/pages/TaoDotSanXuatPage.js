@@ -10,6 +10,7 @@ import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 import ReleaseListModal from '../components/ReleaseListModal';
 import useToast from '../../../hooks/useToast';
+import useSocketEvent from '../../../hooks/useSocketEvent';
 import usePermissions from '../../../hooks/usePermissions';
 import { listRelease1Candidates, createDotSanXuat, listChuyen } from '../../../services/planningService';
 import { fmtNum, fmtDate } from '../../../utils/format';
@@ -86,6 +87,9 @@ export default function TaoDotSanXuatPage() {
   }, [search, show]);
 
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
+  // Tự tải lại khi trạm trước xác nhận (tránh màn để lâu → dữ liệu cũ).
+  useSocketEvent('ready:confirmed', () => load());
+  useSocketEvent('workflow:updated', () => load());
   useEffect(() => { listChuyen().then((r) => setChuyen(r.data || [])).catch(() => {}); }, []);
 
   const basketIds = useMemo(() => new Set(basket.map((b) => b.dot_vai_id)), [basket]);

@@ -16,6 +16,7 @@ import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import { Field, Input } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
+import useSocketEvent from '../../../hooks/useSocketEvent';
 import useNow from '../../../hooks/useNow';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 import usePermissions from '../../../hooks/usePermissions';
@@ -118,6 +119,9 @@ export default function SuaPage() {
     const t = setTimeout(load, 250);
     return () => clearTimeout(t);
   }, [load]);
+
+  // Tự tải lại khi trạm khác xác nhận (tránh màn để lâu → dữ liệu cũ).
+  useSocketEvent('quality:updated', () => load());
 
   const save = async () => {
     setSaving(true);

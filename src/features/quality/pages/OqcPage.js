@@ -17,6 +17,7 @@ import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import FieldFilters, { FilterToggle } from '../../../components/common/FieldFilters';
 import Icon from '../../../components/common/Icon';
 import useToast from '../../../hooks/useToast';
+import useSocketEvent from '../../../hooks/useSocketEvent';
 import useNow from '../../../hooks/useNow';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 import usePermissions from '../../../hooks/usePermissions';
@@ -83,6 +84,9 @@ export default function OqcPage() {
     const t = setTimeout(load, 250);
     return () => clearTimeout(t);
   }, [load]);
+
+  // Tự tải lại khi trạm khác xác nhận (tránh màn để lâu → dữ liệu cũ).
+  useSocketEvent('quality:updated', () => load());
 
   // row = display-row đã tách nguồn (có nguon + con_src + ma_tem_display).
   const open = (row) => {

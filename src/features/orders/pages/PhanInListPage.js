@@ -3,6 +3,7 @@ import Toolbar from '../../../components/common/Toolbar';
 import Pagination from '../../../components/common/Pagination';
 import Badge from '../../../components/common/Badge';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
+import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
 import Button from '../../../components/common/Button';
 import SidePanel from '../../../components/common/SidePanel';
 import Modal from '../../../components/common/Modal';
@@ -317,8 +318,9 @@ export default function PhanInListPage() {
   const AGG_STAGES = ['ALL', 'READY', 'RELEASE_1', 'TEST_RUN', 'RELEASE_2'];
   const showSxCols = !stage || AGG_STAGES.includes(stage);
   const showTemQuality = showTemRows && !['KCS', 'CHO_KHO'].includes(stage); // KCS/Chờ khô chưa có chất lượng → ẩn cột
-  // +1 ở cả 2 chế độ: cột "Tính chất in". Non-tem thêm +1 cột "Barcode"; showSxCols thêm 15 cột (gồm 2 cột TG ERP).
-  const COLS = showTemRows ? (11 + (showTemQuality ? 1 : 0)) : (13 + (showPcsCol ? 1 : 0) + (showSxCols ? 13 : 0));
+  // +1 ở cả 2 chế độ: cột "Tính chất in". Non-tem thêm +1 cột "Barcode";
+  // showSxCols thêm 14 cột (13 cột SX + "Phương án in").
+  const COLS = showTemRows ? (11 + (showTemQuality ? 1 : 0)) : (13 + (showPcsCol ? 1 : 0) + (showSxCols ? 14 : 0));
 
   return (
     <div>
@@ -435,6 +437,8 @@ export default function PhanInListPage() {
                     {sortTh('Kích vải', 'kichVai')}
                     {sortTh('Kích phim', 'kichPhim')}
                     <th className={TH}>Tính chất in</th>
+                    {/* Phương án in — chỉ ở chế độ TỔNG HỢP (chip "Tất cả" + READY/RELEASE_1/2/TEST_RUN). */}
+                    {showSxCols && <th className={TH}>Phương án in</th>}
                     <th className={TH}>Barcode</th>
                     {sortTh('SL đơn hàng', 'slDon', 'text-right border-r border-line/60')}
                     {sortTh('SL vải về', 'slVai', 'text-right')}
@@ -489,6 +493,7 @@ export default function PhanInListPage() {
                       <td rowSpan={n} className={TD}>{g.kich_vai || '—'}</td>
                       <td rowSpan={n} className={TD}>{g.kich_phim || '—'}</td>
                       <td rowSpan={n} className={TD}><TinhChatInCell value={g.tinh_chat_in} /></td>
+                      {showSxCols && <td rowSpan={n} className={TD}><PhuongAnInBadge value={g.phuong_an_in} /></td>}
                       <td rowSpan={n} className={`${TD} tabular-nums`}>{g.barcode || '—'}</td>
                       <td rowSpan={n} className={`${TD} text-right tabular-nums border-r border-line/60`}>{fmtNum(g.so_luong_don_hang)}</td>
                     </>

@@ -26,6 +26,7 @@ import ErpSyncPage from './features/system/pages/ErpSyncPage';
 import OnlineUsersPage from './features/system/pages/OnlineUsersPage';
 import ActivityLogPage from './features/system/pages/ActivityLogPage';
 import FormTemplatesPage from './features/system/pages/FormTemplatesPage';
+import HienThiPainPage from './features/system/pages/HienThiPainPage';
 import ManualEntryPage from './features/system/pages/ManualEntryPage';
 import VaiVeUpdatePage from './features/system/pages/VaiVeUpdatePage';
 import PhanInListPage from './features/orders/pages/PhanInListPage';
@@ -108,6 +109,7 @@ const PAGES = {
   '/he-thong/online': <OnlineUsersPage />,
   '/he-thong/nhat-ky': <ActivityLogPage />,
   '/he-thong/mau-form': <FormTemplatesPage />,
+  '/he-thong/hien-thi-pain': <HienThiPainPage />,
 };
 
 const moduleRoutes = MODULES.flatMap((m) =>

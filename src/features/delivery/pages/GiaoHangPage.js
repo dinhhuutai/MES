@@ -5,6 +5,7 @@ import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import Toast from '../../../components/common/Toast';
 import useToast from '../../../hooks/useToast';
+import useSocketEvent from '../../../hooks/useSocketEvent';
 import usePermissions from '../../../hooks/usePermissions';
 import useNow from '../../../hooks/useNow';
 import { evalSla, slaRowClass } from '../../../utils/sla';
@@ -71,6 +72,10 @@ export default function GiaoHangPage() {
   }, [rangeKey, filtersKey, show]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Tự tải lại khi trạm khác xác nhận (tránh màn để lâu → dữ liệu cũ).
+  useSocketEvent('delivery:updated', () => load());
+  useSocketEvent('quality:updated', () => load());
 
   const selectedList = useMemo(() => Object.values(selected), [selected]);
 

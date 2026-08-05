@@ -10,6 +10,7 @@ import { Input } from '../../../components/common/controls';
 import GomBadge from '../../../components/common/GomBadge';
 import DonePanel from '../../../components/common/DonePanel';
 import useToast from '../../../hooks/useToast';
+import useSocketEvent from '../../../hooks/useSocketEvent';
 import usePermissions from '../../../hooks/usePermissions';
 import useNghenMap from '../../../hooks/useNghenMap';
 import { slaRowClass } from '../../../utils/sla';
@@ -151,6 +152,11 @@ export default function TestRunPage() {
     const t = setTimeout(load, 250);
     return () => clearTimeout(t);
   }, [load]);
+
+  // Tự tải lại khi trạm khác xác nhận (tránh màn để lâu → dữ liệu cũ).
+  // Bỏ qua khi đang tick dở để không mất lựa chọn — `load` xóa danh sách đã chọn.
+  useSocketEvent('workflow:updated', () => { if (selected.size === 0) load(); });
+  useSocketEvent('ready:confirmed', () => { if (selected.size === 0) load(); });
 
   // Chỉ chọn được lệnh chưa QA đạt VÀ không đang chờ kỹ thuật làm lại (đã bị trả về READY).
   const selectable = (r) => !r.qa_done && !r.cho_ky_thuat;

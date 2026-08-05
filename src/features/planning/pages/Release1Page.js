@@ -19,6 +19,7 @@ import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
 import useToast from '../../../hooks/useToast';
+import useSocketEvent from '../../../hooks/useSocketEvent';
 import useNghenMap from '../../../hooks/useNghenMap';
 import { slaRowClass } from '../../../utils/sla';
 import {
@@ -137,6 +138,9 @@ export default function Release1Page() {
 
   useEffect(() => { listChuyen().then((r) => setChuyen(r.data)).catch(() => {}); }, []);
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
+  // Tự tải lại khi trạm trước xác nhận (tránh màn để lâu → dữ liệu cũ).
+  useSocketEvent('ready:confirmed', () => load());
+  useSocketEvent('workflow:updated', () => load());
 
   // Lọc "chỉ hiện phần bị trả về": ẩn set (đợt vải bị trả về nằm ở pool lẻ), chỉ hiện đợt vải lẻ bị trả về.
   const activeCount = Object.values(filters).filter(Boolean).length;

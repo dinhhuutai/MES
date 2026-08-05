@@ -10,6 +10,7 @@ import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
 import { Field, Input, Select, Textarea } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
+import useSocketEvent from '../../../hooks/useSocketEvent';
 import usePermissions from '../../../hooks/usePermissions';
 import useNghenMap from '../../../hooks/useNghenMap';
 import { slaRowClass } from '../../../utils/sla';
@@ -71,6 +72,10 @@ export default function ReplanPage() {
     const t = setTimeout(load, 250);
     return () => clearTimeout(t);
   }, [load]);
+
+  // Tự tải lại khi trạm khác xác nhận (tránh màn để lâu → dữ liệu cũ).
+  // Bỏ qua khi đang tick dở để không mất lựa chọn — `load` xóa danh sách đã chọn.
+  useSocketEvent('workflow:updated', () => { if (selected.size === 0) load(); });
 
   const openDetail = (row) => {
     setDetail(row);

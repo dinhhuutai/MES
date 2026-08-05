@@ -15,6 +15,7 @@ import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
 import useToast from '../../../hooks/useToast';
+import useSocketEvent from '../../../hooks/useSocketEvent';
 import usePermissions from '../../../hooks/usePermissions';
 import {
   listKeHoachTam, confirmKeHoachTam, updateKeHoachTam, deleteKeHoachTam, listChuyen,
@@ -77,6 +78,11 @@ export default function KeHoachTamPage() {
     const t = setTimeout(load, 250);
     return () => clearTimeout(t);
   }, [load]);
+
+  // Tự tải lại khi trạm khác xác nhận (tránh màn để lâu → dữ liệu cũ).
+  // Bỏ qua khi đang tick dở để không mất lựa chọn — `load` xóa danh sách đã chọn.
+  useSocketEvent('ready:confirmed', () => { if (selected.size === 0) load(); });
+  useSocketEvent('workflow:updated', () => { if (selected.size === 0) load(); });
 
   useEffect(() => { listChuyen().then((r) => setChuyen(r.data)).catch(() => {}); }, []);
 
