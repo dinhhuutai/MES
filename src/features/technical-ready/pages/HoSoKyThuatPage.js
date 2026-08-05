@@ -43,6 +43,13 @@ const maVachTheoPa = (barcode, pa) => (BARCODE_PA_RE.test(String(barcode || ''))
 const gomSetBadge = (h, soPhanIn) => (laGomSet(h)
   ? <Badge tone="warning">Gom set {h.inset}{soPhanIn > 1 ? ` · ${soPhanIn} phần in` : ''}</Badge>
   : <Badge tone="default">Không</Badge>);
+// Hôm nay dạng 'YYYY-MM-DD' theo giờ LOCAL — KHÔNG dùng `toISOString()` thẳng vì nó quy về UTC,
+// giờ VN (UTC+7) trước 07:00 sẽ ra NGÀY HÔM QUA.
+const homNay = () => {
+  const d = new Date();
+  return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+};
+
 const fmtDateTime = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '—');
 const paBadge = (v) => (v == null ? <span className="text-ink-soft">—</span>
   : <Badge tone={Number(v) === 0 ? 'default' : 'info'}>{PHUONG_AN_IN[Number(v)] || v}</Badge>);
@@ -73,7 +80,9 @@ export default function HoSoKyThuatPage() {
   const [rows, setRows] = useState([]);
   const [meta, setMeta] = useState({ page: 1, totalPages: 1, total: 0 });
   const [page, setPage] = useState(1);
-  const [filters, setFilters] = useState({});
+  // Vào trang mặc định lọc **NGÀY LÊN MES = HÔM NAY** (kỹ thuật chỉ quan tâm hồ sơ mới về trong ngày).
+  // Bỏ lọc: bấm ô ngày → "Xóa", hoặc nút "Xóa lọc" trong panel Bộ lọc.
+  const [filters, setFilters] = useState(() => ({ tuNgay: homNay(), denNgay: homNay() }));
   const [showFilter, setShowFilter] = useState(false);
   const [loading, setLoading] = useState(true);
   const [scanVal, setScanVal] = useState('');
