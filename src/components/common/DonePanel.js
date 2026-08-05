@@ -1,8 +1,9 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import SidePanel from './SidePanel';
 import DataTable from './DataTable';
 import Badge from './Badge';
 import Button from './Button';
+import Icon from './Icon';
 import Toast from './Toast';
 import TinhChatInCell from './TinhChatInCell';
 import HanGiaoCell from './HanGiaoCell';
@@ -12,6 +13,26 @@ import { fmtNum } from '../../utils/format';
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const fmtTime = (t) => (t ? new Date(t).toLocaleTimeString('vi-VN') : '');
+
+// Bỏ dấu tiếng Việt + hạ chữ thường (gõ "do" ra "đỏ", "xanh la" ra "xanh lá").
+const norm = (s) => String(s ?? '')
+  .normalize('NFD').replace(/[̀-ͯ]/g, '')
+  .replace(/đ/g, 'd').replace(/Đ/g, 'D')
+  .toLowerCase().trim();
+
+// Các trường lọc của panel "Đã hoàn thành" — dùng chung cho ô tìm kiếm 1-ô và panel lọc nhiều trường.
+// ⚠ "Code phần" đọc `ma_phan` TRƯỚC, thiếu mới lùi về `ma`: panel READY/QC dùng chính `ma_phan` làm cột
+// mã (`pin.ma_phan AS ma`), còn panel theo TEM/LỆNH thì `ma` là mã tem/mã lệnh và code phần nằm ở
+// `ma_phan` (backend `DONE_INFO` / `TEM_INFO_LATERAL` đã trả cột này).
+const FILTER_FIELDS = [
+  { key: 'ma_phan', label: 'Code phần', get: (r) => r.ma_phan || r.ma },
+  { key: 'ten_khach_hang', label: 'Khách hàng', get: (r) => r.ten_khach_hang },
+  { key: 'ma_don_hang', label: 'Đơn hàng', get: (r) => r.ma_don_hang },
+  { key: 'ma_hang', label: 'Mã hàng', get: (r) => r.ma_hang },
+  { key: 'mau_vai', label: 'Màu vải', get: (r) => r.mau_vai },
+  { key: 'kich_vai', label: 'Kích vải', get: (r) => r.kich_vai },
+  { key: 'kich_phim', label: 'Kích phim', get: (r) => r.kich_phim },
+];
 
 // Panel "đã hoàn thành ở checkpoint" theo ngày, MỞ BÊN TRÁI (đối xứng với HistoryPanel bên phải).
 // fetcher(dateStr) -> { data: [{ ma, ten_khach_hang, ma_don_hang, ma_hang, mau_vai, kich_vai,
@@ -29,6 +50,9 @@ export default function DonePanel({
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [q, setQ] = useState('');            // ô tìm kiếm 1-ô (quét mọi trường ở FILTER_FIELDS + mã)
+  const [filters, setFilters] = useState({}); // panel lọc từng trường (kết hợp AND)
+  const [showFilters, setShowFilters] = useState(false);
 
   // Giữ fetcher trong ref (prop thường là arrow-function nội tuyến) để không refetch mỗi giây
   // khi màn cha dùng useNow(1000) — tránh panel nháy. Chỉ nạp lại khi mở panel hoặc đổi ngày.
@@ -50,6 +74,22 @@ export default function DonePanel({
   }, [open, date, show]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Lọc CLIENT-SIDE (panel tải trọn 1 ngày nên lọc tại chỗ là đủ, không cần gọi lại API).
+  // Ô tìm kiếm quét MỌI trường ở FILTER_FIELDS + cột mã (mã tem / mã lệnh / mã set) — không dấu.
+  const viewRows = useMemo(() => {
+    const tuKhoa = norm(q);
+    const dangLoc = FILTER_FIELDS.filter((f) => (filters[f.key] || '').trim());
+    if (!tuKhoa && !dangLoc.length) return rows;
+    return rows.filter((r) => {
+      if (dangLoc.some((f) => !norm(f.get(r)).includes(norm(filters[f.key])))) return false;
+      if (!tuKhoa) return true;
+      return FILTER_FIELDS.some((f) => norm(f.get(r)).includes(tuKhoa)) || norm(r.ma).includes(tuKhoa);
+    });
+  }, [rows, q, filters]);
+
+  const soLoc = Object.values(filters).filter((v) => (v || '').trim()).length + (q.trim() ? 1 : 0);
+  const xoaLoc = () => { setFilters({}); setQ(''); };
 
   const defaultColumns = [
     { key: 'ma', header: maHeader, className: 'whitespace-nowrap', render: (r) => <Badge tone="info">{r.ma || '—'}</Badge> },
@@ -90,11 +130,17 @@ export default function DonePanel({
   const doExport = async () => {
     setExporting(true);
     try {
+      // Xuất ĐÚNG danh sách đang lọc (không phải toàn bộ ngày) + ghi bộ lọc vào phụ đề để biết file lọc gì.
+      const moTa = [
+        q.trim() ? `tìm "${q.trim()}"` : '',
+        ...FILTER_FIELDS.filter((f) => (filters[f.key] || '').trim())
+          .map((f) => `${f.label.toLowerCase()}: ${filters[f.key].trim()}`),
+      ].filter(Boolean).join(' · ');
       await exportPanelExcel({
         cols: xlsCols,
-        rows,
+        rows: viewRows,
         title: title.toUpperCase(),
-        subtitle: `Ngày ${date} · ${rows.length} dòng`,
+        subtitle: `Ngày ${date} · ${viewRows.length} dòng${moTa ? ` · Lọc: ${moTa}` : ''}`,
         fileName: 'da-hoan-thanh',
       });
     } catch (e) {
@@ -106,8 +152,11 @@ export default function DonePanel({
 
   return (
     <SidePanel open={open} onClose={onClose} side="left" title={title}
-      subtitle={`${rows.length} đã hoàn thành trong ngày`} width="max-w-3xl">
-      <div className="mb-4 flex items-center gap-2">
+      subtitle={soLoc
+        ? `${viewRows.length}/${rows.length} đã hoàn thành trong ngày (đang lọc)`
+        : `${rows.length} đã hoàn thành trong ngày`}
+      width="max-w-3xl">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         <label className="text-sm font-medium text-ink">Ngày</label>
         <input
           type="date"
@@ -115,11 +164,51 @@ export default function DonePanel({
           onChange={(e) => setDate(e.target.value)}
           className="h-10 rounded-input border border-line px-3 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
         />
-        <Button variant="secondary" icon="file-spreadsheet" className="ml-auto" loading={exporting}
-          disabled={!rows.length} onClick={doExport}>Xuất Excel</Button>
+        {/* 1 ô tìm: code phần · khách hàng · đơn hàng · mã hàng · màu vải · kích vải · kích phim (+ cột mã) */}
+        <div className="relative min-w-[13rem] flex-1">
+          <Icon name="search" size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Tìm code phần, khách, đơn, mã hàng, màu, kích..."
+            className="h-10 w-full rounded-input border border-line bg-surface pl-9 pr-8 text-base md:text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
+          />
+          {q && (
+            <button onClick={() => setQ('')} aria-label="Xóa tìm kiếm"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-soft hover:text-danger">
+              <Icon name="x" size={14} />
+            </button>
+          )}
+        </div>
+        <Button variant={showFilters || soLoc ? 'secondary' : 'ghost'} icon="filter"
+          onClick={() => setShowFilters((v) => !v)}>Bộ lọc{soLoc ? ` (${soLoc})` : ''}</Button>
+        <Button variant="secondary" icon="file-spreadsheet" loading={exporting}
+          disabled={!viewRows.length} onClick={doExport}>Xuất Excel</Button>
       </div>
-      <DataTable columns={tableCols} rows={rows} loading={loading} rowKey="_k" sttStart={0}
-        emptyText="Chưa có mục nào hoàn thành trong ngày" />
+
+      {/* Panel lọc từng trường (kết hợp AND với nhau và với ô tìm kiếm) */}
+      {showFilters && (
+        <div className="mb-3 rounded-card border border-line p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-ink">Lọc nhiều trường (kết hợp AND)</h3>
+            <Button variant="ghost" className="px-2.5 py-1 text-xs" onClick={xoaLoc} disabled={!soLoc}>Xóa lọc</Button>
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {FILTER_FIELDS.map((f) => (
+              <div key={f.key}>
+                <label className="mb-1 block text-xs font-medium text-ink-soft">{f.label}</label>
+                <input value={filters[f.key] || ''}
+                  onChange={(e) => setFilters((s) => ({ ...s, [f.key]: e.target.value }))}
+                  placeholder={`Lọc ${f.label.toLowerCase()}...`}
+                  className="h-9 w-full rounded-input border border-line bg-surface px-2.5 text-base md:text-sm outline-none focus:border-primary" />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <DataTable columns={tableCols} rows={viewRows} loading={loading} rowKey="_k" sttStart={0}
+        emptyText={soLoc ? 'Không có dòng nào khớp bộ lọc' : 'Chưa có mục nào hoàn thành trong ngày'} />
       <Toast toast={toast} />
     </SidePanel>
   );
