@@ -218,7 +218,13 @@ export default function Release1Page() {
 
   // `set` != null ⇒ đợt vải thuộc gom set: panel chỉ xem, release phải làm cho CẢ SET.
   const openDetail = (row, set = null) => {
-    setDetail(set ? { ...row, _setMa: set.ma_set, _setSanSang: set.san_sang, _setChuaReady: set.so_chua_ready } : row);
+    setDetail(set ? {
+      ...row, _setMa: set.ma_set, _setSanSang: set.san_sang, _setChuaReady: set.so_chua_ready,
+      _setSoDot: set.so_dot_vai,
+      // Có ít nhất 1 đợt trong set ĐÃ Ready ⇒ trả về Kỹ thuật có nghĩa (backend trả CẢ SET),
+      // kể cả khi đúng dòng đang xem lại chưa Ready.
+      _setDaReady: (set.so_dot_vai || 0) - (set.so_chua_ready || 0) > 0,
+    } : row);
     // Mặc định release phần CÒN LẠI (SL vải về − đã release); release theo số lượng, giữ phần còn.
     setForm({ chuyenId: chuyen[0]?.id || '', soLuongRelease: String(row.con_release ?? row.so_luong_vai_ve ?? ''), ngayKeHoach: dateOffsetStr(1) });
   };
@@ -253,8 +259,12 @@ export default function Release1Page() {
     if (!lyDo) { show('Nhập lý do trả về Kỹ thuật', 'error'); return; }
     setSaving(true);
     try {
-      await release1TraVeKyThuat({ dotVaiId: detail.dot_vai_id, lyDo });
-      show('Đã trả về Kỹ thuật — phần in quay lại READY');
+      const res = await release1TraVeKyThuat({ dotVaiId: detail.dot_vai_id, lyDo });
+      const n = res?.data?.so_phan_in || 1;
+      const maSet = res?.data?.ma_set;
+      show(maSet
+        ? `Đã trả cả set ${maSet} về Kỹ thuật — ${n} phần in quay lại READY`
+        : 'Đã trả về Kỹ thuật — phần in quay lại READY');
       setTraVeOpen(false); setTraVeReason('');
       setDetail(null);
       load();
@@ -485,8 +495,9 @@ export default function Release1Page() {
         footer={
           <>
             <Button variant="ghost" onClick={() => setDetail(null)}>Đóng</Button>
-            {/* Chỉ phần in ĐÃ READY (QC xác nhận) mới trả về Kỹ thuật được — phần "Chờ Ready" vẫn đang ở READY. */}
-            {detail?.qc_done && (
+            {/* Chỉ phần in ĐÃ READY (QC xác nhận) mới trả về Kỹ thuật được — phần "Chờ Ready" vẫn đang ở READY.
+                Đợt thuộc gom set: chỉ cần set có phần in đã Ready (trả về là trả CẢ SET). */}
+            {(detail?.qc_done || detail?._setDaReady) && (
               <Button variant="danger" icon="chevron-left"
                 onClick={() => { setTraVeReason(''); setTraVeOpen(true); }}>Trả về Kỹ thuật</Button>
             )}
@@ -545,7 +556,7 @@ export default function Release1Page() {
       <Modal
         open={traVeOpen}
         onClose={() => setTraVeOpen(false)}
-        title={`Trả về Kỹ thuật — ${detail?.ma_phan || ''}`}
+        title={`Trả về Kỹ thuật — ${detail?._setMa || detail?.ma_phan || ''}`}
         size="sm"
         footer={
           <>
@@ -557,8 +568,19 @@ export default function Release1Page() {
         }
       >
         <p className="mb-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
-          Phần in sẽ quay lại <b>READY</b>: hủy xác nhận Khuôn/Film/Mực + QC, kỹ thuật phải làm lại.
-          Lý do sẽ hiện ở màn Chuẩn bị kỹ thuật.
+          {detail?._setMa ? (
+            <>
+              Đợt vải thuộc <b>{detail._setMa}</b> — gom set in chung nên sẽ trả về <b>CẢ SET</b>:
+              toàn bộ {detail._setSoDot || ''} đợt vải trong set quay lại <b>READY</b> (hủy xác nhận
+              Khuôn/Film/Mực + QC của mọi phần in trong set), kỹ thuật phải làm lại. Lý do sẽ hiện ở
+              màn Chuẩn bị kỹ thuật.
+            </>
+          ) : (
+            <>
+              Phần in sẽ quay lại <b>READY</b>: hủy xác nhận Khuôn/Film/Mực + QC, kỹ thuật phải làm lại.
+              Lý do sẽ hiện ở màn Chuẩn bị kỹ thuật.
+            </>
+          )}
         </p>
         <Field label="Lý do trả về" required>
           <Textarea rows={3} value={traVeReason} onChange={(e) => setTraVeReason(e.target.value)}
