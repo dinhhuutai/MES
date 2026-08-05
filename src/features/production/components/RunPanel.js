@@ -6,6 +6,7 @@ import Badge from '../../../components/common/Badge';
 import Icon from '../../../components/common/Icon';
 import Toast from '../../../components/common/Toast';
 import SearchableSelect from '../../../components/common/SearchableSelect';
+import TimeSelect from '../../../components/common/TimeSelect';
 import { Field, Input, Textarea, Select } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
@@ -45,31 +46,43 @@ function PhanInInfoCells({ r, stt }) {
 
 const INFO_HEADERS = ['STT', 'Khách hàng', 'Đơn hàng', 'Mã hàng', 'Code phần', 'Màu vải', 'Kích vải', 'Kích phim', 'Loại đợt vải'];
 
-// ─── NGÀY CA · GIỜ SẢN XUẤT · BTP (mig 066) ───────────────────────────────────
+// ─── NGÀY CA · GIỜ SẢN XUẤT · BTP (mig 066 + 068) ─────────────────────────────
 // Nhập theo LƯỢT IN, lưu vào TỪNG TEM tạo ra trong lượt đó. KHÔNG in lên nhãn tem — chỉ để tra cứu.
 // ⚠ Đặt ở MỨC MODULE (không lồng trong RunPanel/PrintSetModal) — component lồng bị remount mỗi lần
 // cha render ⇒ ô nhập mất focus khi đang gõ (cùng luật với `PhanInInfoCells`).
+//
+// NGÀY CA là Ô CHỮ dạng `YYMMDD` + mã ca (`260805D2` = 05/08/2026 ca Dài 2 · `C2` ca Ngắn 2 · `HC`
+// hành chính). BE gợi ý sẵn theo NGÀY KẾ HOẠCH + loại ca của tuần (`goi_y_tem`), người dùng sửa được.
+// GIỜ dùng `TimeSelect` (0h–23h + phút) chứ KHÔNG `<input type="time">` — ô đó hiện AM/PM theo locale máy.
 const META_MAC_DINH = () => ({ ngayCa: '', gioBd: '', gioKt: '', btpTruoc: false, btpCuoi: false });
 
-function TemMetaFields({ meta, setMeta }) {
+function TemMetaFields({ meta, setMeta, goiY }) {
   const set = (k, v) => setMeta((m) => ({ ...m, [k]: v }));
   const chk = 'h-4 w-4 rounded border-line text-primary focus:ring-primary/30';
+  const khacGoiY = goiY?.ngay_ca && meta.ngayCa && meta.ngayCa !== goiY.ngay_ca;
   return (
     <div className="rounded-control border border-line bg-surface-muted/40 p-2.5">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-ink-soft">Ngày ca</span>
-          <Input type="date" value={meta.ngayCa} onChange={(e) => set('ngayCa', e.target.value)} />
+          <Input value={meta.ngayCa} onChange={(e) => set('ngayCa', e.target.value)}
+            placeholder={goiY?.ngay_ca || 'vd: 260805D2'} className="tabular-nums" />
         </label>
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-ink-soft">Từ giờ</span>
-          <Input type="time" value={meta.gioBd} onChange={(e) => set('gioBd', e.target.value)} />
+          <TimeSelect value={meta.gioBd} onChange={(v) => set('gioBd', v)} minuteStep={1} />
         </label>
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-ink-soft">Đến giờ</span>
-          <Input type="time" value={meta.gioKt} onChange={(e) => set('gioKt', e.target.value)} />
+          <TimeSelect value={meta.gioKt} onChange={(v) => set('gioKt', v)} minuteStep={1} />
         </label>
       </div>
+      {khacGoiY && (
+        <button type="button" onClick={() => set('ngayCa', goiY.ngay_ca)}
+          className="mt-1.5 text-xs font-medium text-primary hover:underline">
+          ↺ Về mã theo kế hoạch ({goiY.ngay_ca})
+        </button>
+      )}
       <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1.5">
         <label className="flex cursor-pointer items-center gap-2 text-sm text-ink">
           <input type="checkbox" className={chk} checked={!!meta.btpTruoc}
@@ -84,10 +97,82 @@ function TemMetaFields({ meta, setMeta }) {
   );
 }
 
+// ─── PHÂN CÔNG (inline, không modal) ──────────────────────────────────────────
+// Lần đầu: 3 ô nhập + nút Lưu. Đã lưu: hiện thẳng tên + nút Sửa (bấm mới cho sửa lại).
+// "Thợ in" là 1 ô chữ = DANH SÁCH thợ trên chuyền (mức phiếu) — BE ghi cùng chuỗi cho mọi đợt vải.
+function PhanCongInline({ pc, users, onSave, busy, canRun }) {
+  const daLuu = !!(pc?.ca_truong_id || pc?.chuyen_truong || pc?.tho_in);
+  const [sua, setSua] = useState(false);
+  const [form, setForm] = useState({ caTruongId: '', chuyenTruong: '', thoIn: '' });
+
+  // Nạp lại mỗi khi dữ liệu server đổi (sau khi lưu) hoặc khi bấm Sửa.
+  useEffect(() => {
+    setForm({ caTruongId: pc?.ca_truong_id || '', chuyenTruong: pc?.chuyen_truong || '', thoIn: pc?.tho_in || '' });
+  }, [pc?.ca_truong_id, pc?.chuyen_truong, pc?.tho_in, sua]);
+
+  const dangSua = canRun && (!daLuu || sua); // không có quyền PROD_RUN → chỉ xem
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  if (!dangSua) {
+    return (
+      <div className="rounded-control border border-line px-3 py-2.5 text-sm">
+        <div className="grid grid-cols-1 gap-y-1">
+          <div><span className="text-ink-soft">Ca trưởng:</span> <b className="text-ink">{pc?.ca_truong_ten || '—'}</b></div>
+          <div><span className="text-ink-soft">Chuyền trưởng:</span> <b className="text-ink">{pc?.chuyen_truong || '—'}</b></div>
+          <div><span className="text-ink-soft">Thợ in:</span> <b className="text-ink">{pc?.tho_in || '—'}</b></div>
+        </div>
+        {canRun && (
+          <Button variant="secondary" className="mt-2 w-full" icon="edit" onClick={() => setSua(true)} disabled={busy}>
+            Sửa phân công
+          </Button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <Field label="Ca trưởng">
+        <SearchableSelect
+          value={form.caTruongId}
+          onChange={(v) => set('caTruongId', v)}
+          options={users}
+          getValue={(u) => u.id}
+          getLabel={(u) => u.ho_ten || u.ten_dang_nhap || ''}
+          getSearch={(u) => `${u.ho_ten || ''} ${u.ten_dang_nhap || ''}`}
+          placeholder="Gõ tên hoặc tên đăng nhập để tìm..."
+        />
+      </Field>
+      <Field label="Chuyền trưởng">
+        <Input value={form.chuyenTruong} onChange={(e) => set('chuyenTruong', e.target.value)}
+          placeholder="Nhập tên chuyền trưởng" />
+      </Field>
+      <Field label="Thợ in trên chuyền" hint="Nhiều thợ thì ngăn cách bằng dấu phẩy">
+        <Textarea rows={2} value={form.thoIn} onChange={(e) => set('thoIn', e.target.value)}
+          placeholder="vd: Nguyễn Văn A, Trần B, Lê C" />
+      </Field>
+      <div className="flex gap-2">
+        {daLuu && <Button variant="ghost" className="flex-1" onClick={() => setSua(false)} disabled={busy}>Hủy</Button>}
+        <Button className="flex-1" icon="check" loading={busy}
+          onClick={async () => {
+            const ok = await onSave({
+              caTruongId: form.caTruongId || null,
+              chuyenTruong: form.chuyenTruong,
+              thoIn: form.thoIn,
+            });
+            if (ok) setSua(false);
+          }}>
+          Lưu phân công
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Modal IN TEM cho lệnh GOM SET ────────────────────────────────────────────
 // Nhập SL in cho TỪNG phần in rồi bấm In tem 1 lần: BE tạo N tem trong 1 transaction, FE in nhãn
 // LIÊN TIẾP (xong phần in 1 → phần in 2 → …).
-function PrintSetModal({ open, onClose, rows, onPrint, busy, meta, setMeta }) {
+function PrintSetModal({ open, onClose, rows, onPrint, busy, meta, setMeta, goiY }) {
   const [form, setForm] = useState({}); // dotVaiId → { sl, huy, thieu }
   useEffect(() => { if (open) setForm({}); }, [open]);
   const setCell = (id, key, v) => setForm((f) => ({ ...f, [id]: { ...(f[id] || {}), [key]: v } }));
@@ -123,7 +208,7 @@ function PrintSetModal({ open, onClose, rows, onPrint, busy, meta, setMeta }) {
       )}
     >
       {/* Ngày ca / giờ SX / BTP áp cho MỌI tem của lượt in này (1 lượt in = 1 mốc thời gian). */}
-      <div className="mb-3"><TemMetaFields meta={meta} setMeta={setMeta} /></div>
+      <div className="mb-3"><TemMetaFields meta={meta} setMeta={setMeta} goiY={goiY} /></div>
       <p className="mb-3 text-xs text-ink-soft">
         Nhập <b>SL in</b> từng phần in rồi bấm In tem — tem ra liên tiếp theo thứ tự. Trần mỗi phần in
         = <b>110% SL vào SX</b>. <b>SL vải hủy/thiếu</b> &gt; 0 sẽ ghi vào sổ vải của đợt đó.
@@ -171,88 +256,6 @@ function PrintSetModal({ open, onClose, rows, onPrint, busy, meta, setMeta }) {
   );
 }
 
-// ─── Modal PHÂN CÔNG SẢN XUẤT ─────────────────────────────────────────────────
-// Ca trưởng (chọn từ tài khoản) + Chuyền trưởng (nhập chữ) nằm TRÊN bảng; trong bảng mỗi phần in
-// nhập THỢ IN. (SL vải hủy / vải thiếu đã chuyển sang modal IN TEM — ghi cùng lúc in tem.)
-function PhanCongModal({ open, onClose, rows, users, initial, onSave, busy }) {
-  const [caTruongId, setCaTruongId] = useState('');
-  const [chuyenTruong, setChuyenTruong] = useState('');
-  const [form, setForm] = useState({}); // dotVaiId → { thoIn }
-
-  useEffect(() => {
-    if (!open) return;
-    setCaTruongId(initial?.ca_truong_id || '');
-    setChuyenTruong(initial?.chuyen_truong || '');
-    const byDot = {};
-    (initial?.items || []).forEach((it) => { byDot[it.dot_vai_ve_id] = { thoIn: it.tho_in || '' }; });
-    setForm(byDot);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-
-  const setCell = (id, key, v) => setForm((f) => ({ ...f, [id]: { ...(f[id] || {}), [key]: v } }));
-  const items = rows.map((r) => ({
-    dotVaiId: r.dot_vai_ve_id,
-    thoIn: (form[r.dot_vai_ve_id] || {}).thoIn || '',
-  }));
-  const coThayDoi = items.some((x) => x.thoIn) || caTruongId || chuyenTruong.trim();
-
-  return (
-    <Modal open={open} onClose={onClose} title="Phân công sản xuất" size="xl"
-      footer={(
-        <>
-          <Button variant="ghost" onClick={onClose}>Đóng</Button>
-          <Button onClick={() => onSave({ caTruongId: caTruongId || null, chuyenTruong, items })}
-            loading={busy} disabled={!coThayDoi} icon="check">Lưu phân công</Button>
-        </>
-      )}
-    >
-      <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field label="Ca trưởng">
-          <SearchableSelect
-            value={caTruongId}
-            onChange={setCaTruongId}
-            options={users}
-            getValue={(u) => u.id}
-            getLabel={(u) => u.ho_ten || u.ten_dang_nhap || ''}
-            getSearch={(u) => `${u.ho_ten || ''} ${u.ten_dang_nhap || ''}`}
-            placeholder="Gõ tên hoặc tên đăng nhập để tìm..."
-          />
-        </Field>
-        <Field label="Chuyền trưởng">
-          <Input value={chuyenTruong} onChange={(e) => setChuyenTruong(e.target.value)} placeholder="Nhập tên chuyền trưởng" />
-        </Field>
-      </div>
-
-      <p className="mb-3 text-xs text-ink-soft">
-        <b>Thợ in</b> lưu theo từng phần in (ghi đè lần lưu trước). SL vải hủy / vải thiếu nhập ở
-        <b> modal In tem</b>.
-      </p>
-      <div className="overflow-auto rounded-card border border-line">
-        <table className="w-full border-collapse">
-          <thead>
-            <tr className="border-b border-line bg-surface-muted">
-              {INFO_HEADERS.map((h) => <th key={h} className={TH}>{h}</th>)}
-              <th className={TH}>Thợ in</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-line">
-            {rows.map((r, i) => (
-              <tr key={r.dot_vai_ve_id}>
-                <PhanInInfoCells r={r} stt={i + 1} />
-                <td className={TD}>
-                  <input value={(form[r.dot_vai_ve_id] || {}).thoIn || ''} placeholder="Tên thợ in"
-                    onChange={(e) => setCell(r.dot_vai_ve_id, 'thoIn', e.target.value)}
-                    className="w-40 rounded-control border border-line bg-surface px-2 py-1.5 text-base md:text-sm text-ink outline-none focus:border-primary" />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </Modal>
-  );
-}
-
 export default function RunPanel({ lenhId, onClose, onChanged }) {
   const { can } = usePermissions();
   const { toast, show } = useToast();
@@ -274,7 +277,6 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
   const [vuot, setVuot] = useState('');                // SL vượt sản xuất
   const [temMeta, setTemMeta] = useState(META_MAC_DINH()); // ngày ca · giờ SX · BTP của lượt in (mig 066)
   const [printSetOpen, setPrintSetOpen] = useState(false); // modal in tem gom set
-  const [phanCongOpen, setPhanCongOpen] = useState(false); // modal phân công
   const [users, setUsers] = useState([]);              // tài khoản để chọn ca trưởng
 
   const phieu = data?.phieu;
@@ -283,8 +285,9 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
   const ngungList = data?.ngung_list || [];
   const dotVaiList = data?.dot_vai || [];
   const vaiHuyList = data?.vai_huy || [];
+  const goiYTem = data?.goi_y_tem || null;
   // GOM SET = lệnh có NHIỀU PHẦN IN in chung 1 chuyền ⇒ in tem & ghi vải hủy/thiếu làm theo BẢNG
-  // (modal In tem / Phân công), nên ẩn 2 khối nhập lẻ "Vải hủy/Vải thiếu" ở sidebar.
+  // (modal In tem), nên ẩn 2 khối nhập lẻ "Vải hủy/Vải thiếu" ở sidebar.
   const coGomSet = !!data?.co_gom_set;
 
   const load = useCallback(async () => {
@@ -292,6 +295,15 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
     try {
       const res = await getRun(lenhId);
       setData(res.data);
+      // Điền sẵn ngày ca (theo KẾ HOẠCH) + giờ SX (từ mốc kết thúc lượt in trước → bây giờ).
+      // ⚠ Chỉ điền ô nào người dùng CHƯA gõ, để không đè mất thứ họ đang sửa dở khi màn tự tải lại.
+      const g = res.data?.goi_y_tem;
+      if (g) setTemMeta((m) => ({
+        ...m,
+        ngayCa: m.ngayCa || g.ngay_ca || '',
+        gioBd: m.gioBd || g.gio_bd || '',
+        gioKt: m.gioKt || g.gio_kt || '',
+      }));
     } catch (e) {
       show(e.message || 'Lỗi tải', 'error');
     } finally {
@@ -322,6 +334,8 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
       show(`Đã in tem ${fmtNum(soLuong)} — tự đưa vào xe phơi, đang đếm ngược`);
       setSoLuong('');
       await printLabelFor(res.data?.new_tem_id);
+      // Xóa meta rồi tải lại ⇒ lượt in KẾ TIẾP lấy gợi ý mới (giờ BĐ = mốc kết thúc của lượt vừa in).
+      setTemMeta(META_MAC_DINH());
       await load();
       onChanged?.();
     } catch (e) {
@@ -341,6 +355,7 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
       setPrintSetOpen(false);
       // In tuần tự (await từng nhãn) để cửa sổ in không chồng lên nhau.
       for (const t of list) await printLabelFor(t.tem_id, t.dot_vai_id);
+      setTemMeta(META_MAC_DINH()); // lượt sau lấy gợi ý mới (xem doPrint)
       await load();
       onChanged?.();
     } catch (e) {
@@ -355,11 +370,12 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
     try {
       await savePhanCong(phieu.id, body);
       show('Đã lưu phân công sản xuất');
-      setPhanCongOpen(false);
       await load();
       onChanged?.();
+      return true; // lưu OK → khối phân công thoát chế độ sửa
     } catch (e) {
       show(e.message || 'Lưu phân công thất bại', 'error');
+      return false; // lỗi → GIỮ ô nhập để người dùng sửa tiếp, không mất thứ đang gõ
     } finally {
       setBusy(false);
     }
@@ -562,7 +578,7 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
               </h3>
               {/* Ngày ca · giờ SX · BTP: nhập 1 lần, áp cho mọi tem in ở lượt này (mig 066).
                   Với gom set thì bảng in tem cũng hiện lại khối này để nhập ngay trước khi in. */}
-              {!coGomSet && <div className="mb-2"><TemMetaFields meta={temMeta} setMeta={setTemMeta} /></div>}
+              {!coGomSet && <div className="mb-2"><TemMetaFields meta={temMeta} setMeta={setTemMeta} goiY={goiYTem} /></div>}
               {coGomSet ? (
                 <Button className="w-full" icon="printer" onClick={() => setPrintSetOpen(true)} disabled={busy || remain === 0}>
                   Nhập số lượng &amp; in tem…
@@ -588,97 +604,38 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
             </section>
           )}
 
-          {/* PHÂN CÔNG: thợ in theo phần in + ca trưởng/chuyền trưởng + SL vải hủy/thiếu (1 bảng) */}
-          {canRun && phieu && dotVaiList.length > 0 && (
+          {/* PHÂN CÔNG (inline — không modal): ca trưởng · chuyền trưởng · danh sách thợ in trên chuyền.
+              Chưa lưu → ô nhập + nút Lưu; đã lưu → hiện thẳng tên + nút Sửa. */}
+          {phieu && dotVaiList.length > 0 && (
             <section className="border-t border-line pt-4">
               <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-soft">Phân công</h3>
-              {(data.phan_cong?.ca_truong_ten || data.phan_cong?.chuyen_truong) && (
-                <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1 rounded-control bg-surface-muted px-3 py-2 text-xs text-ink-soft">
-                  {data.phan_cong?.ca_truong_ten && <span>Ca trưởng: <b className="text-ink">{data.phan_cong.ca_truong_ten}</b></span>}
-                  {data.phan_cong?.chuyen_truong && <span>Chuyền trưởng: <b className="text-ink">{data.phan_cong.chuyen_truong}</b></span>}
-                </div>
-              )}
-              <Button variant="secondary" className="w-full" icon="users" onClick={() => setPhanCongOpen(true)} disabled={busy}>
-                Phân công…
-              </Button>
+              <PhanCongInline pc={data.phan_cong} users={users} onSave={doSavePhanCong} busy={busy} canRun={canRun} />
             </section>
           )}
 
-          {/* Ngừng chuyền (downtime) */}
-          {running && (
-            <section className="border-t border-line pt-4">
-              <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-soft">Ngừng chuyền</h3>
-              {ngungActive ? (
-                <div className="rounded-control border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm">
-                  <div className="font-semibold text-rose-700">⏸ Chuyền đang ngừng</div>
-                  <div className="mt-0.5 text-xs text-ink-soft">Từ {fmtDt(ngungActive.tg_bd_ngung)}</div>
-                  {ngungActive.ly_do && <div className="mt-0.5 text-xs text-ink">Lý do: {ngungActive.ly_do}</div>}
-                  {canRun && (
-                    <Button className="mt-2 w-full" onClick={doResume} loading={busy}>Chuyền hoạt động lại</Button>
-                  )}
-                </div>
-              ) : canRun ? (
-                <div className="space-y-2">
-                  <Textarea rows={2} value={stopReason} onChange={(e) => setStopReason(e.target.value)}
-                    placeholder="Lý do ngừng chuyền (vd: hết mực, kẹt vải, đổi khuôn...)" />
-                  <Button variant="danger" className="w-full" onClick={doStop} loading={busy} disabled={!stopReason.trim()}>
-                    Ngừng chuyền
-                  </Button>
-                </div>
-              ) : null}
-
-              {ngungList.length > 0 && (
-                <div className="mt-3">
-                  <div className="mb-1 text-xs font-medium text-ink-soft">Lịch ngừng ({ngungList.length})</div>
-                  <div className="space-y-1.5">
-                    {ngungList.map((n) => (
-                      <div key={n.id} className="rounded-control border border-line px-3 py-2 text-sm">
-                        <div className="flex items-center justify-between">
-                          <span className="text-ink">{fmtDt(n.tg_bd_ngung)}{n.tg_kt_ngung ? ` → ${fmtDt(n.tg_kt_ngung)}` : ''}</span>
-                          {n.trang_thai === 'DANG_NGUNG'
-                            ? <Badge tone="danger">Đang ngừng</Badge>
-                            : <Badge tone="default">{fmtNum(n.so_phut)} phút</Badge>}
-                        </div>
-                        {n.ly_do && <div className="mt-0.5 text-xs text-ink-soft">Lý do: {n.ly_do}{n.nguoi ? ` · ${n.nguoi}` : ''}</div>}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </section>
-          )}
-
-          {/* Ngừng lệnh chạy để in hàng gấp hơn (khác với "Ngừng chuyền" downtime) */}
-          {running && canRun && (
-            <section className="border-t border-line pt-4">
-              <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-soft">Ngừng lệnh chạy (in hàng gấp)</h3>
-              <Button variant="secondary" className="w-full" onClick={openPause} disabled={busy}>
-                Ngừng lệnh chạy…
-              </Button>
-            </section>
-          )}
-
-          {/* Vải hủy (= vải hư) / vải thiếu trong sản xuất, theo phần in.
-              GOM SET → ẨN ô nhập lẻ (nhập trong modal Phân công theo bảng); vẫn hiện sổ "Đã ghi". */}
+          {/* Vải hủy (= vải hư) / vải thiếu trong sản xuất — ghi theo ĐỢT VẢI (`vai_huy.dot_vai_ve_id`).
+              ⚠ 1 phần in có thể có NHIỀU đợt vải trong cùng đợt SX (gộp đợt) ⇒ ô chọn phải hiện mã đợt
+              vải, nếu chỉ hiện code phần thì 2 dòng trùng tên, không biết đang ghi cho đợt nào.
+              GOM SET → ẨN ô nhập lẻ (nhập trong modal In tem theo bảng); vẫn hiện sổ "Đã ghi". */}
           <section className="border-t border-line pt-4">
             <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-soft">
-              Vải hủy / vải thiếu (theo phần in)
+              Vải hủy / vải thiếu (theo đợt vải)
             </h3>
             {canRun && phieu && !coGomSet && (
               <div className="space-y-2">
                 {dotVaiList.length > 1 && (
                   <Select value={vhForm.dotVaiId} onChange={(e) => setVhForm({ ...vhForm, dotVaiId: e.target.value })}>
-                    <option value="">— Chọn phần in —</option>
+                    <option value="">— Chọn đợt vải —</option>
                     {dotVaiList.map((d) => (
                       <option key={d.dot_vai_ve_id} value={d.dot_vai_ve_id}>
-                        {d.ma_phan} · {d.mau_vai} · {d.kich_vai}/{d.kich_phim}
+                        {d.ma_dot_vai} · {d.ma_phan} · {d.mau_vai} · {d.kich_vai}/{d.kich_phim}
                       </option>
                     ))}
                   </Select>
                 )}
                 {dotVaiList.length === 1 && (
                   <div className="rounded-control bg-surface-muted px-3 py-1.5 text-xs text-ink-soft">
-                    Phần in: <b className="text-ink">{dotVaiList[0].ma_phan}</b> · {dotVaiList[0].mau_vai}
+                    Đợt vải: <b className="text-ink">{dotVaiList[0].ma_dot_vai}</b> · {dotVaiList[0].ma_phan} · {dotVaiList[0].mau_vai}
                   </div>
                 )}
                 {/* Chọn loại ghi nhận: vải hủy (hư) hoặc vải thiếu */}
@@ -713,8 +670,8 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
             )}
             {canRun && phieu && coGomSet && (
               <p className="rounded-control border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/30">
-                Đợt SX gom set nhiều phần in — nhập <b>SL vải hủy / vải thiếu</b> theo từng phần in ở nút
-                <b> Phân công</b> phía trên.
+                Đợt SX gom set nhiều phần in — nhập <b>SL vải hủy / vải thiếu</b> theo từng đợt vải trong
+                bảng ở nút <b>Nhập số lượng &amp; in tem…</b> phía trên (ghi cùng lúc với lúc in tem).
               </p>
             )}
             {vaiHuyList.length > 0 && (
@@ -723,7 +680,12 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
                 {vaiHuyList.map((v) => (
                   <div key={v.id} className="rounded-control border border-line px-3 py-2 text-sm">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-ink">{v.ma_phan || '—'}{v.mau_vai ? ` · ${v.mau_vai}` : ''}</span>
+                      <span className="min-w-0 font-medium text-ink">
+                        {v.ma_dot_vai || '—'}
+                        <span className="ml-1 text-xs font-normal text-ink-soft">
+                          {[v.ma_phan, v.mau_vai].filter(Boolean).join(' · ')}
+                        </span>
+                      </span>
                       <span className="flex shrink-0 items-center gap-1.5">
                         <Badge tone={v.loai === 'THIEU' ? 'warning' : 'danger'}>
                           {v.loai === 'THIEU' ? 'Thiếu' : 'Hủy'}
@@ -780,6 +742,60 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
             )}
           </section>
 
+          {/* Ngừng chuyền (downtime) */}
+          {running && (
+            <section className="border-t border-line pt-4">
+              <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-soft">Ngừng chuyền</h3>
+              {ngungActive ? (
+                <div className="rounded-control border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm">
+                  <div className="font-semibold text-rose-700">⏸ Chuyền đang ngừng</div>
+                  <div className="mt-0.5 text-xs text-ink-soft">Từ {fmtDt(ngungActive.tg_bd_ngung)}</div>
+                  {ngungActive.ly_do && <div className="mt-0.5 text-xs text-ink">Lý do: {ngungActive.ly_do}</div>}
+                  {canRun && (
+                    <Button className="mt-2 w-full" onClick={doResume} loading={busy}>Chuyền hoạt động lại</Button>
+                  )}
+                </div>
+              ) : canRun ? (
+                <div className="space-y-2">
+                  <Textarea rows={2} value={stopReason} onChange={(e) => setStopReason(e.target.value)}
+                    placeholder="Lý do ngừng chuyền (vd: hết mực, kẹt vải, đổi khuôn...)" />
+                  <Button variant="danger" className="w-full" onClick={doStop} loading={busy} disabled={!stopReason.trim()}>
+                    Ngừng chuyền
+                  </Button>
+                </div>
+              ) : null}
+
+              {ngungList.length > 0 && (
+                <div className="mt-3">
+                  <div className="mb-1 text-xs font-medium text-ink-soft">Lịch ngừng ({ngungList.length})</div>
+                  <div className="space-y-1.5">
+                    {ngungList.map((n) => (
+                      <div key={n.id} className="rounded-control border border-line px-3 py-2 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-ink">{fmtDt(n.tg_bd_ngung)}{n.tg_kt_ngung ? ` → ${fmtDt(n.tg_kt_ngung)}` : ''}</span>
+                          {n.trang_thai === 'DANG_NGUNG'
+                            ? <Badge tone="danger">Đang ngừng</Badge>
+                            : <Badge tone="default">{fmtNum(n.so_phut)} phút</Badge>}
+                        </div>
+                        {n.ly_do && <div className="mt-0.5 text-xs text-ink-soft">Lý do: {n.ly_do}{n.nguoi ? ` · ${n.nguoi}` : ''}</div>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* Ngừng lệnh chạy để in hàng gấp hơn (khác với "Ngừng chuyền" downtime) */}
+          {running && canRun && (
+            <section className="border-t border-line pt-4">
+              <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-soft">Ngừng lệnh chạy (in hàng gấp)</h3>
+              <Button variant="secondary" className="w-full" onClick={openPause} disabled={busy}>
+                Ngừng lệnh chạy…
+              </Button>
+            </section>
+          )}
+
           {/* Vượt sản xuất — cộng SL vượt vào release + trừ đợt vải chưa release cùng phần in */}
           {canRun && phieu && (
             <section className="border-t border-line pt-4">
@@ -798,11 +814,7 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
       )}
       {/* GOM SET: nhập SL in từng phần in → in nhiều tem liên tiếp */}
       <PrintSetModal open={printSetOpen} onClose={() => setPrintSetOpen(false)} rows={dotVaiList}
-        onPrint={doPrintSet} busy={busy} meta={temMeta} setMeta={setTemMeta} />
-
-      {/* Phân công: thợ in / ca trưởng / chuyền trưởng + SL vải hủy, vải thiếu */}
-      <PhanCongModal open={phanCongOpen} onClose={() => setPhanCongOpen(false)} rows={dotVaiList}
-        users={users} initial={data?.phan_cong} onSave={doSavePhanCong} busy={busy} />
+        onPrint={doPrintSet} busy={busy} meta={temMeta} setMeta={setTemMeta} goiY={goiYTem} />
 
       {/* Ngừng lệnh chạy + hoán đổi phần in gấp hơn */}
       <Modal open={pauseOpen} onClose={() => setPauseOpen(false)} title="Ngừng lệnh chạy — in hàng gấp" size="lg"
