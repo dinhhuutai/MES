@@ -45,24 +45,69 @@ function PhanInInfoCells({ r, stt }) {
 
 const INFO_HEADERS = ['STT', 'Khách hàng', 'Đơn hàng', 'Mã hàng', 'Code phần', 'Màu vải', 'Kích vải', 'Kích phim', 'Loại đợt vải'];
 
+// ─── NGÀY CA · GIỜ SẢN XUẤT · BTP (mig 066) ───────────────────────────────────
+// Nhập theo LƯỢT IN, lưu vào TỪNG TEM tạo ra trong lượt đó. KHÔNG in lên nhãn tem — chỉ để tra cứu.
+// ⚠ Đặt ở MỨC MODULE (không lồng trong RunPanel/PrintSetModal) — component lồng bị remount mỗi lần
+// cha render ⇒ ô nhập mất focus khi đang gõ (cùng luật với `PhanInInfoCells`).
+const META_MAC_DINH = () => ({ ngayCa: '', gioBd: '', gioKt: '', btpTruoc: false, btpCuoi: false });
+
+function TemMetaFields({ meta, setMeta }) {
+  const set = (k, v) => setMeta((m) => ({ ...m, [k]: v }));
+  const chk = 'h-4 w-4 rounded border-line text-primary focus:ring-primary/30';
+  return (
+    <div className="rounded-control border border-line bg-surface-muted/40 p-2.5">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-ink-soft">Ngày ca</span>
+          <Input type="date" value={meta.ngayCa} onChange={(e) => set('ngayCa', e.target.value)} />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-ink-soft">Từ giờ</span>
+          <Input type="time" value={meta.gioBd} onChange={(e) => set('gioBd', e.target.value)} />
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-ink-soft">Đến giờ</span>
+          <Input type="time" value={meta.gioKt} onChange={(e) => set('gioKt', e.target.value)} />
+        </label>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1.5">
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-ink">
+          <input type="checkbox" className={chk} checked={!!meta.btpTruoc}
+            onChange={(e) => set('btpTruoc', e.target.checked)} /> BTP trước
+        </label>
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-ink">
+          <input type="checkbox" className={chk} checked={!!meta.btpCuoi}
+            onChange={(e) => set('btpCuoi', e.target.checked)} /> BTP cuối
+        </label>
+      </div>
+    </div>
+  );
+}
+
 // ─── Modal IN TEM cho lệnh GOM SET ────────────────────────────────────────────
 // Nhập SL in cho TỪNG phần in rồi bấm In tem 1 lần: BE tạo N tem trong 1 transaction, FE in nhãn
 // LIÊN TIẾP (xong phần in 1 → phần in 2 → …).
-function PrintSetModal({ open, onClose, rows, onPrint, busy }) {
-  const [qty, setQty] = useState({});
-  useEffect(() => { if (open) setQty({}); }, [open]);
+function PrintSetModal({ open, onClose, rows, onPrint, busy, meta, setMeta }) {
+  const [form, setForm] = useState({}); // dotVaiId → { sl, huy, thieu }
+  useEffect(() => { if (open) setForm({}); }, [open]);
+  const setCell = (id, key, v) => setForm((f) => ({ ...f, [id]: { ...(f[id] || {}), [key]: v } }));
+  const num = (id, key) => Number((form[id] || {})[key]) || 0;
 
-  const items = useMemo(
-    () => rows.map((r) => ({ dotVaiId: r.dot_vai_ve_id, soLuong: Number(qty[r.dot_vai_ve_id]) || 0 }))
-      .filter((x) => x.soLuong > 0),
-    [rows, qty]
-  );
-  const tong = items.reduce((s, x) => s + x.soLuong, 0);
+  // Dòng có SL in > 0 mới tạo tem; dòng chỉ có vải hủy/thiếu vẫn được gửi để ghi sổ vải.
+  const items = useMemo(() => rows.map((r) => ({
+    dotVaiId: r.dot_vai_ve_id,
+    soLuong: num(r.dot_vai_ve_id, 'sl'),
+    soLuongHuy: num(r.dot_vai_ve_id, 'huy'),
+    soLuongThieu: num(r.dot_vai_ve_id, 'thieu'),
+  })).filter((x) => x.soLuong > 0 || x.soLuongHuy > 0 || x.soLuongThieu > 0),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [rows, form]);
+  const soIn = items.filter((x) => x.soLuong > 0);
+  const tong = soIn.reduce((s, x) => s + x.soLuong, 0);
   const capOf = (r) => Math.floor((Number(r.sl_vao_sx) || 0) * 1.1);
   const overRow = (r) => {
-    const n = Number(qty[r.dot_vai_ve_id]) || 0;
     const cap = capOf(r);
-    return cap > 0 && n > cap;
+    return cap > 0 && num(r.dot_vai_ve_id, 'sl') > cap;
   };
   const hasOver = rows.some(overRow);
 
@@ -71,15 +116,17 @@ function PrintSetModal({ open, onClose, rows, onPrint, busy }) {
       footer={(
         <>
           <Button variant="ghost" onClick={onClose}>Đóng</Button>
-          <Button onClick={() => onPrint(items)} loading={busy} disabled={items.length === 0 || hasOver} icon="printer">
-            In tem ({items.length} phần in · {fmtNum(tong)})
+          <Button onClick={() => onPrint(items)} loading={busy} disabled={soIn.length === 0 || hasOver} icon="printer">
+            In tem ({soIn.length} phần in · {fmtNum(tong)})
           </Button>
         </>
       )}
     >
-      <p className="mb-3 rounded-control bg-surface-muted px-3 py-2 text-xs text-ink-soft">
-        Nhập <b>số lượng in</b> cho từng phần in rồi bấm <b>In tem</b> một lần — máy in ra tem phần in 1,
-        rồi in liên tiếp phần in 2… (phần in để trống thì không in). Trần mỗi phần in = <b>110% SL vào sản xuất</b> của đợt đó.
+      {/* Ngày ca / giờ SX / BTP áp cho MỌI tem của lượt in này (1 lượt in = 1 mốc thời gian). */}
+      <div className="mb-3"><TemMetaFields meta={meta} setMeta={setMeta} /></div>
+      <p className="mb-3 text-xs text-ink-soft">
+        Nhập <b>SL in</b> từng phần in rồi bấm In tem — tem ra liên tiếp theo thứ tự. Trần mỗi phần in
+        = <b>110% SL vào SX</b>. <b>SL vải hủy/thiếu</b> &gt; 0 sẽ ghi vào sổ vải của đợt đó.
       </p>
       <div className="overflow-auto rounded-card border border-line">
         <table className="w-full border-collapse">
@@ -87,23 +134,36 @@ function PrintSetModal({ open, onClose, rows, onPrint, busy }) {
             <tr className="border-b border-line bg-surface-muted">
               {INFO_HEADERS.map((h) => <th key={h} className={TH}>{h}</th>)}
               <th className={`${TH} text-right`}>SL vào SX</th>
+              <th className={`${TH} text-right`}>SL vải hủy</th>
+              <th className={`${TH} text-right`}>SL vải thiếu</th>
               <th className={`${TH} text-right`}>Số lượng in</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
-            {rows.map((r, i) => (
-              <tr key={r.dot_vai_ve_id}>
-                <PhanInInfoCells r={r} stt={i + 1} />
-                <td className={`${TD} text-right tabular-nums text-ink-soft`}>{fmtNum(r.sl_vao_sx)}</td>
-                <td className={`${TD} text-right`}>
-                  <input type="number" min="0" max={capOf(r) || undefined} value={qty[r.dot_vai_ve_id] || ''}
-                    onChange={(e) => setQty((q) => ({ ...q, [r.dot_vai_ve_id]: e.target.value }))}
-                    placeholder="0"
-                    className={`${numCls} ${overRow(r) ? 'border-danger focus:border-danger' : ''}`} />
-                  {overRow(r) && <div className="mt-0.5 text-[11px] text-danger">Tối đa {fmtNum(capOf(r))}</div>}
-                </td>
-              </tr>
-            ))}
+            {rows.map((r, i) => {
+              const f = form[r.dot_vai_ve_id] || {};
+              return (
+                <tr key={r.dot_vai_ve_id}>
+                  <PhanInInfoCells r={r} stt={i + 1} />
+                  <td className={`${TD} text-right tabular-nums text-ink-soft`}>{fmtNum(r.sl_vao_sx)}</td>
+                  <td className={`${TD} text-right`}>
+                    <input type="number" min="0" value={f.huy || ''} placeholder="0" className={numCls}
+                      onChange={(e) => setCell(r.dot_vai_ve_id, 'huy', e.target.value)} />
+                  </td>
+                  <td className={`${TD} text-right`}>
+                    <input type="number" min="0" value={f.thieu || ''} placeholder="0" className={numCls}
+                      onChange={(e) => setCell(r.dot_vai_ve_id, 'thieu', e.target.value)} />
+                  </td>
+                  <td className={`${TD} text-right`}>
+                    <input type="number" min="0" max={capOf(r) || undefined} value={f.sl || ''}
+                      onChange={(e) => setCell(r.dot_vai_ve_id, 'sl', e.target.value)}
+                      placeholder="0"
+                      className={`${numCls} ${overRow(r) ? 'border-danger focus:border-danger' : ''}`} />
+                    {overRow(r) && <div className="mt-0.5 text-[11px] text-danger">Tối đa {fmtNum(capOf(r))}</div>}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -113,33 +173,28 @@ function PrintSetModal({ open, onClose, rows, onPrint, busy }) {
 
 // ─── Modal PHÂN CÔNG SẢN XUẤT ─────────────────────────────────────────────────
 // Ca trưởng (chọn từ tài khoản) + Chuyền trưởng (nhập chữ) nằm TRÊN bảng; trong bảng mỗi phần in
-// nhập SL vải hủy · SL vải thiếu · thợ in.
+// nhập THỢ IN. (SL vải hủy / vải thiếu đã chuyển sang modal IN TEM — ghi cùng lúc in tem.)
 function PhanCongModal({ open, onClose, rows, users, initial, onSave, busy }) {
   const [caTruongId, setCaTruongId] = useState('');
   const [chuyenTruong, setChuyenTruong] = useState('');
-  const [form, setForm] = useState({}); // dotVaiId → { huy, thieu, thoIn }
+  const [form, setForm] = useState({}); // dotVaiId → { thoIn }
 
   useEffect(() => {
     if (!open) return;
     setCaTruongId(initial?.ca_truong_id || '');
     setChuyenTruong(initial?.chuyen_truong || '');
     const byDot = {};
-    (initial?.items || []).forEach((it) => { byDot[it.dot_vai_ve_id] = { huy: '', thieu: '', thoIn: it.tho_in || '' }; });
+    (initial?.items || []).forEach((it) => { byDot[it.dot_vai_ve_id] = { thoIn: it.tho_in || '' }; });
     setForm(byDot);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const setCell = (id, key, v) => setForm((f) => ({ ...f, [id]: { ...(f[id] || {}), [key]: v } }));
-  const items = rows.map((r) => {
-    const f = form[r.dot_vai_ve_id] || {};
-    return {
-      dotVaiId: r.dot_vai_ve_id,
-      thoIn: f.thoIn || '',
-      soLuongHuy: Number(f.huy) || 0,
-      soLuongThieu: Number(f.thieu) || 0,
-    };
-  });
-  const coThayDoi = items.some((x) => x.thoIn || x.soLuongHuy > 0 || x.soLuongThieu > 0) || caTruongId || chuyenTruong.trim();
+  const items = rows.map((r) => ({
+    dotVaiId: r.dot_vai_ve_id,
+    thoIn: (form[r.dot_vai_ve_id] || {}).thoIn || '',
+  }));
+  const coThayDoi = items.some((x) => x.thoIn) || caTruongId || chuyenTruong.trim();
 
   return (
     <Modal open={open} onClose={onClose} title="Phân công sản xuất" size="xl"
@@ -168,42 +223,29 @@ function PhanCongModal({ open, onClose, rows, users, initial, onSave, busy }) {
         </Field>
       </div>
 
-      <p className="mb-3 rounded-control bg-surface-muted px-3 py-2 text-xs text-ink-soft">
-        <b>Thợ in</b> lưu theo từng phần in (ghi đè lần lưu trước). <b>SL vải hủy</b> (= vải hư) và
-        <b> SL vải thiếu</b> nhập &gt; 0 sẽ được ghi THÊM vào sổ vải hủy/thiếu của đợt đó — để trống nếu không phát sinh.
+      <p className="mb-3 text-xs text-ink-soft">
+        <b>Thợ in</b> lưu theo từng phần in (ghi đè lần lưu trước). SL vải hủy / vải thiếu nhập ở
+        <b> modal In tem</b>.
       </p>
       <div className="overflow-auto rounded-card border border-line">
         <table className="w-full border-collapse">
           <thead>
             <tr className="border-b border-line bg-surface-muted">
               {INFO_HEADERS.map((h) => <th key={h} className={TH}>{h}</th>)}
-              <th className={`${TH} text-right`}>SL vải hủy</th>
-              <th className={`${TH} text-right`}>SL vải thiếu</th>
               <th className={TH}>Thợ in</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
-            {rows.map((r, i) => {
-              const f = form[r.dot_vai_ve_id] || {};
-              return (
-                <tr key={r.dot_vai_ve_id}>
-                  <PhanInInfoCells r={r} stt={i + 1} />
-                  <td className={`${TD} text-right`}>
-                    <input type="number" min="0" value={f.huy || ''} placeholder="0" className={numCls}
-                      onChange={(e) => setCell(r.dot_vai_ve_id, 'huy', e.target.value)} />
-                  </td>
-                  <td className={`${TD} text-right`}>
-                    <input type="number" min="0" value={f.thieu || ''} placeholder="0" className={numCls}
-                      onChange={(e) => setCell(r.dot_vai_ve_id, 'thieu', e.target.value)} />
-                  </td>
-                  <td className={TD}>
-                    <input value={f.thoIn || ''} placeholder="Tên thợ in"
-                      onChange={(e) => setCell(r.dot_vai_ve_id, 'thoIn', e.target.value)}
-                      className="w-40 rounded-control border border-line bg-surface px-2 py-1.5 text-base md:text-sm text-ink outline-none focus:border-primary" />
-                  </td>
-                </tr>
-              );
-            })}
+            {rows.map((r, i) => (
+              <tr key={r.dot_vai_ve_id}>
+                <PhanInInfoCells r={r} stt={i + 1} />
+                <td className={TD}>
+                  <input value={(form[r.dot_vai_ve_id] || {}).thoIn || ''} placeholder="Tên thợ in"
+                    onChange={(e) => setCell(r.dot_vai_ve_id, 'thoIn', e.target.value)}
+                    className="w-40 rounded-control border border-line bg-surface px-2 py-1.5 text-base md:text-sm text-ink outline-none focus:border-primary" />
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -230,6 +272,7 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
   const [swapList, setSwapList] = useState([]);        // phần in đang chờ sản xuất để hoán đổi
   const [swapLoading, setSwapLoading] = useState(false);
   const [vuot, setVuot] = useState('');                // SL vượt sản xuất
+  const [temMeta, setTemMeta] = useState(META_MAC_DINH()); // ngày ca · giờ SX · BTP của lượt in (mig 066)
   const [printSetOpen, setPrintSetOpen] = useState(false); // modal in tem gom set
   const [phanCongOpen, setPhanCongOpen] = useState(false); // modal phân công
   const [users, setUsers] = useState([]);              // tài khoản để chọn ca trưởng
@@ -275,7 +318,7 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
   const doPrint = async () => {
     setBusy(true);
     try {
-      const res = await printTem(phieu.id, Number(soLuong));
+      const res = await printTem(phieu.id, Number(soLuong), temMeta);
       show(`Đã in tem ${fmtNum(soLuong)} — tự đưa vào xe phơi, đang đếm ngược`);
       setSoLuong('');
       await printLabelFor(res.data?.new_tem_id);
@@ -292,7 +335,7 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
   const doPrintSet = async (items) => {
     setBusy(true);
     try {
-      const res = await printTemBatch(phieu.id, items);
+      const res = await printTemBatch(phieu.id, items, temMeta);
       const list = res.data?.tems_in || [];
       show(`Đã in ${list.length} tem (${fmtNum(list.reduce((s, x) => s + Number(x.so_luong || 0), 0))}) — tự vào xe phơi, đang đếm ngược`);
       setPrintSetOpen(false);
@@ -514,22 +557,20 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
 
           {running && canRun && (
             <section className="border-t border-line pt-4">
+              <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-soft">
+                In tem{coGomSet ? ` (gom set · ${data.so_phan_in} phần in)` : ''}
+              </h3>
+              {/* Ngày ca · giờ SX · BTP: nhập 1 lần, áp cho mọi tem in ở lượt này (mig 066).
+                  Với gom set thì bảng in tem cũng hiện lại khối này để nhập ngay trước khi in. */}
+              {!coGomSet && <div className="mb-2"><TemMetaFields meta={temMeta} setMeta={setTemMeta} /></div>}
               {coGomSet ? (
-                /* GOM SET: nhập SL cho TỪNG phần in trong bảng rồi in 1 lượt ra nhiều tem liên tiếp. */
-                <>
-                  <h3 className="mb-1 text-xs font-bold uppercase tracking-wide text-ink-soft">In tem (gom set)</h3>
-                  <p className="mb-2 text-xs text-ink-soft">
-                    Đợt SX này gom <b>{data.so_phan_in} phần in</b> in chung chuyền. Bấm bên dưới để nhập
-                    <b> số lượng in của từng phần in</b> rồi in một lượt — tem ra liên tiếp theo thứ tự phần in.
-                  </p>
-                  <Button className="w-full" icon="printer" onClick={() => setPrintSetOpen(true)} disabled={busy || remain === 0}>
-                    Nhập số lượng &amp; in tem…
-                  </Button>
-                </>
+                <Button className="w-full" icon="printer" onClick={() => setPrintSetOpen(true)} disabled={busy || remain === 0}>
+                  Nhập số lượng &amp; in tem…
+                </Button>
               ) : (
                 <div className="flex items-end gap-2">
                   <div className="flex-1">
-                    <label className="mb-1 block text-sm font-medium text-ink">Số lượng in (1 tem)</label>
+                    <label className="mb-1 block text-xs font-medium text-ink-soft">Số lượng in (1 tem)</label>
                     <Input type="number" max={remain || undefined} value={soLuong}
                       onChange={(e) => setSoLuong(e.target.value)} placeholder="vd: 200"
                       className={overMax ? 'border-danger focus:border-danger focus:ring-danger/10' : ''} />
@@ -540,7 +581,7 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
               )}
               {target > 0 && (
                 <p className={`mt-1.5 text-xs ${overMax ? 'text-danger' : 'text-ink-soft'}`}>
-                  Trần 110% SL release: tối đa {fmtNum(maxTotal)} · còn được in <b>{fmtNum(remain)}</b>
+                  Trần 110%: tối đa {fmtNum(maxTotal)} · còn in được <b>{fmtNum(remain)}</b>
                   {overMax ? ' — vượt giới hạn!' : ''}
                 </p>
               )}
@@ -550,11 +591,7 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
           {/* PHÂN CÔNG: thợ in theo phần in + ca trưởng/chuyền trưởng + SL vải hủy/thiếu (1 bảng) */}
           {canRun && phieu && dotVaiList.length > 0 && (
             <section className="border-t border-line pt-4">
-              <h3 className="mb-1 text-xs font-bold uppercase tracking-wide text-ink-soft">Phân công</h3>
-              <p className="mb-2 text-xs text-ink-soft">
-                Ghi <b>thợ in</b> từng phần in, <b>ca trưởng</b> (chọn từ tài khoản) &amp; <b>chuyền trưởng</b>,
-                kèm <b>SL vải hủy / vải thiếu</b> nếu có.
-              </p>
+              <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-soft">Phân công</h3>
               {(data.phan_cong?.ca_truong_ten || data.phan_cong?.chuyen_truong) && (
                 <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1 rounded-control bg-surface-muted px-3 py-2 text-xs text-ink-soft">
                   {data.phan_cong?.ca_truong_ten && <span>Ca trưởng: <b className="text-ink">{data.phan_cong.ca_truong_ten}</b></span>}
@@ -614,11 +651,7 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
           {/* Ngừng lệnh chạy để in hàng gấp hơn (khác với "Ngừng chuyền" downtime) */}
           {running && canRun && (
             <section className="border-t border-line pt-4">
-              <h3 className="mb-1 text-xs font-bold uppercase tracking-wide text-ink-soft">Ngừng lệnh chạy (in hàng gấp)</h3>
-              <p className="mb-2 text-xs text-ink-soft">
-                Ngừng phần in này để chạy phần in cần giao gấp hơn. Tem đã in <b>giữ nguyên</b>; lệnh quay về
-                <b> chờ chạy</b> để lập lại kế hoạch (không cần test lại). Có thể <b>hoán đổi</b> ngay phần in đang chờ.
-              </p>
+              <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-soft">Ngừng lệnh chạy (in hàng gấp)</h3>
               <Button variant="secondary" className="w-full" onClick={openPause} disabled={busy}>
                 Ngừng lệnh chạy…
               </Button>
@@ -750,14 +783,10 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
           {/* Vượt sản xuất — cộng SL vượt vào release + trừ đợt vải chưa release cùng phần in */}
           {canRun && phieu && (
             <section className="border-t border-line pt-4">
-              <h3 className="mb-1 text-xs font-bold uppercase tracking-wide text-ink-soft">Vượt sản xuất</h3>
-              <p className="mb-2 text-xs text-ink-soft">
-                Ghi nhận SL đã sản xuất <b>vượt kế hoạch</b>: tự <b>cộng vào SL release</b> của lệnh và
-                <b> trừ dần ở đợt vải chưa release</b> của cùng phần in (đợt về 0 sẽ ẩn).
-              </p>
+              <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-soft">Vượt sản xuất</h3>
               <div className="flex items-end gap-2">
                 <div className="flex-1">
-                  <label className="mb-1 block text-sm font-medium text-ink">SL sản xuất vượt kế hoạch</label>
+                  <label className="mb-1 block text-xs font-medium text-ink-soft">SL vượt kế hoạch (cộng vào release, trừ đợt chưa release)</label>
                   <Input type="number" min="1" value={vuot}
                     onChange={(e) => setVuot(e.target.value)} placeholder="vd: 50" />
                 </div>
@@ -769,7 +798,7 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
       )}
       {/* GOM SET: nhập SL in từng phần in → in nhiều tem liên tiếp */}
       <PrintSetModal open={printSetOpen} onClose={() => setPrintSetOpen(false)} rows={dotVaiList}
-        onPrint={doPrintSet} busy={busy} />
+        onPrint={doPrintSet} busy={busy} meta={temMeta} setMeta={setTemMeta} />
 
       {/* Phân công: thợ in / ca trưởng / chuyền trưởng + SL vải hủy, vải thiếu */}
       <PhanCongModal open={phanCongOpen} onClose={() => setPhanCongOpen(false)} rows={dotVaiList}

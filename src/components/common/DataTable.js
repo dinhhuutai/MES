@@ -2,13 +2,18 @@ import { useState, useEffect } from 'react';
 import Spinner from './Spinner';
 import Pagination from './Pagination';
 
-// columns: [{ key, header, render?(row), className?, headerClassName?, selection? }]
+// columns: [{ key, header, render?(row), className?, headerClassName?, selection?, merge? }]
 //   - selection: true → cột chọn (checkbox); được render TRƯỚC cột STT.
+//   - merge: true → khi hàng TÁCH NHIỀU DÒNG CON (xem `subRows`), ô này hợp nhất bằng `rowSpan`.
 // sttStart: nếu là số → hiện cột "STT" bắt đầu từ sttStart+1 (truyền (page-1)*limit để liên tục giữa các trang).
 // rowClassName(row): trả class nền theo hàng (vd tô màu cảnh báo SLA).
 // pageSize: PHÂN TRANG CLIENT-SIDE (mặc định 20/trang). Đặt 0 nếu trang tự phân trang server (có <Pagination> riêng).
+// subRows(row) → mảng dòng con | null: 1 BẢN GHI hiện thành NHIỀU DÒNG (vd lệnh GOM SET = nhiều phần in).
+//   Mỗi dòng con render với hàng hợp nhất `{...row, ...sub}` nên `render(r)` của cột dùng được ngay các
+//   trường của phần in. Cột `merge` (+ STT + ô chọn) chỉ vẽ Ở DÒNG ĐẦU với `rowSpan`. Phân trang/STT vẫn
+//   đếm theo BẢN GHI (1 lệnh = 1 STT) — đúng ý "hợp nhất ô ở STT".
 // Responsive: md+ hiển thị dạng BẢNG; dưới md tự đổi sang dạng THẺ (card) cho mobile/tablet.
-export default function DataTable({ columns, rows, loading, rowKey = 'id', emptyText = 'Không có dữ liệu', onRowClick, sttStart, rowClassName, pageSize = 20 }) {
+export default function DataTable({ columns, rows, loading, rowKey = 'id', emptyText = 'Không có dữ liệu', onRowClick, sttStart, rowClassName, pageSize = 20, subRows }) {
   const allRows = rows || [];
   const clientPaged = pageSize > 0 && allRows.length > pageSize;
   const [cpage, setCpage] = useState(1);
@@ -28,6 +33,11 @@ export default function DataTable({ columns, rows, loading, rowKey = 'id', empty
   const totalCols = columns.length + (showStt ? 1 : 0);
 
   const cellValue = (c, row) => (c.render ? c.render(row) : row[c.key]);
+  // Dòng con của 1 bản ghi (≥2 mới tách; 0/1 → giữ nguyên 1 dòng như trước).
+  const subsOf = (row) => {
+    const s = subRows ? subRows(row) : null;
+    return Array.isArray(s) && s.length > 1 ? s : null;
+  };
   // Padding/kích thước co theo bề rộng: laptop (md→xl) gọn để đỡ kéo ngang; chỉ màn RẤT rộng (2xl+) mới giãn.
   const PAD_H = 'px-1.5 py-2 lg:px-2.5 2xl:px-4 2xl:py-3 text-[10px] lg:text-[11px] 2xl:text-xs font-semibold uppercase tracking-tight lg:tracking-wide text-ink-soft';
   const PAD_C = 'px-1.5 py-1.5 lg:px-2.5 lg:py-2 2xl:px-4 2xl:py-3 align-middle';
@@ -42,12 +52,37 @@ export default function DataTable({ columns, rows, loading, rowKey = 'id', empty
   // <input>, nên bấm vào PHẦN ĐỆM quanh checkbox vẫn kích onRowClick → mở SidePanel ngoài ý muốn.
   // Chặn ở cấp <td> để cả cột chọn không bao giờ mở panel (vd Release 2, Kế hoạch tạm, Giao hàng…).
   const stopSel = onRowClick ? (e) => e.stopPropagation() : undefined;
-  const renderCell = (c, row, sticky) => (
-    <td key={c.key} onClick={c.selection ? stopSel : undefined}
+  const renderCell = (c, row, sticky, rowSpan) => (
+    <td key={c.key} onClick={c.selection ? stopSel : undefined} rowSpan={rowSpan}
       className={`${PAD_C} ${sticky ? 'sticky right-0 z-10 bg-surface shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.15)]' : ''} ${c.className || ''}`}>
       {cellValue(c, row)}
     </td>
   );
+
+  // 1 bản ghi → 1 hoặc NHIỀU <tr>. Cột `merge` (+ ô chọn + STT) chỉ vẽ ở dòng đầu, kèm rowSpan.
+  const renderRecord = (row, stt) => {
+    const subs = subsOf(row);
+    const n = subs ? subs.length : 1;
+    const lines = subs || [null];
+    const onClick = onRowClick ? () => onRowClick(row) : undefined;
+    const cls = `border-b border-line/70 transition hover:bg-surface-muted/40 ${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : ''}`;
+    return lines.map((sub, j) => {
+      const r = sub ? { ...row, ...sub } : row;      // dòng con ghi đè trường của phần in
+      const dau = j === 0;
+      const span = n > 1 ? n : undefined;
+      return (
+        <tr key={`${row[rowKey]}-${j}`} onClick={onClick}
+          className={`${cls} ${!dau ? 'border-t-0' : ''}`}>
+          {dau && selCols.map((c) => renderCell(c, row, false, span))}
+          {dau && showStt && (
+            <td rowSpan={span} className="px-1.5 py-1.5 lg:px-2.5 lg:py-2 2xl:px-4 2xl:py-3 align-middle text-right tabular-nums text-ink-soft">{stt}</td>
+          )}
+          {bodyCols.map((c) => ((c.merge && !dau) ? null : renderCell(c, r, false, c.merge ? span : undefined)))}
+          {trailingActions.map((c) => ((c.merge && !dau) ? null : renderCell(c, r, true, c.merge ? span : undefined)))}
+        </tr>
+      );
+    });
+  };
 
   return (
     <div>
@@ -73,17 +108,7 @@ export default function DataTable({ columns, rows, loading, rowKey = 'id', empty
               ) : allRows.length === 0 ? (
                 <tr><td colSpan={totalCols} className="px-4 py-12 text-center text-ink-soft">{emptyText}</td></tr>
               ) : (
-                viewRows.map((row, i) => (
-                  <tr key={row[rowKey]} onClick={onRowClick ? () => onRowClick(row) : undefined}
-                    className={`border-b border-line/70 transition hover:bg-surface-muted/40 ${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : ''}`}>
-                    {selCols.map((c) => renderCell(c, row))}
-                    {showStt && (
-                      <td className="px-1.5 py-1.5 lg:px-2.5 lg:py-2 2xl:px-4 2xl:py-3 align-middle text-right tabular-nums text-ink-soft">{sttBase + i + 1}</td>
-                    )}
-                    {bodyCols.map((c) => renderCell(c, row))}
-                    {trailingActions.map((c) => renderCell(c, row, true))}
-                  </tr>
-                ))
+                viewRows.map((row, i) => renderRecord(row, sttBase + i + 1))
               )}
             </tbody>
           </table>
@@ -113,14 +138,29 @@ export default function DataTable({ columns, rows, loading, rowKey = 'id', empty
                     {showStt && <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs font-medium text-ink-soft">#{sttBase + i + 1}</span>}
                   </div>
                 )}
-                <div className="divide-y divide-line/60">
-                  {labelCols.map((c) => (
+                {(() => {
+                  // Thẻ mobile: bản ghi tách dòng con → cột `merge` hiện MỘT LẦN ở thẻ, các cột còn lại
+                  // lặp theo từng phần in (khối có vạch trái) — tương đương rowSpan của bảng.
+                  const subs = subsOf(row);
+                  const chung = subs ? labelCols.filter((c) => c.merge) : labelCols;
+                  const rieng = subs ? labelCols.filter((c) => !c.merge) : [];
+                  const dong = (c, r) => (
                     <div key={c.key} className="flex items-start justify-between gap-3 py-1.5">
                       <span className="shrink-0 text-xs font-medium uppercase tracking-wide text-ink-soft">{c.header}</span>
-                      <span className="min-w-0 text-right text-sm text-ink">{cellValue(c, row)}</span>
+                      <span className="min-w-0 text-right text-sm text-ink">{cellValue(c, r)}</span>
                     </div>
-                  ))}
-                </div>
+                  );
+                  return (
+                    <>
+                      <div className="divide-y divide-line/60">{chung.map((c) => dong(c, row))}</div>
+                      {subs && subs.map((sub, j) => (
+                        <div key={j} className="mt-2 border-l-2 border-primary/40 pl-2.5">
+                          <div className="divide-y divide-line/60">{rieng.map((c) => dong(c, { ...row, ...sub }))}</div>
+                        </div>
+                      ))}
+                    </>
+                  );
+                })()}
                 {actionCols.length > 0 && (
                   <div className="mt-2.5 flex flex-wrap items-center gap-2 border-t border-line/60 pt-2.5">
                     {actionCols.map((c) => <span key={c.key}>{cellValue(c, row)}</span>)}

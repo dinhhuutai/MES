@@ -14,6 +14,7 @@ import { Field, Select } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import useNow from '../../../hooks/useNow';
+import useSocketEvent from '../../../hooks/useSocketEvent';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 import TraVeBadge from '../../../components/common/TraVeBadge';
 import {
@@ -116,6 +117,19 @@ export default function ReadyPage() {
     const t = setTimeout(load, 250);
     return () => clearTimeout(t);
   }, [load]);
+
+  // Bộ phận Khuôn/Film/Mực làm trên MÁY KHÁC NHAU ⇒ phải tải lại ngầm khi có ai xác nhận,
+  // nếu không mỗi máy giữ dữ liệu lúc mở trang (xem ghi chú cùng vấn đề ở `ReadyQcPage`).
+  // KHÔNG dùng `load` vì nó xóa các dòng đang tick.
+  const refresh = useCallback(async () => {
+    try {
+      const res = await listReadyCandidates({ search, page, limit: 200 });
+      setRows(res.data.items);
+      setMeta(res.data.meta);
+      getReadyItemCounts().then((c) => setCounts(c.data)).catch(() => {});
+    } catch (e) { /* nền: giữ dữ liệu cũ khi lỗi mạng */ }
+  }, [search, page]);
+  useSocketEvent('ready:confirmed', refresh);
 
   const toggleOne = (id) => setSelected((s) => {
     const next = new Set(s);

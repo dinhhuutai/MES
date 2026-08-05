@@ -13,6 +13,7 @@ import Toast from '../../../components/common/Toast';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import useNow from '../../../hooks/useNow';
+import useSocketEvent from '../../../hooks/useSocketEvent';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
@@ -120,6 +121,19 @@ export default function ReadyQcPage() {
     const t = setTimeout(load, 250);
     return () => clearTimeout(t);
   }, [load]);
+
+  // ⚠ TẢI LẠI NGẦM khi kỹ thuật xác nhận Khuôn/Film/Mực ở MÁY KHÁC — trước đây màn này không nghe
+  // socket nên giữ mãi dữ liệu lúc mở trang: KT vừa xác nhận xong mà QC quét mã vẫn báo
+  // "chưa đủ mục kỹ thuật" (lỗi đã gặp thật 04/08/2026 với SD-2607-001-A25-F04-C01 — 3 mục đủ lúc
+  // 16:24, quét lúc 16:27 vẫn báo thiếu). KHÔNG dùng `load` vì nó xóa các dòng đang tick.
+  const refresh = useCallback(async () => {
+    try {
+      const res = await listReadyQcCandidates({ search, page, limit: 500 });
+      setRows(res.data.items);
+      setMeta(res.data.meta);
+    } catch (e) { /* nền: lỗi mạng thì giữ dữ liệu cũ, không quấy người dùng */ }
+  }, [search, page]);
+  useSocketEvent('ready:confirmed', refresh);
 
   const open = async (row, asReturn = false) => {
     setEditing(row);
@@ -287,7 +301,8 @@ export default function ReadyQcPage() {
       <Toolbar title="QC chuẩn bị kỹ thuật" subtitle="Toàn bộ phần in ở READY — QC xác nhận khi đủ mục kỹ thuật (khách II/AD chỉ cần Film + Mực). SLA nghẽn QC chỉ tính sau khi kỹ thuật đủ mục."
         search={search} onSearch={(v) => { setSearch(v); setPage(1); }}
         searchPlaceholder="Tìm code phần, mã hàng, màu/kích vải, kích phim...">
-        {canQC && <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét / tích mã</Button>}
+        {/* Làm tươi NGAY khi mở modal quét: phòng trường hợp tab để lâu / mất socket giữa chừng. */}
+        {canQC && <Button variant="secondary" icon="scan-line" onClick={() => { refresh(); setScanOpen(true); }}>Quét / tích mã</Button>}
         {canQC && selected.size > 0 && (
           <Button loading={batching} onClick={doBatch}>QC xác nhận ({selected.size})</Button>
         )}

@@ -5,9 +5,13 @@ export const listProductionCandidates = (params) => client.get('/production/cand
 export const startProduction = (lenhId, chuyenId) => client.post(`/production/${lenhId}/start`, { chuyenId });
 export const listChuyen = () => client.get('/catalog/chuyen');
 export const getRun = (lenhId) => client.get(`/production/run/${lenhId}`);
-export const printTem = (phieuId, soLuong) => client.post(`/production/phieu/${phieuId}/tem`, { soLuong });
-// In tem NHIỀU phần in 1 lượt (lệnh gom set): items = [{ dotVaiId, soLuong }]
-export const printTemBatch = (phieuId, items) => client.post(`/production/phieu/${phieuId}/tem-batch`, { items });
+// `meta` (mig 066) = { ngayCa, gioBd, gioKt, btpTruoc, btpCuoi } — ngày ca / giờ SX từ→đến / cờ BTP
+// của LƯỢT IN, lưu vào từng tem (không in lên nhãn).
+export const printTem = (phieuId, soLuong, meta) =>
+  client.post(`/production/phieu/${phieuId}/tem`, { soLuong, ...(meta || {}) });
+// In tem NHIỀU phần in 1 lượt (lệnh gom set): items = [{ dotVaiId, soLuong, soLuongHuy, soLuongThieu }]
+export const printTemBatch = (phieuId, items, meta) =>
+  client.post(`/production/phieu/${phieuId}/tem-batch`, { items, ...(meta || {}) });
 export const reprintTem = (temId, lyDo) => client.post(`/production/tem/${temId}/in-lai`, { lyDo });
 // dotVaiId (tùy chọn) → nhãn lấy đúng phần in của đợt vải đó (in tem lệnh gom set)
 export const getTemLabel = (temId, dotVaiId) =>

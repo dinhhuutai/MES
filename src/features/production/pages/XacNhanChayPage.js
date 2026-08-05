@@ -75,11 +75,16 @@ export default function XacNhanChayPage() {
       const rowVals = [r.ten_chuyen, r.ma_chuyen].filter(Boolean).map((s) => s.toLowerCase());
       return rowVals.some((rv) => names.includes(rv));
     };
-    return (rows || []).filter((r) =>
-      like(r.ten_khach_hang, filters.khach) && like(r.ma_don_hang, filters.don)
-      && like(r.ma_hang, filters.maHang) && like(r.mau_vai, filters.mauVai)
-      && like(r.kich_vai, filters.kichVai) && like(r.kich_phim, filters.kichPhim)
-      && matchChuyen(r));
+    // Lệnh GOM SET: khớp nếu BẤT KỲ phần in nào trong lệnh khớp (nếu chỉ xét `r.*` thì chỉ so được
+    // phần in ĐẦU TIÊN — lọc theo mã hàng của phần in thứ 2 sẽ làm mất cả lệnh).
+    const khopPin = (r) => {
+      const list = r.phan_in_list && r.phan_in_list.length ? r.phan_in_list : [r];
+      return list.some((p) =>
+        like(p.ten_khach_hang, filters.khach) && like(p.ma_don_hang, filters.don)
+        && like(p.ma_hang, filters.maHang) && like(p.mau_vai, filters.mauVai)
+        && like(p.kich_vai, filters.kichVai) && like(p.kich_phim, filters.kichPhim));
+    };
+    return (rows || []).filter((r) => khopPin(r) && matchChuyen(r));
   }, [filters, hasFilter, selChuyen]);
   const candFiltered = useMemo(() => applyFilters(candidates), [applyFilters, candidates]);
   const runFiltered = useMemo(() => applyFilters(running), [applyFilters, running]);
@@ -140,15 +145,22 @@ export default function XacNhanChayPage() {
     }
   };
 
+  // LỆNH GOM SET → tách 1 dòng / PHẦN IN (prop `subRows` của DataTable). Cột nào thuộc về LỆNH
+  // (chuyền, SL release, ngày SX, trạng thái, nút thao tác) đánh `merge: true` để hợp nhất ô bằng
+  // rowSpan — cùng với STT. Cột thuộc PHẦN IN (khách/đơn/mã hàng/code phần/màu/kích/hạn giao) hiện
+  // theo từng dòng. Backend chỉ gắn `phan_in_list` khi lệnh có >1 phần in ⇒ lệnh thường không đổi gì.
+  const subRows = (r) => (r.phan_in_list ? r.phan_in_list.map((p) => ({ ...p, __sub: true })) : null);
+
   const candCols = [
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => (
       <div>
         <div className="text-ink">{r.ma_hang || '—'}</div>
-        {r.giai_doan === 'EP_UI' && <Badge tone="info">Ép ủi (in kiếng)</Badge>}
-        <GomBadge soDotVai={r.so_dot_vai} soPhanIn={r.so_phan_in} />
-        {Number(r.da_in_truoc) > 0 && (
+        {/* Badge mức LỆNH → chỉ vẽ ở dòng đầu (`__sub` do `subRows` gắn cho dòng con). */}
+        {!r.__sub && r.giai_doan === 'EP_UI' && <Badge tone="info">Ép ủi (in kiếng)</Badge>}
+        {!r.__sub && <GomBadge soDotVai={r.so_dot_vai} soPhanIn={r.so_phan_in} />}
+        {!r.__sub && Number(r.da_in_truoc) > 0 && (
           <div className="mt-0.5">
             <Badge tone="warning">
               Đã in {fmtNum(r.da_in_truoc)}{r.tg_ngung ? ` · ngừng ${new Date(r.tg_ngung).toLocaleString('vi-VN')}` : ''} → in tiếp
@@ -157,30 +169,37 @@ export default function XacNhanChayPage() {
         )}
       </div>
     ) },
+    { key: 'ma_phan', header: 'Code phần', render: (r) => r.ma_phan || '—' },
     { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
     { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
-    { key: 'ma_chuyen', header: 'Chuyền', render: (r) => r.ten_chuyen || '—' },
-    { key: 'so_luong_release', header: 'SL release', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong_release) },
-    { key: 'ngay_ke_hoach', header: 'Ngày SX KH', render: (r) => fmtDate(r.ngay_ke_hoach) },
+    { key: 'ma_chuyen', header: 'Chuyền', merge: true, render: (r) => r.ten_chuyen || '—' },
+    { key: 'so_luong_release', header: 'SL release', className: 'text-right tabular-nums', merge: true, render: (r) => fmtNum(r.so_luong_release) },
+    { key: 'ngay_ke_hoach', header: 'Ngày SX KH', merge: true, render: (r) => fmtDate(r.ngay_ke_hoach) },
     { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => fmtDate(r.han_giao_hang) },
-    { key: 'actions', header: '', className: 'text-right whitespace-nowrap', render: (r) =>
+    { key: 'actions', header: '', className: 'text-right whitespace-nowrap', merge: true, render: (r) =>
       canRun && <Button className="px-2.5 py-1 text-xs" onClick={() => openConfirm(r)}>Xác nhận chạy</Button> },
   ];
 
   const runCols = [
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
-    { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
+    { key: 'ma_hang', header: 'Mã hàng', render: (r) => (
+      <div>
+        <div className="text-ink">{r.ma_hang || '—'}</div>
+        {!r.__sub && <GomBadge soDotVai={r.so_dot_vai} soPhanIn={r.so_phan_in} />}
+      </div>
+    ) },
+    { key: 'ma_phan', header: 'Code phần', render: (r) => r.ma_phan || '—' },
     { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
     { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
-    { key: 'ma_chuyen', header: 'Chuyền' },
-    { key: 'printed', header: 'Đã in', className: 'text-right tabular-nums', render: (r) => `${fmtNum(r.printed)} / ${fmtNum(r.target)}` },
-    { key: 'so_tem', header: 'Tem', className: 'text-right' },
-    { key: 'tt', header: 'Trạng thái', render: (r) =>
+    { key: 'ma_chuyen', header: 'Chuyền', merge: true },
+    { key: 'printed', header: 'Đã in', className: 'text-right tabular-nums', merge: true, render: (r) => `${fmtNum(r.printed)} / ${fmtNum(r.target)}` },
+    { key: 'so_tem', header: 'Tem', className: 'text-right', merge: true },
+    { key: 'tt', header: 'Trạng thái', merge: true, render: (r) =>
       r.dang_ngung ? <Badge tone="danger">Đang ngừng</Badge> : <Badge tone="success">Đang chạy</Badge> },
-    { key: 'actions', header: '', className: 'text-right whitespace-nowrap', render: (r) =>
+    { key: 'actions', header: '', className: 'text-right whitespace-nowrap', merge: true, render: (r) =>
       <Button variant="secondary" className="px-2.5 py-1 text-xs" onClick={() => setSel(r.lenh_id)}>Mở</Button> },
   ];
 
@@ -227,7 +246,7 @@ export default function XacNhanChayPage() {
         </Button>
       </div>
       <DataTable columns={runCols} rows={runFiltered} loading={loading} rowKey="phieu_id" sttStart={0}
-        rowClassName={(r) => slaRowClass(statusLenh(r.lenh_id))}
+        subRows={subRows} rowClassName={(r) => slaRowClass(statusLenh(r.lenh_id))}
         onRowClick={(r) => setSel(r.lenh_id)} emptyText="Không có lệnh đang chạy" />
 
       <div className="mb-2 mt-6 flex items-center justify-between gap-2">
@@ -237,7 +256,7 @@ export default function XacNhanChayPage() {
         </Button>
       </div>
       <DataTable columns={candCols} rows={candFiltered} loading={loading} sttStart={0}
-        rowClassName={(r) => slaRowClass(statusLenh(r.id))}
+        subRows={subRows} rowClassName={(r) => slaRowClass(statusLenh(r.id))}
         emptyText="Không có lệnh nào chờ chạy" />
 
       {/* Xác nhận thông tin chạy + chọn chuyền thực tế */}
