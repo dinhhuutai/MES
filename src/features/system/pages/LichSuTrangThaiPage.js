@@ -13,7 +13,8 @@ import { Field, Textarea } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import { listConfirmHistory, cancelReadyItem, listReopenReadyCandidates, reopenReady } from '../../../services/readyService';
-import { searchPhanInForCancel, huyPhanIn, listDeletedPhanIn, moPhanIn } from '../../../services/orderService';
+import { searchPhanInForCancel, huyPhanIn, listDeletedPhanIn, moPhanIn,
+  searchDotVaiForCancel, huyDotVai, listDeletedDotVai, moDotVai } from '../../../services/orderService';
 import { listCancelableLenh, cancelLenh, giaCongTemCancelable, huyGiaCongTem } from '../../../services/planningService';
 import { listCancelableTem, cancelPrintTem, listCloseCandidates, closeProduction, listReopenCandidates, reopenProduction, listUndoStartCandidates, undoStartProduction } from '../../../services/productionService';
 import { listCancelKcs, cancelKcs, listCancelSua, cancelSua, listCancelOqc, cancelOqc,
@@ -1241,6 +1242,260 @@ function PhanInReopenSection({ show }) {
   );
 }
 
+// ─── Tab: Hủy ĐỢT VẢI (xóa mềm ở mức đợt, KHÔNG đụng phần in) ────────────────
+// Dùng khi ERP đẩy lên đợt vải sai/thừa (vd đợt BỔ SUNG bị tính SL = 0): bỏ đúng đợt đó, giữ nguyên
+// phần in + các đợt còn lại. Hủy cả phần in là quá tay — kéo theo mọi đợt/lệnh/tem của nó.
+function DotVaiCancelSection({ show }) {
+  const [q, setQ] = useState('');
+  const [stage, setStage] = useState('');
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [selected, setSelected] = useState(() => new Map());
+  const [lyDo, setLyDo] = useState('');
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await searchDotVaiForCancel(q, stage);
+      setResults(res.data);
+    } catch (e) {
+      show(e.message || 'Lỗi tìm kiếm', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [q, stage, show]);
+  useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t); }, [load]);
+
+  // Đợt ĐÃ RELEASE không chọn được (phải hủy lệnh trước) — khóa ngay ở FE cho rõ, BE vẫn chặn thật.
+  const toggle = (row) => {
+    if (row.da_release) return;
+    setSelected((m) => {
+      const next = new Map(m);
+      if (next.has(row.dot_vai_id)) next.delete(row.dot_vai_id); else next.set(row.dot_vai_id, row);
+      return next;
+    });
+  };
+  const selArr = [...selected.values()];
+  const chonDuoc = results.filter((r) => !r.da_release);
+  const allChecked = chonDuoc.length > 0 && chonDuoc.every((r) => selected.has(r.dot_vai_id));
+  const toggleAll = () => setSelected((m) => {
+    const next = new Map(m);
+    if (allChecked) chonDuoc.forEach((r) => next.delete(r.dot_vai_id));
+    else chonDuoc.forEach((r) => next.set(r.dot_vai_id, r));
+    return next;
+  });
+
+  const doHuy = async () => {
+    setBusy(true);
+    try {
+      const res = await huyDotVai(selArr.map((r) => r.dot_vai_id), lyDo.trim() || null);
+      const loi = res.data?.loi || [];
+      show(`Đã hủy ${res.data.count} đợt vải`
+        + (loi.length ? ` · ${loi.length} đợt không hủy được: ${loi[0].ly_do}` : ''),
+      loi.length ? 'warning' : 'success');
+      setSelected(new Map()); setLyDo(''); setConfirm(false);
+      load();
+    } catch (e) {
+      show(e.message || 'Hủy thất bại', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const columns = [
+    { key: 'sel', className: 'w-10', selection: true,
+      header: <input type="checkbox" checked={allChecked} onChange={toggleAll} aria-label="Chọn tất cả" />,
+      render: (r) => (
+        <input type="checkbox" checked={selected.has(r.dot_vai_id)} disabled={r.da_release}
+          title={r.da_release ? 'Đợt đã release — hủy lệnh sản xuất trước' : ''}
+          onClick={(e) => e.stopPropagation()} onChange={() => toggle(r)} aria-label="Chọn đợt vải" />
+      ) },
+    { key: 'ma_dot_vai', header: 'Mã đợt vải', className: 'font-medium text-ink', render: (r) => r.ma_dot_vai },
+    { key: 'loai_dot_vai', header: 'Loại đợt', render: (r) => <Badge tone="default">{r.loai_dot_vai || '—'}</Badge> },
+    { key: 'so_luong_vai_ve', header: 'SL nhận vải', className: 'text-right tabular-nums',
+      render: (r) => (Number(r.so_luong_vai_ve) === 0
+        ? <span className="font-semibold text-danger" title="SL = 0 — thường do ERP gửi số không phải lũy kế">0</span>
+        : fmtNum(r.so_luong_vai_ve)) },
+    { key: 'ma_phan', header: 'Code phần', render: (r) => r.ma_phan },
+    { key: 'ten_khach_hang', header: 'Khách hàng', render: (r) => r.ten_khach_hang || '—' },
+    { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
+    { key: 'mau_vai', header: 'Màu · Kích', render: (r) => [r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—' },
+    { key: 'giai_doan', header: 'Trạm hiện tại', render: (r) => <Badge tone="info">{STAGE_LABEL[r.giai_doan] || r.giai_doan || '—'}</Badge> },
+    { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => <HanGiaoCell value={r.han_giao_hang} /> },
+    { key: 'tg_len_mes', header: 'Ngày/giờ lên từ ERP', className: 'whitespace-nowrap', render: (r) => fmtTime(r.tg_len_mes) },
+    { key: 'so_dot_cua_phan_in', header: 'Số đợt của phần in', className: 'text-right tabular-nums', render: (r) => r.so_dot_cua_phan_in },
+    { key: 'da_release', header: 'Release', render: (r) => (r.da_release
+      ? <Badge tone="warning">Đã release</Badge> : <Badge tone="default">Chưa</Badge>) },
+  ];
+
+  return (
+    <div>
+      <Toolbar title="Hủy đợt vải (xóa mềm)"
+        subtitle="Bỏ ĐÚNG đợt vải sai/thừa do ERP đẩy lên, GIỮ NGUYÊN phần in và các đợt còn lại. Đợt đã release phải hủy lệnh sản xuất trước."
+        search={q} onSearch={setQ} searchPlaceholder="Tìm code phần, mã đợt vải, mã hàng, màu, khách...">
+        <Badge tone="default">{results.length} kết quả</Badge>
+      </Toolbar>
+
+      <div className="mb-3 flex gap-1.5 overflow-x-auto pb-1">
+        {HUY_STAGES.map((s) => (
+          <button key={s.code || 'all'} onClick={() => setStage(s.code)}
+            className={`shrink-0 rounded-full border px-3.5 py-1.5 text-xs font-medium transition ${
+              stage === s.code ? 'border-primary bg-primary text-white' : 'border-line text-ink-soft hover:bg-surface-muted'
+            }`}>
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      {selArr.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-card border border-line bg-surface p-3">
+          <span className="text-xs font-semibold text-ink-soft">Đã chọn {selArr.length}:</span>
+          {selArr.map((r) => (
+            <span key={r.dot_vai_id} className="inline-flex items-center gap-1 rounded-full bg-primary-wash px-3 py-1 text-xs font-medium text-primary">
+              {r.ma_phan} · {r.loai_dot_vai || 'đợt'} ({fmtNum(r.so_luong_vai_ve)})
+              <button onClick={() => toggle(r)} className="ml-0.5 hover:text-danger" aria-label="Bỏ chọn"><Icon name="x" size={12} /></button>
+            </span>
+          ))}
+          <div className="ml-auto flex items-center gap-2">
+            <input value={lyDo} onChange={(e) => setLyDo(e.target.value)} placeholder="Lý do (tùy chọn)"
+              className="h-9 w-52 rounded-input border border-line px-3 text-sm focus:border-primary focus:outline-none" />
+            <Button variant="danger" onClick={() => setConfirm(true)}>Hủy {selArr.length} đợt vải</Button>
+          </div>
+        </div>
+      )}
+
+      <DataTable columns={columns} rows={results} loading={loading} rowKey="dot_vai_id"
+        onRowClick={(r) => toggle(r)} emptyText="Không tìm thấy đợt vải còn hoạt động" />
+
+      <ConfirmDialog
+        open={confirm}
+        onClose={() => setConfirm(false)}
+        onConfirm={doHuy}
+        loading={busy}
+        title="Hủy đợt vải (xóa mềm)"
+        message={`Xóa mềm ${selArr.length} đợt vải: ${selArr.map((r) => `${r.ma_phan} (${r.loai_dot_vai || 'đợt'})`).join(', ')}? Phần in và các đợt vải KHÁC giữ nguyên. Mở lại được ở tab "Mở đợt vải".`}
+        confirmText="Hủy đợt vải"
+        variant="danger"
+      />
+    </div>
+  );
+}
+
+// ─── Tab: Mở đợt vải (khôi phục đợt đã hủy mềm) ──────────────────────────────
+function DotVaiReopenSection({ show }) {
+  const [q, setQ] = useState('');
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState(() => new Map());
+  const [confirm, setConfirm] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listDeletedDotVai(q);
+      setRows(res.data);
+    } catch (e) {
+      show(e.message || 'Lỗi tải', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [q, show]);
+  useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t); }, [load]);
+
+  // Phần in đang bị hủy thì đợt vải không mở lại được (sẽ thành dữ liệu mồ côi) — khóa chọn.
+  const toggle = (row) => {
+    if (!row.phan_in_con_hoat_dong) return;
+    setSelected((m) => {
+      const next = new Map(m);
+      if (next.has(row.dot_vai_id)) next.delete(row.dot_vai_id); else next.set(row.dot_vai_id, row);
+      return next;
+    });
+  };
+  const selArr = [...selected.values()];
+
+  const doReopen = async () => {
+    setBusy(true);
+    try {
+      const res = await moDotVai(selArr.map((r) => r.dot_vai_id));
+      const loi = res.data?.loi || [];
+      show(`Đã mở lại ${res.data.count} đợt vải`
+        + (loi.length ? ` · ${loi.length} đợt không mở được: ${loi[0].ly_do}` : ''),
+      loi.length ? 'warning' : 'success');
+      setSelected(new Map()); setConfirm(false);
+      load();
+    } catch (e) {
+      show(e.message || 'Mở lại thất bại', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const columns = [
+    { key: 'sel', className: 'w-10', selection: true, render: (r) => (
+      <input type="checkbox" checked={selected.has(r.dot_vai_id)} disabled={!r.phan_in_con_hoat_dong}
+        title={r.phan_in_con_hoat_dong ? '' : 'Phần in đang bị hủy — mở phần in trước'}
+        onClick={(e) => e.stopPropagation()} onChange={() => toggle(r)} aria-label="Chọn đợt vải" />
+    ) },
+    { key: 'ma_dot_vai', header: 'Mã đợt vải', className: 'font-medium text-ink', render: (r) => r.ma_dot_vai },
+    { key: 'loai_dot_vai', header: 'Loại đợt', render: (r) => <Badge tone="default">{r.loai_dot_vai || '—'}</Badge> },
+    { key: 'so_luong_vai_ve', header: 'SL nhận vải', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong_vai_ve) },
+    { key: 'ma_phan', header: 'Code phần', render: (r) => r.ma_phan },
+    { key: 'ten_khach_hang', header: 'Khách hàng', render: (r) => r.ten_khach_hang || '—' },
+    { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
+    { key: 'mau_vai', header: 'Màu · Kích', render: (r) => [r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—' },
+    { key: 'tg_huy', header: 'Hủy lúc', className: 'whitespace-nowrap', render: (r) => (
+      <div>
+        <div>{fmtTime(r.tg_huy)}</div>
+        <div className="text-xs text-ink-soft">{r.nguoi_huy || '—'}{r.ly_do ? ` · ${r.ly_do}` : ''}</div>
+      </div>
+    ) },
+    { key: 'phan_in_con_hoat_dong', header: 'Phần in', render: (r) => (r.phan_in_con_hoat_dong
+      ? <Badge tone="success">Còn hoạt động</Badge>
+      : <Badge tone="warning" title="Mở phần in trước rồi mới mở được đợt vải">Đang bị hủy</Badge>) },
+  ];
+
+  return (
+    <div>
+      <Toolbar title="Mở đợt vải (khôi phục đã hủy)"
+        subtitle="Danh sách đợt vải đã hủy mềm. Mở lại sẽ trả đợt về đúng trạng thái trước khi hủy — không đụng phần in."
+        search={q} onSearch={setQ} searchPlaceholder="Tìm code phần, mã đợt vải, mã hàng, màu, khách...">
+        <Badge tone="default">{rows.length} đã hủy</Badge>
+      </Toolbar>
+
+      {selArr.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-card border border-line bg-surface p-3">
+          <span className="text-xs font-semibold text-ink-soft">Đã chọn {selArr.length}:</span>
+          {selArr.map((r) => (
+            <span key={r.dot_vai_id} className="inline-flex items-center gap-1 rounded-full bg-primary-wash px-3 py-1 text-xs font-medium text-primary">
+              {r.ma_phan} · {r.loai_dot_vai || 'đợt'}
+              <button onClick={() => toggle(r)} className="ml-0.5 hover:text-danger" aria-label="Bỏ chọn"><Icon name="x" size={12} /></button>
+            </span>
+          ))}
+          <div className="ml-auto">
+            <Button onClick={() => setConfirm(true)}>Mở lại {selArr.length} đợt vải</Button>
+          </div>
+        </div>
+      )}
+
+      <DataTable columns={columns} rows={rows} loading={loading} rowKey="dot_vai_id"
+        onRowClick={(r) => toggle(r)} emptyText="Không có đợt vải nào đã hủy" />
+
+      <ConfirmDialog
+        open={confirm}
+        onClose={() => setConfirm(false)}
+        onConfirm={doReopen}
+        loading={busy}
+        title="Mở lại đợt vải"
+        message={`Khôi phục ${selArr.length} đợt vải: ${selArr.map((r) => `${r.ma_phan} (${r.loai_dot_vai || 'đợt'})`).join(', ')}? Đợt sẽ trở lại đúng trạng thái trước khi hủy.`}
+        confirmText="Mở lại đợt vải"
+      />
+    </div>
+  );
+}
+
 // ─── Tab: Hủy tem sửa (xóa mềm) — ẩn phần chờ sửa khỏi màn Sửa, GIỮ NGUYÊN mọi số lượng ───
 // "Tem sửa" (nhãn 16-) = phần chờ sửa của 1 tem (con_sua), không phải dòng tem riêng.
 function TemSuaCancelSection({ show }) {
@@ -1477,6 +1732,9 @@ export default function LichSuTrangThaiPage() {
     can('READY_CANCEL') && { key: 'moready', label: 'Mở READY' },
     can('READY_CANCEL') && { key: 'huyphanin', label: 'Hủy phần in' },
     can('READY_CANCEL') && { key: 'mophanin', label: 'Mở phần in' },
+    // Mức ĐỢT VẢI — ERP đẩy lên đợt sai/thừa thì bỏ đúng đợt đó, không phải hủy cả phần in.
+    can('READY_CANCEL') && { key: 'huydotvai', label: 'Hủy đợt vải' },
+    can('READY_CANCEL') && { key: 'modotvai', label: 'Mở đợt vải' },
     // `LENH_CANCEL_ANY` (mig 065) vào được tab này dù không có RELEASE1/2 — quyền hủy tùy chọn.
     (can('RELEASE1') || can('RELEASE2') || can('LENH_CANCEL_ANY')) && { key: 'lenh', label: 'Hủy lệnh sản xuất' },
     (can('RELEASE1') || can('RELEASE2')) && { key: 'huytemgiacong', label: 'Hủy tem gia công' },
@@ -1514,6 +1772,8 @@ export default function LichSuTrangThaiPage() {
       {tab === 'moready' && <ReopenReadySection show={show} />}
       {tab === 'huyphanin' && <PhanInCancelSection show={show} />}
       {tab === 'mophanin' && <PhanInReopenSection show={show} />}
+      {tab === 'huydotvai' && <DotVaiCancelSection show={show} />}
+      {tab === 'modotvai' && <DotVaiReopenSection show={show} />}
       {tab === 'lenh' && <LenhCancelSection show={show} />}
       {tab === 'huytemgiacong' && <GiaCongTemCancelSection show={show} />}
       {tab === 'tem' && <TemCancelSection show={show} />}

@@ -18,12 +18,13 @@ export const getTemLabel = (temId, dotVaiId) =>
   client.get(`/production/tem/${temId}/label`, { params: dotVaiId ? { dotVaiId } : undefined });
 export const getTemLogs = (phieuId) => client.get(`/production/phieu/${phieuId}/tem-logs`);
 export const finishRun = (phieuId) => client.post(`/production/phieu/${phieuId}/finish`);
-export const stopLine = (phieuId, lyDo) => client.post(`/production/phieu/${phieuId}/ngung`, { lyDo });
+// `gioBd`/`gioKt` dạng 'HH:MM' (tùy chọn) — giờ ngừng / hoạt động lại nhập tay; bỏ trống = giờ hệ thống.
+export const stopLine = (phieuId, lyDo, gioBd) => client.post(`/production/phieu/${phieuId}/ngung`, { lyDo, gioBd });
 // Ghi vải hủy (= vải hư) / vải THIẾU trong sản xuất — body.loai: 'HUY' | 'THIEU' (theo đợt vải/phần in)
 export const addVaiHuy = (phieuId, body) => client.post(`/production/phieu/${phieuId}/vai-huy`, body);
 // Phân công sản xuất: { caTruongId, chuyenTruong, items: [{ dotVaiId, thoIn, soLuongHuy, soLuongThieu }] }
 export const savePhanCong = (phieuId, body) => client.post(`/production/phieu/${phieuId}/phan-cong`, body);
-export const resumeLine = (phieuId) => client.post(`/production/phieu/${phieuId}/hoat-dong-lai`);
+export const resumeLine = (phieuId, gioKt) => client.post(`/production/phieu/${phieuId}/hoat-dong-lai`, { gioKt });
 
 // Theo dõi chuyền
 export const getMonitor = () => client.get('/production/monitor');

@@ -11,3 +11,10 @@ export const searchPhanInForCancel = (q, stage) => client.get('/phan-in/huy/sear
 export const huyPhanIn = (phanInIds, lyDo) => client.post('/phan-in/huy', { phanInIds, lyDo });
 export const listDeletedPhanIn = (q) => client.get('/phan-in/mo/deleted', { params: { q } });
 export const moPhanIn = (phanInIds) => client.post('/phan-in/mo', { phanInIds });
+
+// Hủy / Mở ĐỢT VẢI (mức đợt — ERP đẩy lên đợt sai thì bỏ đúng đợt đó, giữ nguyên phần in).
+// `huyDotVai`/`moDotVai` trả `{count, items, loi[]}` — `loi[]` = đợt bị chặn kèm lý do.
+export const searchDotVaiForCancel = (q, stage) => client.get('/phan-in/dot-vai/huy/search', { params: { q, stage } });
+export const huyDotVai = (dotVaiIds, lyDo) => client.post('/phan-in/dot-vai/huy', { dotVaiIds, lyDo });
+export const listDeletedDotVai = (q) => client.get('/phan-in/dot-vai/mo/deleted', { params: { q } });
+export const moDotVai = (dotVaiIds) => client.post('/phan-in/dot-vai/mo', { dotVaiIds });

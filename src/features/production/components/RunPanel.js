@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import SidePanel from '../../../components/common/SidePanel';
 import Modal from '../../../components/common/Modal';
 import Button from '../../../components/common/Button';
@@ -52,11 +52,13 @@ const INFO_HEADERS = ['STT', 'Khách hàng', 'Đơn hàng', 'Mã hàng', 'Code p
 // cha render ⇒ ô nhập mất focus khi đang gõ (cùng luật với `PhanInInfoCells`).
 //
 // NGÀY CA là Ô CHỮ dạng `YYMMDD` + mã ca (`260805D2` = 05/08/2026 ca Dài 2 · `C2` ca Ngắn 2 · `HC`
-// hành chính). BE gợi ý sẵn theo NGÀY KẾ HOẠCH + loại ca của tuần (`goi_y_tem`), người dùng sửa được.
+// hành chính). BE gợi ý sẵn theo **GIỜ HIỆN TẠI lúc mở sidebar** + loại ca của tuần (`goi_y_tem`),
+// người dùng sửa được.
 // GIỜ dùng `TimeSelect` (0h–23h + phút) chứ KHÔNG `<input type="time">` — ô đó hiện AM/PM theo locale máy.
-const META_MAC_DINH = () => ({ ngayCa: '', gioBd: '', gioKt: '', btpTruoc: false, btpCuoi: false });
+const META_MAC_DINH = () => ({ ngayCa: '', gioBd: '', gioKt: '', btpTruoc: false, btpCuoi: false, gcMauVai: '' });
 
-function TemMetaFields({ meta, setMeta, goiY }) {
+// `anGcMauVai`: lệnh GOM SET nhập GC màu vải RIÊNG từng dòng trong bảng → ẩn ô chung ở đây cho khỏi lẫn.
+function TemMetaFields({ meta, setMeta, goiY, anGcMauVai = false }) {
   const set = (k, v) => setMeta((m) => ({ ...m, [k]: v }));
   const chk = 'h-4 w-4 rounded border-line text-primary focus:ring-primary/30';
   const khacGoiY = goiY?.ngay_ca && meta.ngayCa && meta.ngayCa !== goiY.ngay_ca;
@@ -80,8 +82,15 @@ function TemMetaFields({ meta, setMeta, goiY }) {
       {khacGoiY && (
         <button type="button" onClick={() => set('ngayCa', goiY.ngay_ca)}
           className="mt-1.5 text-xs font-medium text-primary hover:underline">
-          ↺ Về mã theo kế hoạch ({goiY.ngay_ca})
+          ↺ Về mã theo giờ hiện tại ({goiY.ngay_ca})
         </button>
+      )}
+      {!anGcMauVai && (
+        <label className="mt-2 block">
+          <span className="mb-1 block text-xs font-medium text-ink-soft">GC màu vải</span>
+          <Input value={meta.gcMauVai || ''} onChange={(e) => set('gcMauVai', e.target.value)}
+            placeholder="GC màu vải của tem này" />
+        </label>
       )}
       <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1.5">
         <label className="flex cursor-pointer items-center gap-2 text-sm text-ink">
@@ -170,48 +179,53 @@ function PhanCongInline({ pc, users, onSave, busy, canRun }) {
 }
 
 // ─── Modal IN TEM cho lệnh GOM SET ────────────────────────────────────────────
-// Nhập SL in cho TỪNG phần in rồi bấm In tem 1 lần: BE tạo N tem trong 1 transaction, FE in nhãn
-// LIÊN TIẾP (xong phần in 1 → phần in 2 → …).
-function PrintSetModal({ open, onClose, rows, onPrint, busy, meta, setMeta, goiY }) {
-  const [form, setForm] = useState({}); // dotVaiId → { sl, huy, thieu }
-  useEffect(() => { if (open) setForm({}); }, [open]);
+// ⚠⚠ IN TỪNG DÒNG, KHÔNG in gộp 1 lượt (đổi 2026-08-06). Bản cũ có 1 nút "In tem (N phần in)" ở
+// footer: BE tạo đủ N tem nhưng FE mở N cửa sổ in liên tiếp ⇒ trình duyệt CHẶN POPUP từ cửa sổ thứ 2
+// trở đi (chỉ lần mở đầu còn giữ được ngữ cảnh user-gesture) ⇒ người dùng chỉ nhận được nhãn của
+// PHẦN IN ĐẦU TIÊN, các tem sau vẫn tạo trong DB nhưng KHÔNG in ra. Nay mỗi dòng 1 nút "In tem":
+// mỗi lần bấm = 1 user-gesture = 1 cửa sổ in ⇒ không bị chặn, và in tới đâu biết tới đó.
+// Modal KHÔNG đóng sau khi in để bấm tiếp dòng khác; dòng đã in trong phiên này hiện dấu ✓.
+function PrintSetModal({ open, onClose, rows, onPrintRow, busy, meta, setMeta, goiY }) {
+  const [form, setForm] = useState({}); // dotVaiId → { sl, huy, thieu, gc }
+  const [daIn, setDaIn] = useState(() => new Set()); // dotVaiId đã in trong phiên mở modal này
+  useEffect(() => { if (open) { setForm({}); setDaIn(new Set()); } }, [open]);
   const setCell = (id, key, v) => setForm((f) => ({ ...f, [id]: { ...(f[id] || {}), [key]: v } }));
   const num = (id, key) => Number((form[id] || {})[key]) || 0;
 
-  // Dòng có SL in > 0 mới tạo tem; dòng chỉ có vải hủy/thiếu vẫn được gửi để ghi sổ vải.
-  const items = useMemo(() => rows.map((r) => ({
-    dotVaiId: r.dot_vai_ve_id,
-    soLuong: num(r.dot_vai_ve_id, 'sl'),
-    soLuongHuy: num(r.dot_vai_ve_id, 'huy'),
-    soLuongThieu: num(r.dot_vai_ve_id, 'thieu'),
-  })).filter((x) => x.soLuong > 0 || x.soLuongHuy > 0 || x.soLuongThieu > 0),
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  [rows, form]);
-  const soIn = items.filter((x) => x.soLuong > 0);
-  const tong = soIn.reduce((s, x) => s + x.soLuong, 0);
   const capOf = (r) => Math.floor((Number(r.sl_vao_sx) || 0) * 1.1);
   const overRow = (r) => {
     const cap = capOf(r);
     return cap > 0 && num(r.dot_vai_ve_id, 'sl') > cap;
   };
-  const hasOver = rows.some(overRow);
+
+  // In 1 dòng: gửi ĐÚNG 1 item (tái dùng `printTemBatch` để giữ nguyên guard 110% từng đợt + tổng lệnh).
+  const inDong = async (r) => {
+    const id = r.dot_vai_ve_id;
+    const f = form[id] || {};
+    const ok = await onPrintRow({
+      dotVaiId: id,
+      soLuong: num(id, 'sl'),
+      soLuongHuy: num(id, 'huy'),
+      soLuongThieu: num(id, 'thieu'),
+      gcMauVai: (f.gc || '').trim() || null,
+    });
+    if (ok) {
+      setDaIn((s) => new Set(s).add(id));
+      // Xóa SL đã in để không bấm nhầm lần 2; giữ lại GC màu vải cho dễ đối chiếu.
+      setForm((s) => ({ ...s, [id]: { ...(s[id] || {}), sl: '', huy: '', thieu: '' } }));
+    }
+  };
 
   return (
     <Modal open={open} onClose={onClose} title="In tem — đợt sản xuất gom set" size="xl"
-      footer={(
-        <>
-          <Button variant="ghost" onClick={onClose}>Đóng</Button>
-          <Button onClick={() => onPrint(items)} loading={busy} disabled={soIn.length === 0 || hasOver} icon="printer">
-            In tem ({soIn.length} phần in · {fmtNum(tong)})
-          </Button>
-        </>
-      )}
+      footer={<Button variant="ghost" onClick={onClose}>Đóng</Button>}
     >
-      {/* Ngày ca / giờ SX / BTP áp cho MỌI tem của lượt in này (1 lượt in = 1 mốc thời gian). */}
-      <div className="mb-3"><TemMetaFields meta={meta} setMeta={setMeta} goiY={goiY} /></div>
+      {/* Ngày ca / giờ SX / BTP áp cho MỌI tem in ở modal này. GC màu vải nhập RIÊNG từng dòng ⇒ ẩn ô chung. */}
+      <div className="mb-3"><TemMetaFields meta={meta} setMeta={setMeta} goiY={goiY} anGcMauVai /></div>
       <p className="mb-3 text-xs text-ink-soft">
-        Nhập <b>SL in</b> từng phần in rồi bấm In tem — tem ra liên tiếp theo thứ tự. Trần mỗi phần in
-        = <b>110% SL vào SX</b>. <b>SL vải hủy/thiếu</b> &gt; 0 sẽ ghi vào sổ vải của đợt đó.
+        Nhập <b>SL in</b> + <b>GC màu vải</b> của từng phần in rồi bấm <b>In tem</b> ở ĐÚNG dòng đó —
+        mỗi lần bấm in 1 tem. Trần mỗi phần in = <b>110% SL vào SX</b>. <b>SL vải hủy/thiếu</b> &gt; 0
+        sẽ ghi vào sổ vải của đợt đó.
       </p>
       <div className="overflow-auto rounded-card border border-line">
         <table className="w-full border-collapse">
@@ -221,30 +235,49 @@ function PrintSetModal({ open, onClose, rows, onPrint, busy, meta, setMeta, goiY
               <th className={`${TH} text-right`}>SL vào SX</th>
               <th className={`${TH} text-right`}>SL vải hủy</th>
               <th className={`${TH} text-right`}>SL vải thiếu</th>
+              <th className={TH}>GC màu vải</th>
               <th className={`${TH} text-right`}>Số lượng in</th>
+              <th className={TH} />
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
             {rows.map((r, i) => {
-              const f = form[r.dot_vai_ve_id] || {};
+              const id = r.dot_vai_ve_id;
+              const f = form[id] || {};
+              const coGhiVai = num(id, 'huy') > 0 || num(id, 'thieu') > 0;
               return (
-                <tr key={r.dot_vai_ve_id}>
+                <tr key={id} className={daIn.has(id) ? 'bg-emerald-50/60 dark:bg-emerald-950/20' : ''}>
                   <PhanInInfoCells r={r} stt={i + 1} />
                   <td className={`${TD} text-right tabular-nums text-ink-soft`}>{fmtNum(r.sl_vao_sx)}</td>
                   <td className={`${TD} text-right`}>
                     <input type="number" min="0" value={f.huy || ''} placeholder="0" className={numCls}
-                      onChange={(e) => setCell(r.dot_vai_ve_id, 'huy', e.target.value)} />
+                      onChange={(e) => setCell(id, 'huy', e.target.value)} />
                   </td>
                   <td className={`${TD} text-right`}>
                     <input type="number" min="0" value={f.thieu || ''} placeholder="0" className={numCls}
-                      onChange={(e) => setCell(r.dot_vai_ve_id, 'thieu', e.target.value)} />
+                      onChange={(e) => setCell(id, 'thieu', e.target.value)} />
+                  </td>
+                  <td className={TD}>
+                    <input value={f.gc || ''} placeholder="GC màu vải"
+                      onChange={(e) => setCell(id, 'gc', e.target.value)}
+                      className="w-40 rounded-control border border-line bg-surface px-2 py-1.5 text-base md:text-sm text-ink outline-none focus:border-primary" />
                   </td>
                   <td className={`${TD} text-right`}>
                     <input type="number" min="0" max={capOf(r) || undefined} value={f.sl || ''}
-                      onChange={(e) => setCell(r.dot_vai_ve_id, 'sl', e.target.value)}
+                      onChange={(e) => setCell(id, 'sl', e.target.value)}
                       placeholder="0"
                       className={`${numCls} ${overRow(r) ? 'border-danger focus:border-danger' : ''}`} />
                     {overRow(r) && <div className="mt-0.5 text-[11px] text-danger">Tối đa {fmtNum(capOf(r))}</div>}
+                  </td>
+                  <td className={`${TD} whitespace-nowrap`}>
+                    <div className="flex items-center gap-2">
+                      <Button className="px-2.5 py-1 text-xs" icon="printer" loading={busy}
+                        disabled={busy || overRow(r) || (num(id, 'sl') <= 0 && !coGhiVai)}
+                        onClick={() => inDong(r)}>
+                        {num(id, 'sl') <= 0 && coGhiVai ? 'Ghi vải' : 'In tem'}
+                      </Button>
+                      {daIn.has(id) && <span className="text-xs font-medium text-success">✓ đã in</span>}
+                    </div>
                   </td>
                 </tr>
               );
@@ -266,6 +299,9 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
   const [busy, setBusy] = useState(false);
   const [soLuong, setSoLuong] = useState('');
   const [stopReason, setStopReason] = useState('');
+  // Giờ ngừng / hoạt động lại NHẬP TAY ('HH:MM', bỏ trống = giờ hệ thống). Luồng vẫn 2 bước như cũ.
+  const [stopGioBd, setStopGioBd] = useState('');
+  const [stopGioKt, setStopGioKt] = useState('');
   const [reprint, setReprint] = useState(null); // tem đang in lại
   const [reprintReason, setReprintReason] = useState('');
   const [logsOpen, setLogsOpen] = useState(false);
@@ -345,21 +381,26 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
     }
   };
 
-  // GOM SET: in nhiều phần in 1 lượt → BE tạo N tem, FE in nhãn LIÊN TIẾP theo thứ tự phần in.
-  const doPrintSet = async (items) => {
+  // GOM SET: in tem cho ĐÚNG 1 phần in (1 lần bấm = 1 tem = 1 cửa sổ in ⇒ không bị chặn popup).
+  // Trả true/false để modal biết có đánh dấu "đã in" cho dòng đó không. KHÔNG đóng modal, KHÔNG reset
+  // `temMeta` (ngày ca/giờ áp chung cho cả lượt đứng máy — còn in tiếp các dòng khác).
+  const doPrintRow = async (item) => {
     setBusy(true);
     try {
-      const res = await printTemBatch(phieu.id, items, temMeta);
-      const list = res.data?.tems_in || [];
-      show(`Đã in ${list.length} tem (${fmtNum(list.reduce((s, x) => s + Number(x.so_luong || 0), 0))}) — tự vào xe phơi, đang đếm ngược`);
-      setPrintSetOpen(false);
-      // In tuần tự (await từng nhãn) để cửa sổ in không chồng lên nhau.
-      for (const t of list) await printLabelFor(t.tem_id, t.dot_vai_id);
-      setTemMeta(META_MAC_DINH()); // lượt sau lấy gợi ý mới (xem doPrint)
+      const res = await printTemBatch(phieu.id, [item], temMeta);
+      const t = (res.data?.tems_in || [])[0];
+      if (t) {
+        show(`Đã in tem ${t.ma_tem} (${fmtNum(t.so_luong)}) — tự vào xe phơi, đang đếm ngược`);
+        await printLabelFor(t.tem_id, t.dot_vai_id);
+      } else {
+        show('Đã ghi sổ vải hủy/thiếu cho phần in này');
+      }
       await load();
       onChanged?.();
+      return true;
     } catch (e) {
       show(e.message || 'In tem thất bại', 'error');
+      return false;
     } finally {
       setBusy(false);
     }
@@ -399,9 +440,9 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
     if (!stopReason.trim()) { show('Nhập lý do ngừng chuyền', 'error'); return; }
     setBusy(true);
     try {
-      await stopLine(phieu.id, stopReason.trim());
+      await stopLine(phieu.id, stopReason.trim(), stopGioBd || null);
       show('Đã ngừng chuyền');
-      setStopReason('');
+      setStopReason(''); setStopGioBd('');
       await load();
       onChanged?.();
     } catch (e) {
@@ -517,8 +558,9 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
   const doResume = async () => {
     setBusy(true);
     try {
-      await resumeLine(phieu.id);
+      await resumeLine(phieu.id, stopGioKt || null);
       show('Chuyền hoạt động lại');
+      setStopGioKt('');
       await load();
       onChanged?.();
     } catch (e) {
@@ -752,13 +794,25 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
                   <div className="mt-0.5 text-xs text-ink-soft">Từ {fmtDt(ngungActive.tg_bd_ngung)}</div>
                   {ngungActive.ly_do && <div className="mt-0.5 text-xs text-ink">Lý do: {ngungActive.ly_do}</div>}
                   {canRun && (
-                    <Button className="mt-2 w-full" onClick={doResume} loading={busy}>Chuyền hoạt động lại</Button>
+                    <div className="mt-2 space-y-2">
+                      {/* Giờ KẾT THÚC ngừng — bỏ trống = giờ hệ thống. Số phút ngừng tự tính lại theo 2 mốc. */}
+                      <label className="block">
+                        <span className="mb-1 block text-xs font-medium text-ink-soft">Giờ hoạt động lại (bỏ trống = bây giờ)</span>
+                        <TimeSelect value={stopGioKt} onChange={setStopGioKt} minuteStep={1} />
+                      </label>
+                      <Button className="w-full" onClick={doResume} loading={busy}>Chuyền hoạt động lại</Button>
+                    </div>
                   )}
                 </div>
               ) : canRun ? (
                 <div className="space-y-2">
                   <Textarea rows={2} value={stopReason} onChange={(e) => setStopReason(e.target.value)}
                     placeholder="Lý do ngừng chuyền (vd: hết mực, kẹt vải, đổi khuôn...)" />
+                  {/* Giờ BẮT ĐẦU ngừng — bỏ trống = giờ hệ thống. Nhập giờ lớn hơn bây giờ ⇒ hiểu là HÔM QUA (ca đêm). */}
+                  <label className="block">
+                    <span className="mb-1 block text-xs font-medium text-ink-soft">Giờ bắt đầu ngừng (bỏ trống = bây giờ)</span>
+                    <TimeSelect value={stopGioBd} onChange={setStopGioBd} minuteStep={1} />
+                  </label>
                   <Button variant="danger" className="w-full" onClick={doStop} loading={busy} disabled={!stopReason.trim()}>
                     Ngừng chuyền
                   </Button>
@@ -814,7 +868,7 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
       )}
       {/* GOM SET: nhập SL in từng phần in → in nhiều tem liên tiếp */}
       <PrintSetModal open={printSetOpen} onClose={() => setPrintSetOpen(false)} rows={dotVaiList}
-        onPrint={doPrintSet} busy={busy} meta={temMeta} setMeta={setTemMeta} goiY={goiYTem} />
+        onPrintRow={doPrintRow} busy={busy} meta={temMeta} setMeta={setTemMeta} goiY={goiYTem} />
 
       {/* Ngừng lệnh chạy + hoán đổi phần in gấp hơn */}
       <Modal open={pauseOpen} onClose={() => setPauseOpen(false)} title="Ngừng lệnh chạy — in hàng gấp" size="lg"

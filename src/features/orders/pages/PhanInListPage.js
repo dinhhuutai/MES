@@ -227,14 +227,32 @@ export default function PhanInListPage() {
   const applySort = (key, dir) => { setSort(dir ? { key, dir } : { key: '', dir: '' }); setPage(1); setMenuKey(null); };
 
   // Xuất Excel: tải TOÀN BỘ danh sách đang lọc (mọi trang) + đúng thứ tự sắp xếp. 2 chế độ: 'tong' | 'chi_tiet'.
+  // ⚠⚠ PHẢI LẶP TRANG, KHÔNG truyền limit lớn: `backend/src/utils/pagination.js` `getPaging` CAP CỨNG
+  // `limit > 200 → 200` ⇒ `limit: 100000` (bản cũ) bị cắt ÂM THẦM còn 200 dòng, file Excel thiếu dữ liệu
+  // mà không báo lỗi gì (đã gặp thật 06/08/2026: 396 phần in nhưng xuất ra chỉ 200).
+  // Dừng khi gom đủ `meta.total`; guard `trang <= MAX_TRANG` phòng backend trả meta sai → lặp vô hạn.
+  const LIMIT_TAI = 200;   // đúng trần của getPaging — xin hơn cũng không được cho
+  const MAX_TRANG = 100;   // trần an toàn: 20.000 dòng
   const doExport = async (mode) => {
     setExporting(true);
     try {
-      const res = await listVaiVe({ search, stage, ...filters, page: 1, limit: 100000, sortKey: sort.key, sortDir: sort.dir });
-      const items = res.data.items || [];
-      if (!items.length) { show('Không có dữ liệu để xuất', 'error'); return; }
-      await exportPhanInVaiVeExcel(items, `danh-sach-phan-in-${mode === 'tong' ? 'tong-hop' : 'chi-tiet'}`, mode);
-      show(`Đã xuất ${items.length} phần in ra Excel (${mode === 'tong' ? 'tổng hợp' : 'chi tiết'})`);
+      const tatCa = [];
+      let trang = 1; let tong = 0;
+      for (; trang <= MAX_TRANG; trang += 1) {
+        // eslint-disable-next-line no-await-in-loop
+        const res = await listVaiVe({
+          search, stage, ...filters, page: trang, limit: LIMIT_TAI, sortKey: sort.key, sortDir: sort.dir,
+        });
+        const items = res.data.items || [];
+        tong = res.data.meta?.total ?? items.length;
+        tatCa.push(...items);
+        if (!items.length || tatCa.length >= tong) break;
+      }
+      if (!tatCa.length) { show('Không có dữ liệu để xuất', 'error'); return; }
+      await exportPhanInVaiVeExcel(tatCa, `danh-sach-phan-in-${mode === 'tong' ? 'tong-hop' : 'chi-tiet'}`, mode);
+      const thieu = tong > tatCa.length ? ` (⚠ mới lấy được ${tatCa.length}/${tong})` : '';
+      show(`Đã xuất ${tatCa.length} phần in ra Excel (${mode === 'tong' ? 'tổng hợp' : 'chi tiết'})${thieu}`,
+        thieu ? 'warning' : 'success');
     } catch (e) {
       show(e.message || 'Xuất Excel thất bại', 'error');
     } finally {
