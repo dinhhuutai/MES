@@ -41,7 +41,7 @@ function ScanViz() {
  *  - IMMEDIATE (`immediate`): mỗi lần quét XÁC NHẬN NGAY (`onScanAction`), ghi vào "Lịch sử phiên này" + nút Hủy (`onUndo`).
  *
  * Props chung: open, onClose, title, help, rows, getId, getCodes, getBarcodes, getPhanInBarcodes,
- *   barcodePhanInRieng (mã vạch phần in → chỉ 1 dòng, không mở rộng gom set — bật ở READY), matchMultiple,
+ *   khongGomSet (TẮT HẲN mở rộng gom set — bật ở READY: quét mã nào xác nhận đúng phần in đó), matchMultiple,
  *   primaryLabel, secondaryLabel, renderHeader (node trên cùng, vd checkbox chọn mục ở READY), disabledScan,
  *   usbBarcode (chỉ READY — bật đầu đọc mã vạch USB trên máy tính),
  *   canSelect (dòng khớp nhưng chưa đủ điều kiện → nêu lý do), onNotFound (quét trượt hẳn → tra thêm để nêu lý do).
@@ -56,14 +56,16 @@ export default function ScanCollectModal({
   // phần in. Quét mã vạch thì THỬ MÃ NÀY TRƯỚC, không có mới sang mã HSKT (mã HSKT ở mức HỒ SƠ nên có
   // thể trỏ tới nhiều phần in). Mặc định đọc `r.barcode_phan_in` — hàng nào không có thì bỏ qua.
   getPhanInBarcodes = (r) => (r && r.barcode_phan_in ? [r.barcode_phan_in] : []),
-  // ⚠ Quét trúng MÃ VẠCH PHẦN IN thì CHỈ lấy đúng dòng đó, KHÔNG mở rộng ra cả nhóm gom set.
-  // Bật ở màn READY (chốt 2026-08-07): READY quét là **XÁC NHẬN NGAY**, mà 3 mục Khuôn/Film/Mực xác
-  // nhận ĐỘC LẬP theo TỪNG phần in ⇒ kéo theo cả set = xác nhận hộ những phần in người ta chưa hề quét.
-  // Mã TDTHĐH vốn 1:1 với code phần nên "chỉ 1 dòng" mới đúng nghĩa của nó.
-  // ⚠ CHỈ áp cho mã này: quét mã HSKT vẫn lấy cả nhóm (đó là công dụng riêng của mã hồ sơ), và các màn
-  // KHÁC (QC READY, Release 1/2, Test Run, Kế hoạch tạm, Tạo đợt SX) giữ nguyên — release gom set là
-  // all-or-nothing nên ở đó chọn cả set mới đúng.
-  barcodePhanInRieng = false,
+  // ⚠⚠ TẮT HẲN GOM SET cho cả màn (chốt 2026-08-07 — mở rộng từ `barcodePhanInRieng` vốn chỉ chặn ở cột
+  // mã vạch phần in). Bật ở màn READY: READY quét là **XÁC NHẬN NGAY**, mà 3 mục Khuôn/Film/Mực xác nhận
+  // ĐỘC LẬP theo TỪNG phần in ⇒ kéo theo cả set = xác nhận hộ những phần in người ta chưa hề quét.
+  // Chặn ĐỦ 2 đường "các phần cùng set đi theo":
+  //   (1) `withGomSet` — quét code phần / TDTHĐH / barcode đợt vải rồi bung ra cả nhóm cùng `hskt_inset`;
+  //   (2) `forceMulti` của mã HSKT — mã ở mức HỒ SƠ, mà "danh sách phần in của HSKT CHÍNH LÀ nhóm gom set"
+  //       ⇒ ở READY nó KHÔNG chỉ đích danh phần in nào; thay vì đoán bừa 1 dòng thì báo rõ cho người quét.
+  // ⚠ CÁC MÀN KHÁC KHÔNG BẬT (QC READY · Release 1/2 · Test Run · Kế hoạch tạm · Tạo đợt SX): release gom
+  // set là all-or-nothing, chọn lẻ 1 thành viên sẽ PHÁ set.
+  khongGomSet = false,
   // Barcode HSKT: quét trúng → chọn TẤT CẢ phần in/đợt cùng HSKT (dù matchMultiple=false). Mặc định đọc r.barcode_hskt.
   getHsktBarcodes = (r) => (r && r.barcode_hskt ? [r.barcode_hskt] : []),
   // NHÓM GOM SET (ERP): `hskt_inset` ≠ 0 ⇒ phần in CÙNG HSKT là một nhóm gom set. Quét TRÚNG bất kỳ
@@ -118,11 +120,14 @@ export default function ScanCollectModal({
   const stopRef = useRef(null); // hàm dừng camera ZXing
   const recentRef = useRef(new Map()); // code → ts (chống lặp)
   const notFoundRef = useRef(new Map()); // code → lý do đã tra (tránh gọi API lặp khi camera quét liên tục)
+  // `khongGomSet`: mã vừa quét trỏ tới NHIỀU phần in (mã HSKT của nhóm gom set) → số dòng nó khớp,
+  // để processScan báo rõ thay vì hiện "Không thấy" (mã CÓ trong danh sách, chỉ là không đích danh).
+  const moHoRef = useRef(0);
   const bufRef = useRef({ s: '', t: 0, timer: null }); // buffer bắt phím đầu đọc mã vạch
   const idRef = useRef(0);
   // Giữ props mới nhất cho vòng lặp camera (effect chỉ chạy lại theo open/mode).
   const stateRef = useRef({});
-  stateRef.current = { rows, getCodes, getBarcodes, getPhanInBarcodes, barcodePhanInRieng, getHsktBarcodes, getGomSetKey, matchMultiple, canSelect, onNotFound, isSelected, onToggle, immediate, onScanAction, actionLabel, primaryLabel, disabledScan };
+  stateRef.current = { rows, getCodes, getBarcodes, getPhanInBarcodes, khongGomSet, getHsktBarcodes, getGomSetKey, matchMultiple, canSelect, onNotFound, isSelected, onToggle, immediate, onScanAction, actionLabel, primaryLabel, disabledScan };
 
   useEffect(() => {
     if (open) {
@@ -143,6 +148,7 @@ export default function ScanCollectModal({
   // có gom set ⇒ mọi phần in cùng nhóm cũng hiện lên / được xác nhận theo.
   const withGomSet = useCallback((matched) => {
     const s = stateRef.current;
+    if (s.khongGomSet) return matched; // READY: quét mã nào xác nhận đúng phần in đó
     if (typeof s.getGomSetKey !== 'function' || !matched.length) return matched;
     const keys = new Set(matched.map((r) => s.getGomSetKey(r)).filter(Boolean));
     if (!keys.size) return matched;
@@ -162,13 +168,14 @@ export default function ScanCollectModal({
     //                rồi barcode đợt vải (đầu đọc USB ở READY)
     //  • 'camera'/khác (nhập tay, không rõ loại) → thử lần lượt cả bốn
     // getHsktBarcodes (forceMulti): trúng barcode HSKT → CHỌN CẢ NHÓM phần in cùng HSKT (dù matchMultiple=false).
-    // Phần tử thứ 3 = noGomSet: trúng cột này thì KHÔNG mở rộng ra nhóm gom set (mã vạch phần in ở READY).
-    const pinNoSet = !!s.barcodePhanInRieng;
+    // ⚠ `khongGomSet` (READY) TẮT luôn forceMulti: mã HSKT ở mức HỒ SƠ, không chỉ đích danh phần in nào ⇒
+    //   thà báo rõ "mã này thuộc N phần in" còn hơn đoán bừa 1 dòng rồi xác nhận nhầm (xem `processScan`).
+    const hsktMulti = !s.khongGomSet;
     const getterList = kind === 'barcode'
-      ? [[s.getPhanInBarcodes, false, pinNoSet], [s.getHsktBarcodes, true], [s.getBarcodes, false], [s.getCodes, false]]
+      ? [[s.getPhanInBarcodes, false], [s.getHsktBarcodes, hsktMulti], [s.getBarcodes, false], [s.getCodes, false]]
       : kind === 'qr'
-        ? [[s.getCodes, false], [s.getPhanInBarcodes, false, pinNoSet], [s.getHsktBarcodes, true], [s.getBarcodes, false]]
-        : [[s.getCodes, false], [s.getPhanInBarcodes, false, pinNoSet], [s.getBarcodes, false], [s.getHsktBarcodes, true]];
+        ? [[s.getCodes, false], [s.getPhanInBarcodes, false], [s.getHsktBarcodes, hsktMulti], [s.getBarcodes, false]]
+        : [[s.getCodes, false], [s.getPhanInBarcodes, false], [s.getBarcodes, false], [s.getHsktBarcodes, hsktMulti]];
     const list = getterList.filter(([g]) => typeof g === 'function');
     const lc = looseStr(raw);
     // 3 LƯỢT (mỗi lượt quét HẾT các cột theo thứ tự ưu tiên trên, rồi mới xuống lượt sau) —
@@ -179,7 +186,7 @@ export default function ScanCollectModal({
     //     không ra": QR trên phiếu giấy thường mang THÊM dữ liệu quanh code phần (tiền tố/hậu tố/
     //     URL/nhiều trường ghép), payload DÀI HƠN code phần nên 2 lượt trên đều trượt.
     const test = (mode) => {
-      for (const [getters, forceMulti, noGomSet] of list) {
+      for (const [getters, forceMulti] of list) {
         let best = 0;
         let pool = [];
         for (const r of s.rows) {
@@ -202,9 +209,13 @@ export default function ScanCollectModal({
           if (score > best) { best = score; pool = [r]; } else if (score === best) pool.push(r);
         }
         if (pool.length) {
-          const kq = (s.matchMultiple || forceMulti) ? pool : [pool[0]];
-          // noGomSet: mã đích danh 1 phần in (TDTHĐH ở READY) → dừng đúng dòng khớp, không kéo cả set.
-          return noGomSet ? kq : withGomSet(kq);
+          // READY: mã chỉ tới NHIỀU phần in (mã HSKT của nhóm gom set) → KHÔNG đoán bừa 1 dòng.
+          // Báo lại để người quét dùng QR code phần / mã vạch TDTHĐH của đúng phần in cần xác nhận.
+          if (s.khongGomSet && !s.matchMultiple && pool.length > 1) {
+            moHoRef.current = pool.length;
+            return []; // mảng rỗng vẫn TRUTHY ⇒ dừng luôn, không rơi xuống lượt khớp lỏng hơn
+          }
+          return withGomSet((s.matchMultiple || forceMulti) ? pool : [pool[0]]);
         }
       }
       return null;
@@ -235,7 +246,13 @@ export default function ScanCollectModal({
     const last = recentRef.current.get(c);
     if (last && now - last < 1500) return; // chống lặp cùng mã
     recentRef.current.set(c, now);
+    moHoRef.current = 0;
     let matched = matchRows(raw, kind);
+    // Mã CÓ trong danh sách nhưng trỏ tới nhiều phần in (mã HSKT ở READY) — nói rõ, đừng để im lặng.
+    if (!matched.length && moHoRef.current > 1) {
+      pushLog(`Mã này thuộc ${moHoRef.current} phần in (gom set) — quét QR code phần hoặc mã vạch TDTHĐH của đúng phần in cần xác nhận`, false);
+      return;
+    }
     // Khớp được nhưng dòng KHÔNG đủ điều kiện chọn → nêu RÕ lý do (đừng để im lặng như "không thấy").
     if (matched.length && typeof s.canSelect === 'function') {
       const blocked = [];
@@ -413,7 +430,9 @@ export default function ScanCollectModal({
                 {ready
                   ? (mode === 'qr'
                     ? 'Đang quét QR (code phần) — chỉ đọc QR, bấm "Mã vạch" nếu cần quét mã vạch'
-                    : 'Đang quét MÃ VẠCH (HSKT / đợt vải) — chọn cả nhóm gom set')
+                    : khongGomSet
+                      ? 'Đang quét MÃ VẠCH (TDTHĐH của phần in) — chỉ đúng phần in đó'
+                      : 'Đang quét MÃ VẠCH (HSKT / đợt vải) — chọn cả nhóm gom set')
                   : slow
                     ? 'Chưa thấy hình? BẤM vào khung để bật camera (iOS chặn tự phát), hoặc kiểm tra quyền camera.'
                     : 'Đang mở camera...'}

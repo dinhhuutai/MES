@@ -280,7 +280,7 @@ export default function ReadyPage() {
         open={scanOpen}
         onClose={() => { setScanOpen(false); load(); }}
         title="Quét / tích phần in — READY"
-        help="Chọn loại mã ở trên: QR (code phần) hoặc Mã vạch (HSKT). Máy tính mặc định là Mã vạch qua đầu đọc USB — muốn quét QR thì bấm QR để dùng camera. Mỗi lần quét XÁC NHẬN NGAY các mục đang chọn. Tích lộn thì bấm Hủy ở dòng đó."
+        help="Chọn loại mã ở trên: QR (code phần) hoặc Mã vạch (TDTHĐH của phần in). Máy tính mặc định là Mã vạch qua đầu đọc USB — muốn quét QR thì bấm QR để dùng camera. Quét mã nào XÁC NHẬN NGAY đúng phần in đó (không kéo theo các phần cùng gom set). Tích lộn thì bấm Hủy ở dòng đó."
         rows={rows}
         immediate
         usbBarcode
@@ -288,9 +288,10 @@ export default function ReadyPage() {
         getCodes={(r) => [r.ma_phan]}
         getBarcodes={(r) => String(r.barcode || '').split(',').map((s) => s.trim()).filter(Boolean)}
         matchMultiple={false}
-        // Quét mã vạch TDTHĐH → ĐÚNG 1 code phần, không kéo theo cả nhóm gom set: ở READY quét là
-        // XÁC NHẬN NGAY, mà Khuôn/Film/Mực xác nhận độc lập theo từng phần in. Quét mã HSKT vẫn lấy cả nhóm.
-        barcodePhanInRieng
+        // TẮT HẲN gom set ở màn này: quét mã nào thì xác nhận ĐÚNG phần in đó, không kéo theo các phần
+        // cùng set. Lý do: READY quét là XÁC NHẬN NGAY, mà Khuôn/Film/Mực xác nhận độc lập theo từng
+        // phần in ⇒ kéo cả set = xác nhận hộ những phần in người ta chưa hề quét.
+        khongGomSet
         onNotFound={giaiThichQuetTruot}
         primaryLabel={(r) => r.ma_phan || r.barcode || '—'}
         secondaryLabel={(r) => [r.ten_khach_hang, r.ma_hang, r.mau_vai].filter(Boolean).join(' · ')}
