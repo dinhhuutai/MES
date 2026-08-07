@@ -9,8 +9,9 @@ import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
 import SidePanel from '../../../components/common/SidePanel';
+import Modal from '../../../components/common/Modal';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
-import { Field, Input } from '../../../components/common/controls';
+import { Field, Input, Textarea } from '../../../components/common/controls';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
@@ -19,7 +20,7 @@ import useSocketEvent from '../../../hooks/useSocketEvent';
 import usePermissions from '../../../hooks/usePermissions';
 import {
   listKeHoachTam, confirmKeHoachTam, updateKeHoachTam, deleteKeHoachTam, listChuyen,
-  keHoachTamHistory, keHoachTamDone,
+  keHoachTamHistory, keHoachTamDone, release1TraVeKyThuat,
 } from '../../../services/planningService';
 import { fmtNum, fmtDate } from '../../../utils/format';
 
@@ -59,6 +60,8 @@ export default function KeHoachTamPage() {
   const [chuyen, setChuyen] = useState([]);
   const [edit, setEdit] = useState(null); // dòng đang sửa
   const [editForm, setEditForm] = useState({ chuyenId: '', soLuongRelease: '', ngayKeHoach: '' });
+  const [traVeOpen, setTraVeOpen] = useState(false); // modal "Trả về Kỹ thuật" (lý do bắt buộc)
+  const [traVeReason, setTraVeReason] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -113,6 +116,36 @@ export default function KeHoachTamPage() {
       setSaving(false);
     }
   };
+
+  // Trả về Kỹ thuật — DÙNG CHUNG endpoint với màn Release 1 (`traVeKyThuat` chỉ cần `dotVaiId`):
+  // mở lại READY cho phần in (hủy xác nhận Khuôn/Film/Mực + QC), và nếu đợt thuộc GOM SET thì trả CẢ SET.
+  // ⚠ CỐ Ý GIỮ NGUYÊN dòng kế hoạch tạm: màn này vốn dành cho phần in CHƯA Ready, nên sau khi trả về
+  // dòng chỉ đổi badge sang "Chờ Ready" (qc_done tính sống ở BE) và không tick chọn được nữa. Xóa dòng
+  // sẽ vứt luôn chuyền/ngày kế hoạch đã lập — bắt người lập kế hoạch làm lại từ đầu, không có lý do gì.
+  const doTraVeKyThuat = async () => {
+    if (!edit) return;
+    const lyDo = traVeReason.trim();
+    if (!lyDo) { show('Nhập lý do trả về Kỹ thuật', 'error'); return; }
+    setSaving(true);
+    try {
+      const res = await release1TraVeKyThuat({ dotVaiId: edit.dot_vai_ve_id, lyDo });
+      const n = res?.data?.so_phan_in || 1;
+      const maSet = res?.data?.ma_set;
+      show(maSet
+        ? `Đã trả cả set ${maSet} về Kỹ thuật — ${n} phần in quay lại READY (kế hoạch tạm giữ nguyên)`
+        : 'Đã trả về Kỹ thuật — phần in quay lại READY (kế hoạch tạm giữ nguyên)');
+      setTraVeOpen(false); setTraVeReason('');
+      setEdit(null);
+      load();
+    } catch (e) {
+      show(e.message || 'Trả về Kỹ thuật thất bại', 'error');
+    } finally { setSaving(false); }
+  };
+
+  // Nút chỉ có nghĩa khi CÓ thứ để hủy: dòng đã Ready, hoặc dòng thuộc set mà set có phần in đã Ready
+  // (dòng đang xem chưa Ready nhưng trả cả set vẫn hợp lý) — cùng luật với màn Release 1.
+  const setDaReady = !!edit?.ma_set && rows.some((r) => r.ma_set === edit.ma_set && r.qc_done);
+  const choPhepTraVe = canDo && !!edit && (edit.qc_done === true || setDaReady);
 
   // Chỉ phần in ĐÃ Ready (qc_done) mới xác nhận Release 1 được → chỉ những dòng này chọn được.
   const readyRows = rows.filter((r) => r.qc_done);
@@ -280,6 +313,11 @@ export default function KeHoachTamPage() {
         footer={(
           <>
             <Button variant="ghost" onClick={() => setEdit(null)}>Đóng</Button>
+            {choPhepTraVe && (
+              <Button variant="danger" icon="log-out" onClick={() => { setTraVeReason(''); setTraVeOpen(true); }}>
+                Trả về Kỹ thuật
+              </Button>
+            )}
             <Button onClick={doSaveEdit} loading={saving} disabled={!editForm.chuyenId}>Lưu</Button>
           </>
         )}
@@ -314,6 +352,41 @@ export default function KeHoachTamPage() {
           </div>
         )}
       </SidePanel>
+
+      {/* Trả về Kỹ thuật — lý do BẮT BUỘC, hiện lại ở màn READY / QC READY (giống màn Release 1) */}
+      <Modal
+        open={traVeOpen}
+        onClose={() => setTraVeOpen(false)}
+        title={`Trả về Kỹ thuật — ${edit?.ma_set || edit?.ma_phan || ''}`}
+        size="sm"
+        footer={(
+          <>
+            <Button variant="ghost" onClick={() => setTraVeOpen(false)}>Hủy</Button>
+            <Button variant="danger" onClick={doTraVeKyThuat} loading={saving} disabled={!traVeReason.trim()}>
+              Xác nhận trả về
+            </Button>
+          </>
+        )}
+      >
+        <p className="mb-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
+          {edit?.ma_set ? (
+            <>
+              Đợt vải thuộc <b>{edit.ma_set}</b> — gom set in chung nên sẽ trả về <b>CẢ SET</b>: mọi phần in
+              trong set quay lại <b>READY</b> (hủy xác nhận Khuôn/Film/Mực + QC), kỹ thuật phải làm lại.
+            </>
+          ) : (
+            <>
+              Phần in sẽ quay lại <b>READY</b>: hủy xác nhận Khuôn/Film/Mực + QC, kỹ thuật phải làm lại.
+            </>
+          )}
+          {' '}Lý do sẽ hiện ở màn Chuẩn bị kỹ thuật. <b>Bản kế hoạch tạm được GIỮ NGUYÊN</b> (chuyền/ngày
+          đã lập không mất), chỉ đổi sang <b>Chờ Ready</b> — Ready xong là xác nhận Release 1 được ngay.
+        </p>
+        <Field label="Lý do trả về" required>
+          <Textarea rows={3} value={traVeReason} onChange={(e) => setTraVeReason(e.target.value)}
+            placeholder="Vì sao trả về kỹ thuật (vd: sai film, khuôn chưa đạt...)" />
+        </Field>
+      </Modal>
 
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}
         title="Lịch sử kế hoạch tạm" fetcher={keHoachTamHistory} />

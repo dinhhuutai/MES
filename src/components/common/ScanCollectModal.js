@@ -40,9 +40,10 @@ function ScanViz() {
  *  - COLLECT (mặc định): dồn vào danh sách "Đã chọn" rồi bấm Xác nhận cùng lúc. `rowAction` = nút phụ mỗi dòng (vd Trả về).
  *  - IMMEDIATE (`immediate`): mỗi lần quét XÁC NHẬN NGAY (`onScanAction`), ghi vào "Lịch sử phiên này" + nút Hủy (`onUndo`).
  *
- * Props chung: open, onClose, title, help, rows, getId, getCodes, getBarcodes, matchMultiple,
+ * Props chung: open, onClose, title, help, rows, getId, getCodes, getBarcodes, getPhanInBarcodes, matchMultiple,
  *   primaryLabel, secondaryLabel, renderHeader (node trên cùng, vd checkbox chọn mục ở READY), disabledScan,
- *   usbBarcode (chỉ READY — bật đầu đọc mã vạch USB trên máy tính).
+ *   usbBarcode (chỉ READY — bật đầu đọc mã vạch USB trên máy tính),
+ *   canSelect (dòng khớp nhưng chưa đủ điều kiện → nêu lý do), onNotFound (quét trượt hẳn → tra thêm để nêu lý do).
  * COLLECT: isSelected, onToggle, onConfirm, confirmLabel, rowAction={label,icon,onClick(row)}.
  * IMMEDIATE: onScanAction(row)->Promise, onUndo(row)->Promise, actionLabel(row).
  */
@@ -50,6 +51,10 @@ export default function ScanCollectModal({
   open, onClose, title = 'Quét / tích mã', help,
   rows = [], getId = (r) => r.id,
   getCodes = (r) => [r.ma_phan], getBarcodes,
+  // Mã vạch của CHÍNH PHẦN IN (ERP `BarcodePTHDH` → `phan_in.barcode`) — TƯƠNG ĐƯƠNG code phần, 1 mã ↔ 1
+  // phần in. Quét mã vạch thì THỬ MÃ NÀY TRƯỚC, không có mới sang mã HSKT (mã HSKT ở mức HỒ SƠ nên có
+  // thể trỏ tới nhiều phần in). Mặc định đọc `r.barcode_phan_in` — hàng nào không có thì bỏ qua.
+  getPhanInBarcodes = (r) => (r && r.barcode_phan_in ? [r.barcode_phan_in] : []),
   // Barcode HSKT: quét trúng → chọn TẤT CẢ phần in/đợt cùng HSKT (dù matchMultiple=false). Mặc định đọc r.barcode_hskt.
   getHsktBarcodes = (r) => (r && r.barcode_hskt ? [r.barcode_hskt] : []),
   // NHÓM GOM SET (ERP): `hskt_inset` ≠ 0 ⇒ phần in CÙNG HSKT là một nhóm gom set. Quét TRÚNG bất kỳ
@@ -63,6 +68,12 @@ export default function ScanCollectModal({
   // ĐANG HIỆN trên bảng nhưng chưa đủ điều kiện thì báo "Không thấy" — người dùng tưởng máy quét hỏng.
   // Nay truyền ĐỦ rows + `canSelect` để nói rõ TẠI SAO không chọn được.
   canSelect,
+  // Quét trượt HẲN (không dòng nào khớp) → tra tiếp toàn hệ thống để NÓI RÕ vì sao.
+  // ⚠ Vì sao cần: danh sách chỉ chứa đối tượng CÒN ở trạm này; xác nhận xong là nó biến mất, nên người
+  // đến sau quét chỉ thấy "Không thấy" và tưởng máy quét hỏng (ca thật 06/08/2026 ở QC READY:
+  // SLGLOVIS-2604-008-A010-F03-C01 đã QC lúc 14:22, người quét lúc 14:48 đi tìm nguyên nhân ở gom set).
+  // Trả chuỗi mô tả để hiện thêm 1 dòng, hoặc null/undefined nếu không có gì để nói.
+  onNotFound,
   isSelected, onToggle,
   primaryLabel = (r) => r.ma_phan, secondaryLabel,
   onConfirm, confirmLabel = 'Xác nhận',
@@ -97,14 +108,19 @@ export default function ScanCollectModal({
   const [videoEl, setVideoEl] = useState(null);
   const stopRef = useRef(null); // hàm dừng camera ZXing
   const recentRef = useRef(new Map()); // code → ts (chống lặp)
+  const notFoundRef = useRef(new Map()); // code → lý do đã tra (tránh gọi API lặp khi camera quét liên tục)
   const bufRef = useRef({ s: '', t: 0, timer: null }); // buffer bắt phím đầu đọc mã vạch
   const idRef = useRef(0);
   // Giữ props mới nhất cho vòng lặp camera (effect chỉ chạy lại theo open/mode).
   const stateRef = useRef({});
-  stateRef.current = { rows, getCodes, getBarcodes, getHsktBarcodes, getGomSetKey, matchMultiple, canSelect, isSelected, onToggle, immediate, onScanAction, actionLabel, primaryLabel, disabledScan };
+  stateRef.current = { rows, getCodes, getBarcodes, getPhanInBarcodes, getHsktBarcodes, getGomSetKey, matchMultiple, canSelect, onNotFound, isSelected, onToggle, immediate, onScanAction, actionLabel, primaryLabel, disabledScan };
 
   useEffect(() => {
-    if (open) { setLog([]); setSession([]); setManual(''); recentRef.current = new Map(); }
+    if (open) {
+      setLog([]); setSession([]); setManual('');
+      recentRef.current = new Map();
+      notFoundRef.current = new Map(); // mở lại modal = tra lại (danh sách đã tải mới)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
@@ -132,14 +148,16 @@ export default function ScanCollectModal({
     if (!c) return [];
     // Thứ tự tra cột theo LOẠI MÃ quét được:
     //  • 'qr'      → QR = CODE PHẦN (ưu tiên code phần)
-    //  • 'barcode' → mã vạch 1D = BARCODE HSKT (ưu tiên HSKT), rồi barcode đợt vải (đầu đọc USB ở READY)
-    //  • 'camera'/khác (nhập tay, không rõ loại) → thử lần lượt cả ba
+    //  • 'barcode' → mã vạch 1D: thử BARCODE PHẦN IN trước (ERP BarcodePTHDH — 1 mã ↔ 1 phần in, chắc
+    //                nhất), KHÔNG khớp mới sang BARCODE HSKT (mức hồ sơ, có thể trỏ nhiều phần in),
+    //                rồi barcode đợt vải (đầu đọc USB ở READY)
+    //  • 'camera'/khác (nhập tay, không rõ loại) → thử lần lượt cả bốn
     // getHsktBarcodes (forceMulti): trúng barcode HSKT → CHỌN CẢ NHÓM phần in cùng HSKT (dù matchMultiple=false).
     const getterList = kind === 'barcode'
-      ? [[s.getHsktBarcodes, true], [s.getBarcodes, false], [s.getCodes, false]]
+      ? [[s.getPhanInBarcodes, false], [s.getHsktBarcodes, true], [s.getBarcodes, false], [s.getCodes, false]]
       : kind === 'qr'
-        ? [[s.getCodes, false], [s.getHsktBarcodes, true], [s.getBarcodes, false]]
-        : [[s.getCodes, false], [s.getBarcodes, false], [s.getHsktBarcodes, true]];
+        ? [[s.getCodes, false], [s.getPhanInBarcodes, false], [s.getHsktBarcodes, true], [s.getBarcodes, false]]
+        : [[s.getCodes, false], [s.getPhanInBarcodes, false], [s.getBarcodes, false], [s.getHsktBarcodes, true]];
     const list = getterList.filter(([g]) => typeof g === 'function');
     const lc = looseStr(raw);
     // 3 LƯỢT (mỗi lượt quét HẾT các cột theo thứ tự ưu tiên trên, rồi mới xuống lượt sau) —
@@ -221,6 +239,20 @@ export default function ScanCollectModal({
       // chưa đọc được QR; hiện mà báo "không thấy" thì payload khác dữ liệu trong danh sách.
       const k = KIND_LABEL[kind];
       pushLog(`Không thấy${k ? ` (${k})` : ''} "${String(raw).trim()}"`, false);
+      // Tra tiếp toàn hệ thống (best-effort, không chặn luồng quét): mã có tồn tại nhưng đối tượng đã
+      // rời trạm này thì nói rõ nó đang ở đâu, thay vì để người quét đoán mò.
+      // ⚠ Nhớ kết quả theo mã: camera quét LIÊN TỤC, cứ 1.5s (hàng rào chống lặp) lại gọi lại 1 lần
+      // nếu cứ để tờ phiếu trước ống kính ⇒ không cache sẽ bắn request liên hồi.
+      if (typeof s.onNotFound === 'function') {
+        const cached = notFoundRef.current.get(c);
+        if (cached !== undefined) { if (cached) pushLog(`Lý do: ${cached}`, false); return; }
+        Promise.resolve(s.onNotFound(String(raw).trim(), kind))
+          .then((msg) => {
+            notFoundRef.current.set(c, msg || null);
+            if (msg) pushLog(`Lý do: ${msg}`, false);
+          })
+          .catch(() => { /* lỗi mạng khi tra thêm: giữ nguyên thông báo "Không thấy", KHÔNG cache */ });
+      }
       return;
     }
     if (s.immediate) { matched.forEach((row) => doImmediate(row)); return; }
@@ -378,7 +410,7 @@ export default function ScanCollectModal({
         {/* Ô NHẬP TAY / ĐẦU ĐỌC USB — LUÔN có ở mọi màn, mọi chế độ.
             Lý do: chỉ màn READY (usbBarcode) mới bắt phím đầu đọc toàn cục, còn các màn khác dùng camera —
             máy tính không có camera thì trước đây KHÔNG quét được mã vạch HSKT. Ô này nhận cả đầu đọc USB
-            (gõ xong tự Enter) lẫn gõ tay, cho mọi loại mã: code phần · barcode đợt vải · barcode HSKT. */}
+            (gõ xong tự Enter) lẫn gõ tay, cho mọi loại mã: code phần · barcode phần in · barcode đợt vải · barcode HSKT. */}
         <form
           onSubmit={(e) => { e.preventDefault(); processScan(manual, 'camera'); setManual(''); }}
           className="flex items-center gap-2"
@@ -391,7 +423,7 @@ export default function ScanCollectModal({
           <input
             value={manual}
             onChange={(e) => setManual(e.target.value)}
-            placeholder="Quét đầu đọc / nhập mã: code phần · barcode HSKT · barcode đợt vải"
+            placeholder="Quét đầu đọc / nhập mã: code phần · barcode phần in · barcode HSKT · barcode đợt vải"
             className="min-w-0 flex-1 rounded-control border border-line bg-surface px-3 py-2 text-base md:text-sm text-ink outline-none focus:border-primary"
           />
           <Button type="submit" variant="secondary" disabled={!manual.trim()}>Thêm</Button>

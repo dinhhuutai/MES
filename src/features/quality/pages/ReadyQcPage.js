@@ -18,7 +18,7 @@ import { evalSla, slaRowClass } from '../../../utils/sla';
 import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
 import { Field, Textarea } from '../../../components/common/controls';
-import { listReadyQcCandidates, getReadyDetail, confirmReadyQC, confirmReadyQcBatch, readyHistory, readyDone, returnReadyToTech } from '../../../services/readyService';
+import { listReadyQcCandidates, getReadyDetail, confirmReadyQC, confirmReadyQcBatch, readyHistory, readyDone, returnReadyToTech, traCuuMaQuet } from '../../../services/readyService';
 import LoaiDotVaiBadge from '../../planning/components/LoaiDotVaiBadge';
 import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
@@ -134,6 +134,15 @@ export default function ReadyQcPage() {
     } catch (e) { /* nền: lỗi mạng thì giữ dữ liệu cũ, không quấy người dùng */ }
   }, [search, page]);
   useSocketEvent('ready:confirmed', refresh);
+
+  // Quét mã mà không khớp dòng nào → tra tiếp toàn hệ thống để nói RÕ vì sao (thường là phần in đã
+  // được QC xác nhận xong nên rời danh sách — trước đây chỉ hiện "Không thấy", người quét tưởng hỏng).
+  const giaiThichQuetTruot = useCallback(async (code) => {
+    try {
+      const res = await traCuuMaQuet(code);
+      return res.data?.mo_ta || null;
+    } catch (e) { return null; }
+  }, []);
 
   const open = async (row, asReturn = false) => {
     setEditing(row);
@@ -417,6 +426,7 @@ export default function ReadyQcPage() {
         getBarcodes={(r) => [r.barcode]}
         matchMultiple={false}
         canSelect={(r) => isReady(r) || 'chưa đủ mục kỹ thuật (Khuôn/Film/Mực) — QC chưa xác nhận được'}
+        onNotFound={giaiThichQuetTruot}
         isSelected={(r) => selected.has(r.id)}
         onToggle={(r) => toggleOne(r.id)}
         primaryLabel={(r) => r.ma_phan || r.barcode || '—'}

@@ -19,7 +19,7 @@ import { evalSla, slaRowClass } from '../../../utils/sla';
 import TraVeBadge from '../../../components/common/TraVeBadge';
 import {
   listReadyCandidates, confirmReadyBulk, readyHistory, readyDone, getReadyItemCounts,
-  confirmReadyItemsBatch, uncheckReadyItem,
+  confirmReadyItemsBatch, uncheckReadyItem, traCuuMaQuet,
 } from '../../../services/readyService';
 import ReadyPanel from '../components/ReadyPanel';
 import LoaiDotVaiBadge from '../../planning/components/LoaiDotVaiBadge';
@@ -130,6 +130,15 @@ export default function ReadyPage() {
     } catch (e) { /* nền: giữ dữ liệu cũ khi lỗi mạng */ }
   }, [search, page]);
   useSocketEvent('ready:confirmed', refresh);
+
+  // Quét mã không khớp dòng nào → tra tiếp toàn hệ thống để nói RÕ vì sao (đã QC xong / đã release /
+  // đã hủy) thay vì chỉ "Không thấy".
+  const giaiThichQuetTruot = useCallback(async (code) => {
+    try {
+      const res = await traCuuMaQuet(code);
+      return res.data?.mo_ta || null;
+    } catch (e) { return null; }
+  }, []);
 
   const toggleOne = (id) => setSelected((s) => {
     const next = new Set(s);
@@ -279,6 +288,7 @@ export default function ReadyPage() {
         getCodes={(r) => [r.ma_phan]}
         getBarcodes={(r) => String(r.barcode || '').split(',').map((s) => s.trim()).filter(Boolean)}
         matchMultiple={false}
+        onNotFound={giaiThichQuetTruot}
         primaryLabel={(r) => r.ma_phan || r.barcode || '—'}
         secondaryLabel={(r) => [r.ten_khach_hang, r.ma_hang, r.mau_vai].filter(Boolean).join(' · ')}
         disabledScan={scanSel.size === 0}
