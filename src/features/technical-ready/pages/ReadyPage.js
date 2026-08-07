@@ -288,6 +288,9 @@ export default function ReadyPage() {
         getCodes={(r) => [r.ma_phan]}
         getBarcodes={(r) => String(r.barcode || '').split(',').map((s) => s.trim()).filter(Boolean)}
         matchMultiple={false}
+        // Quét mã vạch TDTHĐH → ĐÚNG 1 code phần, không kéo theo cả nhóm gom set: ở READY quét là
+        // XÁC NHẬN NGAY, mà Khuôn/Film/Mực xác nhận độc lập theo từng phần in. Quét mã HSKT vẫn lấy cả nhóm.
+        barcodePhanInRieng
         onNotFound={giaiThichQuetTruot}
         primaryLabel={(r) => r.ma_phan || r.barcode || '—'}
         secondaryLabel={(r) => [r.ten_khach_hang, r.ma_hang, r.mau_vai].filter(Boolean).join(' · ')}

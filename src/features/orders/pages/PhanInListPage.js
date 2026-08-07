@@ -337,8 +337,8 @@ export default function PhanInListPage() {
   const showSxCols = !stage || AGG_STAGES.includes(stage);
   const showTemQuality = showTemRows && !['KCS', 'CHO_KHO'].includes(stage); // KCS/Chờ khô chưa có chất lượng → ẩn cột
   // +1 ở cả 2 chế độ: cột "Tính chất in". Non-tem thêm +1 cột "Barcode";
-  // showSxCols thêm 14 cột (13 cột SX + "Phương án in").
-  const COLS = showTemRows ? (11 + (showTemQuality ? 1 : 0)) : (13 + (showPcsCol ? 1 : 0) + (showSxCols ? 14 : 0));
+  // showSxCols thêm 15 cột (13 cột SX + "Phương án in" + "BarCode TDTHĐH").
+  const COLS = showTemRows ? (11 + (showTemQuality ? 1 : 0)) : (13 + (showPcsCol ? 1 : 0) + (showSxCols ? 15 : 0));
 
   return (
     <div>
@@ -457,6 +457,9 @@ export default function PhanInListPage() {
                     <th className={TH}>Tính chất in</th>
                     {/* Phương án in — chỉ ở chế độ TỔNG HỢP (chip "Tất cả" + READY/RELEASE_1/2/TEST_RUN). */}
                     {showSxCols && <th className={TH}>Phương án in</th>}
+                    {/* Mã vạch của CHÍNH phần in (ERP BarcodePTHDH → phan_in.barcode) — khác cột
+                        "Barcode" bên cạnh: cột đó là mã ĐỢT VẢI (IDDotReady), gộp nhiều đợt bằng dấu phẩy. */}
+                    {showSxCols && <th className={TH}>BarCode TDTHĐH</th>}
                     <th className={TH}>Barcode</th>
                     {sortTh('SL đơn hàng', 'slDon', 'text-right border-r border-line/60')}
                     {sortTh('SL vải về', 'slVai', 'text-right')}
@@ -512,6 +515,7 @@ export default function PhanInListPage() {
                       <td rowSpan={n} className={TD}>{g.kich_phim || '—'}</td>
                       <td rowSpan={n} className={TD}><TinhChatInCell value={g.tinh_chat_in} /></td>
                       {showSxCols && <td rowSpan={n} className={TD}><PhuongAnInBadge value={g.phuong_an_in} /></td>}
+                      {showSxCols && <td rowSpan={n} className={`${TD} tabular-nums`}>{g.barcode_phan_in || '—'}</td>}
                       <td rowSpan={n} className={`${TD} tabular-nums`}>{g.barcode || '—'}</td>
                       <td rowSpan={n} className={`${TD} text-right tabular-nums border-r border-line/60`}>{fmtNum(g.so_luong_don_hang)}</td>
                     </>
@@ -653,6 +657,7 @@ export default function PhanInListPage() {
                 {g.mau_vai && <Badge tone="default">{g.mau_vai}</Badge>}
                 {g.kich_vai && <Badge tone="default">Vải {g.kich_vai}</Badge>}
                 {g.kich_phim && <Badge tone="default">Phim {g.kich_phim}</Badge>}
+                {g.barcode_phan_in && <Badge tone="default">TDTHĐH {g.barcode_phan_in}</Badge>}
                 {g.barcode && <Badge tone="default">Barcode {g.barcode}</Badge>}
                 {g.so_dot > 1 && <Badge tone="warning">{g.so_dot} đợt vải</Badge>}
               </div>
@@ -691,6 +696,8 @@ export default function PhanInListPage() {
             <section className="border-t border-line pt-4">
               <h3 className="mb-1 text-xs font-bold uppercase tracking-wide text-ink-soft">Thông số phần in</h3>
               <Row label="Code phần" value={detail.ma_phan} />
+              {/* Mã vạch của CHÍNH phần in (ERP BarcodePTHDH) — "Barcode" bên dưới là mã ĐỢT VẢI. */}
+              <Row label="BarCode TDTHĐH" value={detail.barcode_phan_in || '—'} />
               <Row label="Barcode" value={detail.barcode || '—'} />
               <Row label="Màu vải" value={detail.mau_vai || '—'} />
               <Row label="Kích vải" value={detail.kich_vai || '—'} />
