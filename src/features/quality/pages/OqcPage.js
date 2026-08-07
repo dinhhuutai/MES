@@ -7,7 +7,7 @@ import Button from '../../../components/common/Button';
 import SidePanel from '../../../components/common/SidePanel';
 import Toast from '../../../components/common/Toast';
 import HistoryPanel from '../../../components/common/HistoryPanel';
-import DonePanel from '../../../components/common/DonePanel';
+import DonePanel, { COT_EXCEL_GIO_HT } from '../../../components/common/DonePanel';
 import { Field, Input, Textarea } from '../../../components/common/controls';
 import SearchableSelect from '../../../components/common/SearchableSelect';
 import QrScanner from '../../../components/common/QrScanner';
@@ -348,6 +348,7 @@ export default function OqcPage() {
           { header: 'SL đạt', value: (r) => Number(r.so_luong) || 0, num: true },
           { header: 'SL qua giao', value: (r) => Number(r.sl_qua_giao) || 0, num: true },
           { header: 'Hạn giao', value: (r) => r.han_giao_hang || '', type: 'date' },
+          COT_EXCEL_GIO_HT,
           { header: 'Người', value: (r) => r.nguoi || '' },
         ]} />
 

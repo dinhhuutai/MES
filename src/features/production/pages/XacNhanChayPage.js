@@ -19,6 +19,8 @@ import {
 } from '../../../services/productionService';
 import { fmtNum, fmtDate } from '../../../utils/format';
 import exportCheckpointExcel, { COT_LENH, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
+import ChipTabs from '../../../components/common/ChipTabs';
+import { LOAI_TABS, hopChipChuyen, nhanChip, demChip } from '../../../utils/khuChuyen';
 import RunPanel from '../components/RunPanel';
 
 export default function XacNhanChayPage() {
@@ -38,6 +40,9 @@ export default function XacNhanChayPage() {
   const [confirmRun, setConfirmRun] = useState(null); // lệnh đang xác nhận chạy
   const [runChuyenId, setRunChuyenId] = useState('');
   const [busy, setBusy] = useState(false);
+  // Chip LOẠI CHUYỀN + KHU BÀN — cùng bộ với "Theo dõi chuyền" / "Test Run - QA".
+  // Áp cho CẢ 2 bảng (Đang chạy & Chờ chạy) để 2 bảng luôn nói về cùng một nhóm chuyền.
+  const [loai, setLoai] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -86,8 +91,16 @@ export default function XacNhanChayPage() {
     };
     return (rows || []).filter((r) => khopPin(r) && matchChuyen(r));
   }, [filters, hasFilter, selChuyen]);
-  const candFiltered = useMemo(() => applyFilters(candidates), [applyFilters, candidates]);
-  const runFiltered = useMemo(() => applyFilters(running), [applyFilters, running]);
+  // Chip loại chuyền chồng lên bộ lọc trường (AND).
+  const locTheoChip = useCallback((rows) => (loai ? (rows || []).filter((r) => hopChipChuyen(r, loai)) : rows), [loai]);
+  const candFiltered = useMemo(() => locTheoChip(applyFilters(candidates)), [applyFilters, locTheoChip, candidates]);
+  const runFiltered = useMemo(() => locTheoChip(applyFilters(running)), [applyFilters, locTheoChip, running]);
+  // Số trên chip đếm trên tập ĐÃ qua bộ lọc trường (bỏ chip) để khớp với bảng đang xem.
+  // Gộp cả 2 bảng: 1 dải chip điều khiển cả "Đang chạy" lẫn "Chờ chạy".
+  const countChip = useMemo(
+    () => demChip([...applyFilters(running), ...applyFilters(candidates)]),
+    [applyFilters, running, candidates]
+  );
   const clearFilters = () => setFilters({ khach: '', don: '', maHang: '', mauVai: '', kichVai: '', kichPhim: '', chuyenId: '' });
 
   // Xuất Excel 2 bảng RIÊNG (đang chạy / chờ chạy) — theo đúng bộ lọc đang bật, hết mọi dòng.
@@ -95,6 +108,7 @@ export default function XacNhanChayPage() {
     'tìm kiếm': search, khách: filters.khach, đơn: filters.don, 'mã hàng': filters.maHang,
     'màu vải': filters.mauVai, 'kích vải': filters.kichVai, 'kích phim': filters.kichPhim,
     chuyền: selChuyen ? (selChuyen.ten_chuyen || selChuyen.ma_chuyen) : '',
+    'loại chuyền': nhanChip(loai),
   });
   // Bảng "Đang chạy" lấy từ `monitorRunning` — bộ cột KHÁC danh sách lệnh (không có tính chất in /
   // loại đợt vải / SL đơn hàng), nên khai riêng thay vì dùng COT_LENH cho có rồi để trống.
@@ -239,8 +253,12 @@ export default function XacNhanChayPage() {
         </div>
       )}
 
+      {/* Chip LOẠI CHUYỀN + KHU BÀN — cùng bộ với "Theo dõi chuyền" / "Test Run - QA",
+          điều khiển CẢ 2 bảng bên dưới. */}
+      <ChipTabs tabs={LOAI_TABS} value={loai} counts={countChip} onChange={setLoai} />
+
       <div className="mb-2 mt-1 flex items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-ink">Đang chạy ({runFiltered.length}{hasFilter ? `/${running.length}` : ''})</h3>
+        <h3 className="text-sm font-semibold text-ink">Đang chạy ({runFiltered.length}{hasFilter || loai ? `/${running.length}` : ''})</h3>
         <Button variant="secondary" icon="download" onClick={doExcelRunning} disabled={!runFiltered.length}>
           Excel ({runFiltered.length})
         </Button>
@@ -250,7 +268,7 @@ export default function XacNhanChayPage() {
         onRowClick={(r) => setSel(r.lenh_id)} emptyText="Không có lệnh đang chạy" />
 
       <div className="mb-2 mt-6 flex items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold text-ink">Chờ chạy ({candFiltered.length}{hasFilter ? `/${candidates.length}` : ''})</h3>
+        <h3 className="text-sm font-semibold text-ink">Chờ chạy ({candFiltered.length}{hasFilter || loai ? `/${candidates.length}` : ''})</h3>
         <Button variant="secondary" icon="download" onClick={doExcelCand} disabled={!candFiltered.length}>
           Excel ({candFiltered.length})
         </Button>

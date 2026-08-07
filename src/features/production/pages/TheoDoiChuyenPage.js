@@ -9,29 +9,12 @@ import useToast from '../../../hooks/useToast';
 import useNow from '../../../hooks/useNow';
 import usePermissions from '../../../hooks/usePermissions';
 import { getMonitor, stopLine, resumeLine } from '../../../services/productionService';
-import { KHU_BAN, khuCuaChuyen, thuocKhu } from '../../../utils/khuChuyen';
+import { LOAI_TABS, hopChipChuyen as hopChip, nhanChip, demChip } from '../../../utils/khuChuyen';
 import ChipTabs from '../../../components/common/ChipTabs';
 
 const ROTATE_MS = 30000;
-// Lọc theo LOẠI CHUYỀN (bảng loai_chuyen.ma_loai) — '' = tất cả.
-// Chip lọc: loại chuyền + các KHU của chuyền Bàn (khu = tập `ma_chuyen`, xem utils/khuChuyen.js).
-// Giữ chip "Bàn" tổng để vẫn xem được toàn bộ Bàn; 5 chip khu nằm ngay sau nó.
-const LOAI_TABS = [
-  { v: '', label: 'Tất cả' },
-  { v: 'BAN', label: 'Bàn' },
-  ...KHU_BAN.map((k) => ({ v: `KHU:${k.key}`, label: k.label, khu: k.key })),
-  { v: 'MAY', label: 'Máy' },
-  { v: 'ROBOT', label: 'Robot' },
-  { v: 'EP', label: 'Ép' },
-  { v: 'LOGO', label: 'Logo' },
-  { v: 'GIA_CONG', label: 'Gia công' },
-];
-// 1 hàng (chuyền) có khớp chip đang chọn không: chip khu lọc theo ma_chuyen, còn lại theo loại chuyền.
-const hopChip = (row, v) => {
-  if (!v) return true;
-  if (v.startsWith('KHU:')) return thuocKhu(row.ma_chuyen, v.slice(4));
-  return row.ma_loai_chuyen === v;
-};
+// Chip lọc theo LOẠI CHUYỀN + KHU chuyền Bàn — nguồn chung `utils/khuChuyen.js`
+// (dùng chung với "Test Run - QA" và "Xác nhận chạy"; sửa 1 chỗ, 3 màn cùng đổi).
 const nf = (n) => Number(n || 0).toLocaleString('vi-VN');
 const pad = (n) => String(n).padStart(2, '0');
 const hhmm = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -74,16 +57,8 @@ export default function TheoDoiChuyenPage() {
   }, [load]);
 
   const allRunning = useMemo(() => data.running || [], [data.running]);
-  // Đếm số chuyền đang chạy theo từng loại (cho badge trên toggle).
-  const countByLoai = useMemo(() => {
-    const m = {};
-    allRunning.forEach((x) => {
-      m[x.ma_loai_chuyen || ''] = (m[x.ma_loai_chuyen || ''] || 0) + 1;
-      const k = khuCuaChuyen(x.ma_chuyen);
-      if (k) m[`KHU:${k}`] = (m[`KHU:${k}`] || 0) + 1;
-    });
-    return m;
-  }, [allRunning]);
+  // Đếm số chuyền đang chạy theo từng chip (kể cả chip khu) — cho badge trên toggle.
+  const countByLoai = useMemo(() => demChip(allRunning), [allRunning]);
   const running = useMemo(
     () => (loai ? allRunning.filter((x) => hopChip(x, loai)) : allRunning),
     [allRunning, loai]
@@ -162,7 +137,7 @@ export default function TheoDoiChuyenPage() {
               </select>
             ) : (
               <span className="text-sm text-ink-soft">
-                Không có chuyền đang chạy{loai ? ` — loại "${LOAI_TABS.find((t) => t.v === loai)?.label}"` : ''}
+                Không có chuyền đang chạy{loai ? ` — loại "${nhanChip(loai)}"` : ''}
               </span>
             )}
             {r && (r.dang_ngung ? <Badge tone="danger">● Đang ngừng</Badge> : <Badge tone="success">● Đang chạy</Badge>)}
@@ -186,7 +161,7 @@ export default function TheoDoiChuyenPage() {
         ) : !r ? (
           <div className="py-16 text-center text-ink-soft">
             {loai
-              ? `Không có chuyền loại "${LOAI_TABS.find((t) => t.v === loai)?.label}" nào đang chạy`
+              ? `Không có chuyền loại "${nhanChip(loai)}" nào đang chạy`
               : 'Không có chuyền nào đang chạy'}
           </div>
         ) : (

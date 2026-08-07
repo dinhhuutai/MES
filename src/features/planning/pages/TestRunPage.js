@@ -22,27 +22,12 @@ import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
 import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import TraVeBadge from '../../../components/common/TraVeBadge';
-import { KHU_BAN, khuCuaChuyen, thuocKhu } from '../../../utils/khuChuyen';
+import { LOAI_TABS, hopChipChuyen as hopChip, nhanChip, demChip } from '../../../utils/khuChuyen';
 import ChipTabs from '../../../components/common/ChipTabs';
 import exportCheckpointExcel, { COT_LENH, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
 
-// Chip lọc theo LOẠI CHUYỀN + KHU của chuyền Bàn — cùng bộ với màn "Theo dõi chuyền"
-// (nguồn chung `utils/khuChuyen.js`, sửa 1 chỗ 2 màn cùng đổi).
-const LOAI_TABS = [
-  { v: '', label: 'Tất cả' },
-  { v: 'BAN', label: 'Bàn' },
-  ...KHU_BAN.map((k) => ({ v: `KHU:${k.key}`, label: k.label })),
-  { v: 'MAY', label: 'Máy' },
-  { v: 'ROBOT', label: 'Robot' },
-  { v: 'EP', label: 'Ép' },
-  { v: 'LOGO', label: 'Logo' },
-  { v: 'GIA_CONG', label: 'Gia công' },
-];
-const hopChip = (row, v) => {
-  if (!v) return true;
-  if (v.startsWith('KHU:')) return thuocKhu(row.ma_chuyen, v.slice(4));
-  return row.ma_loai_chuyen === v;
-};
+// Chip lọc theo LOẠI CHUYỀN + KHU của chuyền Bàn — nguồn chung `utils/khuChuyen.js`
+// (dùng chung với "Theo dõi chuyền" và "Xác nhận chạy"; sửa 1 chỗ, 3 màn cùng đổi).
 
 const FILTER_FIELDS = [
   { key: 'codePhan', label: 'Code phần', col: 'ma_phan' }, { key: 'khach', label: 'Khách hàng', col: 'ten_khach_hang' },
@@ -104,16 +89,10 @@ export default function TestRunPage() {
     return filterRows(base, filters, FILTER_FIELDS);
   }, [rows, filters, onlyPending, loai]);
   // Đếm cho badge chip — tính trên tập ĐANG XÉT (theo ô "Chỉ chờ QA") để số khớp bảng.
-  const countChip = useMemo(() => {
-    const base = onlyPending ? rows.filter((r) => !r.qa_done) : rows;
-    const m = { '': base.length };
-    base.forEach((x) => {
-      m[x.ma_loai_chuyen || ''] = (m[x.ma_loai_chuyen || ''] || 0) + 1;
-      const k = khuCuaChuyen(x.ma_chuyen);
-      if (k) m[`KHU:${k}`] = (m[`KHU:${k}`] || 0) + 1;
-    });
-    return m;
-  }, [rows, onlyPending]);
+  const countChip = useMemo(
+    () => demChip(onlyPending ? rows.filter((r) => !r.qa_done) : rows),
+    [rows, onlyPending]
+  );
   const activeCount = Object.values(filters).filter(Boolean).length;
   const doneCount = useMemo(() => rows.filter((r) => r.qa_done).length, [rows]);
 
@@ -131,7 +110,7 @@ export default function TestRunPage() {
     fileName: 'test-run',
     moTaLoc: moTaBoLoc({
       'tìm kiếm': search, 'chỉ chờ QA': onlyPending ? 'có' : '',
-      khu: (LOAI_TABS.find((t) => t.v === loai) || {}).label, ...filters,
+      khu: nhanChip(loai), ...filters,
     }),
   });
 

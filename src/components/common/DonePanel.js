@@ -14,6 +14,12 @@ import { fmtNum } from '../../utils/format';
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const fmtTime = (t) => (t ? new Date(t).toLocaleTimeString('vi-VN') : '');
 
+// Cột Excel "Giờ HT" (giờ hoàn thành) — ĐỨNG NGAY SAU cột "Hạn giao".
+// Export để 4 màn khai `excelColumns` RIÊNG (KCS · Sửa · OQC · Gom set) dùng CHUNG 1 định nghĩa,
+// khỏi mỗi nơi tự format một kiểu. `exportPanelExcel` không có type 'time' nên xuất thẳng chuỗi
+// giống hệt thứ đang hiện trên bảng.
+export const COT_EXCEL_GIO_HT = { header: 'Giờ HT', value: (r) => fmtTime(r.tg), center: true, width: 12 };
+
 // Bỏ dấu tiếng Việt + hạ chữ thường (gõ "do" ra "đỏ", "xanh la" ra "xanh lá").
 const norm = (s) => String(s ?? '')
   .normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -120,6 +126,7 @@ export default function DonePanel({
     ...(showChuyen ? [{ header: 'Chuyền', value: (r) => r.ten_chuyen || '' }] : []),
     { header: 'SL', value: (r) => (r.so_luong != null ? Number(r.so_luong) : ''), num: true },
     { header: 'Hạn giao', value: (r) => r.han_giao_hang || '', type: 'date' },
+    COT_EXCEL_GIO_HT,
     { header: 'Người', value: (r) => r.nguoi || '' },
   ];
 

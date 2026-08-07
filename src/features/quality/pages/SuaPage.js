@@ -11,7 +11,7 @@ import Icon from '../../../components/common/Icon';
 import QrScanner from '../../../components/common/QrScanner';
 import DateRangePicker from '../../../components/common/DateRangePicker';
 import HistoryPanel from '../../../components/common/HistoryPanel';
-import DonePanel from '../../../components/common/DonePanel';
+import DonePanel, { COT_EXCEL_GIO_HT } from '../../../components/common/DonePanel';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import { Field, Input } from '../../../components/common/controls';
@@ -272,6 +272,7 @@ export default function SuaPage() {
           { header: 'Sửa đạt', value: (r) => Number(r.so_luong) || 0, num: true },
           { header: 'Sửa hủy', value: (r) => Number(r.so_luong_sua_huy) || 0, num: true },
           { header: 'Hạn giao', value: (r) => r.han_giao_hang || '', type: 'date' },
+          COT_EXCEL_GIO_HT,
           { header: 'Người', value: (r) => r.nguoi || '' },
         ]} />
 

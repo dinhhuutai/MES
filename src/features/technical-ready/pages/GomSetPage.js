@@ -6,7 +6,7 @@ import SidePanel from '../../../components/common/SidePanel';
 import Icon from '../../../components/common/Icon';
 import Toast from '../../../components/common/Toast';
 import HistoryPanel from '../../../components/common/HistoryPanel';
-import DonePanel from '../../../components/common/DonePanel';
+import DonePanel, { COT_EXCEL_GIO_HT } from '../../../components/common/DonePanel';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
 import { Input, Textarea } from '../../../components/common/controls';
@@ -348,6 +348,9 @@ export default function GomSetPage() {
           { header: 'Thao tác', value: (r) => r.hanh_dong || '' },
           { header: 'Số đợt vải', value: (r) => Number(r.so_luong) || 0, num: true },
           { header: 'Màu', value: (r) => r.mau_list || '' },
+          // Panel Gom set KHÔNG có cột "Hạn giao" ⇒ Giờ HT đứng ngay trước "Người",
+          // giữ đúng thứ tự tương đối như các panel khác (… → Giờ HT → Người).
+          COT_EXCEL_GIO_HT,
           { header: 'Người', value: (r) => r.nguoi || '' },
         ]} />
 

@@ -9,7 +9,7 @@ import SidePanel from '../../../components/common/SidePanel';
 import Modal from '../../../components/common/Modal';
 import Toast from '../../../components/common/Toast';
 import HistoryPanel from '../../../components/common/HistoryPanel';
-import DonePanel from '../../../components/common/DonePanel';
+import DonePanel, { COT_EXCEL_GIO_HT } from '../../../components/common/DonePanel';
 import TemJourneyPanel from '../../../components/common/TemJourneyPanel';
 import QrScanner from '../../../components/common/QrScanner';
 import DateRangePicker from '../../../components/common/DateRangePicker';
@@ -421,6 +421,7 @@ export default function KcsPage() {
           { header: 'SL kiểm', value: (r) => Number(r.so_luong_kiem) || 0, num: true },
           { header: 'SL đạt', value: (r) => Number(r.so_luong) || 0, num: true },
           { header: 'Hạn giao', value: (r) => r.han_giao_hang || '', type: 'date' },
+          COT_EXCEL_GIO_HT,
           { header: 'Người', value: (r) => r.nguoi || '' },
         ]} />
       {journey && (

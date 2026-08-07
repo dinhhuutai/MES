@@ -10,7 +10,8 @@ import TimeSelect from '../../../components/common/TimeSelect';
 import { Field, Input, Textarea, Select } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import { getRun, printTem, printTemBatch, reprintTem, getTemLabel, getTemLogs, finishRun, stopLine, resumeLine, addVaiHuy, savePhanCong, pauseLenhChay, listProductionCandidates, startProduction, vuotSanXuat } from '../../../services/productionService';
+import { getRun, printTem, printTemBatch, reprintTem, getTemLabel, getTemLogs, finishRun, stopLine, resumeLine, addVaiHuy, savePhanCong, pauseLenhChay, listProductionCandidates, startProduction, vuotSanXuat, doiChuyen, listChuyen } from '../../../services/productionService';
+import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import { listUserOptions } from '../../../services/userService';
 import printTemLabel from '../utils/printTemLabel';
 import { fmtNum, fmtDate } from '../../../utils/format';
@@ -216,15 +217,25 @@ function PrintSetModal({ open, onClose, rows, onPrintRow, busy, meta, setMeta, g
     }
   };
 
+  // BTP TRƯỚC = bán thành phẩm chuyển tiếp trong xưởng, KHÔNG dán tem ra ngoài ⇒ chỉ LƯU dữ liệu
+  // (vẫn tạo tem + vào xe phơi như thường), không mở cửa sổ in. Nút đổi nhãn cho khỏi hiểu nhầm.
+  const chiLuu = !!meta.btpTruoc;
+
   return (
-    <Modal open={open} onClose={onClose} title="In tem — đợt sản xuất gom set" size="xl"
+    <Modal open={open} onClose={onClose} title={`${chiLuu ? 'Lưu' : 'In tem'} — đợt sản xuất gom set`} size="xl"
       footer={<Button variant="ghost" onClick={onClose}>Đóng</Button>}
     >
       {/* Ngày ca / giờ SX / BTP áp cho MỌI tem in ở modal này. GC màu vải nhập RIÊNG từng dòng ⇒ ẩn ô chung. */}
       <div className="mb-3"><TemMetaFields meta={meta} setMeta={setMeta} goiY={goiY} anGcMauVai /></div>
+      {chiLuu && (
+        <p className="mb-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
+          Đang bật <b>BTP trước</b> — dữ liệu vẫn lưu vào hệ thống như bình thường (tạo tem, vào xe phơi),
+          nhưng <b>KHÔNG mở cửa sổ in nhãn</b>. Bỏ tick nếu cần in tem ra ngoài.
+        </p>
+      )}
       <p className="mb-3 text-xs text-ink-soft">
-        Nhập <b>SL in</b> + <b>GC màu vải</b> của từng phần in rồi bấm <b>In tem</b> ở ĐÚNG dòng đó —
-        mỗi lần bấm in 1 tem. Trần mỗi phần in = <b>110% SL vào SX</b>. <b>SL vải hủy/thiếu</b> &gt; 0
+        Nhập <b>SL in</b> + <b>GC màu vải</b> của từng phần in rồi bấm <b>{chiLuu ? 'Lưu' : 'In tem'}</b> ở ĐÚNG dòng đó —
+        mỗi lần bấm 1 tem. Trần mỗi phần in = <b>110% SL vào SX</b>. <b>SL vải hủy/thiếu</b> &gt; 0
         sẽ ghi vào sổ vải của đợt đó.
       </p>
       <div className="overflow-auto rounded-card border border-line">
@@ -271,12 +282,14 @@ function PrintSetModal({ open, onClose, rows, onPrintRow, busy, meta, setMeta, g
                   </td>
                   <td className={`${TD} whitespace-nowrap`}>
                     <div className="flex items-center gap-2">
-                      <Button className="px-2.5 py-1 text-xs" icon="printer" loading={busy}
+                      <Button className="px-2.5 py-1 text-xs" icon={chiLuu ? 'save' : 'printer'} loading={busy}
                         disabled={busy || overRow(r) || (num(id, 'sl') <= 0 && !coGhiVai)}
                         onClick={() => inDong(r)}>
-                        {num(id, 'sl') <= 0 && coGhiVai ? 'Ghi vải' : 'In tem'}
+                        {num(id, 'sl') <= 0 && coGhiVai ? 'Ghi vải' : (chiLuu ? 'Lưu' : 'In tem')}
                       </Button>
-                      {daIn.has(id) && <span className="text-xs font-medium text-success">✓ đã in</span>}
+                      {daIn.has(id) && (
+                        <span className="text-xs font-medium text-success">{chiLuu ? '✓ đã lưu' : '✓ đã in'}</span>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -314,6 +327,10 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
   const [temMeta, setTemMeta] = useState(META_MAC_DINH()); // ngày ca · giờ SX · BTP của lượt in (mig 066)
   const [printSetOpen, setPrintSetOpen] = useState(false); // modal in tem gom set
   const [users, setUsers] = useState([]);              // tài khoản để chọn ca trưởng
+  const [doiOpen, setDoiOpen] = useState(false);       // modal đổi chuyền (máy hỏng / dồn tải)
+  const [doiChuyenId, setDoiChuyenId] = useState('');
+  const [doiGhiChu, setDoiGhiChu] = useState('');
+  const [chuyenList, setChuyenList] = useState([]);
 
   const phieu = data?.phieu;
   const running = phieu?.trang_thai === 'DANG_CHAY';
@@ -363,13 +380,19 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
     catch (e) { show(e.message || 'Không lấy được dữ liệu tem để in', 'error'); }
   };
 
+  // BTP TRƯỚC = bán thành phẩm chuyển tiếp trong xưởng ⇒ KHÔNG dán tem ra ngoài: vẫn lưu dữ liệu
+  // (tạo tem + vào xe phơi + ghi ngày ca/giờ SX) như bình thường, chỉ BỎ bước mở cửa sổ in nhãn.
+  const chiLuu = !!temMeta.btpTruoc;
+
   const doPrint = async () => {
     setBusy(true);
     try {
       const res = await printTem(phieu.id, Number(soLuong), temMeta);
-      show(`Đã in tem ${fmtNum(soLuong)} — tự đưa vào xe phơi, đang đếm ngược`);
+      show(chiLuu
+        ? `Đã lưu ${fmtNum(soLuong)} (BTP trước — không in tem) — tự đưa vào xe phơi, đang đếm ngược`
+        : `Đã in tem ${fmtNum(soLuong)} — tự đưa vào xe phơi, đang đếm ngược`);
       setSoLuong('');
-      await printLabelFor(res.data?.new_tem_id);
+      if (!chiLuu) await printLabelFor(res.data?.new_tem_id);
       // Xóa meta rồi tải lại ⇒ lượt in KẾ TIẾP lấy gợi ý mới (giờ BĐ = mốc kết thúc của lượt vừa in).
       setTemMeta(META_MAC_DINH());
       await load();
@@ -390,8 +413,10 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
       const res = await printTemBatch(phieu.id, [item], temMeta);
       const t = (res.data?.tems_in || [])[0];
       if (t) {
-        show(`Đã in tem ${t.ma_tem} (${fmtNum(t.so_luong)}) — tự vào xe phơi, đang đếm ngược`);
-        await printLabelFor(t.tem_id, t.dot_vai_id);
+        show(chiLuu
+          ? `Đã lưu tem ${t.ma_tem} (${fmtNum(t.so_luong)}) — BTP trước, không in nhãn`
+          : `Đã in tem ${t.ma_tem} (${fmtNum(t.so_luong)}) — tự vào xe phơi, đang đếm ngược`);
+        if (!chiLuu) await printLabelFor(t.tem_id, t.dot_vai_id);
       } else {
         show('Đã ghi sổ vải hủy/thiếu cho phần in này');
       }
@@ -401,6 +426,30 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
     } catch (e) {
       show(e.message || 'In tem thất bại', 'error');
       return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // ĐỔI CHUYỀN lượt chạy: máy hỏng / dồn tải sang chuyền khác. Đổi cả phiếu lẫn lệnh ở BE,
+  // tem đã in GIỮ NGUYÊN (thuộc về lượt in đó, không in lại).
+  const moDoiChuyen = () => {
+    setDoiChuyenId(data?.lenh?.chuyen_id || '');
+    setDoiGhiChu('');
+    setDoiOpen(true);
+    if (!chuyenList.length) listChuyen().then((r) => setChuyenList(r.data || [])).catch(() => {});
+  };
+  const doDoiChuyen = async () => {
+    setBusy(true);
+    try {
+      const res = await doiChuyen(phieu.id, { chuyenId: doiChuyenId, ghiChu: doiGhiChu });
+      const d = res.data || {};
+      show(`Đã đổi chuyền${d.chuyen_cu ? ` từ ${d.chuyen_cu}` : ''} → ${d.chuyen_moi}`);
+      setDoiOpen(false);
+      await load();
+      onChanged?.();
+    } catch (e) {
+      show(e.message || 'Đổi chuyền thất bại', 'error');
     } finally {
       setBusy(false);
     }
@@ -584,9 +633,17 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
       subtitle={data?.lenh ? `Chuyền ${data.lenh.ma_chuyen || '—'} · Phần ${data.lenh.phan_list || '—'}` : ''}
       footer={
         running && canRun && (
-          <Button variant="danger" onClick={doFinish} loading={busy} disabled={printed < minFinish}>
-            Chạy hoàn tất
-          </Button>
+          <>
+            {/* Đổi chuyền đứng ĐỐI DIỆN "Chạy hoàn tất" — footer của SidePanel là `justify-end` nên
+                phải `mr-auto` mới đẩy được sang mép TRÁI. Thao tác điều hành (máy hỏng / dồn tải),
+                không phải hành động kết thúc ⇒ để nút phụ. */}
+            <Button variant="secondary" icon="shuffle" className="mr-auto" onClick={moDoiChuyen} disabled={busy}>
+              Đổi chuyền
+            </Button>
+            <Button variant="danger" onClick={doFinish} loading={busy} disabled={printed < minFinish}>
+              Chạy hoàn tất
+            </Button>
+          </>
         )
       }
     >
@@ -616,14 +673,14 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
           {running && canRun && (
             <section className="border-t border-line pt-4">
               <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-soft">
-                In tem{coGomSet ? ` (gom set · ${data.so_phan_in} phần in)` : ''}
+                {chiLuu ? 'Lưu (BTP trước)' : 'In tem'}{coGomSet ? ` (gom set · ${data.so_phan_in} phần in)` : ''}
               </h3>
               {/* Ngày ca · giờ SX · BTP: nhập 1 lần, áp cho mọi tem in ở lượt này (mig 066).
                   Với gom set thì bảng in tem cũng hiện lại khối này để nhập ngay trước khi in. */}
               {!coGomSet && <div className="mb-2"><TemMetaFields meta={temMeta} setMeta={setTemMeta} goiY={goiYTem} /></div>}
               {coGomSet ? (
-                <Button className="w-full" icon="printer" onClick={() => setPrintSetOpen(true)} disabled={busy || remain === 0}>
-                  Nhập số lượng &amp; in tem…
+                <Button className="w-full" icon={chiLuu ? 'save' : 'printer'} onClick={() => setPrintSetOpen(true)} disabled={busy || remain === 0}>
+                  Nhập số lượng &amp; {chiLuu ? 'lưu' : 'in tem'}…
                 </Button>
               ) : (
                 <div className="flex items-end gap-2">
@@ -633,9 +690,17 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
                       onChange={(e) => setSoLuong(e.target.value)} placeholder="vd: 200"
                       className={overMax ? 'border-danger focus:border-danger focus:ring-danger/10' : ''} />
                   </div>
-                  <Button onClick={doPrint} loading={busy}
-                    disabled={!soLuong || Number(soLuong) <= 0 || overMax || remain === 0}>In tem</Button>
+                  {/* BTP trước → chỉ LƯU (không mở cửa sổ in nhãn), nút đổi hẳn nhãn cho khỏi hiểu nhầm. */}
+                  <Button onClick={doPrint} loading={busy} icon={chiLuu ? 'save' : undefined}
+                    disabled={!soLuong || Number(soLuong) <= 0 || overMax || remain === 0}>
+                    {chiLuu ? 'Lưu' : 'In tem'}
+                  </Button>
                 </div>
+              )}
+              {chiLuu && (
+                <p className="mt-1.5 text-xs text-amber-600">
+                  Đang bật <b>BTP trước</b> — vẫn lưu vào hệ thống (tạo tem, vào xe phơi) nhưng KHÔNG in nhãn ra ngoài.
+                </p>
               )}
               {target > 0 && (
                 <p className={`mt-1.5 text-xs ${overMax ? 'text-danger' : 'text-ink-soft'}`}>
@@ -869,6 +934,35 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
       {/* GOM SET: nhập SL in từng phần in → in nhiều tem liên tiếp */}
       <PrintSetModal open={printSetOpen} onClose={() => setPrintSetOpen(false)} rows={dotVaiList}
         onPrintRow={doPrintRow} busy={busy} meta={temMeta} setMeta={setTemMeta} goiY={goiYTem} />
+
+      {/* Đổi chuyền lượt chạy — chọn chuyền khác, tem đã in giữ nguyên */}
+      <Modal open={doiOpen} onClose={() => setDoiOpen(false)} title="Đổi chuyền" size="sm"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setDoiOpen(false)}>Hủy</Button>
+            <Button onClick={doDoiChuyen} loading={busy}
+              disabled={!doiChuyenId || doiChuyenId === data?.lenh?.chuyen_id}>
+              Xác nhận đổi
+            </Button>
+          </>
+        }
+      >
+        <div className="mb-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
+          Chuyển lệnh <b>{data?.lenh?.ma_lenh_san_xuat}</b> sang chuyền khác (máy hỏng, dồn tải…).
+          Đổi cả <b>phiếu đang chạy</b> lẫn <b>lệnh</b>; <b>tem đã in giữ nguyên</b> — không in lại,
+          không đụng xe phơi.
+        </div>
+        <div className="mb-3 text-sm text-ink">
+          Chuyền hiện tại: <b>{data?.lenh?.ten_chuyen || data?.lenh?.ma_chuyen || '—'}</b>
+        </div>
+        <Field label="Chuyền mới" required>
+          <ChuyenPicker chuyen={chuyenList} value={doiChuyenId} onChange={setDoiChuyenId} />
+        </Field>
+        <Field label="Ghi chú" hint="Không bắt buộc — ghi vào nhật ký để sau tra được vì sao đổi">
+          <Textarea rows={2} value={doiGhiChu} onChange={(e) => setDoiGhiChu(e.target.value)}
+            placeholder="vd: máy M5 hỏng trục, chuyển sang M7" />
+        </Field>
+      </Modal>
 
       {/* Ngừng lệnh chạy + hoán đổi phần in gấp hơn */}
       <Modal open={pauseOpen} onClose={() => setPauseOpen(false)} title="Ngừng lệnh chạy — in hàng gấp" size="lg"

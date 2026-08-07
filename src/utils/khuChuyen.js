@@ -21,3 +21,40 @@ export const khuCuaChuyen = (maChuyen) => MA_TO_KHU[String(maChuyen || '').trim(
 
 // Hàng có thuộc chip khu đang chọn không (khớp theo ma_chuyen của hàng).
 export const thuocKhu = (maChuyen, khuKey) => !!khuKey && khuCuaChuyen(maChuyen) === khuKey;
+
+// ─── DẢI CHIP LỌC THEO LOẠI CHUYỀN + KHU BÀN ────────────────────────────────
+// Dùng chung 3 màn: "Theo dõi chuyền" · "Test Run - QA" · "Xác nhận chạy" (2 bảng Đang/Chờ chạy).
+// ⚠ Trước đây mỗi màn tự khai 1 bản giống hệt nhau; khi thêm màn thứ 3 thì gom về đây — sửa 1 chỗ,
+// mọi màn cùng đổi. Giữ chip "Bàn" TỔNG để vẫn xem được toàn bộ Bàn; 5 chip khu nằm ngay sau nó.
+export const LOAI_TABS = [
+  { v: '', label: 'Tất cả' },
+  { v: 'BAN', label: 'Bàn' },
+  ...KHU_BAN.map((k) => ({ v: `KHU:${k.key}`, label: k.label, khu: k.key })),
+  { v: 'MAY', label: 'Máy' },
+  { v: 'ROBOT', label: 'Robot' },
+  { v: 'EP', label: 'Ép' },
+  { v: 'LOGO', label: 'Logo' },
+  { v: 'GIA_CONG', label: 'Gia công' },
+];
+
+// 1 hàng có khớp chip đang chọn không: chip khu lọc theo `ma_chuyen`, còn lại theo `ma_loai_chuyen`.
+export const hopChipChuyen = (row, v) => {
+  if (!v) return true;
+  if (v.startsWith('KHU:')) return thuocKhu(row.ma_chuyen, v.slice(4));
+  return row.ma_loai_chuyen === v;
+};
+
+// Nhãn chip (cho phụ đề Excel / câu "không có hàng nào thuộc loại …").
+export const nhanChip = (v) => (LOAI_TABS.find((t) => t.v === v) || {}).label || '';
+
+// Đếm số hàng cho từng chip (kể cả chip khu) → hiện số nhỏ trên mỗi chip.
+export const demChip = (rows) => {
+  const m = {};
+  (rows || []).forEach((x) => {
+    if (x.ma_loai_chuyen) m[x.ma_loai_chuyen] = (m[x.ma_loai_chuyen] || 0) + 1;
+    const k = khuCuaChuyen(x.ma_chuyen);
+    if (k) m[`KHU:${k}`] = (m[`KHU:${k}`] || 0) + 1;
+  });
+  m[''] = (rows || []).length;
+  return m;
+};
