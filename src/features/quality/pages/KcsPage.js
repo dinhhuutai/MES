@@ -220,6 +220,8 @@ export default function KcsPage() {
       </div>
     ) },
     { key: 'ten_chuyen', header: 'Chuyền', render: (r) => r.ten_chuyen || '—' },
+    // Nhà gia công (ERP NGC, mig 072) — theo đợt nhận vải, BE gộp DISTINCT khi lệnh gộp nhiều đợt.
+    { key: 'nha_gia_cong', header: 'Nhà gia công', render: (r) => r.nha_gia_cong || '—' },
     { key: 'nguoi_gio', header: 'Người XN · Giờ in tem', render: (r) => (
       <div className="leading-tight">
         <div className="text-ink">{r.nguoi_truoc || '—'}</div>

@@ -142,6 +142,8 @@ export default function GiaoHangPage() {
         <div className="text-xs text-ink-soft">{[r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—'}</div>
       </div>
     ) },
+    // Nhà gia công (ERP NGC, mig 072) — theo đợt nhận vải, BE gộp DISTINCT theo lệnh của tem.
+    { key: 'nha_gia_cong', header: 'Nhà gia công', render: (r) => r.nha_gia_cong || '—' },
     { key: 'nguoi_truoc', header: 'Người XN trạm trước', render: (r) => r.nguoi_truoc || '—' },
     { key: 'so_luong', header: 'SL in', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
     { key: 'con_src', header: 'Còn giao', className: 'text-right tabular-nums font-medium text-primary', render: (r) => fmtNum(r.con_src) },

@@ -160,6 +160,7 @@ export default function SuaPage() {
       </div>
     ) },
     { key: 'ten_chuyen', header: 'Chuyền', render: (r) => r.ten_chuyen || '—' },
+    { key: 'nha_gia_cong', header: 'Nhà gia công', render: (r) => r.nha_gia_cong || '—' },
     { key: 'ca', header: 'Ca SX', render: (r) => (r.ca ? <Badge tone="default">{r.ca}</Badge> : '—') },
     { key: 'nguoi_truoc', header: 'Người XN trạm trước', render: (r) => r.nguoi_truoc || '—' },
     { key: 'con_sua', header: 'SL cần sửa', className: 'text-right tabular-nums font-semibold',

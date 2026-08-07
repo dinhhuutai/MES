@@ -148,6 +148,8 @@ export default function Release2Page() {
     { key: 'tinh_chat_in', header: 'Tính chất in', render: (r) => <TinhChatInCell value={r.tinh_chat_in} /> },
     { key: 'phuong_an_in', header: 'Phương án in', render: (r) => <PhuongAnInBadge value={r.phuong_an_in} /> },
     { key: 'loai_dot_vai', header: 'Loại đợt vải', render: (r) => <LoaiDotVaiBadge value={r.loai_dot_vai} /> },
+    // Nhà gia công (ERP NGC, mig 072) — theo ĐỢT NHẬN VẢI; lệnh gộp nhiều đợt thì gộp DISTINCT ở BE.
+    { key: 'nha_gia_cong', header: 'Nhà gia công', render: (r) => r.nha_gia_cong || '—' },
     { key: 'sl_vai_don', header: 'SL vải về / đơn', className: 'text-right tabular-nums whitespace-nowrap', render: (r) => (
       <span><b className="text-ink">{fmtNum(r.so_luong_vai_ve)}</b><span className="text-ink-soft"> / {fmtNum(r.so_luong_don_hang)}</span></span>
     ) },

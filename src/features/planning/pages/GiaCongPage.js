@@ -170,6 +170,7 @@ export default function GiaCongPage() {
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
     { key: 'tinh_chat_in', header: 'Tính chất in', render: (r) => <TinhChatInCell value={r.tinh_chat_in} /> },
     { key: 'loai_dot_vai', header: 'Loại đợt vải', render: (r) => <LoaiDotVaiBadge value={r.loai_dot_vai} /> },
+    { key: 'nha_gia_cong', header: 'Nhà gia công', render: (r) => r.nha_gia_cong || '—' },
     { key: 'so_luong_release', header: 'SL release', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong_release) },
     // Hàng gia công về nhiều lần → theo dõi phần đã nhận / còn phải nhận.
     { key: 'da_chuyen', header: 'Đã chuyển OQC', className: 'text-right tabular-nums', render: (r) => fmtNum(r.da_chuyen || 0) },

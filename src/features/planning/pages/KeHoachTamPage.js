@@ -223,6 +223,7 @@ export default function KeHoachTamPage() {
     { key: 'tinh_chat_in', header: 'Tính chất in', render: (r) => <TinhChatInCell value={r.tinh_chat_in} /> },
     { key: 'phuong_an_in', header: 'Phương án in', render: (r) => <PhuongAnInBadge value={r.phuong_an_in} /> },
     { key: 'loai_dot_vai', header: 'Loại đợt vải', render: (r) => <LoaiDotVaiBadge value={r.loai_dot_vai} /> },
+    { key: 'nha_gia_cong', header: 'Nhà gia công', render: (r) => r.nha_gia_cong || '—' },
     { key: 'so_luong', header: 'SL', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
     { key: 'ten_chuyen', header: 'Chuyền (dự kiến)', render: (r) => r.ten_chuyen || '—' },
     { key: 'ngay_ke_hoach', header: 'Ngày KH', render: (r) => fmtDate(r.ngay_ke_hoach) },

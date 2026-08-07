@@ -163,6 +163,8 @@ export default function TaoDotSanXuatPage() {
                       <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-ink-soft">
                         <span>{[r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—'}</span>
                         <LoaiDotVaiBadge value={r.loai_dot_vai} />
+                        {/* Nhà gia công (ERP NGC, mig 072) — theo đợt nhận vải. */}
+                        {r.nha_gia_cong ? <Badge tone="default">NGC {r.nha_gia_cong}</Badge> : null}
                         {r.qc_done ? <Badge tone="success">Đã Ready</Badge> : <Badge tone="warning">Chờ Ready</Badge>}
                         {r.han_giao_hang ? <span>· hạn {fmtDate(r.han_giao_hang)}</span> : null}
                       </div>

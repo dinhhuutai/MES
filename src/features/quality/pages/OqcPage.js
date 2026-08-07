@@ -187,6 +187,7 @@ export default function OqcPage() {
       </div>
     ) },
     { key: 'chuyen', header: 'Chuyền', render: (r) => r.ten_chuyen || '—' },
+    { key: 'nha_gia_cong', header: 'Nhà gia công', render: (r) => r.nha_gia_cong || '—' },
     { key: 'nguoi_truoc', header: 'Người XN trạm trước', render: (r) => r.nguoi_truoc || '—' },
     { key: 'so_luong', header: 'SL in', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
     { key: 'con_src', header: 'Còn OQC', className: 'text-right tabular-nums font-medium text-primary', render: (r) => fmtNum(r.con_src ?? r.con_oqc) },

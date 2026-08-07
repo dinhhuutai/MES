@@ -188,6 +188,8 @@ export default function XacNhanChayPage() {
     { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
     { key: 'ma_chuyen', header: 'Chuyền', merge: true, render: (r) => r.ten_chuyen || '—' },
+    // Nhà gia công (ERP NGC, mig 072) — mức LỆNH nên `merge` như các cột lệnh khác.
+    { key: 'nha_gia_cong', header: 'Nhà gia công', merge: true, render: (r) => r.nha_gia_cong || '—' },
     { key: 'so_luong_release', header: 'SL release', className: 'text-right tabular-nums', merge: true, render: (r) => fmtNum(r.so_luong_release) },
     { key: 'ngay_ke_hoach', header: 'Ngày SX KH', merge: true, render: (r) => fmtDate(r.ngay_ke_hoach) },
     { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => fmtDate(r.han_giao_hang) },
@@ -209,6 +211,7 @@ export default function XacNhanChayPage() {
     { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
     { key: 'ma_chuyen', header: 'Chuyền', merge: true },
+    { key: 'nha_gia_cong', header: 'Nhà gia công', merge: true, render: (r) => r.nha_gia_cong || '—' },
     { key: 'printed', header: 'Đã in', className: 'text-right tabular-nums', merge: true, render: (r) => `${fmtNum(r.printed)} / ${fmtNum(r.target)}` },
     { key: 'so_tem', header: 'Tem', className: 'text-right', merge: true },
     { key: 'tt', header: 'Trạng thái', merge: true, render: (r) =>

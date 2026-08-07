@@ -78,6 +78,7 @@ function DataCells({ r }) {
       <td className={TD}><TinhChatInCell value={r.tinh_chat_in} /></td>
       <td className={TD}><PhuongAnInBadge value={r.phuong_an_in} /></td>
       <td className={TD}><LoaiDotVaiBadge value={r.loai_dot_vai} /></td>
+      <td className={TD}>{r.nha_gia_cong || '—'}</td>
       <td className={`${TD} text-right tabular-nums whitespace-nowrap`}>
         <b className="text-ink">{fmtNum(r.so_luong_vai_ve)}</b><span className="text-ink-soft"> / {fmtNum(r.so_luong_don_hang)}</span>
       </td>
@@ -317,7 +318,7 @@ export default function Release1Page() {
     } finally { setSaving(false); }
   };
 
-  const colCount = 12; // +1: cột "Tính chất in", +1: cột "Phương án in"
+  const colCount = 13; // +1 "Tính chất in", +1 "Phương án in", +1 "Nhà gia công" (mig 072)
 
   return (
     <div>
@@ -359,6 +360,8 @@ export default function Release1Page() {
                 <th className={TH}>Tính chất in</th>
                 <th className={TH}>Phương án in</th>
                 <th className={TH}>Loại đợt vải</th>
+                {/* Nhà gia công (ERP NGC, mig 072) — theo ĐỢT NHẬN VẢI. */}
+                <th className={TH}>Nhà gia công</th>
                 <th className={`${TH} text-right`}>SL vải về / đơn</th>
                 <th className={`${TH} text-right`}>Còn release</th>
                 <th className={TH}>Ngày nhận vải</th>
