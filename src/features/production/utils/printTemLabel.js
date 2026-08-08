@@ -1,4 +1,7 @@
 import QRCode from 'qrcode';
+// IN THEO MẪU người dùng thiết kế (mig 073) — xem `thuInTheoMau` ở cuối file.
+import { KHO, renderKhung, dungAnhMa, khungPhai } from './renderMauTem';
+import { mauChoViTri } from '../../../services/mauTemService';
 
 const esc = (v) => String(v ?? '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -19,13 +22,24 @@ const fmtDtShort = (t) => {
   return `${p2(d.getDate())}/${p2(d.getMonth() + 1)} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
 };
 
-// Mã tem hiển thị = <tiền tố công đoạn>-<ma_tem>[-<hậu tố lần giao>].
-// Tiền tố: 15 = KCS đạt · 16 = sửa · 17 = OQC/giao. Hậu tố = lần giao (tem tách nhiều lần).
-// Vd: '15-TEM00123', '17-TEM00030-1'. QR mã hóa đúng chuỗi này; máy quét tự tách lại mã gốc.
+// Mã tem hiển thị/in ra = mã gốc + TIỀN TỐ CÔNG ĐOẠN (+ hậu tố lần giao khi tem tách nhiều lần).
+// Tiền tố: 13 = hàng gia công về · 15 = KCS đạt · 16 = sửa · 17 = OQC/giao.
+//
+// ⚠⚠ HAI ĐỊNH DẠNG CÙNG TỒN TẠI (đừng bỏ cái nào):
+//   · MỚI (từ 07/08/2026) — `ma_tem` = barcode ERP **12 chữ số, 2 SỐ ĐẦU ĐÃ LÀ TIỀN TỐ** (`15…`).
+//     Đổi công đoạn = **THAY 2 SỐ ĐẦU**: 152608057689 → 162608057689 → 172608057689.
+//     Giữ đúng 12 số để máy quét bên ERP đọc được.
+//   · CŨ — `ma_tem` dạng `TEM00123`, tiền tố nối bằng DẤU GẠCH: '15-TEM00123', '17-TEM00030-1'.
+//     Tem đã in trước đây quét vẫn ra đúng, KHÔNG phải in lại phiếu.
+// QR mã hóa đúng chuỗi này; máy quét dùng `baseMaTem()` (utils/format.js) để tra về mã gốc.
+// ⚠ Bản backend gương y hệt ở `backend/src/utils/temPrefix.js` — sửa luật thì sửa CẢ HAI.
+const MA_ERP_RE = /^1[3-9]\d{10}$/; // barcode ERP: 12 số, 2 số đầu là tiền tố công đoạn
 export function temCode(maTem, prefix, suffix) {
-  const p = prefix != null && prefix !== '' ? `${prefix}-` : '';
+  const ma = String(maTem == null ? '' : maTem).trim();
   const s = suffix != null && suffix !== '' ? `-${suffix}` : '';
-  return `${p}${maTem}${s}`;
+  if (prefix == null || prefix === '') return `${ma}${s}`;
+  if (MA_ERP_RE.test(ma)) return `${String(prefix)}${ma.slice(2)}${s}`; // mã ERP → thay 2 số đầu
+  return `${prefix}-${ma}${s}`;                                        // mã cũ → nối bằng gạch
 }
 
 // Chuẩn hóa dữ liệu + QR cho 1 nhãn. `code` = mã tem hiển thị (có tiền tố/hậu tố); mặc định = ma_tem.
@@ -173,10 +187,106 @@ function openSheet(inner, title) {
   w.document.close();
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// IN THEO MẪU NGƯỜI DÙNG THIẾT KẾ (mig 073)
+//
+// ⚠⚠ ĐƯỜNG LÙI LÀ BẮT BUỘC: chưa gắn mẫu / chưa chạy migration / API lỗi ⇒ in bằng bố cục CỨNG
+//   bên dưới, Y HỆT như trước. In tem là việc sản xuất đang chờ — không được để module thiết kế
+//   làm hỏng đường in. Vì vậy mọi lỗi ở đây đều nuốt và lùi, KHÔNG ném lên.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// CSS cho tem dựng từ mẫu — chỉ khung + lưới, còn kiểu chữ/viền do TỪNG Ô tự mang theo (inline style
+// do `renderKhung` sinh) nên không cần class .lbl/.v… như bố cục cứng.
+const SHEET_CSS_MAU = `
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: Arial, "Segoe UI", sans-serif; color: #000; }
+  .sheet { display: flex; width: ${KHO.toRong}mm; height: ${KHO.toCao}mm; }
+  .label { width: ${KHO.temRong}mm; height: ${KHO.temCao}mm;
+           padding: ${KHO.leTren}mm ${KHO.lePhai}mm ${KHO.leDuoi}mm ${KHO.leTrai}mm; overflow: hidden; }
+  .label:first-child { width: ${KHO.temRong - 4}mm; padding-right: ${KHO.leTrai}mm; }
+  table.mt-luoi td { padding: 0.25mm 0.6mm; line-height: 1.02; overflow: hidden; }
+  @page { size: ${KHO.toRong}mm ${KHO.toCao}mm; margin: 0; }`;
+
+// Vòng THU CHỮ chạy trong cửa sổ in, TRƯỚC khi gọi print(): ô nào bật "tự co" mà nội dung tràn thì
+// giảm dần cỡ chữ tới khi vừa. Phải làm ở đây (không phải CSS) vì chỉ lúc này mới đo được kích thước
+// thật của ô sau khi trình duyệt dựng xong bảng.
+const JS_TU_CO = `
+  function thuChu(){
+    var os = document.querySelectorAll('td[data-tuco]');
+    for (var i = 0; i < os.length; i++) {
+      var td = os[i];
+      var cs = parseFloat(getComputedStyle(td).fontSize);
+      var min = cs * 0.45;                       // không thu quá 45% — nhỏ hơn nữa là không đọc nổi
+      var n = 0;
+      while (n < 40 && cs > min && (td.scrollWidth > td.clientWidth + 1 || td.scrollHeight > td.clientHeight + 1)) {
+        cs -= Math.max(0.3, cs * 0.06);
+        td.style.fontSize = cs + 'px';
+        n++;
+      }
+    }
+  }`;
+
+// Mở cửa sổ in cho tem dựng từ MẪU (2 khung đã render sẵn thành HTML).
+function openSheetMau(innerTrai, innerPhai, title) {
+  const html = `<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><title>${title}</title>
+<style>${SHEET_CSS_MAU}</style></head>
+<body onafterprint="window.close()">
+  <div class="sheet"><div class="label">${innerTrai}</div><div class="label">${innerPhai}</div></div>
+  <script>
+    ${JS_TU_CO}
+    function go(){ try { thuChu(); } catch(e){} window.focus(); window.print(); }
+    var imgs = Array.prototype.slice.call(document.images);
+    var chua = imgs.filter(function(i){ return !i.complete; });
+    if (chua.length) {
+      var con = chua.length;
+      chua.forEach(function(i){ i.onload = i.onerror = function(){ if (--con === 0) setTimeout(go, 30); }; });
+    } else { setTimeout(go, 100); }
+  </script>
+</body></html>`;
+  const w = window.open('', '_blank', 'width=520,height=480');
+  if (!w) throw new Error('Trình duyệt đang chặn cửa sổ in. Hãy cho phép popup cho trang này rồi in lại.');
+  w.document.write(html);
+  w.document.close();
+}
+
+// Thử in bằng mẫu đã gắn cho `maViTri`. Trả `true` nếu đã in; `false` = chưa gắn mẫu / lỗi → caller lùi.
+// `tienTo` = { trai, phai } số công đoạn ghép vào mã tem của từng khung.
+async function thuInTheoMau(maViTri, label, tienTo, suffix) {
+  let boCuc;
+  try {
+    const res = await mauChoViTri(maViTri);
+    boCuc = res?.data?.mau?.bo_cuc_json;
+    if (!boCuc || !boCuc.trai) return false;      // chưa gắn mẫu → dùng bố cục cứng
+  } catch { return false; }                        // chưa chạy migration / mất mạng → dùng bố cục cứng
+
+  try {
+    const kTrai = boCuc.trai;
+    const kPhai = khungPhai(boCuc);
+    // Mã tem của TỪNG khung khác nhau (vd tem sản xuất: trái 15 · phải 16) ⇒ dữ liệu tách riêng.
+    const dTrai = { ...label, ma_tem: temCode(label.ma_tem, tienTo.trai, suffix) };
+    const dPhai = { ...label, ma_tem: temCode(label.ma_tem, tienTo.phai, suffix) };
+    const [aTrai, aPhai] = await Promise.all([dungAnhMa(kTrai, dTrai), dungAnhMa(kPhai, dPhai)]);
+    openSheetMau(
+      renderKhung(kTrai, dTrai, aTrai),
+      renderKhung(kPhai, dPhai, aPhai),
+      `Tem ${label.ma_tem}`
+    );
+    return true;
+  } catch (e) {
+    // Popup bị chặn thì PHẢI báo cho người dùng (đừng lùi rồi mở thêm cửa sổ thứ 2 cũng bị chặn).
+    if (/popup/i.test(e.message || '')) throw e;
+    console.error('[tem] Dựng tem theo mẫu lỗi, dùng bố cục mặc định:', e);
+    return false;
+  }
+}
+
 // In tem sản xuất theo mẫu THLA: nhãn TRÁI = tem 15 (KCS đạt / PHIẾU GIAO HÀNG),
 // nhãn PHẢI = tem 16 (sửa / IN-K, lưới kiểm). Số công đoạn ghép vào đầu mã tem + QR.
 export default async function printTemLabel(label) {
   if (!label || !label.ma_tem) return;
+  if (await thuInTheoMau('SX_IN_TEM', label, { trai: 15, phai: 16 })) return;
   const dL = await buildData(label, temCode(label.ma_tem, 15));
   const dR = await buildData(label, temCode(label.ma_tem, 16));
   openSheet(leftLabel(dL) + rightLabel(dR), `Tem ${label.ma_tem}`);
@@ -186,6 +296,7 @@ export default async function printTemLabel(label) {
 // "IN" = số lượng đã kiểm (caller truyền qua label.so_luong). In 2 nhãn giống nhau cho vừa tờ 2-up.
 export async function printKcsGiaoTem(label) {
   if (!label || !label.ma_tem) return;
+  if (await thuInTheoMau('KCS_IN_TEM_GIAO', label, { trai: 15, phai: 15 })) return;
   const d = await buildData(label, temCode(label.ma_tem, 15));
   const l = leftLabel(d);
   openSheet(l + l, `Tem 15 ${label.ma_tem}`);
@@ -195,6 +306,7 @@ export async function printKcsGiaoTem(label) {
 // suffix = lần giao (nếu tem tách nhiều lần giao) → '17-TEM00030-1'. so_luong caller truyền vào.
 export async function printOqcTem(label, suffix) {
   if (!label || !label.ma_tem) return;
+  if (await thuInTheoMau('SUA_IN_TEM_OQC', label, { trai: 17, phai: 17 }, suffix)) return;
   const d = await buildData(label, temCode(label.ma_tem, 17, suffix));
   const l = leftLabel(d);
   openSheet(l + l, `Tem 17 ${label.ma_tem}`);
@@ -231,6 +343,7 @@ function veLabel(d) {
 // kich_phim, ten_chuyen/ma_chuyen, so_luong_don_hang, created_date }. In 2 nhãn giống nhau cho vừa tờ 2-up.
 export async function printGiaCongVeTem(label) {
   if (!label || !label.ma_tem) return;
+  if (await thuInTheoMau('GIA_CONG_IN_TEM_VE', label, { trai: 13, phai: 13 })) return;
   const d = await buildData(label, temCode(label.ma_tem, 13));
   const l = veLabel(d);
   openSheet(l + l, `Tem TH VỀ ${label.ma_tem}`);

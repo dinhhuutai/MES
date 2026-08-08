@@ -26,6 +26,7 @@ import ErpSyncPage from './features/system/pages/ErpSyncPage';
 import OnlineUsersPage from './features/system/pages/OnlineUsersPage';
 import ActivityLogPage from './features/system/pages/ActivityLogPage';
 import FormTemplatesPage from './features/system/pages/FormTemplatesPage';
+import ThietKeTemPage from './features/system/pages/ThietKeTemPage';
 import HienThiPainPage from './features/system/pages/HienThiPainPage';
 import ManualEntryPage from './features/system/pages/ManualEntryPage';
 import VaiVeUpdatePage from './features/system/pages/VaiVeUpdatePage';
@@ -109,6 +110,7 @@ const PAGES = {
   '/he-thong/online': <OnlineUsersPage />,
   '/he-thong/nhat-ky': <ActivityLogPage />,
   '/he-thong/mau-form': <FormTemplatesPage />,
+  '/he-thong/thiet-ke-tem': <ThietKeTemPage />,
   '/he-thong/hien-thi-pain': <HienThiPainPage />,
 };
 

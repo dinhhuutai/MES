@@ -147,11 +147,19 @@ export default function Release1Page() {
   const activeCount = Object.values(filters).filter(Boolean).length;
   // Lọc theo tình trạng Ready: cả 2 tick (hoặc cùng bỏ) = hiện tất cả; chỉ 1 tick = lọc theo tick đó.
   const readyPass = (isReady) => (showReady === showWait) || (showReady ? isReady : !isReady);
-  const viewSets = useMemo(
-    () => ((onlyReturned || activeCount > 0) ? [] : sets.filter((s) => readyPass(!!s.san_sang))),
+  // ⚠⚠ BỘ LỌC PHẢI SOI XUỐNG THÀNH VIÊN SET, ĐỪNG ẨN SẠCH SET (fix 2026-08-08).
+  // Bản cũ: `activeCount > 0 ? [] : …` ⇒ chỉ cần nhập 1 ô bất kỳ trong panel Bộ lọc là MỌI dòng gom set
+  // biến mất ⇒ người dùng lọc theo code phần rồi kết luận "phần in không có ở Release 1" (ca thật:
+  // GL-2607-011-A006-F03-C05/C06 trong SET0165, cả 2 đã Ready và hoàn toàn hợp lệ).
+  // Nay: set HIỆN khi có ÍT NHẤT 1 thành viên khớp bộ lọc — cùng cách hiểu với đường đợt vải lẻ.
+  // (`onlyReturned` vẫn ẩn set: đợt vải bị trả về nằm ở pool LẺ, không nằm trong set.)
+  const viewSets = useMemo(() => {
+    if (onlyReturned) return [];
+    const base = sets.filter((s) => readyPass(!!s.san_sang));
+    if (!activeCount) return base;
+    return base.filter((s) => filterRows(s.members || [], filters, FILTER_FIELDS).length > 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [onlyReturned, activeCount, sets, showReady, showWait],
-  );
+  }, [onlyReturned, activeCount, filters, sets, showReady, showWait]);
   const viewRows = useMemo(
     () => filterRows(onlyReturned ? rows.filter((r) => r.tra_ve_ly_do) : rows, filters, FILTER_FIELDS)
       .filter((r) => readyPass(!!r.qc_done)),

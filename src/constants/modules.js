@@ -130,6 +130,8 @@ export const MODULES = [
       { ten: 'Nhập tay đơn → đợt vải', route: '/he-thong/nhap-tay', perm: 'ERP_SYNC' },
       { ten: 'Cập nhật SL nhận vải / release', route: '/he-thong/cap-nhat-vai', perm: 'ERP_SYNC' },
       { ten: 'Mẫu form (tem/phiếu)', route: '/he-thong/mau-form', perm: 'WORKFLOW_VIEW' },
+      // Thiết kế tem (mig 073) — quyền riêng TEM_DESIGN, lúc đầu chỉ admin (role ADMIN có '*').
+      { ten: 'Thiết kế tem', route: '/he-thong/thiet-ke-tem', perm: 'TEM_DESIGN' },
       { ten: 'Hiển thị theo phương án in', route: '/he-thong/hien-thi-pain', perm: 'WORKFLOW_VIEW' },
       { ten: 'Người dùng online', route: '/he-thong/online', perm: 'PRESENCE_VIEW' },
       { ten: 'Nhật ký thao tác', route: '/he-thong/nhat-ky', perm: 'PRESENCE_VIEW' },
