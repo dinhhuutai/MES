@@ -51,6 +51,8 @@ import SuaPage from './features/quality/pages/SuaPage';
 import OqcPage from './features/quality/pages/OqcPage';
 import QcInlinePage from './features/quality/pages/QcInlinePage';
 import LoaiLoiPage from './features/quality/pages/LoaiLoiPage';
+import PhanLoaiLoiPage from './features/production/pages/PhanLoaiLoiPage';
+import BienPhapXuLyPage from './features/production/pages/BienPhapXuLyPage';
 import GiaoDacBietPage from './features/quality/pages/GiaoDacBietPage';
 import QcTraVePage from './features/quality/pages/QcTraVePage';
 import GiaoHangPage from './features/delivery/pages/GiaoHangPage';
@@ -81,6 +83,10 @@ const PAGES = {
   '/san-xuat/xe-phoi': <XePhoiPage />,
   '/san-xuat/kcs': <KcsPage />,
   '/san-xuat/sua': <SuaPage />,
+  '/san-xuat/phan-loai-loi': <PhanLoaiLoiPage />,
+  // Danh mục lỗi dùng CHUNG component với trang ở module Chất lượng — 1 nguồn, 2 lối vào.
+  '/san-xuat/danh-muc-loi': <LoaiLoiPage />,
+  '/san-xuat/bien-phap': <BienPhapXuLyPage />,
   '/chat-luong/ready-qc': <ReadyQcPage />,
   '/chat-luong/qc-in-line': <QcInlinePage />,
   '/chat-luong/oqc': <OqcPage />,

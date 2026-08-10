@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { khop, chuanTuKhoa } from '../../../utils/timKiem';
 import Modal from '../../../components/common/Modal';
 import { Input } from '../../../components/common/controls';
 
@@ -6,9 +7,9 @@ import { Input } from '../../../components/common/controls';
 // hơn dropdown. Bấm 1 chỉ số = chọn ngay. current = mã đang chọn (tô nổi bật).
 export default function MetricPickerModal({ open, metricGroups, current, onPick, onClose }) {
   const [q, setQ] = useState('');
-  const query = q.trim().toLowerCase();
+  const query = chuanTuKhoa(q);
   const groups = Object.entries(metricGroups || {})
-    .map(([nhom, list]) => [nhom, query ? list.filter((m) => `${m.ten} ${m.ma} ${m.mo_ta} ${nhom}`.toLowerCase().includes(query)) : list])
+    .map(([nhom, list]) => [nhom, query ? list.filter((m) => khop(`${m.ten} ${m.ma} ${m.mo_ta} ${nhom}`, query)) : list])
     .filter(([, list]) => list.length);
 
   return (

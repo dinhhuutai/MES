@@ -55,7 +55,12 @@ export const MODULES = [
       { ten: 'Theo dõi chuyền', route: '/san-xuat/theo-doi-chuyen', perm: 'PROD_MONITOR' },
       { ten: 'Tình trạng xe phơi', route: '/san-xuat/xe-phoi', perm: 'XEPHOI' },
       { ten: 'KCS', route: '/san-xuat/kcs', perm: 'KCS' },
+      { ten: 'Phân loại lỗi', route: '/san-xuat/phan-loai-loi', perm: ['PHAN_LOAI_LOI', 'KCS'] },
       { ten: 'Sửa', route: '/san-xuat/sua', perm: 'SUA' },
+      // 2 trang DANH MỤC đặt cuối module (dưới Sửa) — là màn cấu hình, không phải màn thao tác
+      // hằng ngày. "Danh mục lỗi" dùng CHUNG component với trang bên Chất lượng: 1 nguồn, 2 lối vào.
+      { ten: 'Danh mục lỗi', route: '/san-xuat/danh-muc-loi', perm: 'LOI_MANAGE' },
+      { ten: 'Danh mục biện pháp xử lý', route: '/san-xuat/bien-phap', perm: 'BIEN_PHAP_MANAGE' },
     ],
   },
   {

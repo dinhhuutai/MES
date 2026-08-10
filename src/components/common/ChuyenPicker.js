@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Select, Input } from './controls';
+import { khop } from '../../utils/timKiem';
 
 // Chọn chuyền có LỌC THEO LOẠI (chip) + tìm kiếm mã/tên — dùng khi danh sách chuyền dài.
 // Props: chuyen [{id, ma_chuyen, ten_chuyen, loai_chuyen}], value, onChange(id), placeholder.
@@ -13,10 +14,9 @@ export default function ChuyenPicker({ chuyen = [], value, onChange, placeholder
   );
 
   const filtered = useMemo(() => {
-    const kw = q.trim().toLowerCase();
     return chuyen.filter(
       (c) => (!loai || c.loai_chuyen === loai)
-        && (!kw || `${c.ma_chuyen} ${c.ten_chuyen}`.toLowerCase().includes(kw)),
+        && khop(`${c.ma_chuyen} ${c.ten_chuyen}`, q),
     );
   }, [chuyen, loai, q]);
 

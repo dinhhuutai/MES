@@ -22,6 +22,7 @@ import exportCheckpointExcel, { COT_LENH, moTaBoLoc } from '../../../utils/expor
 import ChipTabs from '../../../components/common/ChipTabs';
 import { LOAI_TABS, hopChipChuyen, nhanChip, demChip } from '../../../utils/khuChuyen';
 import RunPanel from '../components/RunPanel';
+import { khop } from '../../../utils/timKiem';
 
 export default function XacNhanChayPage() {
   const { can } = usePermissions();
@@ -73,7 +74,7 @@ export default function XacNhanChayPage() {
   const hasFilter = Object.values(filters).some(Boolean);
   const applyFilters = useCallback((rows) => {
     if (!hasFilter) return rows;
-    const like = (v, q) => !q || String(v || '').toLowerCase().includes(q.toLowerCase());
+    const like = (v, q) => khop(v, q);
     const matchChuyen = (r) => {
       if (!filters.chuyenId || !selChuyen) return true;
       const names = [selChuyen.ten_chuyen, selChuyen.ma_chuyen].filter(Boolean).map((s) => s.toLowerCase());

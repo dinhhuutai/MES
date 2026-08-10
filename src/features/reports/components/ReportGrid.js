@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { fmtNum } from '../../../utils/format';
 import { parseRange } from './ConditionalFormatModal';
+import { khop, chuanTuKhoa } from '../../../utils/timKiem';
 
 // Ký hiệu cột: 0→A, 25→Z, 26→AA...
 export function colLabel(n) {
@@ -62,8 +63,7 @@ export function buildDsMap(cells, danhSach, locHang) {
     if (!p || !blk || !blk.cot?.length) return;
     const f = locHang?.[key] || {};
     const rows = (blk.rows || []).filter((row) => blk.cot.every((col) => {
-      const q = (f[col.key] || '').trim().toLowerCase();
-      return !q || String(row[col.key] ?? '').toLowerCase().includes(q);
+      return khop(row[col.key], f[col.key]);
     }));
     blk.cot.forEach((col, i) => {
       map[cellKey(p.r, p.c + i)] = { text: col.ten, kieu: 'text', la_dau: true };
@@ -104,8 +104,8 @@ function matchDieuKien(r, text, num) {
   switch (r.toan_tu) {
     case 'khong_trong': return t.trim() !== '';
     case 'trong': return t.trim() === '';
-    case 'chua': return t.toLowerCase().includes(String(r.v1 || '').toLowerCase());
-    case 'khong_chua': return !t.toLowerCase().includes(String(r.v1 || '').toLowerCase());
+    case 'chua': return khop(t, r.v1) && chuanTuKhoa(r.v1) !== '';
+    case 'khong_chua': return !(khop(t, r.v1) && chuanTuKhoa(r.v1) !== '');
     case 'bang': return t === String(r.v1) || (num != null && a != null && num === a);
     case 'khac': return !(t === String(r.v1) || (num != null && a != null && num === a));
     case 'lon_hon': return num != null && a != null && num > a;

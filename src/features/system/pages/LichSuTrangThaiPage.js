@@ -21,6 +21,7 @@ import { listCancelKcs, cancelKcs, listCancelSua, cancelSua, listCancelOqc, canc
   listTemSuaCancelable, listTemSuaDeleted, huyTemSua, moTemSua } from '../../../services/qualityService';
 import { fmtNum } from '../../../utils/format';
 import HanGiaoCell from '../../../components/common/HanGiaoCell';
+import { khopNhieu, chuanTuKhoa } from '../../../utils/timKiem';
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const fmtTime = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '—');
@@ -554,10 +555,9 @@ function CloseProductionSection({ show }) {
 
   useEffect(() => { const t = setTimeout(load, 200); return () => clearTimeout(t); }, [load]);
 
-  const kw = search.trim().toLowerCase();
+  const kw = chuanTuKhoa(search);
   const view = kw
-    ? rows.filter((r) => [r.ma_lenh_san_xuat, r.ma_phan, r.ma_hang, r.mau_vai, r.kich_vai, r.kich_phim, r.ten_khach_hang]
-        .some((v) => (v || '').toLowerCase().includes(kw)))
+    ? rows.filter((r) => khopNhieu([r.ma_lenh_san_xuat, r.ma_phan, r.ma_hang, r.mau_vai, r.kich_vai, r.kich_phim, r.ten_khach_hang], kw))
     : rows;
 
   const doClose = async () => {
@@ -624,8 +624,7 @@ function CloseProductionSection({ show }) {
       <Button className="px-2.5 py-1 text-xs" onClick={() => setReopen(r)}>Mở lại</Button> },
   ];
   const reopenView = kw
-    ? reopenRows.filter((r) => [r.ma_lenh_san_xuat, r.ma_phan, r.ma_hang, r.mau_vai, r.kich_vai, r.kich_phim, r.ten_khach_hang]
-        .some((v) => (v || '').toLowerCase().includes(kw)))
+    ? reopenRows.filter((r) => khopNhieu([r.ma_lenh_san_xuat, r.ma_phan, r.ma_hang, r.mau_vai, r.kich_vai, r.kich_phim, r.ten_khach_hang], kw))
     : reopenRows;
 
   return (
@@ -715,10 +714,9 @@ function UndoStartSection({ show }) {
 
   useEffect(() => { const t = setTimeout(load, 200); return () => clearTimeout(t); }, [load]);
 
-  const kw = search.trim().toLowerCase();
+  const kw = chuanTuKhoa(search);
   const view = kw
-    ? rows.filter((r) => [r.ma_lenh_san_xuat, r.ma_phan, r.ma_hang, r.mau_vai, r.kich_vai, r.kich_phim, r.ten_khach_hang]
-        .some((v) => (v || '').toLowerCase().includes(kw)))
+    ? rows.filter((r) => khopNhieu([r.ma_lenh_san_xuat, r.ma_phan, r.ma_hang, r.mau_vai, r.kich_vai, r.kich_phim, r.ten_khach_hang], kw))
     : rows;
 
   const doUndo = async () => {
@@ -828,10 +826,9 @@ function QcCancelSection({ show, kind }) {
 
   useEffect(() => { const t = setTimeout(load, 200); return () => clearTimeout(t); }, [load]);
 
-  const kw = search.trim().toLowerCase();
+  const kw = chuanTuKhoa(search);
   const view = kw
-    ? rows.filter((r) => [r.ma_tem, r.ma_hang, r.mau_vai, r.kich_vai, r.kich_phim, r.ten_khach_hang]
-        .some((v) => (v || '').toLowerCase().includes(kw)))
+    ? rows.filter((r) => khopNhieu([r.ma_tem, r.ma_hang, r.mau_vai, r.kich_vai, r.kich_phim, r.ten_khach_hang], kw))
     : rows;
 
   const doCancel = async () => {

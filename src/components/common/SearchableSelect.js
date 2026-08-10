@@ -1,12 +1,7 @@
 import { useState } from 'react';
 import { Combobox, ComboboxInput, ComboboxOptions, ComboboxOption } from '@headlessui/react';
 import { inputClass } from './controls';
-
-// Bỏ dấu tiếng Việt + hạ chữ thường để tìm KHÔNG DẤU (khóa→khoa, Đức→duc).
-const norm = (s) => (s || '')
-  .normalize('NFD').replace(/[̀-ͯ]/g, '')
-  .replace(/đ/g, 'd').replace(/Đ/g, 'D')
-  .toLowerCase().trim();
+import { chuanTim as norm } from '../../utils/timKiem';
 
 // Select có ô tìm kiếm (combobox) — dùng khi danh sách dài (vd chọn người trong hàng trăm user).
 // Dropdown portal (anchor) để không bị cắt trong Modal/SidePanel.

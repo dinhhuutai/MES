@@ -34,12 +34,30 @@ export function dinhDangNgay(v, ma) {
 
 const fmtSo = (v) => (v == null || v === '' ? '' : Number(v).toLocaleString('vi-VN'));
 
+// TÌM & THAY khi hiện lên tem — cho phép rút gọn nội dung mà KHÔNG đụng dữ liệu gốc.
+//   "Ca 1"          + [{tu:'Ca ',    thanh:'C'}] → "C1"
+//   "Chuyền M4A-4B" + [{tu:'Chuyền M', thanh:''}] → "4A-4B"
+// Thay LẦN LƯỢT theo thứ tự trong danh sách, mỗi luật thay MỌI lần xuất hiện. `tu` rỗng thì bỏ qua.
+// ⚠ Cố ý dùng thay-chuỗi-thường (`split/join`) chứ KHÔNG regex: người dùng ở xưởng gõ "(6PCS)" hay
+//   "2.1*1" là chuỗi thật, không phải cú pháp.
+export function apDungThay(chuoi, thay) {
+  if (!Array.isArray(thay) || !thay.length) return chuoi;
+  let s = String(chuoi == null ? '' : chuoi);
+  for (const r of thay) {
+    if (!r || !r.tu) continue;
+    s = s.split(String(r.tu)).join(String(r.thanh == null ? '' : r.thanh));
+  }
+  return s;
+}
+
 // Giá trị 1 trường dữ liệu, đã định dạng theo kiểu ô.
-function giaTriTruong(data, ma, dinhDang, kieuTruong) {
+function giaTriTruong(data, ma, dinhDang, kieuTruong, thay) {
   const v = data ? data[ma] : '';
-  if (kieuTruong === 'ngay') return dinhDangNgay(v, dinhDang);
-  if (kieuTruong === 'so') return fmtSo(v);
-  return v == null ? '' : String(v);
+  let out;
+  if (kieuTruong === 'ngay') out = dinhDangNgay(v, dinhDang);
+  else if (kieuTruong === 'so') out = fmtSo(v);
+  else out = v == null ? '' : String(v);
+  return apDungThay(out, thay);
 }
 
 // Nội dung 1 ô = nối các mảnh `phan` (chữ cố định + trường dữ liệu).
@@ -57,10 +75,23 @@ export function noiDungO(o, data, truongMap) {
       const kieu = p.kieu
         || (truongMap && truongMap[p.ma] ? truongMap[p.ma].kieu : null)
         || (p.dinh_dang ? 'ngay' : 'chu');
-      return giaTriTruong(data, p.ma, p.dinh_dang, kieu);
+      return giaTriTruong(data, p.ma, p.dinh_dang, kieu, p.thay);
     }
     return '';
   }).join('');
+}
+
+// CHỮ DỌC — `o.xoay`: 0/không có = ngang · 90 = dọc đọc TỪ TRÊN XUỐNG · 270 = dọc đọc TỪ DƯỚI LÊN.
+// ⚠ Phải bọc nội dung trong <span> chứ KHÔNG đặt `transform` thẳng lên <td>: theo chuẩn CSS, phần tử
+//   `display: table-cell` KHÔNG nhận `transform` — đặt lên td thì trình duyệt lặng lẽ bỏ qua, chữ vẫn
+//   nằm ngang mà không báo lỗi gì. `writing-mode` thì td nhận được, nhưng để 2 chiều dùng chung một
+//   đường thì bọc span luôn cho nhất quán giữa bản in và lưới thiết kế.
+export const XOAY_HOP_LE = [0, 90, 270];
+export function cssChuDoc(xoay) {
+  const x = Number(xoay) || 0;
+  if (x !== 90 && x !== 270) return '';
+  const base = 'display:inline-block;writing-mode:vertical-rl;text-orientation:mixed';
+  return x === 270 ? `${base};transform:rotate(180deg)` : base;
 }
 
 // CSS của 1 ô — dựng từ thuộc tính người dùng chọn ở panel thiết kế.
@@ -75,6 +106,8 @@ function styleO(o, mmPx = 1) {
     `text-align:${o.ngang || 'center'}`,
     `vertical-align:${o.doc || 'middle'}`,
   ];
+  // GIÃN CHỮ (letter-spacing) — mm, cho phép ÂM để bóp chữ lại cho vừa ô hẹp.
+  if (Number(o.gian_chu_mm)) st.push(`letter-spacing:${Number(o.gian_chu_mm)}mm`);
   if (o.dam) st.push('font-weight:700');
   if (o.nghieng) st.push('font-style:italic');
   if (o.gach_chan) st.push('text-decoration:underline');
@@ -134,7 +167,11 @@ export function renderKhung(khung, data, anhMa, opts = {}) {
       const rs = Math.max(1, Number(cell.rs) || 1);
       const laMa = cell.kieu === 'qr' || cell.kieu === 'barcode';
       const maText = laMa ? giaTriTruong(data, cell.ma_qr || 'ma_tem', null, 'chu') : '';
-      const noiDung = laMa ? htmlOMa(cell, khoa, anhMa, maText) : esc(noiDungO(cell, data, truongMap));
+      const cssDoc = laMa ? '' : cssChuDoc(cell.xoay);
+      const chu = esc(noiDungO(cell, data, truongMap));
+      const noiDung = laMa
+        ? htmlOMa(cell, khoa, anhMa, maText)
+        : (cssDoc ? `<span style="${cssDoc}">${chu}</span>` : chu);
       // `data-tuco` để vòng thu chữ trong cửa sổ in tìm được đúng ô cần co.
       const attr = [
         cs > 1 ? ` colspan="${cs}"` : '', rs > 1 ? ` rowspan="${rs}"` : '',

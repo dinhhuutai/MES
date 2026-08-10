@@ -12,6 +12,7 @@ import { getLichSuNghen, getTinhTrangPhanIn } from '../../../services/dashboardS
 import { fmtNum } from '../../../utils/format';
 import { fmtDur, slaRowClass, SLA_BADGE } from '../../../utils/sla';
 import { ChartCard, KpiCard, Bar1, TrendComposed } from '../components/charts';
+import { khopNhieu, chuanTuKhoa } from '../../../utils/timKiem';
 
 const pad = (n) => String(n).padStart(2, '0');
 // Ngày VN dạng YYYY-MM-DD, cách N ngày so với hôm nay.
@@ -129,9 +130,10 @@ export default function LichSuNghenPage() {
   const episodes = useMemo(() => {
     let list = data?.episodes || [];
     if (focus) list = list.filter((e) => e.level === focus.level && e.ma === focus.ma);
-    const q = search.trim().toLowerCase();
-    if (q) list = list.filter((e) => [e.ma_phan, e.ma_hang, e.ma_don_hang, e.ten_khach_hang, e.mau_vai, e.ten]
-      .some((x) => (x || '').toLowerCase().includes(q)));
+    if (chuanTuKhoa(search)) {
+      list = list.filter((e) => khopNhieu(
+        [e.ma_phan, e.ma_hang, e.ma_don_hang, e.ten_khach_hang, e.mau_vai, e.ten], search));
+    }
     return list.map((e, i) => ({ ...e, _k: i }));
   }, [data, focus, search]);
 

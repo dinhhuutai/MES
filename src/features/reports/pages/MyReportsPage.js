@@ -1,5 +1,4 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
 import Badge from '../../../components/common/Badge';
@@ -13,14 +12,15 @@ import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import ReportGrid from '../components/ReportGrid';
 import ReportChart, { chartData } from '../components/ReportChart';
+import ReportDesignerModal from '../components/ReportDesignerModal';
 import exportReportExcel from '../utils/exportReportExcel';
 import { listMyReports, createReport, deleteReport, renderReport } from '../../../services/baoCaoService';
 import { fmtDate, fmtDateTime } from '../../../utils/format';
 
 export default function MyReportsPage() {
+  const [thietKe, setThietKe] = useState(null);   // id báo cáo đang mở trong trình thiết kế
   const { can } = usePermissions();
   const { toast, show } = useToast();
-  const navigate = useNavigate();
   const canDesign = can('BAOCAO_DESIGN');
 
   const [rows, setRows] = useState([]);
@@ -46,7 +46,7 @@ export default function MyReportsPage() {
     try {
       const res = await createReport({ tenBaoCao: creating.tenBaoCao, moTa: creating.moTa });
       show('Đã tạo báo cáo');
-      navigate(`/bao-cao/thiet-ke/${res.data.id}`);
+      setThietKe(res.data.id);
     } catch (e) { show(e.message || 'Tạo thất bại', 'error'); }
     finally { setSaving(false); }
   };
@@ -87,7 +87,7 @@ export default function MyReportsPage() {
           onClick={(e) => { e.stopPropagation(); doPreview(r); }}>Xem trước</Button>
         <Button variant="ghost" icon="download" className="px-3 py-1.5" disabled={busyId === r.id}
           onClick={(e) => { e.stopPropagation(); doExcel(r); }}>Excel</Button>
-        <Button className="px-3 py-1.5" onClick={(e) => { e.stopPropagation(); navigate(`/bao-cao/thiet-ke/${r.id}`); }}>Mở</Button>
+        <Button className="px-3 py-1.5" onClick={(e) => { e.stopPropagation(); setThietKe(r.id); }}>Mở</Button>
         {canDesign && (
           <Button variant="danger" className="px-3 py-1.5" onClick={(e) => { e.stopPropagation(); setConfirm(r); }}>Xóa</Button>
         )}
@@ -103,7 +103,7 @@ export default function MyReportsPage() {
       </Toolbar>
 
       <DataTable columns={columns} rows={rows} loading={loading}
-        onRowClick={(r) => navigate(`/bao-cao/thiet-ke/${r.id}`)} emptyText="Chưa có báo cáo — bấm Tạo báo cáo" />
+        onRowClick={(r) => setThietKe(r.id)} emptyText="Chưa có báo cáo — bấm Tạo báo cáo" />
 
       <Modal open={!!creating} onClose={() => setCreating(null)} title="Tạo báo cáo mới"
         footer={<>
@@ -152,7 +152,7 @@ export default function MyReportsPage() {
             <div className="mt-4 flex justify-end gap-2 border-t border-line pt-3">
               <Button variant="ghost" icon="download"
                 onClick={() => exportReportExcel(viewing.content, viewing.content.ma_bao_cao)}>Xuất Excel</Button>
-              <Button icon="pencil" onClick={() => navigate(`/bao-cao/thiet-ke/${viewing.content.id}`)}>Mở để sửa</Button>
+              <Button icon="pencil" onClick={() => { const rid = viewing.content.id; setViewing(null); setThietKe(rid); }}>Mở để sửa</Button>
             </div>
           </>
         )}
@@ -161,6 +161,9 @@ export default function MyReportsPage() {
       <ConfirmDialog open={!!confirm} onClose={() => setConfirm(null)} onConfirm={doDelete}
         title="Xóa báo cáo" message={confirm ? `Xóa báo cáo "${confirm.ten_bao_cao}"?` : ''}
         confirmText="Xóa" variant="danger" />
+
+      {/* Trình thiết kế toàn màn hình — đóng lại là về đúng danh sách đang xem */}
+      <ReportDesignerModal open={!!thietKe} id={thietKe} onClose={() => { setThietKe(null); load(); }} />
 
       <Toast toast={toast} />
     </div>

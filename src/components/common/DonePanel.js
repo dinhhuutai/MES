@@ -10,6 +10,7 @@ import HanGiaoCell from './HanGiaoCell';
 import exportPanelExcel from './exportPanelExcel';
 import useToast from '../../hooks/useToast';
 import { fmtNum } from '../../utils/format';
+import { chuanTim } from '../../utils/timKiem';
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const fmtTime = (t) => (t ? new Date(t).toLocaleTimeString('vi-VN') : '');
@@ -20,11 +21,8 @@ const fmtTime = (t) => (t ? new Date(t).toLocaleTimeString('vi-VN') : '');
 // giống hệt thứ đang hiện trên bảng.
 export const COT_EXCEL_GIO_HT = { header: 'Giờ HT', value: (r) => fmtTime(r.tg), center: true, width: 12 };
 
-// Bỏ dấu tiếng Việt + hạ chữ thường (gõ "do" ra "đỏ", "xanh la" ra "xanh lá").
-const norm = (s) => String(s ?? '')
-  .normalize('NFD').replace(/[̀-ͯ]/g, '')
-  .replace(/đ/g, 'd').replace(/Đ/g, 'D')
-  .toLowerCase().trim();
+// Bỏ dấu + hạ chữ thường + gộp khoảng trắng — nguồn chung `utils/timKiem` (gõ "do" ra "đỏ").
+const norm = chuanTim;
 
 // Các trường lọc của panel "Đã hoàn thành" — dùng chung cho ô tìm kiếm 1-ô và panel lọc nhiều trường.
 // ⚠ "Code phần" đọc `ma_phan` TRƯỚC, thiếu mới lùi về `ma`: panel READY/QC dùng chính `ma_phan` làm cột

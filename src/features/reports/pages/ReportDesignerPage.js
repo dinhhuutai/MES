@@ -17,6 +17,7 @@ import MetricPickerModal from '../components/MetricPickerModal';
 import DatasetBlockModal from '../components/DatasetBlockModal';
 import ChartManagerModal from '../components/ChartManagerModal';
 import ReportChart, { chartData, CHART_KIEU } from '../components/ReportChart';
+import { khop } from '../../../utils/timKiem';
 import {
   getReport, getMetrics, getDatasets, updateReport, undoReport, renderReport, reportHistory,
 } from '../../../services/baoCaoService';
@@ -66,9 +67,14 @@ function rectKeys(a, b) {
   return s;
 }
 
-export default function ReportDesignerPage() {
-  const { id } = useParams();
+// `idProp` + `onClose` = đang chạy TRONG MODAL TOÀN MÀN HÌNH (mở từ danh sách báo cáo).
+// Không truyền = chạy như TRANG (route /bao-cao/thiet-ke/:id vẫn giữ cho link cũ / bookmark).
+export default function ReportDesignerPage({ idProp = null, onClose = null }) {
+  const params = useParams();
+  const id = idProp || params.id;
   const navigate = useNavigate();
+  const trongModal = !!onClose;
+  const dong = onClose || (() => navigate('/bao-cao'));
   const { toast, show } = useToast();
   const { can } = usePermissions();
   const canDesign = can('BAOCAO_DESIGN');
@@ -367,11 +373,13 @@ export default function ReportDesignerPage() {
   );
 
   return (
-    <div>
+    <div className={trongModal ? 'flex h-full flex-col' : ''}>
       {/* Header */}
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div className={`mb-4 flex flex-wrap items-center justify-between gap-3 ${trongModal ? 'shrink-0' : ''}`}>
         <div className="flex items-center gap-2">
-          <Button variant="ghost" className="px-2" onClick={() => navigate('/bao-cao')}><Icon name="chevron-left" size={18} /></Button>
+          <Button variant="ghost" className="px-2" title={trongModal ? 'Đóng' : 'Về danh sách báo cáo'} onClick={dong}>
+            <Icon name={trongModal ? 'x' : 'chevron-left'} size={18} />
+          </Button>
           <div>
             <input value={name} onChange={(e) => setName(e.target.value)} disabled={!canDesign}
               className="w-64 rounded border-0 bg-transparent text-lg font-bold text-ink focus:bg-surface-muted focus:outline-none" />
@@ -393,7 +401,7 @@ export default function ReportDesignerPage() {
       </div>
 
       {/* Ghi chú realtime + thêm cột/hàng */}
-      <div className="mb-3 flex flex-wrap items-center gap-3">
+      <div className={`mb-3 flex flex-wrap items-center gap-3 ${trongModal ? 'shrink-0' : ''}`}>
         <p className="rounded-control bg-primary-wash/50 px-3 py-1.5 text-xs text-ink-soft">
           <Icon name="clock" size={13} className="mr-1 inline" />
           Số liệu hệ thống được lấy <b>realtime</b> lúc Xem trước / Xuất. Mỗi chỉ số tự có mốc thời gian riêng (hôm nay / hiện tại) — không cần chọn kỳ.
@@ -449,7 +457,7 @@ export default function ReportDesignerPage() {
 
       {/* Thanh công cụ định dạng (Google-Sheets-like) — dính đỉnh khi cuộn */}
       {canDesign && mode === 'design' && (
-        <div className="sticky top-0 z-30 mb-3 flex flex-wrap items-center gap-1.5 rounded-card border border-line bg-surface px-3 py-2 shadow-card">
+        <div className={`z-30 mb-3 flex flex-wrap items-center gap-1.5 rounded-card border border-line bg-surface px-3 py-2 shadow-card ${trongModal ? 'shrink-0' : 'sticky top-0'}`}>
           <FmtBtn title="In đậm" onClick={() => applyFormat({ dam: !(cell?.dinh_dang?.dam) })} active={cell?.dinh_dang?.dam}><b>B</b></FmtBtn>
           <FmtBtn title="In nghiêng" onClick={() => applyFormat({ nghieng: !(cell?.dinh_dang?.nghieng) })} active={cell?.dinh_dang?.nghieng}><i>I</i></FmtBtn>
           <FmtBtn title="Gạch chân" onClick={() => applyFormat({ gach_chan: !(cell?.dinh_dang?.gach_chan) })} active={cell?.dinh_dang?.gach_chan}><span className="underline">U</span></FmtBtn>
@@ -520,7 +528,7 @@ export default function ReportDesignerPage() {
         </div>
       )}
 
-      <div className="flex flex-col gap-4 lg:flex-row">
+      <div className={`flex flex-col gap-4 lg:flex-row ${trongModal ? 'min-h-0 flex-1 overflow-auto pr-1' : ''}`}>
         {/* Lưới */}
         <div className="min-w-0 flex-1">
           <ReportGrid grid={grid} ketQua={ketQua} mode={mode} selected={selected} metricsByMa={metricsByMa}
@@ -665,7 +673,7 @@ export default function ReportDesignerPage() {
         {(() => {
           const q = catalogQ.trim().toLowerCase();
           const groups = Object.entries(metricGroups)
-            .map(([nhom, list]) => [nhom, q ? list.filter((m) => `${m.ten} ${m.ma} ${m.mo_ta} ${nhom}`.toLowerCase().includes(q)) : list])
+            .map(([nhom, list]) => [nhom, q ? list.filter((m) => khop(`${m.ten} ${m.ma} ${m.mo_ta} ${nhom}`, q)) : list])
             .filter(([, list]) => list.length);
           if (!groups.length) return <p className="py-6 text-center text-sm text-ink-soft">Không có chỉ số khớp “{catalogQ}”.</p>;
           return (

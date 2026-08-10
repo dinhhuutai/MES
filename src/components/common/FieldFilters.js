@@ -1,5 +1,6 @@
 import Button from './Button';
 import Icon from './Icon';
+import { khop, chuanTuKhoa } from '../../utils/timKiem';
 
 // Panel LỌC NHIỀU TRƯỜNG (kết hợp AND) + chip hiển thị lọc đang bật — dùng chung nhiều trang.
 // props: fields [{key,label}], values {key:val}, onField(key,val), onClear, open, labelMap? (nhãn chip).
@@ -41,12 +42,12 @@ export default function FieldFilters({ fields, values, onField, onClear, open, l
   );
 }
 
-// Lọc CLIENT-SIDE danh sách theo các trường (fields có `col` = tên thuộc tính hàng). Kết hợp AND, ILIKE-contains.
+// Lọc CLIENT-SIDE danh sách theo các trường (fields có `col` = tên thuộc tính hàng). Kết hợp AND,
+// khớp CHỨA — **không phân biệt hoa–thường, KHÔNG PHÂN BIỆT DẤU**, tự bỏ khoảng trắng thừa (`khop`).
 export function filterRows(rows, filters, fields) {
-  const active = fields.filter((f) => filters[f.key]);
+  const active = fields.filter((f) => chuanTuKhoa(filters[f.key]));
   if (!active.length) return rows || [];
-  return (rows || []).filter((r) => active.every((f) =>
-    String(r[f.col] ?? '').toLowerCase().includes(String(filters[f.key]).toLowerCase())));
+  return (rows || []).filter((r) => active.every((f) => khop(r[f.col], filters[f.key])));
 }
 
 // Nút bật/tắt panel lọc (kèm số lọc đang bật).

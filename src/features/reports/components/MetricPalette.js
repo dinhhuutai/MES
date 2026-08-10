@@ -1,12 +1,13 @@
 import { useState } from 'react';
+import { khop, chuanTuKhoa } from '../../../utils/timKiem';
 import Icon from '../../../components/common/Icon';
 
 // Bảng dữ liệu (metric) tương tác: KÉO một mục thả vào ô, hoặc chọn ô rồi BẤM mục để chèn.
 export default function MetricPalette({ metricGroups, onPick, onClose, hasSelection }) {
   const [q, setQ] = useState('');
-  const query = q.trim().toLowerCase();
+  const query = chuanTuKhoa(q);
   const groups = Object.entries(metricGroups)
-    .map(([nhom, list]) => [nhom, query ? list.filter((m) => `${m.ten} ${m.ma} ${m.mo_ta} ${nhom}`.toLowerCase().includes(query)) : list])
+    .map(([nhom, list]) => [nhom, query ? list.filter((m) => khop(`${m.ten} ${m.ma} ${m.mo_ta} ${nhom}`, query)) : list])
     .filter(([, list]) => list.length);
 
   return (
