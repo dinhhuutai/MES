@@ -11,7 +11,7 @@ import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
 import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
 import useToast from '../../../hooks/useToast';
-import useSocketEvent from '../../../hooks/useSocketEvent';
+import useSocketReload from '../../../hooks/useSocketReload';
 import usePermissions from '../../../hooks/usePermissions';
 import useNghenMap from '../../../hooks/useNghenMap';
 import { slaRowClass } from '../../../utils/sla';
@@ -70,16 +70,16 @@ export default function Release2Page() {
     moTaLoc: moTaBoLoc({ 'tìm kiếm': search, ...filters }),
   });
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const res = await listRelease2Candidates({ search, limit: 500 });
       setRows(res.data.items);
-      setSelected(new Set());
+      if (!silent) setSelected(new Set());
     } catch (e) {
-      show(e.message || 'Lỗi tải', 'error');
+      if (!silent) show(e.message || 'Lỗi tải', 'error');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [search, show]);
 
@@ -90,7 +90,9 @@ export default function Release2Page() {
 
   // Tự tải lại khi trạm khác xác nhận (tránh màn để lâu → dữ liệu cũ).
   // Bỏ qua khi đang tick dở để không mất lựa chọn — `load` xóa danh sách đã chọn.
-  useSocketEvent('workflow:updated', () => { if (selected.size === 0) load(); });
+  // ⚠ Tải NGẦM khi có sự kiện realtime: `load(true)` bỏ qua `setLoading(true)` (bảng không bị
+  // thay bằng spinner) và KHÔNG xóa dòng đang tích. Nhiều sự kiện trong 400ms gộp thành 1 lần tải.
+  useSocketReload(['workflow:updated'], () => load(true));
 
   const toggleOne = (id) => setSelected((s) => {
     const next = new Set(s);

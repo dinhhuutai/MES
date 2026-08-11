@@ -19,7 +19,7 @@ import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
 import useToast from '../../../hooks/useToast';
-import useSocketEvent from '../../../hooks/useSocketEvent';
+import useSocketReload from '../../../hooks/useSocketReload';
 import useNghenMap from '../../../hooks/useNghenMap';
 import { slaRowClass } from '../../../utils/sla';
 import {
@@ -119,8 +119,8 @@ export default function Release1Page() {
   const [traVeOpen, setTraVeOpen] = useState(false);     // modal "Trả về Kỹ thuật" (lý do bắt buộc)
   const [traVeReason, setTraVeReason] = useState('');
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const [res, setRes] = await Promise.all([
         // Tải-hết (limit cao) để quét/tích khớp mọi đợt vải + lọc client trọn vẹn (mirror Release 2).
@@ -131,17 +131,18 @@ export default function Release1Page() {
       setMeta(res.data.meta);
       setSets(setRes.data);
     } catch (e) {
-      show(e.message || 'Lỗi tải', 'error');
+      if (!silent) show(e.message || 'Lỗi tải', 'error');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [search, page, show]);
 
   useEffect(() => { listChuyen().then((r) => setChuyen(r.data)).catch(() => {}); }, []);
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
   // Tự tải lại khi trạm trước xác nhận (tránh màn để lâu → dữ liệu cũ).
-  useSocketEvent('ready:confirmed', () => load());
-  useSocketEvent('workflow:updated', () => load());
+  // ⚠ Tải NGẦM khi có sự kiện realtime: `load(true)` bỏ qua `setLoading(true)` (bảng không bị
+  // thay bằng spinner) và KHÔNG xóa dòng đang tích. Nhiều sự kiện trong 400ms gộp thành 1 lần tải.
+  useSocketReload(['ready:confirmed', 'workflow:updated'], () => load(true));
 
   // Lọc "chỉ hiện phần bị trả về": ẩn set (đợt vải bị trả về nằm ở pool lẻ), chỉ hiện đợt vải lẻ bị trả về.
   const activeCount = Object.values(filters).filter(Boolean).length;

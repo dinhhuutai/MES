@@ -7,7 +7,7 @@ import Toast from '../../../components/common/Toast';
 import Icon from '../../../components/common/Icon';
 import useToast from '../../../hooks/useToast';
 import useNow from '../../../hooks/useNow';
-import useSocketEvent from '../../../hooks/useSocketEvent';
+import useSocketReload from '../../../hooks/useSocketReload';
 import { getOnline, getHistory } from '../../../services/presenceService';
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
@@ -49,9 +49,9 @@ export default function OnlineUsersPage() {
     }
   }, [show]);
 
-  const loadHistory = useCallback(async () => {
+  const loadHistory = useCallback(async (silent = false) => {
     if (!selected) return;
-    setLoadingHist(true);
+    if (!silent) setLoadingHist(true);
     try {
       const res = await getHistory({ date, userId: selected.userId });
       setHistory((res.data || []).map((r, i) => ({ ...r, _k: i })));
@@ -59,7 +59,7 @@ export default function OnlineUsersPage() {
       show(e.message || 'Lỗi tải lịch sử', 'error');
       setHistory([]);
     } finally {
-      setLoadingHist(false);
+      if (!silent) setLoadingHist(false);
     }
   }, [selected, date, show]);
 
@@ -67,10 +67,12 @@ export default function OnlineUsersPage() {
   useEffect(() => { loadHistory(); }, [loadHistory]);
 
   // Realtime: có người vào/ra/đổi trang → refetch online; nếu đang xem 1 user thì cập nhật lịch sử.
-  useSocketEvent('presence:updated', () => {
+  // ⚠ `presence:updated` là BROADCAST TOÀN HỆ THỐNG, bắn mỗi khi BẤT KỲ ai đổi trang
+  // (backend/src/sockets/presence.js:63) ⇒ trước đây panel lịch sử chớp liên tục. Gộp 2 giây + tải NGẦM.
+  useSocketReload(['presence:updated'], () => {
     loadOnline();
-    if (selected && date === todayStr()) loadHistory();
-  });
+    if (selected && date === todayStr()) loadHistory(true);
+  }, 2000);
 
   const onlineCols = [
     { key: 'hoTen', header: 'Người dùng', className: 'font-medium text-ink',

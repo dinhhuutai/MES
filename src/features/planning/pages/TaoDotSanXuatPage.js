@@ -11,7 +11,7 @@ import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 import ReleaseListModal from '../components/ReleaseListModal';
 import useToast from '../../../hooks/useToast';
-import useSocketEvent from '../../../hooks/useSocketEvent';
+import useSocketReload from '../../../hooks/useSocketReload';
 import usePermissions from '../../../hooks/usePermissions';
 import { listRelease1Candidates, createDotSanXuat, listChuyen } from '../../../services/planningService';
 import { fmtNum, fmtDate } from '../../../utils/format';
@@ -46,22 +46,23 @@ export default function TaoDotSanXuatPage() {
   const [scanOpen, setScanOpen] = useState(false);
   const [releaseOpen, setReleaseOpen] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const res = await listRelease1Candidates({ search, limit: 1000 });
       setRows(res.data.items);
     } catch (e) {
-      show(e.message || 'Lỗi tải', 'error');
+      if (!silent) show(e.message || 'Lỗi tải', 'error');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [search, show]);
 
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
   // Tự tải lại khi trạm trước xác nhận (tránh màn để lâu → dữ liệu cũ).
-  useSocketEvent('ready:confirmed', () => load());
-  useSocketEvent('workflow:updated', () => load());
+  // ⚠ Tải NGẦM khi có sự kiện realtime: `load(true)` bỏ qua `setLoading(true)` (bảng không bị
+  // thay bằng spinner) và KHÔNG xóa dòng đang tích. Nhiều sự kiện trong 400ms gộp thành 1 lần tải.
+  useSocketReload(['ready:confirmed', 'workflow:updated'], () => load(true));
   useEffect(() => { listChuyen().then((r) => setChuyen(r.data || [])).catch(() => {}); }, []);
 
   const basketIds = useMemo(() => new Set(basket.map((b) => b.dot_vai_id)), [basket]);

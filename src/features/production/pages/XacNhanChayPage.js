@@ -11,7 +11,7 @@ import { Field, Input } from '../../../components/common/controls';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import useSocketEvent from '../../../hooks/useSocketEvent';
+import useSocketReload from '../../../hooks/useSocketReload';
 import useNghenMap from '../../../hooks/useNghenMap';
 import { slaRowClass } from '../../../utils/sla';
 import {
@@ -45,8 +45,8 @@ export default function XacNhanChayPage() {
   // Áp cho CẢ 2 bảng (Đang chạy & Chờ chạy) để 2 bảng luôn nói về cùng một nhóm chuyền.
   const [loai, setLoai] = useState('');
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       // limit 200 = trần của `getPaging` (backend). Trang lọc + phân trang CLIENT nên phải tải-hết,
       // nếu không nút Excel chỉ xuất được phần đã tải.
@@ -54,9 +54,9 @@ export default function XacNhanChayPage() {
       setCandidates(c.data.items);
       setRunning(m.data.running);
     } catch (e) {
-      show(e.message || 'Lỗi tải', 'error');
+      if (!silent) show(e.message || 'Lỗi tải', 'error');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [search, show]);
 
@@ -66,8 +66,9 @@ export default function XacNhanChayPage() {
     return () => clearTimeout(t);
   }, [load]);
   // Tự tải lại khi SL release / sản xuất đổi ở nơi khác (vd cập nhật SL nhận vải / release ở Hệ thống).
-  useSocketEvent('production:updated', load);
-  useSocketEvent('dashboard:refresh', load);
+  // ⚠ Tải NGẦM khi có sự kiện realtime: `load(true)` bỏ qua `setLoading(true)` (bảng không bị
+  // thay bằng spinner) và KHÔNG xóa dòng đang tích. Nhiều sự kiện trong 400ms gộp thành 1 lần tải.
+  useSocketReload(['production:updated', 'dashboard:refresh'], () => load(true));
 
   // Lọc client-side theo từng trường (kết hợp AND) + chuyền. Áp cho cả "Đang chạy" & "Chờ chạy".
   const selChuyen = useMemo(() => (chuyen || []).find((x) => x.id === filters.chuyenId) || null, [chuyen, filters.chuyenId]);

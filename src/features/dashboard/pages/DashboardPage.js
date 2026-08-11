@@ -6,7 +6,7 @@ import Toast from '../../../components/common/Toast';
 import SidePanel from '../../../components/common/SidePanel';
 import KcsBreakdown from '../../../components/common/KcsBreakdown';
 import useToast from '../../../hooks/useToast';
-import useSocketEvent from '../../../hooks/useSocketEvent';
+import useSocketReload from '../../../hooks/useSocketReload';
 import { getActivity, getStageCounts, getBang2, getTinhTrangPhanIn, getHoanThanhHomNay, getChartDetail, getDieuPhoi, getFlow, getFlowOwners } from '../../../services/dashboardService';
 import { fmtNum } from '../../../utils/format';
 import { fmtDur } from '../../../utils/sla';
@@ -656,7 +656,9 @@ export default function DashboardPage() {
   }, [show]);
 
   useEffect(() => { load(); }, [load]);
-  useSocketEvent('dashboard:refresh', load);
+  // ⚠ Gộp sự kiện: `load` bắn 8 request song song rồi thay toàn bộ state ⇒ mọi biểu đồ vẽ lại.
+  // Backend emit `dashboard:refresh` theo cụm nên không gộp là vẽ lại 2-3 lần cho 1 thao tác.
+  useSocketReload(['dashboard:refresh'], load, 600);
 
   const nghenByTram = useMemo(() => Object.fromEntries((bang2?.nhom_nghen || []).map((g) => [g.ma_tram, g.count])), [bang2]);
   const sapByTram = useMemo(() => Object.fromEntries((bang2?.nhom_sap || []).map((g) => [g.ma_tram, g.count])), [bang2]);

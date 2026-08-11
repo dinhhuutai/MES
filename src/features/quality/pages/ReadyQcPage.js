@@ -13,7 +13,7 @@ import Toast from '../../../components/common/Toast';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import useNow from '../../../hooks/useNow';
-import useSocketEvent from '../../../hooks/useSocketEvent';
+import useSocketReload from '../../../hooks/useSocketReload';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
@@ -133,7 +133,7 @@ export default function ReadyQcPage() {
       setMeta(res.data.meta);
     } catch (e) { /* nền: lỗi mạng thì giữ dữ liệu cũ, không quấy người dùng */ }
   }, [search, page]);
-  useSocketEvent('ready:confirmed', refresh);
+  useSocketReload(['ready:confirmed'], refresh);
 
   // Quét mã mà không khớp dòng nào → tra tiếp toàn hệ thống để nói RÕ vì sao (thường là phần in đã
   // được QC xác nhận xong nên rời danh sách — trước đây chỉ hiện "Không thấy", người quét tưởng hỏng).

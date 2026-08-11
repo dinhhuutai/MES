@@ -11,7 +11,7 @@ import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import GiaCongHistoryPanel from '../components/GiaCongHistoryPanel';
 import useToast from '../../../hooks/useToast';
-import useSocketEvent from '../../../hooks/useSocketEvent';
+import useSocketReload from '../../../hooks/useSocketReload';
 import usePermissions from '../../../hooks/usePermissions';
 import TraVeBadge from '../../../components/common/TraVeBadge';
 import { listGiaCong, giaCongToOqc, giaCongTraLai } from '../../../services/planningService';
@@ -58,17 +58,17 @@ export default function GiaCongPage() {
     catch (e) { show(e.message || 'In tem thất bại', 'error'); }
   };
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const res = await listGiaCong({ search, limit: 500 });
       setRows(res.data.items);
       setMeta(res.data.meta || { total: res.data.items.length });
-      setSelected(new Set());
+      if (!silent) setSelected(new Set());
     } catch (e) {
-      show(e.message || 'Lỗi tải', 'error');
+      if (!silent) show(e.message || 'Lỗi tải', 'error');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [search, show]);
 
@@ -79,8 +79,9 @@ export default function GiaCongPage() {
 
   // Tự tải lại khi trạm khác xác nhận (tránh màn để lâu → dữ liệu cũ).
   // Bỏ qua khi đang tick dở để không mất lựa chọn — `load` xóa danh sách đã chọn.
-  useSocketEvent('workflow:updated', () => { if (selected.size === 0) load(); });
-  useSocketEvent('quality:updated', () => { if (selected.size === 0) load(); });
+  // ⚠ Tải NGẦM khi có sự kiện realtime: `load(true)` bỏ qua `setLoading(true)` (bảng không bị
+  // thay bằng spinner) và KHÔNG xóa dòng đang tích. Nhiều sự kiện trong 400ms gộp thành 1 lần tải.
+  useSocketReload(['workflow:updated', 'quality:updated'], () => load(true));
 
   const toggleOne = (id) => setSelected((s) => {
     const next = new Set(s);

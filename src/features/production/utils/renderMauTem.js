@@ -13,6 +13,41 @@ export const KHO = {
   leTren: 1, leDuoi: 1, leTrai: 1, lePhai: 5,
 };
 
+// CSS cho tem dựng từ mẫu — chỉ khung + lưới, còn kiểu chữ/viền do TỪNG Ô tự mang theo (inline style
+// do `renderKhung` sinh) nên không cần class .lbl/.v… như bố cục cứng.
+// ⚠⚠ DÙNG CHUNG cho cửa sổ IN THẬT (`printTemLabel.openSheetMau`) và khung XEM TRƯỚC ở màn thiết kế
+//   (`TemXemTruoc`) — để 2 chỗ ra **y hệt nhau**. Sửa ở đây là sửa cho cả hai; đừng chép ra bản thứ 2.
+export const SHEET_CSS_MAU = `
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: Arial, "Segoe UI", sans-serif; color: #000; }
+  .sheet { display: flex; width: ${KHO.toRong}mm; height: ${KHO.toCao}mm; }
+  .label { width: ${KHO.temRong}mm; height: ${KHO.temCao}mm;
+           padding: ${KHO.leTren}mm ${KHO.lePhai}mm ${KHO.leDuoi}mm ${KHO.leTrai}mm; overflow: hidden; }
+  .label:first-child { width: ${KHO.temRong - 4}mm; padding-right: ${KHO.leTrai}mm; }
+  table.mt-luoi td { padding: 0.25mm 0.6mm; line-height: 1.02; overflow: hidden; }
+  @page { size: ${KHO.toRong}mm ${KHO.toCao}mm; margin: 0; }`;
+
+// Vòng THU CHỮ chạy TRONG cửa sổ in / khung xem trước, trước khi gọi print(): ô nào bật "tự co" mà nội
+// dung tràn thì giảm dần cỡ chữ tới khi vừa. Phải làm ở đây (không phải CSS) vì chỉ lúc này mới đo được
+// kích thước THẬT của ô sau khi trình duyệt dựng xong bảng.
+// ⚠ Xem trước cũng chạy vòng này ⇒ thấy đúng cỡ chữ sẽ in ra, không phải đoán.
+export const JS_TU_CO = `
+  function thuChu(){
+    var os = document.querySelectorAll('td[data-tuco]');
+    for (var i = 0; i < os.length; i++) {
+      var td = os[i];
+      var cs = parseFloat(getComputedStyle(td).fontSize);
+      var min = cs * 0.45;                       // không thu quá 45% — nhỏ hơn nữa là không đọc nổi
+      var n = 0;
+      while (n < 40 && cs > min && (td.scrollWidth > td.clientWidth + 1 || td.scrollHeight > td.clientHeight + 1)) {
+        cs -= Math.max(0.3, cs * 0.06);
+        td.style.fontSize = cs + 'px';
+        n++;
+      }
+    }
+  }`;
+
 const esc = (s) => String(s == null ? '' : s)
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -34,18 +69,37 @@ export function dinhDangNgay(v, ma) {
 
 const fmtSo = (v) => (v == null || v === '' ? '' : Number(v).toLocaleString('vi-VN'));
 
-// TÌM & THAY khi hiện lên tem — cho phép rút gọn nội dung mà KHÔNG đụng dữ liệu gốc.
-//   "Ca 1"          + [{tu:'Ca ',    thanh:'C'}] → "C1"
-//   "Chuyền M4A-4B" + [{tu:'Chuyền M', thanh:''}] → "4A-4B"
-// Thay LẦN LƯỢT theo thứ tự trong danh sách, mỗi luật thay MỌI lần xuất hiện. `tu` rỗng thì bỏ qua.
+// ĐỔI CÁCH HIỂN THỊ khi hiện lên tem — rút gọn / chèn thêm mà KHÔNG đụng dữ liệu gốc.
+// Mỗi luật có `kieu`; luật CŨ chỉ có `{tu, thanh}` (không `kieu`) vẫn chạy đúng vì mặc định là THAY.
+//   THAY  : thay MỌI lần xuất hiện của `tu` bằng `thanh`
+//           "Ca 1" + {tu:'Ca ', thanh:'C'} → "C1" · "Chuyền M4A-4B" + {tu:'Chuyền M', thanh:''} → "4A-4B"
+//   VITRI : thay `so_kt` ký tự KỂ TỪ ký tự thứ `vi_tri` (đếm từ 1) bằng `thanh`; `so_kt=0` = chèn thêm
+//           "152608057689" + {vi_tri:1, so_kt:2, thanh:'17'} → "172608057689"
+//           "260805C2"     + {vi_tri:1, so_kt:6, thanh:''}   → "C2"
+//   DAU   : thêm `thanh` vào ĐẦU chuỗi · CUOI : thêm `thanh` vào CUỐI chuỗi
+// Chạy LẦN LƯỢT theo thứ tự trong danh sách (luật sau ăn kết quả của luật trước).
 // ⚠ Cố ý dùng thay-chuỗi-thường (`split/join`) chứ KHÔNG regex: người dùng ở xưởng gõ "(6PCS)" hay
 //   "2.1*1" là chuỗi thật, không phải cú pháp.
+// ⚠ Luật sai/thừa thì BỎ QUA im lặng, không ném lỗi — đây là đường IN, máy in đang chờ.
 export function apDungThay(chuoi, thay) {
   if (!Array.isArray(thay) || !thay.length) return chuoi;
   let s = String(chuoi == null ? '' : chuoi);
   for (const r of thay) {
-    if (!r || !r.tu) continue;
-    s = s.split(String(r.tu)).join(String(r.thanh == null ? '' : r.thanh));
+    if (!r) continue;
+    const thanh = String(r.thanh == null ? '' : r.thanh);
+    const kieu = r.kieu || 'THAY';
+    if (kieu === 'DAU') { if (thanh) s = thanh + s; continue; }
+    if (kieu === 'CUOI') { if (thanh) s += thanh; continue; }
+    if (kieu === 'VITRI') {
+      const vt = Math.max(1, Number(r.vi_tri) || 1);
+      // Chuỗi ngắn hơn vị trí yêu cầu → BỎ QUA (không nối bừa vào cuối, tránh in ra thứ vô nghĩa).
+      if (vt > s.length + 1) continue;
+      const n = Math.max(0, Number(r.so_kt) || 0);
+      s = s.slice(0, vt - 1) + thanh + s.slice(vt - 1 + n);
+      continue;
+    }
+    if (!r.tu) continue;
+    s = s.split(String(r.tu)).join(thanh);
   }
   return s;
 }
@@ -58,6 +112,16 @@ function giaTriTruong(data, ma, dinhDang, kieuTruong, thay) {
   else if (kieuTruong === 'so') out = fmtSo(v);
   else out = v == null ? '' : String(v);
   return apDungThay(out, thay);
+}
+
+// GIÁ TRỊ MÃ của ô QR / mã vạch — có áp luật `thay` (đổi cách hiển thị) như mảnh trường của ô chữ.
+// ⚠⚠ DÙNG CHUNG cho ẢNH (`dsOMa` → mã hóa vào QR/vạch) và DÒNG CHỮ dưới hình (`renderKhung`): hai chỗ
+//   này BẮT BUỘC ra cùng một chuỗi, lệch nhau thì nhìn một đằng quét ra một nẻo. Đừng gọi
+//   `giaTriTruong` trực tiếp ở 2 nơi nữa.
+// ⚠ Luật ở đây đổi LUÔN NỘI DUNG ĐƯỢC MÃ HÓA (khác ô chữ chỉ đổi chữ hiện ra) — cắt/thêm ký tự là máy
+//   quét ở KCS/Sửa/OQC đọc ra chuỗi khác `ma_tem` gốc. Panel thiết kế có cảnh báo đỏ nhắc điều này.
+export function giaTriMa(cell, data) {
+  return giaTriTruong(data, (cell && cell.ma_qr) || 'ma_tem', null, 'chu', cell && cell.thay);
 }
 
 // Nội dung 1 ô = nối các mảnh `phan` (chữ cố định + trường dữ liệu).
@@ -117,12 +181,71 @@ function styleO(o, mmPx = 1) {
   return st.join(';');
 }
 
+// ⚠⚠ CHIỀU CAO TỪNG HÀNG — TÍNH SẴN BẰNG mm CHO **MỌI** HÀNG, KHÔNG để trình duyệt tự chia.
+//
+// Lỗi thật đã gặp (2026-08-11): `<tr>` không đặt `height` thì thuật toán bảng của trình duyệt chia
+// chiều cao **THEO NỘI DUNG** ⇒ (a) hàng chứa ảnh QR/mã vạch nở bung theo kích thước GỐC của ảnh
+// (canvas mã vạch cao 60px ≈ 15.9mm) làm tem "cao ra"; (b) **hàng toàn ô TRỐNG bị bóp gần bằng 0**
+// (thấy rõ ở 4 mẫu gốc: 2 hàng kẻ ô trống của tem phải, và khối Lo/SL Giao/KCS/N Kiểm của tem trái).
+// Trên MÀN THIẾT KẾ thì ô mã chỉ là chữ "▣ QR" nên trông vẫn đều ⇒ **thiết kế một kiểu, in một kiểu**.
+//
+// Đúng ý nghĩa đã chốt: `cao_mm: null` = "tự giãn CHIA ĐỀU phần trống còn lại" (DATABASE.md §4).
+// Dùng CHUNG cho bản in (`renderKhung`) và lưới thiết kế (`TemGrid`) ⇒ 2 bên khớp từng mm.
+export function caoHangMm(khung) {
+  const hang = Array.isArray(khung && khung.hang) ? khung.hang : [];
+  let cung = 0; let tuDo = 0;
+  hang.forEach((h) => { const v = Number(h && h.cao_mm) || 0; if (v > 0) cung += v; else tuDo += 1; });
+  // Đặt cứng đã vượt khổ → hàng tự do vẫn được 0.5mm (giống cách chia cột), thanh trạng thái đã cảnh báo.
+  const moi = tuDo ? Math.max(0.5, (KHO.noiDungCao - cung) / tuDo) : 0;
+  return hang.map((h) => (Number(h && h.cao_mm) > 0 ? Number(h.cao_mm) : moi));
+}
+
+// CÓ hiện dãy chữ mã bên dưới hình không?
+// ⚠ MÃ VẠCH: MẶC ĐỊNH **KHÔNG** hiện số (chốt 2026-08-11) — bản thân vạch đã mang đủ dữ liệu, in kèm
+//   dãy số chỉ tốn chỗ trên tem 55×80mm; muốn có thì tick lại ở panel (`hien_ma: true` tường minh).
+//   QR thì NGƯỢC LẠI — mặc định vẫn hiện, vì mắt người không đọc được QR mà tem cần đối chiếu tay
+//   (4 mẫu gốc đều khai `hien_ma: true` cho ô QR nên không mẫu nào bị đổi).
+export const hienChuMa = (o) => (o && o.kieu === 'barcode' ? o.hien_ma === true : !o || o.hien_ma !== false);
+
+// ⚠⚠ HAI LỚP CHỪA TRẮNG QUANH MÃ — mục đích KHÁC NHAU, đừng gộp làm một:
+//   1. `LE_MA_MM` (CSS, dưới đây) — tách hình khỏi VIỀN Ô cho dễ nhìn. Ô mã vạch `width:100%` trước
+//      đây dính sát 2 viền trái/phải (báo lỗi 2026-08-11).
+//   2. VÙNG TRẮNG THEO CHUẨN nướng thẳng vào ẢNH ở `dungAnhMa` (`margin` của JsBarcode/qrcode) — cái
+//      này TỈ LỆ THEO BỀ RỘNG VẠCH nên đúng chuẩn ở mọi kích thước ô, còn lề mm cố định thì không.
+//      Thiếu nó là máy quét đọc không ra, không phải chuyện thẩm mỹ.
+const LE_MA_MM = 0.6;
+
 // Ô mã vạch/QR: ảnh đã dựng sẵn (bất đồng bộ) truyền vào qua `anhMa[khoa]`.
-function htmlOMa(o, khoa, anhMa, maText) {
+// ⚠⚠ KÍCH THƯỚC ẢNH PHẢI TÍNH RA mm, TUYỆT ĐỐI KHÔNG dùng `height:100%`/`60%`:
+//   phần trăm chiều cao chỉ giải được khi ô có chiều cao XÁC ĐỊNH; trong bảng nó thường **không xác
+//   định** ⇒ trình duyệt lùi về kích thước GỐC của ảnh (QR 320px ≈ 84mm · mã vạch cao 60px ≈ 15.9mm)
+//   ⇒ ô phình ra, tem "cao ra" đúng như báo lỗi 2026-08-11. Nay `caoOmm` = tổng chiều cao các hàng ô
+//   này chiếm (đã trừ padding + dòng chữ mã) nên ảnh LUÔN vừa đúng ô đã thiết kế.
+// ⚠ QR giữ TỈ LỆ VUÔNG (`max-*` + auto) — méo thì máy quét đọc kém. MÃ VẠCH thì kéo đầy ô
+//   (`width:100%` + chiều cao cố định): kéo dãn theo CHIỀU DỌC không ảnh hưởng máy quét (nó chỉ đọc
+//   tỉ lệ bề rộng các vạch), mà lại tận dụng hết ô.
+function htmlOMa(o, khoa, anhMa, maText, caoOmm) {
   const src = anhMa ? anhMa[khoa] : '';
-  const cao = o.kieu === 'qr' ? 'height:100%;max-height:100%' : 'height:60%';
-  const img = src ? `<img src="${src}" alt="" style="display:block;margin:0 auto;max-width:100%;${cao}">` : '';
-  const ma = o.hien_ma === false ? '' : `<div style="font-size:${Number(o.co_chu_mm) || 2.2}mm;font-weight:700;word-break:break-all;line-height:1.05">${esc(maText)}</div>`;
+  const coChu = hienChuMa(o);
+  const coChuMm = Number(o.co_chu_mm) || 2.2;
+  const le = LE_MA_MM * 2;                       // tổng phần chừa 2 bên / trên-dưới
+  let kichThuoc;
+  if (caoOmm > 0) {
+    // 0.5mm = padding trên+dưới của td (SHEET_CSS_MAU); dòng chữ mã ≈ cỡ chữ × 1.25.
+    const con = Math.max(0.8, caoOmm - 0.5 - le - (coChu ? coChuMm * 1.25 : 0));
+    kichThuoc = o.kieu === 'barcode'
+      ? `width:calc(100% - ${le}mm);height:${con.toFixed(2)}mm;margin:${LE_MA_MM}mm auto`
+      : `margin:${LE_MA_MM}mm auto;width:auto;height:auto;max-width:calc(100% - ${le}mm);max-height:${con.toFixed(2)}mm`;
+  } else {
+    // Không biết chiều cao ô (không nên xảy ra) → chỉ chặn bề rộng, thà nhỏ còn hơn phình.
+    kichThuoc = o.kieu === 'barcode'
+      ? `width:calc(100% - ${le}mm);height:auto;margin:${LE_MA_MM}mm auto`
+      : `margin:${LE_MA_MM}mm auto;max-width:calc(100% - ${le}mm);height:auto`;
+  }
+  const img = src ? `<img src="${src}" alt="" style="display:block;${kichThuoc}">` : '';
+  const ma = coChu
+    ? `<div style="font-size:${coChuMm}mm;font-weight:700;word-break:break-all;line-height:1.05">${esc(maText)}</div>`
+    : '';
   return `${img}${ma}`;
 }
 
@@ -157,6 +280,8 @@ export function renderKhung(khung, data, anhMa, opts = {}) {
     return `<col${w ? ` style="width:${w}mm"` : ''}>`;
   }).join('')}</colgroup>`;
 
+  const caoHang = caoHangMm(khung);
+
   const rows = hang.map((h, r) => {
     const tds = [];
     for (let c = 0; c < soCot; c += 1) {
@@ -166,11 +291,13 @@ export function renderKhung(khung, data, anhMa, opts = {}) {
       const cs = Math.max(1, Number(cell.cs) || 1);
       const rs = Math.max(1, Number(cell.rs) || 1);
       const laMa = cell.kieu === 'qr' || cell.kieu === 'barcode';
-      const maText = laMa ? giaTriTruong(data, cell.ma_qr || 'ma_tem', null, 'chu') : '';
+      const maText = laMa ? giaTriMa(cell, data) : '';
       const cssDoc = laMa ? '' : cssChuDoc(cell.xoay);
       const chu = esc(noiDungO(cell, data, truongMap));
+      // Ô gộp dọc thì chiều cao = tổng các hàng nó chiếm.
+      const caoO = caoHang.slice(r, r + rs).reduce((s, x) => s + x, 0);
       const noiDung = laMa
-        ? htmlOMa(cell, khoa, anhMa, maText)
+        ? htmlOMa(cell, khoa, anhMa, maText, caoO)
         : (cssDoc ? `<span style="${cssDoc}">${chu}</span>` : chu);
       // `data-tuco` để vòng thu chữ trong cửa sổ in tìm được đúng ô cần co.
       const attr = [
@@ -182,8 +309,9 @@ export function renderKhung(khung, data, anhMa, opts = {}) {
       ].join('');
       tds.push(`<td${attr}>${noiDung}</td>`);
     }
-    const cao = h && h.cao_mm ? ` style="height:${h.cao_mm}mm"` : ' style="height:auto"';
-    return `<tr${cao}>${tds.join('')}</tr>`;
+    // ⚠ ĐẶT mm cho MỌI hàng (kể cả hàng "tự giãn") — `height:auto` là đường dẫn tới lỗi phình ô / bóp
+    //   hàng trống nói ở `caoHangMm`. Tổng đúng bằng 78mm nên bảng vẫn lấp kín nhãn.
+    return `<tr style="height:${caoHang[r].toFixed(3)}mm">${tds.join('')}</tr>`;
   }).join('');
 
   // `table-layout:fixed` + `height:100%` để hàng `cao_mm: null` tự giãn lấp phần trống (như `.bot`/`.grid` cũ).
@@ -196,7 +324,7 @@ export function dsOMa(khung, data) {
   const o = (khung && khung.o) || {};
   for (const [khoa, cell] of Object.entries(o)) {
     if (cell.kieu === 'qr' || cell.kieu === 'barcode') {
-      out.push({ khoa, kieu: cell.kieu, gia_tri: giaTriTruong(data, cell.ma_qr || 'ma_tem', null, 'chu') });
+      out.push({ khoa, kieu: cell.kieu, gia_tri: giaTriMa(cell, data) });
     }
   }
   return out;
@@ -216,12 +344,26 @@ export async function dungAnhMa(khung, data) {
     try {
       if (!it.gia_tri) continue;
       if (it.kieu === 'qr') {
-        out[it.khoa] = await QRCode.toDataURL(it.gia_tri, { margin: 0, width: 320, errorCorrectionLevel: 'M' });
+        // ⚠ `margin` tính bằng SỐ Ô (module), không phải px. **2 ô** — chuẩn QR đòi 4, nhưng tem chỉ
+        //   55×80mm nên lấy 2 làm dung hòa (vẫn hơn hẳn `margin: 0` cũ = KHÔNG có vùng trắng nào, mã
+        //   dính sát viền ô là máy quét dò không ra mốc định vị).
+        out[it.khoa] = await QRCode.toDataURL(it.gia_tri, { margin: 2, width: 320, errorCorrectionLevel: 'M' });
       } else if (barcodeMod) {
         const JsBarcode = barcodeMod.default || barcodeMod;
         const cv = document.createElement('canvas');
         // `displayValue:false` — phần chữ do ô tự vẽ (để chỉnh cỡ chữ được ở panel thiết kế).
-        JsBarcode(cv, it.gia_tri, { format: 'CODE128', displayValue: false, margin: 0, width: 2, height: 60 });
+        // ⚠ `width` = bề rộng 1 vạch mảnh (px). Nâng 2→4 vì ảnh bị KÉO ĐẦY ô rồi mới in: 2px cho ra
+        //   ~146dpi trên giấy — mức mà máy quét đọc phập phù; 4px lên ~292dpi, vạch sắc nét.
+        // ⚠⚠ `marginLeft/Right = 40px = 10 vạch mảnh` = ĐÚNG vùng trắng tối thiểu của CODE128. Nướng
+        //   vào ảnh nên khi kéo giãn nó co giãn THEO vạch ⇒ luôn đúng chuẩn dù ô rộng hay hẹp.
+        //   Trên/dưới không cần vùng trắng (mã 1D chỉ đọc theo chiều ngang).
+        // ⚠⚠ PHẢI truyền `margin: 0` — JsBarcode `fixOptions` chạy `marginTop = marginTop || margin`,
+        //   mà **`0` là falsy** ⇒ khai `marginTop: 0` KHÔNG có tác dụng, nó lấy `margin` mặc định = 10px
+        //   (im lặng, không báo gì). Đặt `margin: 0` làm nền rồi mới đè trái/phải mới ra đúng ý.
+        JsBarcode(cv, it.gia_tri, {
+          format: 'CODE128', displayValue: false, width: 4, height: 100,
+          margin: 0, marginLeft: 40, marginRight: 40,
+        });
         out[it.khoa] = cv.toDataURL('image/png');
       }
     } catch { /* mã hỏng → bỏ ảnh, giữ chữ */ }

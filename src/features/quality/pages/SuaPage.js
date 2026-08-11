@@ -16,7 +16,7 @@ import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import { Field, Input } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
-import useSocketEvent from '../../../hooks/useSocketEvent';
+import useSocketReload from '../../../hooks/useSocketReload';
 import useNow from '../../../hooks/useNow';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 import usePermissions from '../../../hooks/usePermissions';
@@ -60,15 +60,15 @@ export default function SuaPage() {
   const rangeKey = useMemo(() => `${range.from || ''}|${range.to || ''}`, [range]);
   const activeFilters = useMemo(() => Object.entries(filters).filter(([, v]) => v), [filters]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const res = await listSuaCandidates({ search, ...filters, ngayTu: range.from || undefined, ngayDen: range.to || undefined });
       setRows(res.data);
     } catch (e) {
-      show(e.message || 'Lỗi tải', 'error');
+      if (!silent) show(e.message || 'Lỗi tải', 'error');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, filtersKey, rangeKey, show]);
@@ -121,7 +121,9 @@ export default function SuaPage() {
   }, [load]);
 
   // Tự tải lại khi trạm khác xác nhận (tránh màn để lâu → dữ liệu cũ).
-  useSocketEvent('quality:updated', () => load());
+  // ⚠ Tải NGẦM khi có sự kiện realtime: `load(true)` bỏ qua `setLoading(true)` (bảng không bị
+  // thay bằng spinner) và KHÔNG xóa dòng đang tích. Nhiều sự kiện trong 400ms gộp thành 1 lần tải.
+  useSocketReload(['quality:updated'], () => load(true));
 
   const save = async () => {
     setSaving(true);

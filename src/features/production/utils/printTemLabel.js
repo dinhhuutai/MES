@@ -1,6 +1,6 @@
 import QRCode from 'qrcode';
 // IN THEO MẪU người dùng thiết kế (mig 073) — xem `thuInTheoMau` ở cuối file.
-import { KHO, renderKhung, dungAnhMa, khungPhai } from './renderMauTem';
+import { renderKhung, dungAnhMa, khungPhai, SHEET_CSS_MAU, JS_TU_CO } from './renderMauTem';
 import { mauChoViTri } from '../../../services/mauTemService';
 
 const esc = (v) => String(v ?? '')
@@ -195,37 +195,8 @@ function openSheet(inner, title) {
 //   làm hỏng đường in. Vì vậy mọi lỗi ở đây đều nuốt và lùi, KHÔNG ném lên.
 // ─────────────────────────────────────────────────────────────────────────────
 
-// CSS cho tem dựng từ mẫu — chỉ khung + lưới, còn kiểu chữ/viền do TỪNG Ô tự mang theo (inline style
-// do `renderKhung` sinh) nên không cần class .lbl/.v… như bố cục cứng.
-const SHEET_CSS_MAU = `
-  * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; }
-  body { font-family: Arial, "Segoe UI", sans-serif; color: #000; }
-  .sheet { display: flex; width: ${KHO.toRong}mm; height: ${KHO.toCao}mm; }
-  .label { width: ${KHO.temRong}mm; height: ${KHO.temCao}mm;
-           padding: ${KHO.leTren}mm ${KHO.lePhai}mm ${KHO.leDuoi}mm ${KHO.leTrai}mm; overflow: hidden; }
-  .label:first-child { width: ${KHO.temRong - 4}mm; padding-right: ${KHO.leTrai}mm; }
-  table.mt-luoi td { padding: 0.25mm 0.6mm; line-height: 1.02; overflow: hidden; }
-  @page { size: ${KHO.toRong}mm ${KHO.toCao}mm; margin: 0; }`;
-
-// Vòng THU CHỮ chạy trong cửa sổ in, TRƯỚC khi gọi print(): ô nào bật "tự co" mà nội dung tràn thì
-// giảm dần cỡ chữ tới khi vừa. Phải làm ở đây (không phải CSS) vì chỉ lúc này mới đo được kích thước
-// thật của ô sau khi trình duyệt dựng xong bảng.
-const JS_TU_CO = `
-  function thuChu(){
-    var os = document.querySelectorAll('td[data-tuco]');
-    for (var i = 0; i < os.length; i++) {
-      var td = os[i];
-      var cs = parseFloat(getComputedStyle(td).fontSize);
-      var min = cs * 0.45;                       // không thu quá 45% — nhỏ hơn nữa là không đọc nổi
-      var n = 0;
-      while (n < 40 && cs > min && (td.scrollWidth > td.clientWidth + 1 || td.scrollHeight > td.clientHeight + 1)) {
-        cs -= Math.max(0.3, cs * 0.06);
-        td.style.fontSize = cs + 'px';
-        n++;
-      }
-    }
-  }`;
+// ⚠ `SHEET_CSS_MAU` + `JS_TU_CO` nay ở `renderMauTem.js` (import ở đầu file) — DÙNG CHUNG với khung
+//   XEM TRƯỚC của màn thiết kế, để "xem sao in vậy". Đừng khai lại bản riêng ở đây.
 
 // Mở cửa sổ in cho tem dựng từ MẪU (2 khung đã render sẵn thành HTML).
 function openSheetMau(innerTrai, innerPhai, title) {
@@ -249,6 +220,20 @@ function openSheetMau(innerTrai, innerPhai, title) {
   if (!w) throw new Error('Trình duyệt đang chặn cửa sổ in. Hãy cho phép popup cho trang này rồi in lại.');
   w.document.write(html);
   w.document.close();
+}
+
+// IN THỬ từ màn THIẾT KẾ — dựng bằng ĐÚNG đường in thật (`renderKhung` + `openSheetMau`) nên tờ giấy
+// ra sao thì bản in thật y như vậy.
+// ⚠ Dữ liệu truyền vào là DỮ LIỆU GIẢ của màn thiết kế ⇒ **KHÔNG gọi ERP, KHÔNG tiêu một mã tem nào**
+//   (mã tem chỉ tiêu khi TẠO tem ở màn Sản xuất — xem CLAUDE.md §6 Chất lượng).
+export async function inThuMauTem(boCuc, data, tienTo) {
+  if (!boCuc || !boCuc.trai) throw new Error('Bố cục trống, chưa in thử được');
+  const kTrai = boCuc.trai;
+  const kPhai = khungPhai(boCuc);
+  const dTrai = { ...data, ma_tem: temCode(data.ma_tem, tienTo && tienTo.trai) };
+  const dPhai = { ...data, ma_tem: temCode(data.ma_tem, tienTo && tienTo.phai) };
+  const [aTrai, aPhai] = await Promise.all([dungAnhMa(kTrai, dTrai), dungAnhMa(kPhai, dPhai)]);
+  openSheetMau(renderKhung(kTrai, dTrai, aTrai), renderKhung(kPhai, dPhai, aPhai), 'In thử mẫu tem');
 }
 
 // Thử in bằng mẫu đã gắn cho `maViTri`. Trả `true` nếu đã in; `false` = chưa gắn mẫu / lỗi → caller lùi.

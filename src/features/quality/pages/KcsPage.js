@@ -18,7 +18,7 @@ import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import Icon from '../../../components/common/Icon';
 import { Field, Input } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
-import useSocketEvent from '../../../hooks/useSocketEvent';
+import useSocketReload from '../../../hooks/useSocketReload';
 import usePermissions from '../../../hooks/usePermissions';
 import { listKcsCandidates, recordKcs, gopTem, kcsHistory, kcsDone, getTemHanhTrinh } from '../../../services/qualityService';
 import { redryTem, getTemLabel } from '../../../services/productionService';
@@ -140,8 +140,9 @@ export default function KcsPage() {
   }, [load]);
 
   // Tự tải lại khi trạm khác xác nhận (tránh màn để lâu → dữ liệu cũ).
-  useSocketEvent('quality:updated', () => load());
-  useSocketEvent('drying:updated', () => load());
+  // ⚠ Tải NGẦM khi có sự kiện realtime: `load(true)` bỏ qua `setLoading(true)` (bảng không bị
+  // thay bằng spinner) và KHÔNG xóa dòng đang tích. Nhiều sự kiện trong 400ms gộp thành 1 lần tải.
+  useSocketReload(['quality:updated', 'drying:updated'], () => load(true));
 
   // Tự làm mới ngầm mỗi 30s: tem phơi xong (BE tự chuyển sang chờ KCS) sẽ hiện lên mà không cần bấm.
   useEffect(() => {

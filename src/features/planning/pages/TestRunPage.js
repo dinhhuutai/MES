@@ -10,7 +10,7 @@ import { Input } from '../../../components/common/controls';
 import GomBadge from '../../../components/common/GomBadge';
 import DonePanel from '../../../components/common/DonePanel';
 import useToast from '../../../hooks/useToast';
-import useSocketEvent from '../../../hooks/useSocketEvent';
+import useSocketReload from '../../../hooks/useSocketReload';
 import usePermissions from '../../../hooks/usePermissions';
 import useNghenMap from '../../../hooks/useNghenMap';
 import { slaRowClass } from '../../../utils/sla';
@@ -114,16 +114,16 @@ export default function TestRunPage() {
     }),
   });
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const res = await listTestRunCandidates({ search, limit: 500 });
       setRows(res.data.items);
-      setSelected(new Set());
+      if (!silent) setSelected(new Set());
     } catch (e) {
-      show(e.message || 'Lỗi tải', 'error');
+      if (!silent) show(e.message || 'Lỗi tải', 'error');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [search, show]);
 
@@ -134,8 +134,9 @@ export default function TestRunPage() {
 
   // Tự tải lại khi trạm khác xác nhận (tránh màn để lâu → dữ liệu cũ).
   // Bỏ qua khi đang tick dở để không mất lựa chọn — `load` xóa danh sách đã chọn.
-  useSocketEvent('workflow:updated', () => { if (selected.size === 0) load(); });
-  useSocketEvent('ready:confirmed', () => { if (selected.size === 0) load(); });
+  // ⚠ Tải NGẦM khi có sự kiện realtime: `load(true)` bỏ qua `setLoading(true)` (bảng không bị
+  // thay bằng spinner) và KHÔNG xóa dòng đang tích. Nhiều sự kiện trong 400ms gộp thành 1 lần tải.
+  useSocketReload(['workflow:updated', 'ready:confirmed'], () => load(true));
 
   // Chỉ chọn được lệnh chưa QA đạt VÀ không đang chờ kỹ thuật làm lại (đã bị trả về READY).
   const selectable = (r) => !r.qa_done && !r.cho_ky_thuat;

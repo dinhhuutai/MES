@@ -21,6 +21,21 @@ export default function DataTable({ columns, rows, loading, rowKey = 'id', empty
   useEffect(() => { setCpage(1); }, [allRows.length]); // đổi số dòng (lọc/tải mới) → về trang 1
   const safePage = Math.min(Math.max(cpage, 1), totalPages);
   const viewRows = clientPaged ? allRows.slice((safePage - 1) * pageSize, safePage * pageSize) : allRows;
+
+  // ⚠⚠ CHỐNG NHÁY MÀN HÌNH (chốt 2026-08-11): CHỈ thay bảng bằng spinner khi TẢI LẦN ĐẦU (chưa có
+  // dòng nào). Đang có dòng mà tải lại (socket realtime, đổi bộ lọc, phân trang) thì **GIỮ NGUYÊN
+  // dòng cũ** + chỉ chạy một vạch mảnh trên đỉnh.
+  // Vì sao: 14 trang cho handler socket gọi `load()` có `setLoading(true)`, mà backend bắn 2-3 sự kiện
+  // cho MỖI thao tác + job phơi khô broadcast mỗi 60 giây ⇒ bảng biến mất/hiện lại liên tục, người
+  // dùng gọi là "nháy quá khó chịu". Sửa Ở ĐÂY là hết nháy cho MỌI trang dùng DataTable, kể cả trang
+  // chưa kịp chuyển sang tải ngầm. KHÔNG đổi API component ⇒ không trang nào phải sửa theo.
+  const laTaiLanDau = loading && allRows.length === 0;
+  const dangTaiNgam = loading && allRows.length > 0;
+
+  // Vạch tiến trình mảnh — dấu hiệu DUY NHẤT cho biết đang tải lại (thay cho spinner nuốt cả bảng).
+  const VachTai = () => (
+    <div className="h-0.5 w-full animate-pulse bg-primary/60" role="presentation" />
+  );
   const sttBase = (typeof sttStart === 'number' ? sttStart : 0) + (clientPaged ? (safePage - 1) * pageSize : 0);
 
   const showStt = typeof sttStart === 'number';
@@ -87,7 +102,8 @@ export default function DataTable({ columns, rows, loading, rowKey = 'id', empty
   return (
     <div>
       {/* ===== BẢNG (md trở lên) ===== */}
-      <div className="hidden md:block card overflow-hidden">
+      <div className="hidden md:block card overflow-hidden" aria-busy={loading || undefined}>
+        {dangTaiNgam && <VachTai />}
         <div className="overflow-auto max-h-[calc(100vh-13rem)]">
           <table className="w-full text-[11px] lg:text-[12px] 2xl:text-sm">
             <thead>
@@ -101,7 +117,7 @@ export default function DataTable({ columns, rows, loading, rowKey = 'id', empty
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {laTaiLanDau ? (
                 <tr><td colSpan={totalCols} className="px-4 py-12 text-center text-ink-soft">
                   <Spinner size={22} className="mx-auto" />
                 </td></tr>
@@ -116,8 +132,9 @@ export default function DataTable({ columns, rows, loading, rowKey = 'id', empty
       </div>
 
       {/* ===== THẺ (dưới md — mobile/tablet) ===== */}
-      <div className="space-y-2.5 md:hidden">
-        {loading ? (
+      <div className="space-y-2.5 md:hidden" aria-busy={loading || undefined}>
+        {dangTaiNgam && <VachTai />}
+        {laTaiLanDau ? (
           <div className="card p-8 text-center text-ink-soft"><Spinner size={22} className="mx-auto" /></div>
         ) : allRows.length === 0 ? (
           <div className="card p-8 text-center text-ink-soft">{emptyText}</div>

@@ -7,7 +7,7 @@ import DateRangePicker from '../../../components/common/DateRangePicker';
 import KcsBreakdown from '../../../components/common/KcsBreakdown';
 import { Select } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
-import useSocketEvent from '../../../hooks/useSocketEvent';
+import useSocketReload from '../../../hooks/useSocketReload';
 import { getLichSuNghen, getTinhTrangPhanIn } from '../../../services/dashboardService';
 import { fmtNum } from '../../../utils/format';
 import { fmtDur, slaRowClass, SLA_BADGE } from '../../../utils/sla';
@@ -105,8 +105,8 @@ export default function LichSuNghenPage() {
   const [focus, setFocus] = useState(null); // { level, ma } lọc bảng theo cột biểu đồ bấm vào
   const [journeyId, setJourneyId] = useState(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const r = await getLichSuNghen({ from: range.from, to: range.to, level, tram });
       setData(r.data);
@@ -118,7 +118,9 @@ export default function LichSuNghenPage() {
   }, [range.from, range.to, level, tram, show]);
 
   useEffect(() => { load(); }, [load]);
-  useSocketEvent('dashboard:refresh', load);
+  // ⚠ Tải NGẦM khi có sự kiện realtime: `load(true)` bỏ qua `setLoading(true)` (bảng không bị
+  // thay bằng spinner) và KHÔNG xóa dòng đang tích. Nhiều sự kiện trong 400ms gộp thành 1 lần tải.
+  useSocketReload(['dashboard:refresh'], () => load(true));
 
   const kpi = data?.kpi;
   const byTramChart = useMemo(() => (data?.by_tram || []).map((g) => ({ name: g.ten, value: g.tong_vuot_phut, _ma: g.ma })), [data]);

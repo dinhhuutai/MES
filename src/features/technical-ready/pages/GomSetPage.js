@@ -11,7 +11,7 @@ import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
 import { Input, Textarea } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
-import useSocketEvent from '../../../hooks/useSocketEvent';
+import useSocketReload from '../../../hooks/useSocketReload';
 import usePermissions from '../../../hooks/usePermissions';
 import {
   listGomCandidates, listSets, getSet, createSet, removeFromSet, cancelSet, gomHistory, gomDone,
@@ -97,34 +97,35 @@ export default function GomSetPage() {
 
   const stagedIds = useMemo(() => new Set(staged.map((s) => s.dot_vai_id)), [staged]);
 
-  const loadCands = useCallback(async () => {
-    setLoadingCands(true);
+  const loadCands = useCallback(async (silent = false) => {
+    if (!silent) setLoadingCands(true);
     try {
       const res = await listGomCandidates({ search, limit: 200 });
       setCands(res.data.items);
     } catch (e) {
-      show(e.message || 'Lỗi tải', 'error');
+      if (!silent) show(e.message || 'Lỗi tải', 'error');
     } finally {
-      setLoadingCands(false);
+      if (!silent) setLoadingCands(false);
     }
   }, [search, show]);
 
-  const loadSets = useCallback(async () => {
-    setLoadingSets(true);
+  const loadSets = useCallback(async (silent = false) => {
+    if (!silent) setLoadingSets(true);
     try {
       const res = await listSets({});
       setSets(res.data);
     } catch (e) {
-      show(e.message || 'Lỗi tải', 'error');
+      if (!silent) show(e.message || 'Lỗi tải', 'error');
     } finally {
-      setLoadingSets(false);
+      if (!silent) setLoadingSets(false);
     }
   }, [show]);
 
   useEffect(() => { const t = setTimeout(loadCands, 250); return () => clearTimeout(t); }, [loadCands]);
   useEffect(() => { if (view === 'sets') loadSets(); }, [view, loadSets]);
   // Kỹ thuật/QC xác nhận ở máy khác → danh sách gom set phải tươi (tránh dữ liệu cũ).
-  useSocketEvent('ready:confirmed', () => { loadCands(); if (view === 'sets') loadSets(); });
+  // ⚠ Tải NGẦM khi có sự kiện realtime — xem ghi chú ở `hooks/useSocketReload`.
+  useSocketReload(['ready:confirmed'], () => { loadCands(true); if (view === 'sets') loadSets(true); });
 
   const left = useMemo(() => cands.filter((c) => !stagedIds.has(c.dot_vai_id)), [cands, stagedIds]);
   const stageRow = (row) => setStaged((s) => (s.some((x) => x.dot_vai_id === row.dot_vai_id) ? s : [...s, row]));

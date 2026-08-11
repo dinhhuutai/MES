@@ -14,7 +14,7 @@ import React, { useEffect, useRef, useState } from 'react';
 //   nên JS không biết trước chiều cao — chỉ khi cùng một bảng thì header hàng mới luôn khớp dòng.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { noiDungO, cssChuDoc } from '../../production/utils/renderMauTem';
+import { noiDungO, cssChuDoc, caoHangMm } from '../../production/utils/renderMauTem';
 import { RONG_MM, CAO_MM } from '../utils/temLuoi';
 
 // Chuỗi CSS "a:b;c:d" → object cho React style.
@@ -124,6 +124,13 @@ export default function TemGrid({
   for (let i = 0; i < soCot; i += 1) { const w = rongMm(i); if (w) rongCung += w; else nTuDo += 1; }
   const rongTuDo = Math.max(0.5, (RONG_MM - rongCung) / (nTuDo || 1));
   const pxCot = (i) => (rongMm(i) || rongTuDo) * tiLe;
+
+  // ⚠ Chiều cao hàng tính bằng CHÍNH hàm của bản in (`caoHangMm`) — hàng "tự giãn" chia đều phần
+  //   trống còn lại. Trước đây chỉ đặt `height` cho hàng có `cao_mm` rồi để trình duyệt tự chia phần
+  //   còn lại THEO NỘI DUNG ⇒ lưới thiết kế và bản in ra hai kiểu khác nhau (hàng trống bị bóp).
+  //   Truyền `caoMm(i)` để lúc KÉO MÉP vẫn xem trước được tại chỗ.
+  const caoHang = caoHangMm({ hang: hang.map((_, i) => ({ cao_mm: caoMm(i) })) });
+  const pxHang = (i) => caoHang[i] * tiLe;
 
   const trongVung = (r, c) => !!vung && dangSua && r >= vung.r1 && r <= vung.r2 && c >= vung.c1 && c <= vung.c2;
 
@@ -239,7 +246,7 @@ export default function TemGrid({
               const hMm = caoMm(r);
               return (
                 // eslint-disable-next-line react/no-array-index-key
-                <tr key={r} style={hMm ? { height: hMm * tiLe } : undefined}>
+                <tr key={r} style={{ height: pxHang(r) }}>
                   <th
                     className={`${thBase} relative border border-line ${chonCaHang ? 'bg-primary/20 text-primary' : 'bg-surface-muted text-ink-soft'}`}
                     style={{ cursor: 'pointer' }}

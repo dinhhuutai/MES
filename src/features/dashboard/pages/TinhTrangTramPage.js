@@ -6,7 +6,7 @@ import Button from '../../../components/common/Button';
 import Toast from '../../../components/common/Toast';
 import QrScanner from '../../../components/common/QrScanner';
 import useToast from '../../../hooks/useToast';
-import useSocketEvent from '../../../hooks/useSocketEvent';
+import useSocketReload from '../../../hooks/useSocketReload';
 import { fmtNum, fmtDateTime, baseMaTem } from '../../../utils/format';
 import { listTinhTrangPhanIn, getTinhTrangGraph } from '../../../services/dashboardService';
 
@@ -475,19 +475,28 @@ export default function TinhTrangTramPage() {
 
   // Tìm rỗng → 1 phần in ĐANG Ở TRẠM GIAO mới nhất (fallback: mới nhất theo đợt vải);
   // có nhập → tối đa 30 khớp (KHÔNG tải hết vài ngàn phần in).
-  const loadList = useCallback(async () => {
+  // `giuChon`: tải lại NGẦM do socket thì phải GIỮ phần in đang xem. Trước đây luôn `setIdx(0)` nên
+  // cứ có sự kiện là nhảy về phần in đầu tiên — đang xem dở là mất chỗ, và lớp SVG vẽ mũi tên phải đo
+  // lại toàn bộ ⇒ nhìn ra là nháy. Đổi ô tìm kiếm thì vẫn về đầu (đúng ý người dùng).
+  // ⚠ Đọc chỉ số đang xem qua `idxRef` chứ KHÔNG đưa `idx` vào deps — nếu không `loadList` đổi mỗi
+  // lần bấm sang phần in khác ⇒ `useEffect([loadList])` bắn request thừa.
+  const loadList = useCallback(async (giuChon = false) => {
     try {
       const l = await listTinhTrangPhanIn({ search, limit: search.trim() ? 30 : 1 });
-      setList(l.data.items);
-      setIdx(0);
-    } catch (e) { show(e.message || 'Lỗi tải', 'error'); }
+      const items = l.data.items;
+      const dangXem = giuChon ? listRef.current[idxRef.current] : null;
+      const i = dangXem ? items.findIndex((x) => x.id === dangXem.id) : -1;
+      setList(items);
+      setIdx(i >= 0 ? i : 0);
+    } catch (e) { if (!giuChon) show(e.message || 'Lỗi tải', 'error'); }
   }, [search, show]);
 
   useEffect(() => { const t = setTimeout(loadList, 300); return () => clearTimeout(t); }, [loadList]);
-  useSocketEvent('dashboard:refresh', loadList);
-  useSocketEvent('production:updated', loadList);
+  useSocketReload(['dashboard:refresh', 'production:updated'], () => loadList(true), 500);
 
   const current = list[idx];
+  const idxRef = useRef(idx); idxRef.current = idx;
+  const listRef = useRef(list); listRef.current = list;
 
   useEffect(() => {
     if (!current) { setGraph(null); return undefined; }

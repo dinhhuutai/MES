@@ -23,6 +23,16 @@ const dateLabel = (d) => `T${d.getDay() === 0 ? 'CN' : d.getDay() + 1}, ${d.getD
 const fmtDMY = (d) => (d ? `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}` : '—');
 const fmtDMHM = (d) => (d ? `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}` : '—');
 
+// ⚠⚠ ĐẶT Ở MỨC MODULE, KHÔNG lồng trong thân trang: trang này dùng `useNow(1000)` nên re-render MỖI
+// GIÂY; component định nghĩa lồng sẽ là một TYPE MỚI mỗi lần render ⇒ React unmount + mount lại toàn
+// bộ thẻ mỗi giây (chớp nội dung, và nếu bên trong có ô nhập thì mất focus) — bẫy §9 CLAUDE.md.
+const Card = ({ label, children }) => (
+  <div className="rounded-card border border-line bg-surface-muted/50 p-5">
+    <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-soft">{label}</div>
+    {children}
+  </div>
+);
+
 export default function TheoDoiChuyenPage() {
   const { toast, show } = useToast();
   const { can } = usePermissions();
@@ -112,13 +122,6 @@ export default function TheoDoiChuyenPage() {
     catch (e) { show(e.message || 'Thất bại', 'error'); }
     finally { setBusy(false); }
   };
-
-  const Card = ({ label, children }) => (
-    <div className="rounded-card border border-line bg-surface-muted/50 p-5">
-      <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-soft">{label}</div>
-      {children}
-    </div>
-  );
 
   return (
     <div>

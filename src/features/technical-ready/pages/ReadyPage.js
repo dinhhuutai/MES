@@ -14,7 +14,7 @@ import { Field, Select } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import useNow from '../../../hooks/useNow';
-import useSocketEvent from '../../../hooks/useSocketEvent';
+import useSocketReload from '../../../hooks/useSocketReload';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 import TraVeBadge from '../../../components/common/TraVeBadge';
 import {
@@ -129,7 +129,7 @@ export default function ReadyPage() {
       getReadyItemCounts().then((c) => setCounts(c.data)).catch(() => {});
     } catch (e) { /* nền: giữ dữ liệu cũ khi lỗi mạng */ }
   }, [search, page]);
-  useSocketEvent('ready:confirmed', refresh);
+  useSocketReload(['ready:confirmed'], refresh);
 
   // Quét mã không khớp dòng nào → tra tiếp toàn hệ thống để nói RÕ vì sao (đã QC xong / đã release /
   // đã hủy) thay vì chỉ "Không thấy".

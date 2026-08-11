@@ -7,6 +7,8 @@ import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import TemGrid, { tenCot } from './TemGrid';
 import TemToolbar from './TemToolbar';
 import OPanel from './TemOPanel';
+import TemXemTruoc from './TemXemTruoc';
+import { inThuMauTem } from '../../production/utils/printTemLabel';
 import {
   themHangNhieu, xoaHangVung, themCotNhieu, xoaCotVung, chiaLaiLuoi,
   gopVung, tachVung, datO, datONhieu, datVienVung, xoaNoiDungO, xoaDinhDangO, layDinhDang,
@@ -42,8 +44,13 @@ function kepVung(khung, v) {
 
 export default function TemDesignerModal({ open, mau, dm, dataXemTruoc, onLuu, onClose }) {
   const [boCuc, setBoCuc] = useState(null);
+  const [xemTruoc, setXemTruoc] = useState(false);   // false = thiết kế · true = xem bản in thật
+  const [loiInThu, setLoiInThu] = useState(null);
   const [ben, setBen] = useState('trai');
   const [sel, setSel] = useState(null);          // { r1,c1,r2,c2, neo:"r,c" }
+  // Đếm số lần BẤM CHỌN MỚI (không tăng khi kéo rê) — panel phải dựa vào đây để đưa con trỏ vào ô
+  // nhập nội dung. Dùng bộ đếm thay vì `neo` để bấm LẠI đúng ô cũ vẫn lấy được con trỏ.
+  const [lanChon, setLanChon] = useState(0);
   const [tiLe, setTiLe] = useState(8);
   const [luu, setLuu] = useState(false);
   const [dinhDangChep, setDinhDangChep] = useState(null);
@@ -59,7 +66,15 @@ export default function TemDesignerModal({ open, mau, dm, dataXemTruoc, onLuu, o
     const bc = JSON.parse(JSON.stringify(mau.bo_cuc_json || {}));
     setBoCuc(bc); setBanDau(JSON.stringify(bc));
     setBen('trai'); setSel(null); setLichSu([]); setLamLai([]); setDinhDangChep(null);
+    setXemTruoc(false); setLoiInThu(null);
   }, [mau]);
+
+  // Tiền tố công đoạn của mẫu này khi in THẬT — lấy từ nút in đang gắn mẫu (vd tem sản xuất: trái 15,
+  // phải 16). Chưa gắn nút nào thì lấy `15` cho cả 2 khung để vẫn thấy được dạng mã.
+  const tienTo = useMemo(() => {
+    const vt = (dm?.vi_tri_in || []).find((v) => mau && v.mau_tem_id === mau.id);
+    return vt ? vt.tien_to : { trai: '15', phai: '15' };
+  }, [dm, mau]);
 
   const hai = !!(boCuc && boCuc.phai);
   const khung = boCuc ? (ben === 'phai' && hai ? boCuc.phai : boCuc.trai) : null;
@@ -130,6 +145,7 @@ export default function TemDesignerModal({ open, mau, dm, dataXemTruoc, onLuu, o
     if (!k) return;
     const doiKhung = bThat !== (ben === 'phai' && b.phai ? 'phai' : 'trai');
     if (doiKhung) setBen(bThat);
+    if (!opts?.giuNeo) setLanChon((n) => n + 1);   // bấm chọn mới (kéo rê thì `giuNeo` = true)
     const v = moRongVung(k, chuanVung(tu, den));
     setSel((cu) => ({
       ...v,
@@ -144,6 +160,7 @@ export default function TemDesignerModal({ open, mau, dm, dataXemTruoc, onLuu, o
     const k = bThat === 'phai' ? b.phai : b.trai;
     if (!k) return;
     setBen(bThat);
+    setLanChon((n) => n + 1);
     setSel({ r1: 0, c1: 0, r2: k.hang.length - 1, c2: k.so_cot - 1, neo: '0,0' });
   }, []);
 
@@ -249,12 +266,19 @@ export default function TemDesignerModal({ open, mau, dm, dataXemTruoc, onLuu, o
 
   // ── Phím tắt ──────────────────────────────────────────────────────────────
   // Bỏ qua khi đang gõ trong ô nhập để không nuốt thao tác của chính ô đó.
+  // ⚠⚠ NGOẠI LỆ: ô nhập nội dung của panel (`data-o-nhap`) LUÔN giữ con trỏ sau khi bấm chọn ô
+  //   (TemGrid `preventDefault` mousedown nên focus không rời đi). Nếu chặn cứng theo thẻ INPUT thì
+  //   mũi tên / Delete sẽ CHẾT hẳn sau lần bấm ô đầu tiên. Ô đó ĐANG TRỐNG ⇒ coi như không gõ gì,
+  //   trả phím về cho lưới (đúng kiểu Excel: chọn ô, gõ chữ là nhập, bấm mũi tên là đi ô).
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (e) => {
+      if (xemTruoc) return;                 // chế độ xem trước: không sửa gì, phím tắt vô nghĩa
       const t = e.target || {};
       const tag = (t.tagName || '').toUpperCase();
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t.isContentEditable) return;
+      const oNhapTrong = tag === 'INPUT' && t.dataset && t.dataset.oNhap === '1' && !t.value;
+      if (!oNhapTrong
+        && (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || t.isContentEditable)) return;
       const k = (e.key || '').toLowerCase();
       if (e.ctrlKey || e.metaKey) {
         if (k === 'z' && !e.shiftKey) { e.preventDefault(); hoanTac(); }
@@ -281,7 +305,12 @@ export default function TemDesignerModal({ open, mau, dm, dataXemTruoc, onLuu, o
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [open, hoanTac, lamLaiFn, chonHet, doXoaNoiDung, chonVung, ben, khung, sel, neo]);
+  }, [open, xemTruoc, hoanTac, lamLaiFn, chonHet, doXoaNoiDung, chonVung, ben, khung, sel, neo]);
+
+  const doInThu = async () => {
+    try { setLoiInThu(null); await inThuMauTem(boCuc, dataXemTruoc, tienTo); }
+    catch (e) { setLoiInThu(e.message || 'Không mở được cửa sổ in'); }
+  };
 
   const chuaLuu = !!boCuc && JSON.stringify(boCuc) !== banDau;
 
@@ -322,13 +351,28 @@ export default function TemDesignerModal({ open, mau, dm, dataXemTruoc, onLuu, o
                 </p>
               </div>
 
-              <label className="ml-2 flex items-center gap-2 text-xs text-ink">
-                <input type="checkbox" checked={hai} onChange={doiCheDoHaiKhung} />
-                2 khung KHÁC nhau
-              </label>
-              <Button variant="ghost" icon="copy" disabled={!hai} onClick={() => chepKhung(ben)}>
-                Chép {ben === 'trai' ? 'trái → phải' : 'phải → trái'}
-              </Button>
+              {/* CHUYỂN CHẾ ĐỘ — Thiết kế ↔ Xem trước bản in */}
+              <div className="ml-2 flex overflow-hidden rounded-control border border-line">
+                {[['Thiết kế', false, 'layout'], ['Xem trước', true, 'eye']].map(([ten, gt, ic]) => (
+                  <button key={ten} type="button" onClick={() => setXemTruoc(gt)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium ${
+                      xemTruoc === gt ? 'bg-primary text-white' : 'bg-surface text-ink-soft hover:text-ink'}`}>
+                    <Icon name={ic} size={13} />{ten}
+                  </button>
+                ))}
+              </div>
+
+              {!xemTruoc && (
+                <>
+                  <label className="flex items-center gap-2 text-xs text-ink">
+                    <input type="checkbox" checked={hai} onChange={doiCheDoHaiKhung} />
+                    2 khung KHÁC nhau
+                  </label>
+                  <Button variant="ghost" icon="copy" disabled={!hai} onClick={() => chepKhung(ben)}>
+                    Chép {ben === 'trai' ? 'trái → phải' : 'phải → trái'}
+                  </Button>
+                </>
+              )}
 
               <div className="ml-auto flex items-center gap-2">
                 <Button onClick={doLuu} loading={luu} icon="save" disabled={!chuaLuu}>Lưu mẫu</Button>
@@ -336,8 +380,8 @@ export default function TemDesignerModal({ open, mau, dm, dataXemTruoc, onLuu, o
               </div>
             </div>
 
-            {/* ── THANH CÔNG CỤ (dính đỉnh) ──────────────────────────────── */}
-            <div className="shrink-0">
+            {/* ── THANH CÔNG CỤ (dính đỉnh) — chế độ xem trước không có gì để định dạng ─── */}
+            <div className={`shrink-0 ${xemTruoc ? 'hidden' : ''}`}>
               <TemToolbar
                 dm={dm} khung={khung} vung={vung} khoas={khoas} oNeo={oNeo} deu={deu}
                 onDinhDang={apDinhDang} onVien={apVien} onGop={doGop} onTach={doTach}
@@ -356,6 +400,39 @@ export default function TemDesignerModal({ open, mau, dm, dataXemTruoc, onLuu, o
             </div>
 
             {/* ── THÂN: canvas + panel ───────────────────────────────────── */}
+            {xemTruoc ? (
+              <div className="min-h-0 flex-1 overflow-auto bg-surface-muted p-5">
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-ink-soft">
+                    Tờ in {dm.kho_tem.to_rong_mm}×{dm.kho_tem.to_cao_mm}mm — đúng những gì máy in nhận
+                    (kể cả cỡ chữ đã tự co và mã QR/mã vạch thật). Vạch xanh nét đứt là mép cắt giữa 2 nhãn.
+                  </span>
+                  <div className="ml-auto flex items-center gap-1">
+                    <button type="button" title="Thu nhỏ" disabled={tiLe <= ZOOM_MIN}
+                      className="rounded-control border border-line p-1.5 text-ink-soft hover:text-ink disabled:opacity-30"
+                      onClick={() => setTiLe((z) => Math.max(ZOOM_MIN, z - 1))}><Icon name="zoom-out" size={14} /></button>
+                    <span className="w-12 text-center text-xs text-ink-soft">{Math.round((tiLe / (96 / 25.4)) * 100)}%</span>
+                    <button type="button" title="Phóng to" disabled={tiLe >= ZOOM_MAX}
+                      className="rounded-control border border-line p-1.5 text-ink-soft hover:text-ink disabled:opacity-30"
+                      onClick={() => setTiLe((z) => Math.min(ZOOM_MAX, z + 1))}><Icon name="zoom-in" size={14} /></button>
+                    <Button variant="secondary" icon="printer" onClick={doInThu} className="ml-1 px-3 py-1.5">In thử</Button>
+                  </div>
+                </div>
+                {loiInThu && (
+                  <div className="mb-3 rounded-control border border-danger/40 bg-danger/5 px-3 py-2 text-xs text-danger">
+                    {loiInThu}
+                  </div>
+                )}
+                <TemXemTruoc boCuc={boCuc} data={dataXemTruoc} tiLe={tiLe} tienTo={tienTo} />
+                <p className="mt-3 max-w-3xl text-[11px] leading-relaxed text-ink-soft">
+                  Dữ liệu ở đây là <b>số liệu mẫu</b> để canh bố cục — lúc in thật sẽ thay bằng dữ liệu của tem.
+                  Mã tem xem trước dùng tiền tố <b>{tienTo.trai}</b>
+                  {tienTo.phai !== tienTo.trai ? <> / <b>{tienTo.phai}</b></> : null}
+                  {' '}theo nút in đang gắn mẫu này. Nút <b>In thử</b> mở đúng cửa sổ in thật (dữ liệu mẫu,
+                  <b> không tiêu mã tem</b> nào của ERP).
+                </p>
+              </div>
+            ) : (
             <div className="flex min-h-0 flex-1">
               <div className="flex-1 overflow-auto bg-surface-muted p-5">
                 <div className="flex items-start gap-4">
@@ -378,7 +455,8 @@ export default function TemDesignerModal({ open, mau, dm, dataXemTruoc, onLuu, o
                   })}
                 </div>
                 <p className="mt-3 max-w-3xl text-[11px] leading-relaxed text-ink-soft">
-                  Kéo chuột để chọn nhiều ô · Shift+bấm để nới vùng · bấm chữ <b>A/B/C…</b> hay số <b>1/2/3…</b> để chọn cả cột/hàng ·
+                  Bấm 1 ô là <b>gõ nội dung được ngay</b> (con trỏ tự vào ô nhập bên phải, Enter để thêm) ·
+                  kéo chuột để chọn nhiều ô · Shift+bấm để nới vùng · bấm chữ <b>A/B/C…</b> hay số <b>1/2/3…</b> để chọn cả cột/hàng ·
                   kéo mép header để đổi bề rộng cột / chiều cao hàng · phím mũi tên để đi ô, <b>Delete</b> xóa nội dung,
                   <b> Ctrl+Z</b> hoàn tác.
                 </p>
@@ -387,7 +465,8 @@ export default function TemDesignerModal({ open, mau, dm, dataXemTruoc, onLuu, o
               <aside className="w-[21rem] shrink-0 overflow-y-auto border-l border-line p-3">
                 {neo ? (
                   <OPanel
-                    khoa={neo} o={oNeo} dm={dm} vung={vung} soO={khoas.length}
+                    khoa={neo} o={oNeo} dm={dm} vung={vung} soO={khoas.length} tinHieuChon={lanChon}
+                    data={dataXemTruoc}
                     hang={khung.hang[tachKhoa(neo)[0]]}
                     cot={(khung.cot || [])[tachKhoa(neo)[1]]}
                     onDoiO={(v) => datKhung(datO(khung, neo, v))}
@@ -401,13 +480,16 @@ export default function TemDesignerModal({ open, mau, dm, dataXemTruoc, onLuu, o
                 )}
               </aside>
             </div>
+            )}
 
             {/* ── THANH TRẠNG THÁI ───────────────────────────────────────── */}
             <div className="flex shrink-0 flex-wrap items-center gap-3 border-t border-line px-4 py-1.5 text-[11px] text-ink-soft">
               <span>
-                {vung
-                  ? `Đang chọn ${tenCot(vung.c1)}${vung.r1 + 1}${khoas.length > 1 ? `:${tenCot(vung.c2)}${vung.r2 + 1} (${khoas.length} ô)` : ''}`
-                  : 'Chưa chọn ô nào'}
+                {xemTruoc
+                  ? `Xem trước bản in — ${hai ? '2 nhãn khác nhau' : '2 nhãn giống nhau'}`
+                  : (vung
+                    ? `Đang chọn ${tenCot(vung.c1)}${vung.r1 + 1}${khoas.length > 1 ? `:${tenCot(vung.c2)}${vung.r2 + 1} (${khoas.length} ô)` : ''}`
+                    : 'Chưa chọn ô nào')}
               </span>
               <span>·</span>
               <span>Lưới {khung.hang.length}/{SO_HANG_MAX} hàng × {khung.so_cot}/{SO_COT_MAX} cột</span>
