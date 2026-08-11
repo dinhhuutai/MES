@@ -54,6 +54,7 @@ import LoaiLoiPage from './features/quality/pages/LoaiLoiPage';
 import PhanLoaiLoiPage from './features/production/pages/PhanLoaiLoiPage';
 import BienPhapXuLyPage from './features/production/pages/BienPhapXuLyPage';
 import LyDoNgungChuyenPage from './features/production/pages/LyDoNgungChuyenPage';
+import LyDoBoSungPage from './features/production/pages/LyDoBoSungPage';
 import GiaoDacBietPage from './features/quality/pages/GiaoDacBietPage';
 import QcTraVePage from './features/quality/pages/QcTraVePage';
 import GiaoHangPage from './features/delivery/pages/GiaoHangPage';
@@ -89,6 +90,7 @@ const PAGES = {
   '/san-xuat/danh-muc-loi': <LoaiLoiPage />,
   '/san-xuat/bien-phap': <BienPhapXuLyPage />,
   '/san-xuat/ly-do-ngung': <LyDoNgungChuyenPage />,
+  '/san-xuat/ly-do-bo-sung': <LyDoBoSungPage />,
   '/chat-luong/ready-qc': <ReadyQcPage />,
   '/chat-luong/qc-in-line': <QcInlinePage />,
   '/chat-luong/oqc': <OqcPage />,

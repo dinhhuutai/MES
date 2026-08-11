@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Button from '../../../components/common/Button';
 import Icon from '../../../components/common/Icon';
 import { Field, Input, Select, inputClass } from '../../../components/common/controls';
-import { hienChuMa, giaTriMa } from '../../production/utils/renderMauTem';
+import { hienChuMa, giaTriMa, HE_MA_VACH, heMaCuaO } from '../../production/utils/renderMauTem';
 import { tenCot } from './TemGrid';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -208,6 +208,16 @@ export default function TemOPanel({
               ? 'Mã vạch mặc định chỉ in vạch (không in số) — vạch chiếm trọn chiều cao ô.'
               : 'QR mặc định in kèm dãy mã để đối chiếu bằng mắt.'}
           </p>
+
+          {/* HỆ MÃ VẠCH — cùng dãy số nhưng mỗi hệ vẽ ra hình vạch khác hẳn, nên tem MES có thể trông
+              không giống tem cũ. Chỉ liệt kê hệ mà máy quét của chính MES đọc được (xem HE_MA_VACH). */}
+          {o?.kieu === 'barcode' && (
+            <Field label="Hệ mã vạch" hint={HE_MA_VACH.find((h) => h.ma === heMaCuaO(o))?.mo_ta}>
+              <Select value={heMaCuaO(o)} onChange={(e) => onDoiO({ he_ma: e.target.value })}>
+                {HE_MA_VACH.map((h) => <option key={h.ma} value={h.ma}>{h.ten}</option>)}
+              </Select>
+            </Field>
+          )}
 
           {/* LUẬT ĐỔI CÁCH HIỂN THỊ cho ô mã — cùng bảng luật với mảnh trường của ô chữ.
               ⚠ Khác một điểm CỐT TỬ: ở đây luật đổi LUÔN nội dung được MÃ HÓA vào QR/vạch, nên phải

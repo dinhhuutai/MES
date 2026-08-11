@@ -6,6 +6,11 @@ import { chuanTim as norm } from '../../utils/timKiem';
 // Select có ô tìm kiếm (combobox) — dùng khi danh sách dài (vd chọn người trong hàng trăm user).
 // Dropdown portal (anchor) để không bị cắt trong Modal/SidePanel.
 // getSearch: chuỗi để KHỚP tìm kiếm (mặc định = getLabel). Truyền để tìm theo cả tên + username...
+//
+// `moNgay`: BẤM VÀO Ô LÀ BUNG SẴN CẢ DANH SÁCH, không cần gõ chữ nào (prop `immediate` của Headless UI
+//   — mặc định combobox chỉ mở khi bắt đầu gõ). Bật cho danh mục vừa phải mà người dùng hay muốn
+//   "xem có những gì" (vd Lý do ngừng chuyền); danh sách RẤT dài (hàng trăm user) thì để mặc định
+//   tắt cho khỏi đổ một đống ngay khi chạm ô, nhất là trên điện thoại.
 export default function SearchableSelect({
   value,
   onChange,
@@ -15,6 +20,7 @@ export default function SearchableSelect({
   getSearch,
   placeholder = 'Tìm kiếm...',
   emptyLabel = '— Không —',
+  moNgay = false,
 }) {
   const [query, setQuery] = useState('');
   const q = norm(query);
@@ -23,7 +29,8 @@ export default function SearchableSelect({
   const selected = options.find((o) => getValue(o) === value) || null;
 
   return (
-    <Combobox value={value || ''} onChange={(v) => onChange(v || '')} onClose={() => setQuery('')}>
+    <Combobox value={value || ''} onChange={(v) => onChange(v || '')} onClose={() => setQuery('')}
+      immediate={moNgay}>
       <div className="relative">
         <ComboboxInput
           className={`${inputClass} bg-surface`}

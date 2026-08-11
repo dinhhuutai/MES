@@ -27,6 +27,13 @@ export const listLyDoNgung = (params) => client.get('/production/ly-do-ngung', {
 export const createLyDoNgung = (body) => client.post('/production/ly-do-ngung', body);
 export const updateLyDoNgung = (id, body) => client.patch(`/production/ly-do-ngung/${id}`, body);
 export const toggleLyDoNgung = (id, active) => client.patch(`/production/ly-do-ngung/${id}/active`, { active });
+
+// Danh mục LÝ DO BỔ SUNG (mig 077) + ghi lý do cho 1 đợt vải
+export const listLyDoBoSung = (params) => client.get('/production/ly-do-bo-sung', { params });
+export const createLyDoBoSung = (body) => client.post('/production/ly-do-bo-sung', body);
+export const updateLyDoBoSung = (id, body) => client.patch(`/production/ly-do-bo-sung/${id}`, body);
+export const toggleLyDoBoSung = (id, active) => client.patch(`/production/ly-do-bo-sung/${id}/active`, { active });
+export const luuLyDoBoSungDotVai = (dotVaiId, body) => client.post(`/production/dot-vai/${dotVaiId}/ly-do-bo-sung`, body);
 // Ghi vải hủy (= vải hư) / vải THIẾU trong sản xuất — body.loai: 'HUY' | 'THIEU' (theo đợt vải/phần in)
 export const addVaiHuy = (phieuId, body) => client.post(`/production/phieu/${phieuId}/vai-huy`, body);
 // Phân công sản xuất: { caTruongId, chuyenTruong, items: [{ dotVaiId, thoIn, soLuongHuy, soLuongThieu }] }

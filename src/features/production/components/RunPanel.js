@@ -10,7 +10,7 @@ import TimeSelect from '../../../components/common/TimeSelect';
 import { Field, Input, Textarea, Select } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import { getRun, printTem, printTemBatch, reprintTem, getTemLabel, getTemLogs, finishRun, stopLine, resumeLine, addVaiHuy, savePhanCong, pauseLenhChay, listProductionCandidates, startProduction, vuotSanXuat, doiChuyen, listChuyen, listLyDoNgung } from '../../../services/productionService';
+import { getRun, printTem, printTemBatch, reprintTem, getTemLabel, getTemLogs, finishRun, stopLine, resumeLine, addVaiHuy, savePhanCong, pauseLenhChay, listProductionCandidates, startProduction, vuotSanXuat, doiChuyen, listChuyen, listLyDoNgung, listLyDoBoSung, luuLyDoBoSungDotVai } from '../../../services/productionService';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import { listUserOptions } from '../../../services/userService';
 import printTemLabel from '../utils/printTemLabel';
@@ -103,6 +103,73 @@ function TemMetaFields({ meta, setMeta, goiY, anGcMauVai = false }) {
             onChange={(e) => set('btpCuoi', e.target.checked)} /> BTP cuối
         </label>
       </div>
+    </div>
+  );
+}
+
+// ─── LÝ DO BỔ SUNG cho 1 ĐỢT VẢI (inline, mig 077) ────────────────────────────
+// Chỉ hiện với đợt vải loại BỔ SUNG. Đã ghi → hiện thẳng lý do + nút Sửa; chưa ghi → ô chọn + Lưu.
+// ⚠ Đặt ở MỨC MODULE (không lồng trong RunPanel) — component lồng bị remount mỗi lần cha render ⇒
+//   ô nhập mất focus khi đang gõ (cùng luật với `PhanCongInline`/`TemMetaFields`).
+function LyDoBoSungInline({ dot, ds, canRun, onSave }) {
+  const daGhi = !!(dot.ly_do_bo_sung_id || dot.ghi_chu_bo_sung);
+  const [sua, setSua] = useState(false);
+  const [form, setForm] = useState({ lyDoId: '', ghiChu: '' });
+  const [dangLuu, setDangLuu] = useState(false);
+
+  useEffect(() => {
+    setForm({ lyDoId: dot.ly_do_bo_sung_id || '', ghiChu: dot.ghi_chu_bo_sung || '' });
+  }, [dot.ly_do_bo_sung_id, dot.ghi_chu_bo_sung, sua]);
+
+  const dangSua = canRun && (!daGhi || sua);
+  const luu = async () => {
+    setDangLuu(true);
+    const ok = await onSave(dot.dot_vai_ve_id, form);
+    setDangLuu(false);
+    if (ok) setSua(false);   // lỗi thì GIỮ ô nhập, không mất thứ đang gõ
+  };
+
+  return (
+    <div className="rounded-control border border-amber-300/60 bg-amber-50/40 px-3 py-2.5 dark:bg-amber-950/10">
+      <div className="mb-1.5 text-xs">
+        <b className="text-ink">{dot.ma_dot_vai}</b>
+        <span className="text-ink-soft"> · {dot.ma_phan} · {dot.mau_vai}</span>
+        <Badge tone="warning" className="ml-1.5">{dot.ten_loai_dot_vai || 'Bổ sung'}</Badge>
+      </div>
+      {dangSua ? (
+        <div className="space-y-2">
+          {ds.length > 0 && (
+            <SearchableSelect
+              moNgay
+              value={form.lyDoId}
+              onChange={(v) => setForm((f) => ({ ...f, lyDoId: v }))}
+              options={ds}
+              getValue={(l) => l.id}
+              getLabel={(l) => l.ten_ly_do || ''}
+              getSearch={(l) => `${l.ten_ly_do || ''} ${l.ma_ly_do || ''}`}
+              placeholder="Bấm để xem danh sách, hoặc gõ để tìm..."
+              emptyLabel="— Chọn lý do bổ sung —"
+            />
+          )}
+          <Textarea rows={2} value={form.ghiChu}
+            onChange={(e) => setForm((f) => ({ ...f, ghiChu: e.target.value }))}
+            placeholder={ds.length ? 'Ghi chú thêm (tùy chọn)' : 'Lý do bổ sung (vd: in hư, vải thiếu...)'} />
+          <div className="flex gap-2">
+            <Button className="flex-1" onClick={luu} loading={dangLuu}
+              disabled={!form.lyDoId && !form.ghiChu.trim()}>Lưu lý do</Button>
+            {daGhi && <Button variant="ghost" onClick={() => setSua(false)}>Hủy</Button>}
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1 text-sm">
+            <div className="text-ink">{dot.ten_ly_do_bo_sung || '—'}</div>
+            {dot.ghi_chu_bo_sung && <div className="text-xs text-ink-soft">{dot.ghi_chu_bo_sung}</div>}
+          </div>
+          {canRun && <Button variant="ghost" icon="pencil" className="px-2.5 py-1 text-xs"
+            onClick={() => setSua(true)}>Sửa</Button>}
+        </div>
+      )}
     </div>
   );
 }
@@ -314,6 +381,7 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
   const [stopReason, setStopReason] = useState('');   // ghi chú thêm (tùy chọn)
   const [stopLyDoId, setStopLyDoId] = useState('');   // lý do chọn từ danh mục (mig 076)
   const [lyDoNgungDs, setLyDoNgungDs] = useState([]);
+  const [lyDoBoSungDs, setLyDoBoSungDs] = useState([]);   // danh mục lý do bổ sung (mig 077)
   // Giờ ngừng / hoạt động lại NHẬP TAY ('HH:MM', bỏ trống = giờ hệ thống). Luồng vẫn 2 bước như cũ.
   const [stopGioBd, setStopGioBd] = useState('');
   const [stopGioKt, setStopGioKt] = useState('');
@@ -346,6 +414,8 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
   const ngungActive = data?.ngung_active || null;
   const ngungList = data?.ngung_list || [];
   const dotVaiList = data?.dot_vai || [];
+  // Đợt vải loại BỔ SUNG (ERP `loaikd = 5I`) — nhận diện bằng MÃ danh mục, không so tên hiển thị.
+  const dotVaiBoSung = dotVaiList.filter((d) => d.ma_loai_dot_vai === 'BO_SUNG');
   const vaiHuyList = data?.vai_huy || [];
   const goiYTem = data?.goi_y_tem || null;
   // GOM SET = lệnh có NHIỀU PHẦN IN in chung 1 chuyền ⇒ in tem & ghi vải hủy/thiếu làm theo BẢNG
@@ -380,12 +450,15 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
       .then((r) => setUsers(r.data || []))
       .catch(() => { /* không chặn màn sản xuất; ô ca trưởng sẽ rỗng */ });
   }, []);
-  // Danh mục lý do ngừng chuyền (mig 076). Lỗi/chưa chạy migration → mảng rỗng → ô chọn ẩn đi,
-  // người đứng máy vẫn gõ tay lý do được như trước.
+  // Danh mục lý do ngừng chuyền (mig 076) + lý do bổ sung (mig 077). Lỗi/chưa chạy migration → mảng
+  // rỗng → ô chọn ẩn đi, người đứng máy vẫn gõ tay lý do được như trước.
   useEffect(() => {
     listLyDoNgung()
       .then((r) => setLyDoNgungDs(r.data || []))
       .catch(() => setLyDoNgungDs([]));
+    listLyDoBoSung()
+      .then((r) => setLyDoBoSungDs(r.data || []))
+      .catch(() => setLyDoBoSungDs([]));
   }, []);
 
   // Lấy dữ liệu nhãn tem rồi mở cửa sổ in (barcode Code128 = mã tem).
@@ -567,6 +640,19 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
   };
 
   // Ghi vải hủy (= vải hư) / vải THIẾU theo phần in. Lệnh chỉ 1 phần in → tự chọn; nhiều phần in → phải chọn.
+  // Ghi lý do bổ sung cho 1 đợt vải. Trả true/false để khối inline biết có thoát chế độ sửa không.
+  const doSaveLyDoBoSung = async (dotVaiId, form) => {
+    try {
+      await luuLyDoBoSungDotVai(dotVaiId, form);
+      show('Đã lưu lý do bổ sung');
+      await load();
+      return true;
+    } catch (e) {
+      show(e.message || 'Lưu lý do bổ sung thất bại', 'error');
+      return false;
+    }
+  };
+
   // `loai` truyền TƯỜNG MINH từ nút bấm của đúng khối — không suy từ state dùng chung nữa.
   const doVaiHuy = async (loai) => {
     const thieu = loai === 'THIEU';
@@ -731,6 +817,24 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
                   {overMax ? ' — vượt giới hạn!' : ''}
                 </p>
               )}
+            </section>
+          )}
+
+          {/* LÝ DO BỔ SUNG — CHỈ hiện khi lệnh có đợt vải loại BỔ SUNG (mig 077). Đặt NGAY TRÊN Phân công.
+              ⚠ Ghi ở mức ĐỢT VẢI (mỗi đợt bổ sung 1 lý do riêng), không phải mức phiếu — lý do đi theo
+                đợt vải qua mọi lệnh sản xuất về sau.
+              ⚠ Nhận diện bằng `ma_loai_dot_vai === 'BO_SUNG'` (mã danh mục), KHÔNG so tên hiển thị. */}
+          {dotVaiBoSung.length > 0 && (
+            <section className="border-t border-line pt-4">
+              <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-soft">
+                Lý do bổ sung <span className="ml-1 font-normal normal-case">({dotVaiBoSung.length} đợt vải)</span>
+              </h3>
+              <div className="space-y-2">
+                {dotVaiBoSung.map((d) => (
+                  <LyDoBoSungInline key={d.dot_vai_ve_id} dot={d} ds={lyDoBoSungDs}
+                    canRun={canRun} onSave={doSaveLyDoBoSung} />
+                ))}
+              </div>
             </section>
           )}
 
@@ -902,15 +1006,18 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
                     <label className="block">
                       <span className="mb-1 block text-xs font-medium text-ink-soft">Lý do ngừng</span>
                       {/* Ô tìm kiếm giống hệt ô "Ca trưởng" (`SearchableSelect`) — gõ vài chữ là ra,
-                          tìm KHÔNG DẤU. Danh mục lý do sẽ dài dần nên đừng đổi về `<Select>` trơn. */}
+                          tìm KHÔNG DẤU. Danh mục lý do sẽ dài dần nên đừng đổi về `<Select>` trơn.
+                          `moNgay`: BẤM VÀO Ô LÀ BUNG SẴN CẢ DANH SÁCH (người đứng máy thường muốn xem
+                          có những lý do gì rồi mới chọn, chứ không nhớ sẵn để gõ). */}
                       <SearchableSelect
+                        moNgay
                         value={stopLyDoId}
                         onChange={setStopLyDoId}
                         options={lyDoNgungDs}
                         getValue={(l) => l.id}
                         getLabel={(l) => l.ten_ly_do || ''}
                         getSearch={(l) => `${l.ten_ly_do || ''} ${l.ma_ly_do || ''}`}
-                        placeholder="Gõ để tìm lý do (vd: het muc, doi khuon)..."
+                        placeholder="Bấm để xem danh sách, hoặc gõ để tìm..."
                         emptyLabel="— Chọn lý do —"
                       />
                     </label>

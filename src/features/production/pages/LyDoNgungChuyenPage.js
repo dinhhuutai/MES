@@ -52,17 +52,24 @@ export default function LyDoNgungChuyenPage() {
     catch (e) { show(e.message || 'Cập nhật thất bại', 'error'); }
   };
 
+  // ⚠⚠ `DataTable` đọc **`c.key`** để lấy giá trị ô (`row[c.key]`) — KHÔNG có `col`, cũng KHÔNG có
+  //   `center`. Khai `col:` thì cột hiện RỖNG mà không báo lỗi gì (đã mắc thật ở trang này +
+  //   `BienPhapXuLyPage` + 4 cột của `PhanLoaiLoiPage`). Căn giữa thì dùng `className`/`headerClassName`.
+  //   Mọi cột PHẢI có `key` — nó cũng là React key của `<th>/<td>`.
   const columns = [
-    { header: 'Mã', render: (r) => <span className="font-mono text-xs">{r.ma_ly_do}</span> },
-    { header: 'Lý do ngừng chuyền', col: 'ten_ly_do' },
-    { header: 'Mô tả', render: (r) => <span className="text-xs text-ink-soft">{r.mo_ta || '—'}</span> },
+    { key: 'ma_ly_do', header: 'Mã', render: (r) => <span className="font-mono text-xs">{r.ma_ly_do}</span> },
+    { key: 'ten_ly_do', header: 'Lý do ngừng chuyền', className: 'font-medium text-ink' },
+    { key: 'mo_ta', header: 'Mô tả', render: (r) => <span className="text-xs text-ink-soft">{r.mo_ta || '—'}</span> },
     {
+      key: 'dang_hoat_dong',
       header: 'Trạng thái',
+      className: 'text-center',
+      headerClassName: 'text-center',
       render: (r) => (r.dang_hoat_dong
         ? <Badge tone="success">Đang dùng</Badge> : <Badge tone="default">Ngừng dùng</Badge>),
-      center: true,
     },
     {
+      key: 'actions',
       header: '',
       render: (r) => (
         <div className="flex justify-end gap-1.5">

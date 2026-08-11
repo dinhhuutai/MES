@@ -101,21 +101,21 @@ export default function PhanLoaiLoiPage() {
       render: (r) => (<><div className="text-ink">{r.ten_khach_hang || '—'}</div>
         <div className="text-xs text-ink-soft">{r.ma_don_hang || '—'}</div></>),
     },
-    { header: 'Mã hàng', col: 'ma_hang' },
-    { header: 'Code phần', col: 'ma_phan' },
+    { header: 'Mã hàng', key: 'ma_hang' },
+    { header: 'Code phần', key: 'ma_phan' },
     {
       header: 'Màu · Kích',
       render: (r) => (<><div className="text-ink">{r.mau_vai || '—'}</div>
         <div className="text-xs text-ink-soft">{r.kich_vai || '—'} / {r.kich_phim || '—'}</div></>),
     },
-    { header: 'Chuyền', col: 'ten_chuyen' },
+    { header: 'Chuyền', key: 'ten_chuyen' },
     { header: 'Mã tem', render: (r) => <span className="font-mono text-xs">{r.ma_tem}</span> },
     { header: 'SL in', render: (r) => Number(r.so_luong || 0).toLocaleString('vi-VN'), center: true },
     { header: 'Đạt', render: (r) => <span className="text-emerald-600">{Number(r.sl_kcs_dat || 0)}</span>, center: true },
     { header: 'Sửa', render: (r) => <span className="text-amber-600">{Number(r.sl_kcs_sua || 0)}</span>, center: true },
     { header: 'Hủy', render: (r) => <span className="text-danger">{Number(r.sl_kcs_huy || 0)}</span>, center: true },
     { header: 'Lỗi đã phân loại', render: (r) => <span className="text-xs text-ink-soft">{r.cac_loi || '—'}</span> },
-    { header: 'Người nhập', col: 'nguoi' },
+    { header: 'Người nhập', key: 'nguoi' },
   ];
 
   return (

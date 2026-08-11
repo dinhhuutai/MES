@@ -200,6 +200,23 @@ export function caoHangMm(khung) {
   return hang.map((h) => (Number(h && h.cao_mm) > 0 ? Number(h.cao_mm) : moi));
 }
 
+// ─── HỆ MÃ VẠCH (symbology) ───────────────────────────────────────────────────
+// Có NHIỀU hệ mã vạch khác nhau, cùng một dãy số nhưng vẽ ra hình vạch KHÁC HẲN nhau ⇒ tem MES in
+// CODE128 trông không giống tem cũ do hệ khác in ra. Nay chọn được từng ô (`o.he_ma`).
+// ⚠⚠ CHỈ liệt kê những hệ mà **máy quét camera của chính MES đọc được** (`cameraDecoder.js`
+//   POSSIBLE_FORMATS: CODE_128 · CODE_39 · ITF · EAN_13 · EAN_8 · UPC_A · UPC_E). Thêm hệ ngoài
+//   danh sách đó (CODABAR, MSI, pharmacode…) là in ra rồi KCS/Sửa/OQC quét không ra tem.
+//   ⚠ CODABAR đã bị GỠ khỏi máy quét vì đọc ra mã RÁC từ đường kẻ bảng của phiếu — đừng đưa lại.
+export const HE_MA_VACH = [
+  { ma: 'CODE128', ten: 'Code 128 (mặc định)', mo_ta: 'Gọn nhất, nhận mọi ký tự — dùng cho mã tem 12 số' },
+  { ma: 'CODE128B', ten: 'Code 128-B', mo_ta: 'Ép bảng mã B (chữ + số), vạch dài hơn Code 128 tự chọn' },
+  { ma: 'CODE39', ten: 'Code 39', mo_ta: 'Vạch to, dài — kiểu mã vạch đời cũ, dễ đọc bằng đầu đọc rẻ' },
+  { ma: 'ITF', ten: 'ITF (Interleaved 2 of 5)', mo_ta: 'CHỈ chữ số và phải CHẴN chữ số — rất gọn' },
+  { ma: 'EAN13', ten: 'EAN-13', mo_ta: 'Đúng 12–13 chữ số, có vạch mốc 2 đầu như mã hàng siêu thị' },
+];
+const HE_MA_HOP_LE = new Set(HE_MA_VACH.map((h) => h.ma));
+export const heMaCuaO = (o) => (o && HE_MA_HOP_LE.has(o.he_ma) ? o.he_ma : 'CODE128');
+
 // CÓ hiện dãy chữ mã bên dưới hình không?
 // ⚠ MÃ VẠCH: MẶC ĐỊNH **KHÔNG** hiện số (chốt 2026-08-11) — bản thân vạch đã mang đủ dữ liệu, in kèm
 //   dãy số chỉ tốn chỗ trên tem 55×80mm; muốn có thì tick lại ở panel (`hien_ma: true` tường minh).
@@ -324,7 +341,7 @@ export function dsOMa(khung, data) {
   const o = (khung && khung.o) || {};
   for (const [khoa, cell] of Object.entries(o)) {
     if (cell.kieu === 'qr' || cell.kieu === 'barcode') {
-      out.push({ khoa, kieu: cell.kieu, gia_tri: giaTriMa(cell, data) });
+      out.push({ khoa, kieu: cell.kieu, gia_tri: giaTriMa(cell, data), he_ma: heMaCuaO(cell) });
     }
   }
   return out;
@@ -360,10 +377,18 @@ export async function dungAnhMa(khung, data) {
         // ⚠⚠ PHẢI truyền `margin: 0` — JsBarcode `fixOptions` chạy `marginTop = marginTop || margin`,
         //   mà **`0` là falsy** ⇒ khai `marginTop: 0` KHÔNG có tác dụng, nó lấy `margin` mặc định = 10px
         //   (im lặng, không báo gì). Đặt `margin: 0` làm nền rồi mới đè trái/phải mới ra đúng ý.
-        JsBarcode(cv, it.gia_tri, {
-          format: 'CODE128', displayValue: false, width: 4, height: 100,
+        const opt = {
+          displayValue: false, width: 4, height: 100,
           margin: 0, marginLeft: 40, marginRight: 40,
-        });
+        };
+        // ⚠ Hệ mã có RÀNG BUỘC dữ liệu (ITF đòi chẵn chữ số, EAN13 đòi 12–13 số…). JsBarcode NÉM LỖI
+        //   khi dữ liệu không hợp ⇒ LÙI VỀ CODE128 để tem vẫn có mã quét được, thay vì mất trắng ô mã.
+        try {
+          JsBarcode(cv, it.gia_tri, { ...opt, format: it.he_ma || 'CODE128' });
+        } catch (e) {
+          console.warn(`[tem] Mã "${it.gia_tri}" không hợp hệ ${it.he_ma}, lùi về CODE128:`, e.message);
+          JsBarcode(cv, it.gia_tri, { ...opt, format: 'CODE128' });
+        }
         out[it.khoa] = cv.toDataURL('image/png');
       }
     } catch { /* mã hỏng → bỏ ảnh, giữ chữ */ }

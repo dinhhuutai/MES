@@ -8,26 +8,28 @@ import Toast from '../../../components/common/Toast';
 import { Field, Input, Textarea } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import {
-  listBienPhap, createBienPhap, updateBienPhap, toggleBienPhap,
-} from '../../../services/phanLoaiLoiService';
+  listLyDoBoSung, createLyDoBoSung, updateLyDoBoSung, toggleLyDoBoSung,
+} from '../../../services/productionService';
 
-// Danh mục BIỆN PHÁP XỬ LÝ (mig 075) — dropdown trong bảng nhập của trang Phân loại lỗi.
-// Cùng khuôn với `LoaiLoiPage` (danh mục lỗi) để 2 trang thao tác giống nhau.
-export default function BienPhapXuLyPage() {
+// Danh mục LÝ DO BỔ SUNG (mig 077) — hiện ở sidebar màn Xác nhận chạy khi đợt vải có loại BỔ SUNG.
+// Cùng khuôn với `LyDoNgungChuyenPage` / `BienPhapXuLyPage` để các trang danh mục thao tác giống nhau.
+export default function LyDoBoSungPage() {
   const { toast, show } = useToast();
   const [rows, setRows] = useState([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState(null);   // null = đóng; {id?, maBienPhap, tenBienPhap, moTa}
+  const [form, setForm] = useState(null);   // null = đóng; {id?, maLyDo, tenLyDo, moTa}
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await listBienPhap({ search, all: '1' });
+      const res = await listLyDoBoSung({ search, all: '1' });
       setRows(res.data || []);
     } catch (e) { show(e.message || 'Không tải được danh mục', 'error'); }
     setLoading(false);
+    // ⚠ deps là `show` (ổn định nhờ useCallback([]) trong useToast) — KHÔNG để cả object `useToast()`
+    // vào đây: nó là object mới mỗi render ⇒ useEffect chạy lại vô hạn, bắn request không ngừng.
   }, [search, show]);
 
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
@@ -35,24 +37,24 @@ export default function BienPhapXuLyPage() {
   const doSave = async () => {
     setSaving(true);
     try {
-      if (form.id) await updateBienPhap(form.id, { tenBienPhap: form.tenBienPhap, moTa: form.moTa });
-      else await createBienPhap({ maBienPhap: form.maBienPhap, tenBienPhap: form.tenBienPhap, moTa: form.moTa });
-      show(form.id ? 'Đã cập nhật' : 'Đã thêm biện pháp');
+      if (form.id) await updateLyDoBoSung(form.id, { tenLyDo: form.tenLyDo, moTa: form.moTa });
+      else await createLyDoBoSung({ maLyDo: form.maLyDo, tenLyDo: form.tenLyDo, moTa: form.moTa });
+      show(form.id ? 'Đã cập nhật' : 'Đã thêm lý do');
       setForm(null); load();
     } catch (e) { show(e.message || 'Lưu thất bại', 'error'); }
     setSaving(false);
   };
 
   const doToggle = async (r) => {
-    try { await toggleBienPhap(r.id, !r.dang_hoat_dong); load(); }
+    try { await toggleLyDoBoSung(r.id, !r.dang_hoat_dong); load(); }
     catch (e) { show(e.message || 'Cập nhật thất bại', 'error'); }
   };
 
   // ⚠⚠ `DataTable` đọc **`c.key`** (`row[c.key]`), KHÔNG có `col` cũng KHÔNG có `center` —
-  //   khai sai thì cột hiện RỖNG mà không báo lỗi gì (cột "Tên biện pháp" đã bị mất suốt vì lỗi này).
+  //   khai sai thì cột hiện RỖNG mà không báo lỗi gì.
   const columns = [
-    { key: 'ma_bien_phap', header: 'Mã', render: (r) => <span className="font-mono text-xs">{r.ma_bien_phap}</span> },
-    { key: 'ten_bien_phap', header: 'Tên biện pháp', className: 'font-medium text-ink' },
+    { key: 'ma_ly_do', header: 'Mã', render: (r) => <span className="font-mono text-xs">{r.ma_ly_do}</span> },
+    { key: 'ten_ly_do', header: 'Lý do bổ sung', className: 'font-medium text-ink' },
     { key: 'mo_ta', header: 'Mô tả', render: (r) => <span className="text-xs text-ink-soft">{r.mo_ta || '—'}</span> },
     {
       key: 'dang_hoat_dong',
@@ -68,7 +70,7 @@ export default function BienPhapXuLyPage() {
       render: (r) => (
         <div className="flex justify-end gap-1.5">
           <Button variant="ghost" icon="pencil" className="px-2.5 py-1 text-xs"
-            onClick={(e) => { e.stopPropagation(); setForm({ id: r.id, maBienPhap: r.ma_bien_phap, tenBienPhap: r.ten_bien_phap, moTa: r.mo_ta || '' }); }}>
+            onClick={(e) => { e.stopPropagation(); setForm({ id: r.id, maLyDo: r.ma_ly_do, tenLyDo: r.ten_ly_do, moTa: r.mo_ta || '' }); }}>
             Sửa
           </Button>
           <Button variant="ghost" className="px-2.5 py-1 text-xs"
@@ -82,29 +84,34 @@ export default function BienPhapXuLyPage() {
 
   return (
     <div>
-      <Toolbar title="Danh mục biện pháp xử lý"
-        subtitle="Dùng cho cột “Biện pháp xử lý” ở trang Phân loại lỗi"
-        search={search} onSearch={setSearch} searchPlaceholder="Tìm mã hoặc tên biện pháp...">
-        <Button icon="plus" onClick={() => setForm({ maBienPhap: '', tenBienPhap: '', moTa: '' })}>Thêm biện pháp</Button>
+      <Toolbar title="Danh mục lý do bổ sung"
+        subtitle="Hiện ở sidebar màn Xác nhận chạy khi đợt vải là hàng BỔ SUNG"
+        search={search} onSearch={setSearch} searchPlaceholder="Tìm mã hoặc tên lý do...">
+        <Button icon="plus" onClick={() => setForm({ maLyDo: '', tenLyDo: '', moTa: '' })}>Thêm lý do</Button>
       </Toolbar>
 
-      <DataTable columns={columns} rows={rows} loading={loading} emptyText="Chưa có biện pháp nào" />
+      <DataTable columns={columns} rows={rows} loading={loading} emptyText="Chưa có lý do nào" />
+
+      <p className="mt-3 text-xs text-ink-soft">
+        Lý do đặt <b>Ngừng dùng</b> sẽ không còn hiện trong ô chọn ở màn Sản xuất, nhưng các đợt vải đã
+        ghi trước đó vẫn giữ nguyên lý do cũ.
+      </p>
 
       <Modal open={!!form} onClose={() => setForm(null)}
-        title={form?.id ? 'Sửa biện pháp xử lý' : 'Thêm biện pháp xử lý'}
+        title={form?.id ? 'Sửa lý do bổ sung' : 'Thêm lý do bổ sung'}
         footer={<>
           <Button variant="ghost" onClick={() => setForm(null)}>Hủy</Button>
           <Button loading={saving} onClick={doSave}
-            disabled={!form?.tenBienPhap?.trim() || (!form?.id && !form?.maBienPhap?.trim())}>Lưu</Button>
+            disabled={!form?.tenLyDo?.trim() || (!form?.id && !form?.maLyDo?.trim())}>Lưu</Button>
         </>}>
         {form && (
           <>
-            <Field label="Mã biện pháp" required={!form.id} hint={form.id ? 'Không đổi được mã sau khi tạo' : 'Chữ HOA, số và gạch dưới — vd IN_LAI'}>
-              <Input value={form.maBienPhap} disabled={!!form.id}
-                onChange={(e) => setForm({ ...form, maBienPhap: e.target.value.toUpperCase() })} />
+            <Field label="Mã lý do" required={!form.id} hint={form.id ? 'Không đổi được mã sau khi tạo' : 'Chữ HOA, số và gạch dưới — vd IN_HU'}>
+              <Input value={form.maLyDo} disabled={!!form.id}
+                onChange={(e) => setForm({ ...form, maLyDo: e.target.value.toUpperCase() })} />
             </Field>
-            <Field label="Tên biện pháp" required>
-              <Input value={form.tenBienPhap} onChange={(e) => setForm({ ...form, tenBienPhap: e.target.value })} />
+            <Field label="Tên lý do" required>
+              <Input value={form.tenLyDo} onChange={(e) => setForm({ ...form, tenLyDo: e.target.value })} />
             </Field>
             <Field label="Mô tả">
               <Textarea rows={2} value={form.moTa} onChange={(e) => setForm({ ...form, moTa: e.target.value })} />
