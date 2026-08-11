@@ -61,6 +61,7 @@ export const MODULES = [
       // hằng ngày. "Danh mục lỗi" dùng CHUNG component với trang bên Chất lượng: 1 nguồn, 2 lối vào.
       { ten: 'Danh mục lỗi', route: '/san-xuat/danh-muc-loi', perm: 'LOI_MANAGE' },
       { ten: 'Danh mục biện pháp xử lý', route: '/san-xuat/bien-phap', perm: 'BIEN_PHAP_MANAGE' },
+      { ten: 'Danh mục lý do ngừng chuyền', route: '/san-xuat/ly-do-ngung', perm: 'LY_DO_NGUNG_MANAGE' },
     ],
   },
   {

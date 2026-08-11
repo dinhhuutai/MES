@@ -19,7 +19,14 @@ export const getTemLabel = (temId, dotVaiId) =>
 export const getTemLogs = (phieuId) => client.get(`/production/phieu/${phieuId}/tem-logs`);
 export const finishRun = (phieuId) => client.post(`/production/phieu/${phieuId}/finish`);
 // `gioBd`/`gioKt` dạng 'HH:MM' (tùy chọn) — giờ ngừng / hoạt động lại nhập tay; bỏ trống = giờ hệ thống.
-export const stopLine = (phieuId, lyDo, gioBd) => client.post(`/production/phieu/${phieuId}/ngung`, { lyDo, gioBd });
+// `lyDoId` = lý do chọn từ danh mục (mig 076); `lyDo` = ghi chú thêm / lý do gõ tay.
+export const stopLine = (phieuId, lyDo, gioBd, lyDoId) => client.post(`/production/phieu/${phieuId}/ngung`, { lyDo, gioBd, lyDoId });
+
+// Danh mục LÝ DO NGỪNG CHUYỀN (mig 076)
+export const listLyDoNgung = (params) => client.get('/production/ly-do-ngung', { params });
+export const createLyDoNgung = (body) => client.post('/production/ly-do-ngung', body);
+export const updateLyDoNgung = (id, body) => client.patch(`/production/ly-do-ngung/${id}`, body);
+export const toggleLyDoNgung = (id, active) => client.patch(`/production/ly-do-ngung/${id}/active`, { active });
 // Ghi vải hủy (= vải hư) / vải THIẾU trong sản xuất — body.loai: 'HUY' | 'THIEU' (theo đợt vải/phần in)
 export const addVaiHuy = (phieuId, body) => client.post(`/production/phieu/${phieuId}/vai-huy`, body);
 // Phân công sản xuất: { caTruongId, chuyenTruong, items: [{ dotVaiId, thoIn, soLuongHuy, soLuongThieu }] }

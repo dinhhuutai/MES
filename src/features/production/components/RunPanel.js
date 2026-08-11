@@ -10,7 +10,7 @@ import TimeSelect from '../../../components/common/TimeSelect';
 import { Field, Input, Textarea, Select } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import { getRun, printTem, printTemBatch, reprintTem, getTemLabel, getTemLogs, finishRun, stopLine, resumeLine, addVaiHuy, savePhanCong, pauseLenhChay, listProductionCandidates, startProduction, vuotSanXuat, doiChuyen, listChuyen } from '../../../services/productionService';
+import { getRun, printTem, printTemBatch, reprintTem, getTemLabel, getTemLogs, finishRun, stopLine, resumeLine, addVaiHuy, savePhanCong, pauseLenhChay, listProductionCandidates, startProduction, vuotSanXuat, doiChuyen, listChuyen, listLyDoNgung } from '../../../services/productionService';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import { listUserOptions } from '../../../services/userService';
 import printTemLabel from '../utils/printTemLabel';
@@ -311,7 +311,9 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [soLuong, setSoLuong] = useState('');
-  const [stopReason, setStopReason] = useState('');
+  const [stopReason, setStopReason] = useState('');   // ghi chú thêm (tùy chọn)
+  const [stopLyDoId, setStopLyDoId] = useState('');   // lý do chọn từ danh mục (mig 076)
+  const [lyDoNgungDs, setLyDoNgungDs] = useState([]);
   // Giờ ngừng / hoạt động lại NHẬP TAY ('HH:MM', bỏ trống = giờ hệ thống). Luồng vẫn 2 bước như cũ.
   const [stopGioBd, setStopGioBd] = useState('');
   const [stopGioKt, setStopGioKt] = useState('');
@@ -319,7 +321,14 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
   const [reprintReason, setReprintReason] = useState('');
   const [logsOpen, setLogsOpen] = useState(false);
   const [temLogs, setTemLogs] = useState([]);
-  const [vhForm, setVhForm] = useState({ dotVaiId: '', soLuong: '', lyDo: '', loai: 'HUY' });
+  // ⚠⚠ VẢI HỦY và VẢI THIẾU giữ Ô NHẬP RIÊNG, KHÔNG dùng chung 1 form + toggle `loai` như trước:
+  //   bản cũ đổi toggle chỉ đổi `loai` nên SỐ LƯỢNG + LÝ DO vừa gõ cho vải hủy **đi theo luôn** sang
+  //   vải thiếu ⇒ bấm Ghi là ghi nhầm loại (lỗi thật 2026-08-11). Nay 2 khối tách hẳn, hiện cùng lúc,
+  //   không còn toggle nên không có đường nào lẫn nữa. `vhDot` (đợt vải) CỐ Ý dùng chung — nó là ngữ
+  //   cảnh "đang ghi cho đợt vải nào", hiện 1 lần ở trên và nhìn thấy rõ.
+  const [vhDot, setVhDot] = useState('');
+  const [vhHuy, setVhHuy] = useState({ soLuong: '', lyDo: '' });
+  const [vhThieu, setVhThieu] = useState({ soLuong: '', lyDo: '' });
   const [pauseOpen, setPauseOpen] = useState(false);   // modal ngừng lệnh chạy (in hàng gấp)
   const [swapList, setSwapList] = useState([]);        // phần in đang chờ sản xuất để hoán đổi
   const [swapLoading, setSwapLoading] = useState(false);
@@ -370,6 +379,13 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
     listUserOptions({ limit: 500 })
       .then((r) => setUsers(r.data || []))
       .catch(() => { /* không chặn màn sản xuất; ô ca trưởng sẽ rỗng */ });
+  }, []);
+  // Danh mục lý do ngừng chuyền (mig 076). Lỗi/chưa chạy migration → mảng rỗng → ô chọn ẩn đi,
+  // người đứng máy vẫn gõ tay lý do được như trước.
+  useEffect(() => {
+    listLyDoNgung()
+      .then((r) => setLyDoNgungDs(r.data || []))
+      .catch(() => setLyDoNgungDs([]));
   }, []);
 
   // Lấy dữ liệu nhãn tem rồi mở cửa sổ in (barcode Code128 = mã tem).
@@ -486,12 +502,16 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
   };
 
   const doStop = async () => {
-    if (!stopReason.trim()) { show('Nhập lý do ngừng chuyền', 'error'); return; }
+    // Có danh mục thì BẮT BUỘC chọn lý do; chưa chạy mig 076 (danh sách rỗng) thì lùi về gõ tay.
+    if (!stopLyDoId && !stopReason.trim()) {
+      show(lyDoNgungDs.length ? 'Chọn lý do ngừng chuyền' : 'Nhập lý do ngừng chuyền', 'error');
+      return;
+    }
     setBusy(true);
     try {
-      await stopLine(phieu.id, stopReason.trim(), stopGioBd || null);
+      await stopLine(phieu.id, stopReason.trim(), stopGioBd || null, stopLyDoId || null);
       show('Đã ngừng chuyền');
-      setStopReason(''); setStopGioBd('');
+      setStopReason(''); setStopGioBd(''); setStopLyDoId('');
       await load();
       onChanged?.();
     } catch (e) {
@@ -547,22 +567,25 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
   };
 
   // Ghi vải hủy (= vải hư) / vải THIẾU theo phần in. Lệnh chỉ 1 phần in → tự chọn; nhiều phần in → phải chọn.
-  const doVaiHuy = async () => {
-    const thieu = vhForm.loai === 'THIEU';
+  // `loai` truyền TƯỜNG MINH từ nút bấm của đúng khối — không suy từ state dùng chung nữa.
+  const doVaiHuy = async (loai) => {
+    const thieu = loai === 'THIEU';
     const nhan = thieu ? 'vải thiếu' : 'vải hủy';
-    const qty = Number(vhForm.soLuong);
+    const form = thieu ? vhThieu : vhHuy;
+    const qty = Number(form.soLuong);
     if (!qty || qty <= 0) { show(`Nhập số lượng ${nhan}`, 'error'); return; }
-    if (dotVaiList.length > 1 && !vhForm.dotVaiId) { show(`Chọn phần in cần ghi ${nhan}`, 'error'); return; }
+    if (dotVaiList.length > 1 && !vhDot) { show(`Chọn đợt vải cần ghi ${nhan}`, 'error'); return; }
     setBusy(true);
     try {
       await addVaiHuy(phieu.id, {
-        dotVaiId: vhForm.dotVaiId || (dotVaiList.length === 1 ? dotVaiList[0].dot_vai_ve_id : null),
+        dotVaiId: vhDot || (dotVaiList.length === 1 ? dotVaiList[0].dot_vai_ve_id : null),
         soLuong: qty,
-        lyDo: vhForm.lyDo.trim() || null,
-        loai: thieu ? 'THIEU' : 'HUY',
+        lyDo: form.lyDo.trim() || null,
+        loai,
       });
       show(`Đã ghi ${nhan}`);
-      setVhForm({ dotVaiId: '', soLuong: '', lyDo: '', loai: vhForm.loai });
+      // Chỉ xóa Ô CỦA CHÍNH LOẠI VỪA GHI — khối kia đang gõ dở thì giữ nguyên.
+      (thieu ? setVhThieu : setVhHuy)({ soLuong: '', lyDo: '' });
       await load();
       onChanged?.();
     } catch (e) {
@@ -731,7 +754,7 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
             {canRun && phieu && !coGomSet && (
               <div className="space-y-2">
                 {dotVaiList.length > 1 && (
-                  <Select value={vhForm.dotVaiId} onChange={(e) => setVhForm({ ...vhForm, dotVaiId: e.target.value })}>
+                  <Select value={vhDot} onChange={(e) => setVhDot(e.target.value)}>
                     <option value="">— Chọn đợt vải —</option>
                     {dotVaiList.map((d) => (
                       <option key={d.dot_vai_ve_id} value={d.dot_vai_ve_id}>
@@ -745,34 +768,36 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
                     Đợt vải: <b className="text-ink">{dotVaiList[0].ma_dot_vai}</b> · {dotVaiList[0].ma_phan} · {dotVaiList[0].mau_vai}
                   </div>
                 )}
-                {/* Chọn loại ghi nhận: vải hủy (hư) hoặc vải thiếu */}
-                <div className="flex gap-2">
-                  {[{ v: 'HUY', label: 'Vải hủy (hư)' }, { v: 'THIEU', label: 'Vải thiếu' }].map((o) => (
-                    <button key={o.v} type="button" onClick={() => setVhForm({ ...vhForm, loai: o.v })}
-                      className={`flex-1 rounded-control border px-3 py-1.5 text-sm font-medium transition-colors ${
-                        vhForm.loai === o.v ? 'border-primary bg-primary-wash/50 text-primary' : 'border-line text-ink-soft hover:text-ink'
-                      }`}>
-                      {o.label}
-                    </button>
-                  ))}
-                </div>
-                <div className="flex items-end gap-2">
-                  <div className="flex-1">
-                    <label className="mb-1 block text-sm font-medium text-ink">
-                      Số lượng {vhForm.loai === 'THIEU' ? 'vải thiếu' : 'vải hủy'}
-                    </label>
-                    <Input type="number" min="1" value={vhForm.soLuong}
-                      onChange={(e) => setVhForm({ ...vhForm, soLuong: e.target.value })} placeholder="vd: 5" />
+                {/* 2 KHỐI TÁCH HẲN — bỏ toggle `loai` cũ (xem ghi chú ở state `vhHuy`/`vhThieu`). */}
+                {[
+                  {
+                    loai: 'HUY', ten: 'Vải hủy (hư)', form: vhHuy, set: setVhHuy,
+                    vien: 'border-danger/30', nut: 'danger',
+                    goiY: 'Lý do vải hủy (vd: lỗi vải, in hỏng, rách...)',
+                  },
+                  {
+                    loai: 'THIEU', ten: 'Vải thiếu', form: vhThieu, set: setVhThieu,
+                    vien: 'border-warning/40', nut: 'secondary',
+                    goiY: 'Lý do vải thiếu (vd: giao thiếu, hụt khổ...)',
+                  },
+                ].map((k) => (
+                  <div key={k.loai} className={`space-y-2 rounded-control border ${k.vien} p-2.5`}>
+                    <div className="text-sm font-semibold text-ink">{k.ten}</div>
+                    <div className="flex items-end gap-2">
+                      <div className="flex-1">
+                        <label className="mb-1 block text-xs font-medium text-ink-soft">Số lượng</label>
+                        <Input type="number" min="1" value={k.form.soLuong}
+                          onChange={(e) => k.set({ ...k.form, soLuong: e.target.value })} placeholder="vd: 5" />
+                      </div>
+                      <Button variant={k.nut} onClick={() => doVaiHuy(k.loai)} loading={busy}
+                        disabled={!k.form.soLuong || Number(k.form.soLuong) <= 0}>
+                        Ghi
+                      </Button>
+                    </div>
+                    <Textarea rows={2} value={k.form.lyDo}
+                      onChange={(e) => k.set({ ...k.form, lyDo: e.target.value })} placeholder={k.goiY} />
                   </div>
-                  <Button variant="danger" onClick={doVaiHuy} loading={busy}
-                    disabled={!vhForm.soLuong || Number(vhForm.soLuong) <= 0}>
-                    Ghi {vhForm.loai === 'THIEU' ? 'vải thiếu' : 'vải hủy'}
-                  </Button>
-                </div>
-                <Textarea rows={2} value={vhForm.lyDo} onChange={(e) => setVhForm({ ...vhForm, lyDo: e.target.value })}
-                  placeholder={vhForm.loai === 'THIEU'
-                    ? 'Lý do vải thiếu (vd: giao thiếu, hụt khổ...)'
-                    : 'Lý do vải hủy (vd: lỗi vải, in hỏng, rách...)'} />
+                ))}
               </div>
             )}
             {canRun && phieu && coGomSet && (
@@ -871,14 +896,36 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
                 </div>
               ) : canRun ? (
                 <div className="space-y-2">
+                  {/* Lý do lấy từ DANH MỤC (Sản xuất > Danh mục lý do ngừng chuyền, mig 076).
+                      ⚠ Chưa chạy migration → danh sách rỗng → ẩn ô chọn, lùi về gõ tay như trước. */}
+                  {lyDoNgungDs.length > 0 && (
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-medium text-ink-soft">Lý do ngừng</span>
+                      {/* Ô tìm kiếm giống hệt ô "Ca trưởng" (`SearchableSelect`) — gõ vài chữ là ra,
+                          tìm KHÔNG DẤU. Danh mục lý do sẽ dài dần nên đừng đổi về `<Select>` trơn. */}
+                      <SearchableSelect
+                        value={stopLyDoId}
+                        onChange={setStopLyDoId}
+                        options={lyDoNgungDs}
+                        getValue={(l) => l.id}
+                        getLabel={(l) => l.ten_ly_do || ''}
+                        getSearch={(l) => `${l.ten_ly_do || ''} ${l.ma_ly_do || ''}`}
+                        placeholder="Gõ để tìm lý do (vd: het muc, doi khuon)..."
+                        emptyLabel="— Chọn lý do —"
+                      />
+                    </label>
+                  )}
                   <Textarea rows={2} value={stopReason} onChange={(e) => setStopReason(e.target.value)}
-                    placeholder="Lý do ngừng chuyền (vd: hết mực, kẹt vải, đổi khuôn...)" />
+                    placeholder={lyDoNgungDs.length
+                      ? 'Ghi chú thêm (tùy chọn)'
+                      : 'Lý do ngừng chuyền (vd: hết mực, kẹt vải, đổi khuôn...)'} />
                   {/* Giờ BẮT ĐẦU ngừng — bỏ trống = giờ hệ thống. Nhập giờ lớn hơn bây giờ ⇒ hiểu là HÔM QUA (ca đêm). */}
                   <label className="block">
                     <span className="mb-1 block text-xs font-medium text-ink-soft">Giờ bắt đầu ngừng (bỏ trống = bây giờ)</span>
                     <TimeSelect value={stopGioBd} onChange={setStopGioBd} minuteStep={1} />
                   </label>
-                  <Button variant="danger" className="w-full" onClick={doStop} loading={busy} disabled={!stopReason.trim()}>
+                  <Button variant="danger" className="w-full" onClick={doStop} loading={busy}
+                    disabled={lyDoNgungDs.length ? !stopLyDoId : !stopReason.trim()}>
                     Ngừng chuyền
                   </Button>
                 </div>
