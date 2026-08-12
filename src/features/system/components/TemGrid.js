@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LƯỚI TEM (màn thiết kế) — bảng tính kiểu Excel vẽ ĐÚNG TỈ LỆ THẬT để "xem sao in vậy":
@@ -14,7 +14,10 @@ import React, { useEffect, useRef, useState } from 'react';
 //   nên JS không biết trước chiều cao — chỉ khi cùng một bảng thì header hàng mới luôn khớp dòng.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { noiDungO, cssChuDoc, caoHangMm } from '../../production/utils/renderMauTem';
+import {
+  noiDungO, cssChuDoc, caoHangMm, tuCoBat,
+  PAD_DOC_MM, VIEN_DOC_MM, TU_CO_SAN, TU_CO_BUOC, TU_CO_VONG,
+} from '../../production/utils/renderMauTem';
 import { RONG_MM, CAO_MM } from '../utils/temLuoi';
 
 // Chuỗi CSS "a:b;c:d" → object cho React style.
@@ -59,6 +62,51 @@ const vienCss = (v = {}) => {
 };
 
 const thBase = 'select-none text-[10px] font-medium leading-none';
+
+const CANH_DOC = { top: 'flex-start', middle: 'center', bottom: 'flex-end' };
+const CANH_NGANG = { left: 'flex-start', center: 'center', right: 'flex-end' };
+
+// NỘI DUNG 1 Ô CHỮ — hộp chiều cao CỐ ĐỊNH + tự co cỡ chữ, y hệt bản in (`renderMauTem.hopChu`
+// + `JS_TU_CO`). Có ở đây để lưới thiết kế hiện ĐÚNG cỡ chữ sẽ in ra, không phải mở Xem trước mới biết.
+// ⚠ Thu chữ trên chính `.mt-noi` (không đụng `<td>`): cỡ chữ gốc của td do React quản, ghi đè rồi xóa
+//   sẽ giẫm lên style prop. Span thì React không hề đặt `fontSize` nên mutation ở đây sống qua re-render.
+// ⚠ Deps chỉ gồm thứ ẢNH HƯỞNG BỐ CỤC — kéo chọn vùng re-render liên tục, để trống deps là mỗi lần
+//   rê chuột đo lại cả trăm ô (giật lag).
+function ONoiDung({ txt, cssDocStr, tuCo, caoPx, rongPx, coChuPx, canhNgang, canhDoc }) {
+  const hop = useRef(null);
+  const noi = useRef(null);
+  useLayoutEffect(() => {
+    const h = hop.current; const n = noi.current;
+    if (!h || !n) return;
+    n.style.fontSize = '';
+    if (!tuCo) return;
+    let cs = coChuPx;
+    const min = Math.max(3, cs * TU_CO_SAN);
+    let i = 0;
+    while (i < TU_CO_VONG && cs > min
+           && (n.scrollHeight > h.clientHeight + 1 || n.scrollWidth > h.clientWidth + 1)) {
+      cs -= Math.max(0.3, cs * TU_CO_BUOC);
+      n.style.fontSize = `${cs}px`;
+      i += 1;
+    }
+  }, [txt, cssDocStr, tuCo, caoPx, rongPx, coChuPx]);
+
+  return (
+    <div
+      ref={hop}
+      style={{
+        display: 'flex', height: caoPx, overflow: 'hidden',
+        ...(cssDocStr
+          ? { flexDirection: 'row', justifyContent: CANH_NGANG[canhNgang] || 'center', alignItems: CANH_DOC[canhDoc] || 'center' }
+          : { flexDirection: 'column', justifyContent: CANH_DOC[canhDoc] || 'center' }),
+      }}
+    >
+      <span ref={noi}>
+        {cssDocStr ? <span style={cssSangObj(cssDocStr)}>{txt}</span> : txt}
+      </span>
+    </div>
+  );
+}
 
 export default function TemGrid({
   khung, data, tiLe = 8, nhan,
@@ -308,17 +356,27 @@ export default function TemGrid({
                           whiteSpace: cell.xuong_dong === false ? 'nowrap' : 'normal',
                           wordBreak: cell.xuong_dong === false ? 'normal' : 'break-word',
                           overflow: 'hidden',
-                          padding: '0 1px',
+                          // Padding lấy ĐÚNG theo bản in (`SHEET_CSS_MAU`) để chỗ chứa chữ khớp từng mm.
+                          padding: `${(PAD_DOC_MM / 2) * tiLe}px ${0.6 * tiLe}px`,
                           cursor: 'cell',
                           lineHeight: 1.05,
                           userSelect: 'none',
                         }}
                       >
-                        {(() => {
-                          if (laMa) return <span className="text-[10px] text-ink-soft">{txt}</span>;
-                          const doc = cssChuDoc(cell.xoay);
-                          return doc ? <span style={cssSangObj(doc)}>{txt}</span> : txt;
-                        })()}
+                        {laMa ? (
+                          <span className="text-[10px] text-ink-soft">{txt}</span>
+                        ) : (
+                          <ONoiDung
+                            txt={txt}
+                            cssDocStr={cssChuDoc(cell.xoay)}
+                            tuCo={tuCoBat(cell)}
+                            caoPx={Math.max(2, (caoHang.slice(r, r + rs).reduce((s, x) => s + x, 0) - PAD_DOC_MM - VIEN_DOC_MM) * tiLe)}
+                            rongPx={Array.from({ length: cs }, (_, k) => pxCot(c + k)).reduce((s, x) => s + x, 0)}
+                            coChuPx={Math.max(5, (Number(cell.co_chu_mm) || 2.2) * tiLe * 0.92)}
+                            canhNgang={cell.ngang || 'center'}
+                            canhDoc={cell.doc || 'middle'}
+                          />
+                        )}
                       </td>
                     );
                   })}

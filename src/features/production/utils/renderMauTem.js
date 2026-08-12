@@ -13,6 +13,13 @@ export const KHO = {
   leTren: 1, leDuoi: 1, leTrai: 1, lePhai: 5,
 };
 
+// Padding TRÊN+DƯỚI của mỗi ô (tổng, mm) — trừ ra khi tính chiều cao hộp nội dung `.mt-hop`.
+export const PAD_DOC_MM = 0.5;
+// Viền trên+dưới ăn vào chiều cao khả dụng (`border-collapse:collapse` chia đôi nét cho 2 ô kề nhau).
+// ⚠ Nhỏ nhưng PHẢI trừ: thiếu thì mỗi hàng đội thêm ~0.05mm, tem 15 hàng đội gần 1mm ⇒ bảng vượt
+//   78mm và `.label{overflow:hidden}` gặm mất dải cuối.
+export const VIEN_DOC_MM = 0.05;
+
 // CSS cho tem dựng từ mẫu — chỉ khung + lưới, còn kiểu chữ/viền do TỪNG Ô tự mang theo (inline style
 // do `renderKhung` sinh) nên không cần class .lbl/.v… như bố cục cứng.
 // ⚠⚠ DÙNG CHUNG cho cửa sổ IN THẬT (`printTemLabel.openSheetMau`) và khung XEM TRƯỚC ở màn thiết kế
@@ -25,23 +32,43 @@ export const SHEET_CSS_MAU = `
   .label { width: ${KHO.temRong}mm; height: ${KHO.temCao}mm;
            padding: ${KHO.leTren}mm ${KHO.lePhai}mm ${KHO.leDuoi}mm ${KHO.leTrai}mm; overflow: hidden; }
   .label:first-child { width: ${KHO.temRong - 4}mm; padding-right: ${KHO.leTrai}mm; }
-  table.mt-luoi td { padding: 0.25mm 0.6mm; line-height: 1.02; overflow: hidden; }
+  table.mt-luoi td { padding: ${PAD_DOC_MM / 2}mm 0.6mm; line-height: 1.02; overflow: hidden; }
   @page { size: ${KHO.toRong}mm ${KHO.toCao}mm; margin: 0; }`;
+
+// ─── TỰ CO CỠ CHỮ CHO VỪA Ô ───────────────────────────────────────────────────
+// Sàn / bước thu — khai 1 chỗ, dùng chung cho bản in (`JS_TU_CO`) và lưới thiết kế (`TemGrid`).
+// 0.95^40 ≈ 0.13 < sàn ⇒ luôn chạm sàn trong 40 vòng, không sợ lặp vô tận.
+export const TU_CO_SAN = 0.3;     // không thu quá 30% cỡ gốc — nhỏ hơn nữa là không đọc nổi trên giấy
+export const TU_CO_BUOC = 0.05;   // mỗi vòng nhỏ đi 5% — đủ mịn để "vừa khít", đủ nhanh để không kẹt in
+export const TU_CO_VONG = 40;
 
 // Vòng THU CHỮ chạy TRONG cửa sổ in / khung xem trước, trước khi gọi print(): ô nào bật "tự co" mà nội
 // dung tràn thì giảm dần cỡ chữ tới khi vừa. Phải làm ở đây (không phải CSS) vì chỉ lúc này mới đo được
 // kích thước THẬT của ô sau khi trình duyệt dựng xong bảng.
 // ⚠ Xem trước cũng chạy vòng này ⇒ thấy đúng cỡ chữ sẽ in ra, không phải đoán.
+//
+// ⚠⚠ ĐO TRÊN HỘP `.mt-hop` (chiều cao mm CỐ ĐỊNH), TUYỆT ĐỐI KHÔNG đo trên `<td>` — lỗi thật:
+//   theo chuẩn CSS bảng (CSS 2.1 §17.5.3) `height` của `<tr>`/`<td>` chỉ là chiều cao **TỐI THIỂU**,
+//   nội dung dài thì HÀNG TỰ NỞ RA ⇒ `td.clientHeight` nở theo ⇒ `scrollHeight > clientHeight` LUÔN SAI
+//   ⇒ vòng thu không bao giờ chạy theo chiều dọc. Chữ dài khi đó làm bảng vượt 78mm và bị
+//   `.label{overflow:hidden}` **cắt cụt phần dưới tem** — im lặng, không báo gì.
+// ⚠ So `noi.scrollHeight` (chiều cao THẬT của nội dung) với `hop.clientHeight`, KHÔNG dùng
+//   `hop.scrollHeight`: hộp căn giữa (`justify-content:center`) tràn ra CẢ HAI đầu, mà `scrollHeight`
+//   chỉ tính phần tràn ở đầu DƯỚI ⇒ báo thiếu.
 export const JS_TU_CO = `
   function thuChu(){
-    var os = document.querySelectorAll('td[data-tuco]');
-    for (var i = 0; i < os.length; i++) {
-      var td = os[i];
+    var hs = document.querySelectorAll('[data-tuco]');
+    for (var i = 0; i < hs.length; i++) {
+      var hop = hs[i];
+      var noi = hop.firstElementChild;
+      var td = hop.parentElement;
+      if (!noi || !td) continue;
       var cs = parseFloat(getComputedStyle(td).fontSize);
-      var min = cs * 0.45;                       // không thu quá 45% — nhỏ hơn nữa là không đọc nổi
+      var min = Math.max(3, cs * ${TU_CO_SAN});
       var n = 0;
-      while (n < 40 && cs > min && (td.scrollWidth > td.clientWidth + 1 || td.scrollHeight > td.clientHeight + 1)) {
-        cs -= Math.max(0.3, cs * 0.06);
+      while (n < ${TU_CO_VONG} && cs > min
+             && (noi.scrollHeight > hop.clientHeight + 1 || noi.scrollWidth > hop.clientWidth + 1)) {
+        cs -= Math.max(0.3, cs * ${TU_CO_BUOC});
         td.style.fontSize = cs + 'px';
         n++;
       }
@@ -181,6 +208,33 @@ function styleO(o, mmPx = 1) {
   return st.join(';');
 }
 
+// TỰ CO có BẬT cho ô này không? ⚠ **MẶC ĐỊNH BẬT** (chốt 2026-08-12): kích thước ô là thứ người dùng
+// đã thiết kế và phải GIỮ NGUYÊN, còn nội dung thì lấy từ dữ liệu thật nên dài ngắn không đoán trước
+// được ⇒ tràn thì co chữ lại là hành vi đúng, phải tick từng ô mới có mới là bất thường. Tắt bằng
+// `tu_co: false` tường minh (nút trên thanh công cụ). Ô mã QR/vạch KHÔNG áp (ảnh đã tính sẵn mm).
+export const tuCoBat = (o) => !o || o.tu_co !== false;
+
+// HỘP NỘI DUNG của ô chữ — chiều cao mm CỐ ĐỊNH + `overflow:hidden`.
+// ⚠⚠ Đây là thứ giữ cho "kích thước ô cố định": không có hộp này thì `<td>` nở theo nội dung (height
+//   của hàng chỉ là TỐI THIỂU — xem `JS_TU_CO`) ⇒ hàng phình, bảng vượt 78mm, tem bị cắt cụt. Có hộp
+//   thì hàng đứng yên, phần thừa bị cắt, và vòng thu chữ ĐO ĐƯỢC mức tràn thật để co lại cho vừa.
+// ⚠ Căn lề phải làm LẠI bằng flex ở đây: hộp lấp kín ô nên `vertical-align` của `<td>` hết tác dụng.
+//   Chữ NGANG: xếp cột, `justify-content` theo canh dọc (`doc`), `text-align` của td lo canh ngang.
+//   Chữ DỌC (writing-mode): xếp hàng, `justify-content` theo `ngang` + `align-items` theo `doc`.
+const CANH_DOC = { top: 'flex-start', middle: 'center', bottom: 'flex-end' };
+const CANH_NGANG = { left: 'flex-start', center: 'center', right: 'flex-end' };
+function hopChu(chu, o, caoOmm, cssDoc) {
+  const cao = Math.max(0.3, (Number(caoOmm) || 0) - PAD_DOC_MM - VIEN_DOC_MM);
+  const dung = CANH_DOC[o.doc || 'middle'] || 'center';
+  const st = cssDoc
+    ? `flex-direction:row;justify-content:${CANH_NGANG[o.ngang || 'center'] || 'center'};align-items:${dung}`
+    : `flex-direction:column;justify-content:${dung}`;
+  const trong = cssDoc ? `<span style="${cssDoc}">${chu}</span>` : chu;
+  return `<div class="mt-hop"${tuCoBat(o) ? ' data-tuco="1"' : ''} `
+    + `style="display:flex;height:${cao.toFixed(2)}mm;overflow:hidden;${st}">`
+    + `<span class="mt-noi">${trong}</span></div>`;
+}
+
 // ⚠⚠ CHIỀU CAO TỪNG HÀNG — TÍNH SẴN BẰNG mm CHO **MỌI** HÀNG, KHÔNG để trình duyệt tự chia.
 //
 // Lỗi thật đã gặp (2026-08-11): `<tr>` không đặt `height` thì thuật toán bảng của trình duyệt chia
@@ -313,14 +367,14 @@ export function renderKhung(khung, data, anhMa, opts = {}) {
       const chu = esc(noiDungO(cell, data, truongMap));
       // Ô gộp dọc thì chiều cao = tổng các hàng nó chiếm.
       const caoO = caoHang.slice(r, r + rs).reduce((s, x) => s + x, 0);
+      // ⚠ Ô chữ đi qua `hopChu` (chiều cao mm cố định + `data-tuco` cho vòng thu chữ); ô mã giữ đường
+      //   riêng vì ảnh đã được tính sẵn kích thước mm trong `htmlOMa`.
       const noiDung = laMa
         ? htmlOMa(cell, khoa, anhMa, maText, caoO)
-        : (cssDoc ? `<span style="${cssDoc}">${chu}</span>` : chu);
-      // `data-tuco` để vòng thu chữ trong cửa sổ in tìm được đúng ô cần co.
+        : hopChu(chu, cell, caoO, cssDoc);
       const attr = [
         cs > 1 ? ` colspan="${cs}"` : '', rs > 1 ? ` rowspan="${rs}"` : '',
         ` style="${styleO(cell)}"`,
-        cell.tu_co ? ' data-tuco="1"' : '',
         choThietKe ? ` data-o="${khoa}"` : '',
         choThietKe && chonO === khoa ? ' class="dang-chon"' : '',
       ].join('');

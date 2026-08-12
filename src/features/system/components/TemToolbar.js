@@ -162,8 +162,11 @@ export default function TemToolbar({
           onClick={() => onDinhDang({ xuong_dong: !deu((o) => o.xuong_dong !== false) })}>
           <Icon name="wrap-text" size={14} />
         </Nut>
-        <Nut title="Tự co cỡ chữ cho vừa ô khi in" bat={deu((o) => !!o.tu_co)} disabled={!co}
-          onClick={() => onDinhDang({ tu_co: !deu((o) => !!o.tu_co) })}>
+        {/* ⚠ MẶC ĐỊNH BẬT (`tu_co !== false`) — ô giữ đúng kích thước đã thiết kế, nội dung dài thì co
+            chữ lại cho vừa. Tắt = nội dung thừa bị CẮT chứ ô vẫn không nở ra. */}
+        <Nut title="Tự co cỡ chữ cho vừa ô (mặc định BẬT — tắt thì chữ thừa bị cắt)"
+          bat={deu((o) => o.tu_co !== false)} disabled={!co}
+          onClick={() => onDinhDang({ tu_co: !deu((o) => o.tu_co !== false) })}>
           <Icon name="maximize-2" size={14} />
         </Nut>
       </Nhom>
