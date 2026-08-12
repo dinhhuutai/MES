@@ -24,6 +24,21 @@ export const baseMaTem = (code) => {
   return MA_TEM_ERP_RE.test(c) ? `15${c.slice(2)}` : c.replace(/^\d+-/, '');
 };
 
+// Chiều NGƯỢC của `baseMaTem`: mã gốc + TIỀN TỐ CÔNG ĐOẠN (+ hậu tố lần giao).
+// Tiền tố: 13 = hàng gia công về · 15 = KCS đạt · 16 = sửa · 17 = OQC/giao.
+//   · mã ERP 12 số → THAY 2 số đầu   : temCode('152608057689', 16) → '162608057689'
+//   · mã cũ TEM… → nối bằng gạch     : temCode('TEM00123', 16)     → '16-TEM00123'
+// ⚠ Đặt ở đây (KHÔNG ở `printTemLabel.js`) để màn danh sách dùng được mà không phải nạp
+//   thư viện `qrcode` + bộ render tem; `printTemLabel.js` re-export lại hàm này.
+// ⚠ Bản backend gương y hệt ở `backend/src/utils/temPrefix.js` — sửa luật thì sửa CẢ HAI.
+export function temCode(maTem, prefix, suffix) {
+  const ma = String(maTem == null ? '' : maTem).trim();
+  const s = suffix != null && suffix !== '' ? `-${suffix}` : '';
+  if (prefix == null || prefix === '') return `${ma}${s}`;
+  if (MA_TEM_ERP_RE.test(ma)) return `${String(prefix)}${ma.slice(2)}${s}`;
+  return `${prefix}-${ma}${s}`;
+}
+
 export const fmtDateTime = (d) => {
   if (!d) return '—';
   const date = new Date(d);

@@ -139,8 +139,14 @@ export const MODULES = [
       { ten: 'Mẫu form (tem/phiếu)', route: '/he-thong/mau-form', perm: 'WORKFLOW_VIEW' },
       // Thiết kế tem (mig 073) — quyền riêng TEM_DESIGN, lúc đầu chỉ admin (role ADMIN có '*').
       { ten: 'Thiết kế tem', route: '/he-thong/thiet-ke-tem', perm: 'TEM_DESIGN' },
+      // Quản trị phần in (mig 078) — trang GỠ RỐI: sửa dữ liệu gốc + đặt lại giai đoạn theo đợt vải.
+      // Quyền riêng PHAN_IN_ADMIN, cấp hẹp (role ADMIN có '*' nên dùng được ngay).
+      { ten: 'Quản trị phần in', route: '/he-thong/quan-tri-phan-in', perm: 'PHAN_IN_ADMIN' },
       { ten: 'Hiển thị theo phương án in', route: '/he-thong/hien-thi-pain', perm: 'WORKFLOW_VIEW' },
       { ten: 'Người dùng online', route: '/he-thong/online', perm: 'PRESENCE_VIEW' },
+      // Phiên đăng nhập theo THIẾT BỊ (mig 081): xem 1 tài khoản đang đăng nhập ở những máy nào và
+      // đăng xuất máy không dùng nữa. Xem chỉ cần PRESENCE_VIEW; đăng xuất người KHÁC cần PHIEN_MANAGE.
+      { ten: 'Phiên đăng nhập', route: '/he-thong/phien-dang-nhap', perm: ['PRESENCE_VIEW', 'PHIEN_MANAGE'] },
       { ten: 'Nhật ký thao tác', route: '/he-thong/nhat-ky', perm: 'PRESENCE_VIEW' },
     ],
   },

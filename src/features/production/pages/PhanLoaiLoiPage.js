@@ -12,7 +12,7 @@ import { listLoaiLoi } from '../../../services/qualityService';
 import {
   listPhanLoaiLoi, traTemPhanLoai, luuPhanLoaiLoi, listBienPhap,
 } from '../../../services/phanLoaiLoiService';
-import { fmtDateTime } from '../../../utils/format';
+import { fmtDateTime, temCode } from '../../../utils/format';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PHÂN LOẠI LỖI (mig 075) — module Sản xuất, dưới KCS.
@@ -109,7 +109,10 @@ export default function PhanLoaiLoiPage() {
         <div className="text-xs text-ink-soft">{r.kich_vai || '—'} / {r.kich_phim || '—'}</div></>),
     },
     { header: 'Chuyền', key: 'ten_chuyen' },
-    { header: 'Mã tem', render: (r) => <span className="font-mono text-xs">{r.ma_tem}</span> },
+    // ⚠ Hiện mã tem với TIỀN TỐ 16 = nhãn HÀNG LỖI dán túi sửa — đúng cái nhãn người phân loại đang
+    //   cầm trên tay. DB lưu mã gốc tiền tố 15 (KCS đạt); chỉ đổi phần HIỂN THỊ, `traTem` vẫn gửi
+    //   `r.ma_tem` gốc (backend quy mọi công đoạn về mã gốc bằng `baseMaTem`).
+    { header: 'Mã tem', render: (r) => <span className="font-mono text-xs">{temCode(r.ma_tem, 16)}</span> },
     { header: 'SL in', render: (r) => Number(r.so_luong || 0).toLocaleString('vi-VN'), center: true },
     { header: 'Đạt', render: (r) => <span className="text-emerald-600">{Number(r.sl_kcs_dat || 0)}</span>, center: true },
     { header: 'Sửa', render: (r) => <span className="text-amber-600">{Number(r.sl_kcs_sua || 0)}</span>, center: true },

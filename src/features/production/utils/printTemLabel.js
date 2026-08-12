@@ -2,6 +2,7 @@ import QRCode from 'qrcode';
 // IN THEO MẪU người dùng thiết kế (mig 073) — xem `thuInTheoMau` ở cuối file.
 import { renderKhung, dungAnhMa, khungPhai, SHEET_CSS_MAU, JS_TU_CO } from './renderMauTem';
 import { mauChoViTri } from '../../../services/mauTemService';
+import { temCode } from '../../../utils/format';
 
 const esc = (v) => String(v ?? '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -32,15 +33,10 @@ const fmtDtShort = (t) => {
 //   · CŨ — `ma_tem` dạng `TEM00123`, tiền tố nối bằng DẤU GẠCH: '15-TEM00123', '17-TEM00030-1'.
 //     Tem đã in trước đây quét vẫn ra đúng, KHÔNG phải in lại phiếu.
 // QR mã hóa đúng chuỗi này; máy quét dùng `baseMaTem()` (utils/format.js) để tra về mã gốc.
-// ⚠ Bản backend gương y hệt ở `backend/src/utils/temPrefix.js` — sửa luật thì sửa CẢ HAI.
-const MA_ERP_RE = /^1[3-9]\d{10}$/; // barcode ERP: 12 số, 2 số đầu là tiền tố công đoạn
-export function temCode(maTem, prefix, suffix) {
-  const ma = String(maTem == null ? '' : maTem).trim();
-  const s = suffix != null && suffix !== '' ? `-${suffix}` : '';
-  if (prefix == null || prefix === '') return `${ma}${s}`;
-  if (MA_ERP_RE.test(ma)) return `${String(prefix)}${ma.slice(2)}${s}`; // mã ERP → thay 2 số đầu
-  return `${prefix}-${ma}${s}`;                                        // mã cũ → nối bằng gạch
-}
+// ⚠ Hàm nay nằm ở `utils/format.js` (cạnh `baseMaTem` — 2 chiều của CÙNG một luật) để màn danh sách
+//   dùng được mà không phải nạp `qrcode` + bộ render tem. Re-export ở đây cho các import cũ
+//   (⚠ phải `import` rồi `export` — `export … from` KHÔNG tạo binding cục bộ để dùng trong file này).
+export { temCode };
 
 // Chuẩn hóa dữ liệu + QR cho 1 nhãn. `code` = mã tem hiển thị (có tiền tố/hậu tố); mặc định = ma_tem.
 async function buildData(label, code) {
@@ -64,6 +60,9 @@ async function buildData(label, code) {
     ca: esc(label.ca || ''),
     tgBdPhoi: esc(fmtDtShort(label.tg_bd_phoi)),
     tgKtPhoi: esc(fmtDtShort(label.tg_kt_phoi)),
+    // Người sửa — CHỈ có ở tem 17 in từ trang Sửa (nhập ngay lúc in, mig 080). Rỗng thì nhãn không
+    // thêm dòng nào ⇒ các tem khác giữ y nguyên bố cục.
+    nguoiSua: esc(label.nguoi_sua || ''),
   };
   // QR là 1 băng riêng ở trên (QR trái + ô trống phải), thông tin nằm full-width bên dưới.
   d.qrBand = `<table class="t qb"><tr><td class="qr">${qrUrl ? `<img src="${qrUrl}" alt="">` : ''}<div class="ma">${d.ma_tem}</div></td><td class="v"></td></tr></table>`;
@@ -91,6 +90,7 @@ function leftLabel(d, brand = 'THLA') {
         <tr><td class="lbl">SL Giao</td><td></td><td></td><td></td></tr>
         <tr><td class="lbl">KCS</td><td></td><td></td><td></td></tr>
         <tr><td class="lbl">N Kiểm</td><td></td><td></td><td></td></tr>
+        ${d.nguoiSua ? `<tr><td class="lbl">N Sửa</td><td class="v" colspan="3">${d.nguoiSua}</td></tr>` : ''}
       </table>
       <div class="code">104-THLA-CM I-011 B3</div>
     </div>`;
@@ -175,9 +175,14 @@ function openSheet(inner, title) {
 <body onafterprint="window.close()">
   <div class="sheet">${inner}</div>
   <script>
-    var img = document.querySelector('.qr img');
     function go(){ window.focus(); window.print(); }
-    if (img && !img.complete) { img.onload = go; img.onerror = go; } else { setTimeout(go, 100); }
+    /* ⚠ Chờ TẤT CẢ ảnh QR, không chỉ ảnh đầu: tờ có thể mang 2 tem KHÁC NHAU (in 2 tem cùng lúc ở
+       trang Sửa) ⇒ chỉ chờ ảnh thứ nhất thì tem thứ hai có khi in ra thiếu QR. */
+    var chua = Array.prototype.slice.call(document.images).filter(function(i){ return !i.complete; });
+    if (chua.length) {
+      var con = chua.length;
+      chua.forEach(function(i){ i.onload = i.onerror = function(){ if (--con === 0) setTimeout(go, 30); }; });
+    } else { setTimeout(go, 100); }
   </script>
 </body></html>`;
   // KHÔNG dùng alert() — ném lỗi để trang gọi hiện Toast theo design system.
@@ -238,7 +243,9 @@ export async function inThuMauTem(boCuc, data, tienTo) {
 
 // Thử in bằng mẫu đã gắn cho `maViTri`. Trả `true` nếu đã in; `false` = chưa gắn mẫu / lỗi → caller lùi.
 // `tienTo` = { trai, phai } số công đoạn ghép vào mã tem của từng khung.
-async function thuInTheoMau(maViTri, label, tienTo, suffix) {
+// `labelPhai` (tùy chọn) = dữ liệu RIÊNG cho khung PHẢI ⇒ 1 tờ in được 2 TEM KHÁC NHAU (trang Sửa
+//   chọn 2 dòng in 1 lượt). Bỏ trống = khung phải dùng chính `label` như trước.
+async function thuInTheoMau(maViTri, label, tienTo, suffix, labelPhai) {
   let boCuc;
   try {
     const res = await mauChoViTri(maViTri);
@@ -250,8 +257,9 @@ async function thuInTheoMau(maViTri, label, tienTo, suffix) {
     const kTrai = boCuc.trai;
     const kPhai = khungPhai(boCuc);
     // Mã tem của TỪNG khung khác nhau (vd tem sản xuất: trái 15 · phải 16) ⇒ dữ liệu tách riêng.
+    const goc = labelPhai || label;
     const dTrai = { ...label, ma_tem: temCode(label.ma_tem, tienTo.trai, suffix) };
-    const dPhai = { ...label, ma_tem: temCode(label.ma_tem, tienTo.phai, suffix) };
+    const dPhai = { ...goc, ma_tem: temCode(goc.ma_tem, tienTo.phai, goc === label ? suffix : goc.suffix) };
     const [aTrai, aPhai] = await Promise.all([dungAnhMa(kTrai, dTrai), dungAnhMa(kPhai, dPhai)]);
     openSheetMau(
       renderKhung(kTrai, dTrai, aTrai),
@@ -290,11 +298,29 @@ export async function printKcsGiaoTem(label) {
 // In tem OQC (sau khi SỬA xong → OQC) = tem 17: bố cục Y HỆT tem 15 (nhãn trái PHIẾU GIAO HÀNG).
 // suffix = lần giao (nếu tem tách nhiều lần giao) → '17-TEM00030-1'. so_luong caller truyền vào.
 export async function printOqcTem(label, suffix) {
-  if (!label || !label.ma_tem) return;
-  if (await thuInTheoMau('SUA_IN_TEM_OQC', label, { trai: 17, phai: 17 }, suffix)) return;
-  const d = await buildData(label, temCode(label.ma_tem, 17, suffix));
-  const l = leftLabel(d);
-  openSheet(l + l, `Tem 17 ${label.ma_tem}`);
+  return printSuaOqcTem([{ ...label, suffix }]);
+}
+
+// IN 1–2 TEM 17 TRÊN CÙNG 1 TỜ (tờ decal 110×80mm vốn là 2-up) — dùng ở sidebar "Đã hoàn thành" của
+// trang Sửa: chọn 1 dòng thì in 2 nhãn GIỐNG NHAU (như trước), chọn 2 dòng thì **dòng 1 ra tem bên
+// trái, dòng 2 ra tem bên phải** ⇒ 1 lần bấm in được 2 lô, khỏi tốn nửa tờ decal.
+//
+// ⚠ TỐI ĐA 2 (`slice(0, 2)`) — tờ chỉ có 2 khung, dòng thứ 3 sẽ bị mất im lặng nếu không chặn.
+// ⚠ MỖI LẦN BẤM = 1 CỬA SỔ IN: đừng gọi hàm này nhiều lần liên tiếp trong 1 lần bấm — trình duyệt
+//   CHẶN POPUP từ cửa sổ thứ 2 trở đi (bài học ở modal in tem gom set, §6 Sản xuất).
+// `label.nguoi_sua` (nhập ở modal In tem) in ra dòng "N Sửa" của nhãn; `label.suffix` = lần giao.
+export async function printSuaOqcTem(labels) {
+  const ds = (Array.isArray(labels) ? labels : [labels]).filter((x) => x && x.ma_tem).slice(0, 2);
+  if (!ds.length) return;
+  const l1 = ds[0];
+  const l2 = ds[1] || l1;
+  if (await thuInTheoMau('SUA_IN_TEM_OQC', l1, { trai: 17, phai: 17 }, l1.suffix, l2)) return;
+  const [d1, d2] = await Promise.all([
+    buildData(l1, temCode(l1.ma_tem, 17, l1.suffix)),
+    buildData(l2, temCode(l2.ma_tem, 17, l2.suffix)),
+  ]);
+  openSheet(leftLabel(d1) + leftLabel(d2),
+    `Tem 17 ${l1.ma_tem}${ds[1] ? ` + ${ds[1].ma_tem}` : ''}`);
 }
 
 // Nhãn "hàng về" gia công = tem 13: bố cục PHIẾU GIAO HÀNG nhưng có BĂNG "TH VỀ" phía trên tiêu đề.

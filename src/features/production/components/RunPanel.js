@@ -6,11 +6,12 @@ import Badge from '../../../components/common/Badge';
 import Icon from '../../../components/common/Icon';
 import Toast from '../../../components/common/Toast';
 import SearchableSelect from '../../../components/common/SearchableSelect';
+import NhieuNguoiSelect from '../../../components/common/NhieuNguoiSelect';
 import TimeSelect from '../../../components/common/TimeSelect';
 import { Field, Input, Textarea, Select } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import { getRun, printTem, printTemBatch, reprintTem, getTemLabel, getTemLogs, finishRun, stopLine, resumeLine, addVaiHuy, savePhanCong, pauseLenhChay, listProductionCandidates, startProduction, vuotSanXuat, doiChuyen, listChuyen, listLyDoNgung, listLyDoBoSung, luuLyDoBoSungDotVai } from '../../../services/productionService';
+import { getRun, printTem, printTemBatch, reprintTem, getTemLabel, getTemLogs, finishRun, stopLine, resumeLine, addVaiHuy, savePhanCong, pauseLenhChay, listProductionCandidates, startProduction, vuotSanXuat, doiChuyen, listChuyen, listLyDoNgung, luuLyDoBoSungDotVai } from '../../../services/productionService';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import { listUserOptions } from '../../../services/userService';
 import printTemLabel from '../utils/printTemLabel';
@@ -107,24 +108,44 @@ function TemMetaFields({ meta, setMeta, goiY, anGcMauVai = false }) {
   );
 }
 
-// ─── LÝ DO BỔ SUNG cho 1 ĐỢT VẢI (inline, mig 077) ────────────────────────────
-// Chỉ hiện với đợt vải loại BỔ SUNG. Đã ghi → hiện thẳng lý do + nút Sửa; chưa ghi → ô chọn + Lưu.
+// ─── SỐ LƯỢNG BỔ SUNG cho 1 ĐỢT VẢI (inline, mig 077 + 079) ───────────────────
+// Chỉ hiện với đợt vải loại BỔ SUNG. Chia SL bổ sung theo TRÁCH NHIỆM:
+//   vd bổ sung 50 = 40 do CÔNG TY làm sai + 10 do KHÁCH HÀNG (giao vải thiếu…).
+//
+// ⚠⚠ ĐÃ BỎ Ô CHỌN LÝ DO (chốt 12/08/2026) — chỉ còn 2 ô SỐ LƯỢNG + ghi chú. Cột `ly_do_bo_sung_id`
+//   (mig 077) giữ trong DB cho dữ liệu đã nhập trước đó, nhưng FE KHÔNG gửi lên nữa.
+// ⚠ Σ(cty + khách) nên bằng SL vải về của đợt bổ sung — lệch thì chỉ CẢNH BÁO màu, KHÔNG chặn Lưu
+//   (số ERP và số thực nhận có thể khác; đây là ô nhập ở chuyền đang chạy).
 // ⚠ Đặt ở MỨC MODULE (không lồng trong RunPanel) — component lồng bị remount mỗi lần cha render ⇒
 //   ô nhập mất focus khi đang gõ (cùng luật với `PhanCongInline`/`TemMetaFields`).
-function LyDoBoSungInline({ dot, ds, canRun, onSave }) {
-  const daGhi = !!(dot.ly_do_bo_sung_id || dot.ghi_chu_bo_sung);
+function LyDoBoSungInline({ dot, canRun, onSave }) {
+  const daGhi = dot.sl_bo_sung_cty != null || dot.sl_bo_sung_khach != null || !!dot.ghi_chu_bo_sung;
   const [sua, setSua] = useState(false);
-  const [form, setForm] = useState({ lyDoId: '', ghiChu: '' });
+  const [form, setForm] = useState({ slCty: '', slKhach: '', ghiChu: '' });
   const [dangLuu, setDangLuu] = useState(false);
 
   useEffect(() => {
-    setForm({ lyDoId: dot.ly_do_bo_sung_id || '', ghiChu: dot.ghi_chu_bo_sung || '' });
-  }, [dot.ly_do_bo_sung_id, dot.ghi_chu_bo_sung, sua]);
+    setForm({
+      slCty: dot.sl_bo_sung_cty == null ? '' : String(dot.sl_bo_sung_cty),
+      slKhach: dot.sl_bo_sung_khach == null ? '' : String(dot.sl_bo_sung_khach),
+      ghiChu: dot.ghi_chu_bo_sung || '',
+    });
+  }, [dot.sl_bo_sung_cty, dot.sl_bo_sung_khach, dot.ghi_chu_bo_sung, sua]);
 
   const dangSua = canRun && (!daGhi || sua);
+  const num = (v) => Math.max(0, Math.trunc(Number(v) || 0));
+  const tong = num(form.slCty) + num(form.slKhach);
+  const slVe = Number(dot.so_luong_vai_ve) || 0;
+  const lech = slVe > 0 && tong > 0 && tong !== slVe;
+  const coSo = form.slCty !== '' || form.slKhach !== '';
+
   const luu = async () => {
     setDangLuu(true);
-    const ok = await onSave(dot.dot_vai_ve_id, form);
+    const ok = await onSave(dot.dot_vai_ve_id, {
+      slCty: form.slCty === '' ? null : num(form.slCty),
+      slKhach: form.slKhach === '' ? null : num(form.slKhach),
+      ghiChu: form.ghiChu,
+    });
     setDangLuu(false);
     if (ok) setSua(false);   // lỗi thì GIỮ ô nhập, không mất thứ đang gõ
   };
@@ -135,36 +156,43 @@ function LyDoBoSungInline({ dot, ds, canRun, onSave }) {
         <b className="text-ink">{dot.ma_dot_vai}</b>
         <span className="text-ink-soft"> · {dot.ma_phan} · {dot.mau_vai}</span>
         <Badge tone="warning" className="ml-1.5">{dot.ten_loai_dot_vai || 'Bổ sung'}</Badge>
+        {slVe > 0 && <span className="ml-1.5 text-ink-soft">SL vải về <b className="text-ink">{fmtNum(slVe)}</b></span>}
       </div>
       {dangSua ? (
         <div className="space-y-2">
-          {ds.length > 0 && (
-            <SearchableSelect
-              moNgay
-              value={form.lyDoId}
-              onChange={(v) => setForm((f) => ({ ...f, lyDoId: v }))}
-              options={ds}
-              getValue={(l) => l.id}
-              getLabel={(l) => l.ten_ly_do || ''}
-              getSearch={(l) => `${l.ten_ly_do || ''} ${l.ma_ly_do || ''}`}
-              placeholder="Bấm để xem danh sách, hoặc gõ để tìm..."
-              emptyLabel="— Chọn lý do bổ sung —"
-            />
-          )}
+          <div className="grid grid-cols-2 gap-2">
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-ink-soft">SL do công ty</span>
+              <Input type="number" min="0" value={form.slCty} placeholder="vd: 40"
+                onChange={(e) => setForm((f) => ({ ...f, slCty: e.target.value }))} />
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-ink-soft">SL do khách hàng</span>
+              <Input type="number" min="0" value={form.slKhach} placeholder="vd: 10"
+                onChange={(e) => setForm((f) => ({ ...f, slKhach: e.target.value }))} />
+            </label>
+          </div>
+          <div className={`text-xs ${lech ? 'text-amber-600' : 'text-ink-soft'}`}>
+            Tổng <b>{fmtNum(tong)}</b>{slVe > 0 ? ` / ${fmtNum(slVe)} SL vải về` : ''}
+            {lech ? ' — lệch so với SL vải về, kiểm lại giúp (vẫn lưu được)' : ''}
+          </div>
           <Textarea rows={2} value={form.ghiChu}
             onChange={(e) => setForm((f) => ({ ...f, ghiChu: e.target.value }))}
-            placeholder={ds.length ? 'Ghi chú thêm (tùy chọn)' : 'Lý do bổ sung (vd: in hư, vải thiếu...)'} />
+            placeholder="Ghi chú thêm (tùy chọn) — vd: in hư 40, khách giao vải thiếu 10" />
           <div className="flex gap-2">
             <Button className="flex-1" onClick={luu} loading={dangLuu}
-              disabled={!form.lyDoId && !form.ghiChu.trim()}>Lưu lý do</Button>
+              disabled={!coSo && !form.ghiChu.trim()}>Lưu số lượng bổ sung</Button>
             {daGhi && <Button variant="ghost" onClick={() => setSua(false)}>Hủy</Button>}
           </div>
         </div>
       ) : (
         <div className="flex items-start gap-2">
           <div className="min-w-0 flex-1 text-sm">
-            <div className="text-ink">{dot.ten_ly_do_bo_sung || '—'}</div>
-            {dot.ghi_chu_bo_sung && <div className="text-xs text-ink-soft">{dot.ghi_chu_bo_sung}</div>}
+            <div className="flex flex-wrap gap-x-4 gap-y-0.5">
+              <span className="text-ink-soft">Do công ty: <b className="text-ink">{dot.sl_bo_sung_cty == null ? '—' : fmtNum(dot.sl_bo_sung_cty)}</b></span>
+              <span className="text-ink-soft">Do khách hàng: <b className="text-ink">{dot.sl_bo_sung_khach == null ? '—' : fmtNum(dot.sl_bo_sung_khach)}</b></span>
+            </div>
+            {dot.ghi_chu_bo_sung && <div className="mt-0.5 text-xs text-ink-soft">{dot.ghi_chu_bo_sung}</div>}
           </div>
           {canRun && <Button variant="ghost" icon="pencil" className="px-2.5 py-1 text-xs"
             onClick={() => setSua(true)}>Sửa</Button>}
@@ -177,6 +205,12 @@ function LyDoBoSungInline({ dot, ds, canRun, onSave }) {
 // ─── PHÂN CÔNG (inline, không modal) ──────────────────────────────────────────
 // Lần đầu: 3 ô nhập + nút Lưu. Đã lưu: hiện thẳng tên + nút Sửa (bấm mới cho sửa lại).
 // "Thợ in" là 1 ô chữ = DANH SÁCH thợ trên chuyền (mức phiếu) — BE ghi cùng chuỗi cho mọi đợt vải.
+//
+// ⚠ CẢ 3 Ô ĐỀU CHỌN TỪ DANH SÁCH TÀI KHOẢN (2026-08-12) — trước đây Chuyền trưởng/Thợ in là ô chữ gõ
+//   tay nên mỗi người viết một kiểu ("Nguyễn Văn A" / "nguyen van a" / "A"), không đối chiếu được.
+//   Ca trưởng lưu **id** (`phieu_san_xuat.ca_truong_id`), còn Chuyền trưởng / Thợ in lưu **TÊN**
+//   (`chuyen_truong` VARCHAR · `tho_in` TEXT) ⇒ đổi sang ô chọn KHÔNG cần migration, và vẫn cho gõ
+//   tên người chưa có tài khoản (thợ khoán) — xem `NhieuNguoiSelect`.
 function PhanCongInline({ pc, users, onSave, busy, canRun }) {
   const daLuu = !!(pc?.ca_truong_id || pc?.chuyen_truong || pc?.tho_in);
   const [sua, setSua] = useState(false);
@@ -220,13 +254,27 @@ function PhanCongInline({ pc, users, onSave, busy, canRun }) {
           placeholder="Gõ tên hoặc tên đăng nhập để tìm..."
         />
       </Field>
-      <Field label="Chuyền trưởng">
-        <Input value={form.chuyenTruong} onChange={(e) => set('chuyenTruong', e.target.value)}
-          placeholder="Nhập tên chuyền trưởng" />
+      {/* ⚠ `chapNhanTuDo`: ô này TRƯỚC ĐÂY là ô chữ gõ tay, đổi sang ô chọn mà chặt quá thì MẤT khả
+          năng ghi tên người chưa có tài khoản. Cột `chuyen_truong` lưu TÊN nên nhận chữ thô là hợp lệ. */}
+      <Field label="Chuyền trưởng" hint="Chọn trong danh sách, hoặc gõ tên rồi Enter nếu người đó chưa có tài khoản">
+        <SearchableSelect
+          chapNhanTuDo
+          value={form.chuyenTruong}
+          onChange={(v) => set('chuyenTruong', v)}
+          options={users}
+          getValue={(u) => u.ho_ten || u.ten_dang_nhap || ''}
+          getLabel={(u) => u.ho_ten || u.ten_dang_nhap || ''}
+          getSearch={(u) => `${u.ho_ten || ''} ${u.ten_dang_nhap || ''}`}
+          placeholder="Gõ tên hoặc tên đăng nhập để tìm..."
+        />
       </Field>
-      <Field label="Thợ in trên chuyền" hint="Nhiều thợ thì ngăn cách bằng dấu phẩy">
-        <Textarea rows={2} value={form.thoIn} onChange={(e) => set('thoIn', e.target.value)}
-          placeholder="vd: Nguyễn Văn A, Trần B, Lê C" />
+      <Field label="Thợ in trên chuyền" hint="Chọn xong 1 người là tự thêm vào danh sách, chọn tiếp được; tên chưa có trong danh sách thì gõ rồi Enter">
+        <NhieuNguoiSelect
+          value={form.thoIn}
+          onChange={(v) => set('thoIn', v)}
+          options={users}
+          placeholder="Gõ tên thợ in để tìm rồi chọn / Enter..."
+        />
       </Field>
       <div className="flex gap-2">
         {daLuu && <Button variant="ghost" className="flex-1" onClick={() => setSua(false)} disabled={busy}>Hủy</Button>}
@@ -381,7 +429,6 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
   const [stopReason, setStopReason] = useState('');   // ghi chú thêm (tùy chọn)
   const [stopLyDoId, setStopLyDoId] = useState('');   // lý do chọn từ danh mục (mig 076)
   const [lyDoNgungDs, setLyDoNgungDs] = useState([]);
-  const [lyDoBoSungDs, setLyDoBoSungDs] = useState([]);   // danh mục lý do bổ sung (mig 077)
   // Giờ ngừng / hoạt động lại NHẬP TAY ('HH:MM', bỏ trống = giờ hệ thống). Luồng vẫn 2 bước như cũ.
   const [stopGioBd, setStopGioBd] = useState('');
   const [stopGioKt, setStopGioKt] = useState('');
@@ -450,15 +497,13 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
       .then((r) => setUsers(r.data || []))
       .catch(() => { /* không chặn màn sản xuất; ô ca trưởng sẽ rỗng */ });
   }, []);
-  // Danh mục lý do ngừng chuyền (mig 076) + lý do bổ sung (mig 077). Lỗi/chưa chạy migration → mảng
-  // rỗng → ô chọn ẩn đi, người đứng máy vẫn gõ tay lý do được như trước.
+  // Danh mục lý do ngừng chuyền (mig 076). Lỗi/chưa chạy migration → mảng rỗng → ô chọn ẩn đi,
+  // người đứng máy vẫn gõ tay lý do được như trước.
+  // ⚠ KHÔNG còn nạp danh mục "lý do bổ sung" — khối Số lượng bổ sung đã bỏ ô chọn lý do (mig 079).
   useEffect(() => {
     listLyDoNgung()
       .then((r) => setLyDoNgungDs(r.data || []))
       .catch(() => setLyDoNgungDs([]));
-    listLyDoBoSung()
-      .then((r) => setLyDoBoSungDs(r.data || []))
-      .catch(() => setLyDoBoSungDs([]));
   }, []);
 
   // Lấy dữ liệu nhãn tem rồi mở cửa sổ in (barcode Code128 = mã tem).
@@ -640,15 +685,16 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
   };
 
   // Ghi vải hủy (= vải hư) / vải THIẾU theo phần in. Lệnh chỉ 1 phần in → tự chọn; nhiều phần in → phải chọn.
-  // Ghi lý do bổ sung cho 1 đợt vải. Trả true/false để khối inline biết có thoát chế độ sửa không.
+  // Ghi SL bổ sung (do công ty / do khách hàng) cho 1 đợt vải.
+  // Trả true/false để khối inline biết có thoát chế độ sửa không.
   const doSaveLyDoBoSung = async (dotVaiId, form) => {
     try {
       await luuLyDoBoSungDotVai(dotVaiId, form);
-      show('Đã lưu lý do bổ sung');
+      show('Đã lưu số lượng bổ sung');
       await load();
       return true;
     } catch (e) {
-      show(e.message || 'Lưu lý do bổ sung thất bại', 'error');
+      show(e.message || 'Lưu số lượng bổ sung thất bại', 'error');
       return false;
     }
   };
@@ -820,18 +866,19 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
             </section>
           )}
 
-          {/* LÝ DO BỔ SUNG — CHỈ hiện khi lệnh có đợt vải loại BỔ SUNG (mig 077). Đặt NGAY TRÊN Phân công.
-              ⚠ Ghi ở mức ĐỢT VẢI (mỗi đợt bổ sung 1 lý do riêng), không phải mức phiếu — lý do đi theo
+          {/* SỐ LƯỢNG BỔ SUNG — CHỈ hiện khi lệnh có đợt vải loại BỔ SUNG (mig 077 + 079). Đặt NGAY
+              TRÊN Phân công. Chia SL bổ sung thành phần do CÔNG TY và phần do KHÁCH HÀNG.
+              ⚠ Ghi ở mức ĐỢT VẢI (mỗi đợt bổ sung số riêng), không phải mức phiếu — đi theo
                 đợt vải qua mọi lệnh sản xuất về sau.
               ⚠ Nhận diện bằng `ma_loai_dot_vai === 'BO_SUNG'` (mã danh mục), KHÔNG so tên hiển thị. */}
           {dotVaiBoSung.length > 0 && (
             <section className="border-t border-line pt-4">
               <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-soft">
-                Lý do bổ sung <span className="ml-1 font-normal normal-case">({dotVaiBoSung.length} đợt vải)</span>
+                Số lượng bổ sung <span className="ml-1 font-normal normal-case">({dotVaiBoSung.length} đợt vải)</span>
               </h3>
               <div className="space-y-2">
                 {dotVaiBoSung.map((d) => (
-                  <LyDoBoSungInline key={d.dot_vai_ve_id} dot={d} ds={lyDoBoSungDs}
+                  <LyDoBoSungInline key={d.dot_vai_ve_id} dot={d}
                     canRun={canRun} onSave={doSaveLyDoBoSung} />
                 ))}
               </div>

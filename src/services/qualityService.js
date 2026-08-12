@@ -11,6 +11,9 @@ export const listSuaCandidates = (params) => client.get('/quality/sua/candidates
 export const recordSua = (temId, body) => client.post(`/quality/sua/${temId}`, body);
 export const suaHistory = (date) => client.get('/quality/sua/history', { params: { date } });
 export const suaDone = (date) => client.get('/quality/sua/done', { params: { date } });
+// Ghi NGƯỜI SỬA cho các lượt sửa được chọn, nhập ở modal In tem (mig 080).
+// items: [{ suaId, nguoiSuaId?, nguoiSua }]
+export const luuNguoiSua = (items) => client.post('/quality/sua/nguoi-sua', { items });
 
 export const listOqcCandidates = (params) => client.get('/quality/oqc/candidates', { params });
 export const recordOqc = (temId, body) => client.post(`/quality/oqc/${temId}`, body);

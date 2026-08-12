@@ -18,7 +18,8 @@ export const release1TraVeKyThuat = (body) => client.post('/planning/release1/tr
 export const createDotSanXuat = (body) => client.post('/planning/dot-san-xuat', body);
 export const release1History = (date) => client.get('/planning/release1/history', { params: { date } });
 // Danh sách release theo ngày kế hoạch (modal/report + Excel/In)
-export const getReleaseList = (date) => client.get('/planning/release-list', { params: { date } });
+// mode: 'KE_HOACH' (mặc định — theo ngày kế hoạch) | 'RELEASE' (theo ngày bấm Release 1)
+export const getReleaseList = (date, mode) => client.get('/planning/release-list', { params: { date, mode } });
 export const release1Done = (date) => client.get('/planning/release1/done', { params: { date } });
 export const listReleaseSets = (params) => client.get('/planning/release1/sets', { params });
 export const releaseSet = (setId, body) => client.post(`/planning/release1/set/${setId}`, body);

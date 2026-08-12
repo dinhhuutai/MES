@@ -4,7 +4,7 @@ import Button from '../../../components/common/Button';
 import Icon from '../../../components/common/Icon';
 import Badge from '../../../components/common/Badge';
 import SearchableSelect from '../../../components/common/SearchableSelect';
-import { fmtDateTime } from '../../../utils/format';
+import { fmtDateTime, temCode } from '../../../utils/format';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SIDEPANEL PHÂN LOẠI LỖI của 1 tem — thông tin tem đầy đủ + bảng nhập lỗi.
@@ -15,6 +15,9 @@ import { fmtDateTime } from '../../../utils/format';
 //
 // ⚠ Ô nhập khai class riêng, KHÔNG dùng `Input` của controls: `inputClass` có sẵn `w-full`+`h-11`
 //   mà Tailwind sinh `.w-full` SAU `.w-20` ⇒ class truyền thêm vô tác dụng (bẫy §6 Hồ sơ kỹ thuật).
+//
+// ⚠ MÃ TEM hiện với TIỀN TỐ **16** (nhãn hàng LỖI dán túi sửa) — đúng nhãn mà người phân loại đang
+//   cầm trên tay. DB vẫn lưu mã gốc tiền tố 15 (KCS đạt); chỉ đổi phần HIỂN THỊ.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const O_SO = 'h-9 w-20 rounded-control border border-line bg-surface px-2 text-right text-base md:text-sm outline-none focus:border-primary';
@@ -74,7 +77,7 @@ export default function PhanLoaiLoiPanel({ open, onClose, data, loaiLoi, bienPha
   return (
     <SidePanel
       open={open} onClose={onClose} width="max-w-4xl"
-      title={tem ? `Phân loại lỗi — tem ${tem.ma_tem}` : 'Phân loại lỗi'}
+      title={tem ? `Phân loại lỗi — tem ${temCode(tem.ma_tem, 16)}` : 'Phân loại lỗi'}
       subtitle={tem ? `${tem.ten_khach_hang || '—'} · ${tem.ma_phan || '—'}` : ''}
       footer={tem && (
         <>

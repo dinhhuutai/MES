@@ -14,8 +14,10 @@ import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
 import { Field, Input, Textarea } from '../../../components/common/controls';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
+import TimeSelect from '../../../components/common/TimeSelect';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
+import ReleaseListModal from '../components/ReleaseListModal';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
 import useToast from '../../../hooks/useToast';
@@ -103,6 +105,7 @@ export default function Release1Page() {
   const [chuyen, setChuyen] = useState([]);
   const [histOpen, setHistOpen] = useState(false);
   const [doneOpen, setDoneOpen] = useState(false);
+  const [releaseListOpen, setReleaseListOpen] = useState(false); // modal "Danh sách release" (dùng chung với Tạo đợt SX)
   const [onlyReturned, setOnlyReturned] = useState(false); // lọc đợt vải bị QC trả về
   const [showReady, setShowReady] = useState(false); // lọc: hiện đợt "Đã Ready" (qc_done) — mặc định KHÔNG tick (hiện tất cả)
   const [showWait, setShowWait] = useState(false);   // lọc: hiện đợt "Chờ Ready" (chưa QC) — mặc định KHÔNG tick (hiện tất cả)
@@ -112,9 +115,9 @@ export default function Release1Page() {
   const [cpage, setCpage] = useState(1);             // phân trang CLIENT (chọn-tất-cả vẫn spanning mọi trang)
 
   const [detail, setDetail] = useState(null);        // row lẻ đang xem
-  const [form, setForm] = useState({ chuyenId: '', soLuongRelease: '', ngayKeHoach: '' });
+  const [form, setForm] = useState({ chuyenId: '', soLuongRelease: '', ngayKeHoach: '', gioBd: '', gioKt: '' });
   const [releaseOpen, setReleaseOpen] = useState(false); // modal release gộp
-  const [relForm, setRelForm] = useState({ chuyenId: '', ngayKeHoach: '' });
+  const [relForm, setRelForm] = useState({ chuyenId: '', ngayKeHoach: '', gioBd: '', gioKt: '' });
   const [saving, setSaving] = useState(false);
   const [traVeOpen, setTraVeOpen] = useState(false);     // modal "Trả về Kỹ thuật" (lý do bắt buộc)
   const [traVeReason, setTraVeReason] = useState('');
@@ -236,17 +239,20 @@ export default function Release1Page() {
       _setDaReady: (set.so_dot_vai || 0) - (set.so_chua_ready || 0) > 0,
     } : row);
     // Mặc định release phần CÒN LẠI (SL vải về − đã release); release theo số lượng, giữ phần còn.
-    setForm({ chuyenId: chuyen[0]?.id || '', soLuongRelease: String(row.con_release ?? row.so_luong_vai_ve ?? ''), ngayKeHoach: dateOffsetStr(1) });
+    setForm({ chuyenId: chuyen[0]?.id || '', soLuongRelease: String(row.con_release ?? row.so_luong_vai_ve ?? ''), ngayKeHoach: dateOffsetStr(1), gioBd: '', gioKt: '' });
   };
 
   // Release 1 phần in lẻ (từ side panel chi tiết)
   const submitRelease = async (dotVaiIds) => {
     setSaving(true);
     try {
+      // Giờ BD/KT (HH:MM) ghép với ngày kế hoạch → timestamp, y hệt màn Tạo đợt sản xuất.
+      const mkTs = (gio) => (form.ngayKeHoach && gio ? `${form.ngayKeHoach}T${gio}:00` : null);
       const res = await createRelease1({
         dotVaiIds, chuyenId: form.chuyenId,
         soLuongRelease: form.soLuongRelease ? Number(form.soLuongRelease) : null,
         ngayKeHoach: form.ngayKeHoach || null,
+        tgBdKh: mkTs(form.gioBd), tgKtKh: mkTs(form.gioKt),
       });
       const skipped = res?.data?.skipped_test_count || 0;
       const tam = res?.data?.ke_hoach_tam_count || 0;
@@ -284,7 +290,7 @@ export default function Release1Page() {
   };
 
   const openReleaseAll = () => {
-    setRelForm({ chuyenId: chuyen[0]?.id || '', ngayKeHoach: dateOffsetStr(1) });
+    setRelForm({ chuyenId: chuyen[0]?.id || '', ngayKeHoach: dateOffsetStr(1), gioBd: '', gioKt: '' });
     setReleaseOpen(true);
   };
 
@@ -292,16 +298,18 @@ export default function Release1Page() {
   const doReleaseAll = async () => {
     setSaving(true);
     try {
+      const mkTsR = (gio) => (relForm.ngayKeHoach && gio ? `${relForm.ngayKeHoach}T${gio}:00` : null);
+      const gio = { tgBdKh: mkTsR(relForm.gioBd), tgKtKh: mkTsR(relForm.gioKt) };
       let okSets = 0; let tamSets = 0; const errs = [];
       for (const s of selectedSetList) {
         try {
           // Set đủ QC → release thật (1 lệnh chung). Set CHƯA đủ Ready → lưu KẾ HOẠCH TẠM cho cả set
           // (không tạo lệnh, không tách lẻ) — khi cả set Ready xong mới release chung ở màn Kế hoạch tạm.
           if (s.san_sang) {
-            await releaseSet(s.id, { chuyenId: relForm.chuyenId, ngayKeHoach: relForm.ngayKeHoach || null });
+            await releaseSet(s.id, { chuyenId: relForm.chuyenId, ngayKeHoach: relForm.ngayKeHoach || null, ...gio });
             okSets += 1;
           } else {
-            await keHoachTamSet(s.id, { chuyenId: relForm.chuyenId, ngayKeHoach: relForm.ngayKeHoach || null });
+            await keHoachTamSet(s.id, { chuyenId: relForm.chuyenId, ngayKeHoach: relForm.ngayKeHoach || null, ...gio });
             tamSets += 1;
           }
         } catch (e) { errs.push(`${s.ma_set}: ${e.message}`); }
@@ -310,7 +318,7 @@ export default function Release1Page() {
       if (looseList.length) {
         const res = await createRelease1({
           dotVaiIds: looseList.map((r) => r.dot_vai_id),
-          chuyenId: relForm.chuyenId, soLuongRelease: null, ngayKeHoach: relForm.ngayKeHoach || null,
+          chuyenId: relForm.chuyenId, soLuongRelease: null, ngayKeHoach: relForm.ngayKeHoach || null, ...gio,
         });
         const tam = res?.data?.ke_hoach_tam_count || 0;
         looseMsg = ` · ${res?.data?.created_count || 0} lệnh lẻ${tam > 0 ? ` · ${tam} → Kế hoạch tạm` : ''}`;
@@ -345,6 +353,9 @@ export default function Release1Page() {
           <label className="flex items-center gap-1"><input type="checkbox" checked={showWait} onChange={(e) => setShowWait(e.target.checked)} />Chờ Ready</label>
         </span>
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
+        {/* Cùng modal với màn "Tạo đợt sản xuất" — người lập kế hoạch ở Release 1 cũng cần in/xuất
+            danh sách release cho chuyền mà không phải nhảy sang màn khác. */}
+        <Button variant="secondary" icon="list" onClick={() => setReleaseListOpen(true)}>Danh sách release</Button>
         <Button variant="secondary" icon="download" onClick={doExcel}
           disabled={!viewRows.length && !viewSets.length}>Excel</Button>
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
@@ -496,6 +507,16 @@ export default function Release1Page() {
         <Field label="Ngày kế hoạch">
           <Input type="date" value={relForm.ngayKeHoach} onChange={(e) => setRelForm({ ...relForm, ngayKeHoach: e.target.value })} />
         </Field>
+        {/* Giờ BD/KT — ghép với ngày kế hoạch thành `tg_bd_kh`/`tg_kt_kh`; bỏ trống thì không ghi giờ.
+            Dùng `TimeSelect` (24h) chứ KHÔNG `<input type="time">` — ô đó hiện AM/PM theo locale máy. */}
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Giờ bắt đầu">
+            <TimeSelect value={relForm.gioBd} onChange={(v) => setRelForm({ ...relForm, gioBd: v })} minuteStep={5} />
+          </Field>
+          <Field label="Giờ kết thúc">
+            <TimeSelect value={relForm.gioKt} onChange={(v) => setRelForm({ ...relForm, gioKt: v })} minuteStep={5} />
+          </Field>
+        </div>
       </Modal>
 
       {/* Chi tiết / release 1 đợt vải lẻ */}
@@ -557,6 +578,12 @@ export default function Release1Page() {
                 </Field>
                 <Field label="Ngày kế hoạch">
                   <Input type="date" value={form.ngayKeHoach} onChange={(e) => setForm({ ...form, ngayKeHoach: e.target.value })} />
+                </Field>
+                <Field label="Giờ bắt đầu">
+                  <TimeSelect value={form.gioBd} onChange={(v) => setForm({ ...form, gioBd: v })} minuteStep={5} />
+                </Field>
+                <Field label="Giờ kết thúc">
+                  <TimeSelect value={form.gioKt} onChange={(v) => setForm({ ...form, gioKt: v })} minuteStep={5} />
                 </Field>
               </div>
             </div>
@@ -620,6 +647,7 @@ export default function Release1Page() {
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)} title="Lịch sử Release 1" fetcher={release1History} />
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
         title="Lệnh đã Release 1" maHeader="Lệnh" fetcher={release1Done} />
+      <ReleaseListModal open={releaseListOpen} onClose={() => setReleaseListOpen(false)} />
       <Toast toast={toast} />
     </div>
   );

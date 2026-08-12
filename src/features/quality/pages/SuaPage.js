@@ -1,5 +1,7 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import Toolbar from '../../../components/common/Toolbar';
+import Modal from '../../../components/common/Modal';
+import SearchableSelect from '../../../components/common/SearchableSelect';
 import OwnerHint from '../../../components/common/OwnerHint';
 import DataTable from '../../../components/common/DataTable';
 import Badge from '../../../components/common/Badge';
@@ -20,10 +22,11 @@ import useSocketReload from '../../../hooks/useSocketReload';
 import useNow from '../../../hooks/useNow';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 import usePermissions from '../../../hooks/usePermissions';
-import { listSuaCandidates, recordSua, suaHistory, suaDone } from '../../../services/qualityService';
+import { listSuaCandidates, recordSua, suaHistory, suaDone, luuNguoiSua } from '../../../services/qualityService';
 import { getTemLabel } from '../../../services/productionService';
-import { printOqcTem } from '../../production/utils/printTemLabel';
-import { fmtNum, baseMaTem } from '../../../utils/format';
+import { listUserOptions } from '../../../services/userService';
+import { printSuaOqcTem } from '../../production/utils/printTemLabel';
+import { fmtNum, baseMaTem, temCode } from '../../../utils/format';
 
 const empty = { soLuongHuyThang: '', soLuongSua: '', soLuongSuaDat: '', soLuongSuaHuy: '' };
 
@@ -78,12 +81,73 @@ export default function SuaPage() {
 
   const openRow = (row) => { setEditing(row); setForm({ ...empty, soLuongSuaDat: String(row.con_sua || '') }); };
 
-  // In tem OQC (Sửa đã hoàn thành) = tem 17, bố cục y hệt tem 15. SL IN = số lượng sửa đạt (→ OQC).
-  const printOqc = async (row) => {
+  // ── IN TEM 17 (Sửa đã hoàn thành → OQC) ────────────────────────────────────
+  // ⚠⚠ ĐÃ BỎ nút "In tem" ở TỪNG DÒNG (đổi 12/08/2026). Nay: tích 1–2 dòng ở sidebar "Đã hoàn thành"
+  //   → nút "In tem" ở CHÂN panel → modal nhập TÊN NGƯỜI SỬA từng dòng → in.
+  //   Vì sao: tờ decal vốn là 2-up (2 tem/tờ) — in 1 tem mỗi lần thì tem bên cạnh bỏ trắng, tốn nửa
+  //   tờ; và tem 17 dán lô đi giao cần biết AI ĐÃ SỬA, trước đây không có chỗ nào nhập.
+  //   Tối đa 2 vì 1 tờ chỉ có 2 khung; tối thiểu 1.
+  const [inOpen, setInOpen] = useState(false);
+  const [inRows, setInRows] = useState([]);   // dòng đang chuẩn bị in (kèm ô nhập người sửa)
+  const [inBusy, setInBusy] = useState(false);
+  const [users, setUsers] = useState([]);
+  const clearChonRef = useRef(null);           // hàm bỏ tích của DonePanel (nhận qua footerChon)
+
+  useEffect(() => {
+    listUserOptions({ limit: 200 })
+      .then((r) => setUsers(r.data || []))
+      .catch(() => { /* không chặn in tem — ô người sửa vẫn gõ tay được */ });
+  }, []);
+
+  const moModalIn = (rows, clear) => {
+    clearChonRef.current = clear;
+    setInRows(rows.map((r) => ({
+      ...r,
+      nguoiSua: r.nguoi_sua || '',      // đã in lần trước → điền lại tên cũ
+      nguoiSuaId: r.nguoi_sua_id || '',
+    })));
+    setInOpen(true);
+  };
+
+  // Lưu người sửa (mig 080) rồi IN — 1 lần bấm = 1 cửa sổ in cho cả 1–2 tem (popup blocker chỉ cho
+  // mở 1 cửa sổ / 1 lượt bấm, xem ghi chú ở `printSuaOqcTem`).
+  const doInTem = async () => {
+    if (!inRows.length) return;
+    if (inRows.some((r) => !String(r.nguoiSua || '').trim())) {
+      show('Nhập tên người sửa cho mọi dòng trước khi in', 'error');
+      return;
+    }
+    setInBusy(true);
     try {
-      const res = await getTemLabel(row.tem_id);
-      await printOqcTem({ ...res.data, so_luong: row.so_luong });
-    } catch (e) { show(e.message || 'Không in được tem', 'error'); }
+      await luuNguoiSua(inRows.map((r) => ({
+        suaId: r.sua_id, nguoiSuaId: r.nguoiSuaId || null, nguoiSua: r.nguoiSua,
+      })));
+      const labels = await Promise.all(inRows.map(async (r) => {
+        const res = await getTemLabel(r.tem_id);
+        // ⚠ SỐ LIỆU CỦA LƯỢT SỬA ghép ở đây, KHÔNG có trong `getTemLabelData` (backend chỉ biết tem,
+        //   không biết đang in lượt sửa nào — 1 tem sửa nhiều lần từng phần). Đây là nguồn của nhóm
+        //   trường "Sửa" trong trình Thiết kế tem; thêm trường mới ở `TRUONG_TEM` thì PHẢI thêm ở đây.
+        const slSua = Number(r.so_luong_kiem) || 0;
+        const slDat = Number(r.so_luong) || 0;
+        return {
+          ...res.data,
+          so_luong: r.so_luong,            // dòng "IN" của nhãn = SL sửa đạt (→ OQC), giữ như cũ
+          nguoi_sua: r.nguoiSua,           // NHẬP TAY lúc in
+          sl_sua: slSua,
+          sl_sua_dat: slDat,
+          sl_sua_huy: Number(r.so_luong_sua_huy) || 0,
+          ty_le_sua_dat: slSua > 0 ? `${Math.round((slDat / slSua) * 100)}%` : '',
+          nguoi_xn_sua: r.nguoi || '',     // người bấm xác nhận sửa trong hệ thống (khác người sửa)
+          tg_sua: r.tg || null,
+        };
+      }));
+      await printSuaOqcTem(labels);
+      show(`Đã in ${labels.length} tem 17 (sửa đạt → OQC)`);
+      setInOpen(false);
+      clearChonRef.current?.();
+    } catch (e) {
+      show(e.message || 'Không in được tem', 'error');
+    } finally { setInBusy(false); }
   };
 
   const doneColumns = [
@@ -97,9 +161,8 @@ export default function SuaPage() {
     { key: 'so_luong_sua_huy', header: 'Sửa hủy', className: 'text-right tabular-nums text-rose-600', render: (r) => fmtNum(r.so_luong_sua_huy) },
     { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => <HanGiaoCell value={r.han_giao_hang} /> },
     { key: 'tg', header: 'Giờ', className: 'whitespace-nowrap tabular-nums', render: (r) => (r.tg ? new Date(r.tg).toLocaleTimeString('vi-VN') : '') },
-    { key: 'in_tem', header: '', className: 'text-right', render: (r) => (
-      r.tem_id ? <Button variant="secondary" className="!px-3 !py-1.5 !text-xs" onClick={() => printOqc(r)}>In tem</Button> : null
-    ) },
+    // Người sửa đã ghi ở lần in trước (mig 080) — thấy ngay dòng nào đã in, ai sửa.
+    { key: 'nguoi_sua', header: 'Người sửa', render: (r) => r.nguoi_sua || '—' },
   ];
 
   // Quét QR (ma_tem) → tra tem đang chờ sửa → mở modal nhập.
@@ -265,6 +328,21 @@ export default function SuaPage() {
         title="Lịch sử Sửa" fetcher={suaHistory} />
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
         title="Tem đã sửa" maHeader="Tem" fetcher={suaDone} columns={doneColumns}
+        chonNhieu toiDaChon={2}
+        chonDuoc={(r) => (r.tem_id ? (r.sua_id ? true : 'Thiếu migration 080 — chưa in được tem có tên người sửa') : 'Dòng này không có tem')}
+        footerChon={({ rows: sel, clear }) => (
+          <>
+            <span className="mr-auto text-xs text-ink-soft">
+              {sel.length === 0
+                ? 'Tích 1–2 dòng để in tem (1 tờ = 2 tem: dòng 1 → tem trái, dòng 2 → tem phải)'
+                : `Đã chọn ${sel.length}/2 dòng`}
+            </span>
+            {sel.length > 0 && <Button variant="ghost" onClick={clear}>Bỏ chọn</Button>}
+            <Button icon="printer" disabled={!sel.length} onClick={() => moModalIn(sel, clear)}>
+              In tem{sel.length ? ` (${sel.length})` : ''}
+            </Button>
+          </>
+        )}
         excelColumns={[
           { header: 'Tem', value: (r) => r.ma || '' },
           { header: 'Khách hàng', value: (r) => r.ten_khach_hang || '' },
@@ -277,7 +355,78 @@ export default function SuaPage() {
           { header: 'Hạn giao', value: (r) => r.han_giao_hang || '', type: 'date' },
           COT_EXCEL_GIO_HT,
           { header: 'Người', value: (r) => r.nguoi || '' },
+          { header: 'Người sửa', value: (r) => r.nguoi_sua || '' },
         ]} />
+
+      {/* MODAL IN TEM 17 — bảng thông tin các tem sắp in + ô nhập TÊN NGƯỜI SỬA từng dòng.
+          Ô nhập dùng `SearchableSelect` (chọn từ tài khoản, tìm không dấu) giống ô Ca trưởng bên
+          màn Sản xuất; giá trị lưu là TÊN nên người chưa có tài khoản vẫn in được — gõ tên rồi Enter
+          (`chapNhanTuDo`), CHỈ 1 ô nhập cho mỗi dòng. */}
+      <Modal open={inOpen} onClose={() => setInOpen(false)} size="xl"
+        title={`In tem 17 — ${inRows.length} tem trên 1 tờ`}
+        footer={
+          <>
+            <span className="mr-auto text-xs text-ink-soft">
+              {inRows.length === 1
+                ? 'In 2 nhãn GIỐNG NHAU trên tờ decal'
+                : 'Dòng 1 → tem bên trái · dòng 2 → tem bên phải'}
+            </span>
+            <Button variant="ghost" onClick={() => setInOpen(false)}>Hủy</Button>
+            <Button icon="printer" loading={inBusy} onClick={doInTem}>In tem</Button>
+          </>
+        }>
+        <div className="overflow-auto rounded-card border border-line">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-line bg-surface-muted text-left text-xs uppercase tracking-wide text-ink-soft">
+                <th className="px-2 py-2 w-8">#</th>
+                <th className="px-2 py-2" style={{ minWidth: 210 }}>Người sửa <span className="text-danger">*</span></th>
+                <th className="px-2 py-2">Tem (in ra)</th>
+                <th className="px-2 py-2">Khách hàng</th>
+                <th className="px-2 py-2">Mã hàng</th>
+                <th className="px-2 py-2">Code phần</th>
+                <th className="px-2 py-2">Màu · Kích</th>
+                <th className="px-2 py-2 text-right">SL sửa</th>
+                <th className="px-2 py-2 text-right">Sửa đạt</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {inRows.map((r, i) => (
+                <tr key={r.sua_id || r._k} className="align-top">
+                  <td className="px-2 py-2 text-ink-soft">{i + 1}</td>
+                  {/* ⚠ CHỈ 1 Ô NHẬP: `chapNhanTuDo` cho gõ tên người chưa có tài khoản (Enter là nhận)
+                      nên KHÔNG cần thêm input "hoặc gõ tay" — 2 ô nhập tên cạnh nhau trông như lỗi. */}
+                  <td className="px-2 py-2">
+                    <SearchableSelect
+                      chapNhanTuDo
+                      value={r.nguoiSua}
+                      onChange={(v) => setInRows((ds) => ds.map((x, j) => (j === i
+                        ? { ...x, nguoiSua: v, nguoiSuaId: (users.find((u) => (u.ho_ten || u.ten_dang_nhap) === v) || {}).id || '' }
+                        : x)))}
+                      options={users}
+                      getValue={(u) => u.ho_ten || u.ten_dang_nhap || ''}
+                      getLabel={(u) => u.ho_ten || u.ten_dang_nhap || ''}
+                      getSearch={(u) => `${u.ho_ten || ''} ${u.ten_dang_nhap || ''}`}
+                      placeholder="Chọn hoặc gõ tên người sửa..."
+                    />
+                  </td>
+                  {/* Mã in ra mang tiền tố 17 (sửa đạt → giao) — đúng cái sẽ hiện trên nhãn giấy. */}
+                  <td className="px-2 py-2"><Badge tone="info">{temCode(r.ma, 17)}</Badge></td>
+                  <td className="px-2 py-2">{r.ten_khach_hang || '—'}</td>
+                  <td className="px-2 py-2">{r.ma_hang || '—'}</td>
+                  <td className="px-2 py-2">{r.ma_phan || '—'}</td>
+                  <td className="px-2 py-2">
+                    <div>{r.mau_vai || '—'}</div>
+                    <div className="text-xs text-ink-soft">{[r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—'}</div>
+                  </td>
+                  <td className="px-2 py-2 text-right tabular-nums">{fmtNum(r.so_luong_kiem)}</td>
+                  <td className="px-2 py-2 text-right tabular-nums font-semibold text-emerald-600">{fmtNum(r.so_luong)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Modal>
 
       <QrScanner open={scanOpen} onClose={() => setScanOpen(false)} onResult={onScan} />
 

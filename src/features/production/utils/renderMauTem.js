@@ -104,10 +104,19 @@ const fmtSo = (v) => (v == null || v === '' ? '' : Number(v).toLocaleString('vi-
 //           "152608057689" + {vi_tri:1, so_kt:2, thanh:'17'} → "172608057689"
 //           "260805C2"     + {vi_tri:1, so_kt:6, thanh:''}   → "C2"
 //   DAU   : thêm `thanh` vào ĐẦU chuỗi · CUOI : thêm `thanh` vào CUỐI chuỗi
+//   LAY_TU: CHỈ LẤY `so_tu` TỪ (cách nhau bằng khoảng trắng), từ CUỐI (mặc định) hoặc từ ĐẦU
+//           "NGUYỄN VĂN ANH TUẤN" + {so_tu:2}                 → "ANH TUẤN"  (bỏ họ, giữ tên lót + tên)
+//           "NGUYỄN VĂN ANH TUẤN" + {so_tu:1, tu_cuoi:false}   → "NGUYỄN"
+//   LAY_KT: CHỈ LẤY `so_kt` ký tự KỂ TỪ ký tự thứ `vi_tri` (đếm từ 1); `so_kt` trống/0 = lấy TỚI HẾT
+//           "152608057689" + {vi_tri:3}            → "2608057689"
+//           "GL-2607-011"  + {vi_tri:4, so_kt:4}   → "2607"
 // Chạy LẦN LƯỢT theo thứ tự trong danh sách (luật sau ăn kết quả của luật trước).
 // ⚠ Cố ý dùng thay-chuỗi-thường (`split/join`) chứ KHÔNG regex: người dùng ở xưởng gõ "(6PCS)" hay
 //   "2.1*1" là chuỗi thật, không phải cú pháp.
 // ⚠ Luật sai/thừa thì BỎ QUA im lặng, không ném lỗi — đây là đường IN, máy in đang chờ.
+// ⚠⚠ LUẬT CẮT (LAY_TU/LAY_KT) TUYỆT ĐỐI KHÔNG ĐƯỢC TRẢ VỀ RỖNG do tham số chưa nhập / ngoài phạm vi:
+//   thà in nguyên văn còn hơn để trống ô trên tem đã dán ra hàng. Vì vậy chưa nhập số → bỏ qua luật,
+//   vị trí vượt độ dài → bỏ qua, số từ lớn hơn số từ có thật → lấy hết những gì có.
 export function apDungThay(chuoi, thay) {
   if (!Array.isArray(thay) || !thay.length) return chuoi;
   let s = String(chuoi == null ? '' : chuoi);
@@ -125,6 +134,22 @@ export function apDungThay(chuoi, thay) {
       s = s.slice(0, vt - 1) + thanh + s.slice(vt - 1 + n);
       continue;
     }
+    if (kieu === 'LAY_TU') {
+      const n = Math.max(0, Math.trunc(Number(r.so_tu) || 0));
+      if (!n) continue;                                  // chưa nhập số từ → giữ nguyên
+      const tu = s.trim().split(/\s+/).filter(Boolean);
+      if (!tu.length) continue;
+      // `slice(-n)` tự xử ca n ≥ số từ có thật (lấy hết), khỏi phải chặn riêng.
+      s = (r.tu_cuoi === false ? tu.slice(0, n) : tu.slice(-n)).join(' ');
+      continue;
+    }
+    if (kieu === 'LAY_KT') {
+      const vt = Math.max(1, Math.trunc(Number(r.vi_tri) || 1));
+      if (vt > s.length) continue;                       // ngoài chuỗi → giữ nguyên, KHÔNG trả rỗng
+      const n = Math.max(0, Math.trunc(Number(r.so_kt) || 0));
+      s = n > 0 ? s.slice(vt - 1, vt - 1 + n) : s.slice(vt - 1);
+      continue;
+    }
     if (!r.tu) continue;
     s = s.split(String(r.tu)).join(thanh);
   }
@@ -132,7 +157,9 @@ export function apDungThay(chuoi, thay) {
 }
 
 // Giá trị 1 trường dữ liệu, đã định dạng theo kiểu ô.
-function giaTriTruong(data, ma, dinhDang, kieuTruong, thay) {
+// ⚠ EXPORT để panel thiết kế xem trước "cũ → mới" bằng ĐÚNG hàm của đường IN — tự tính lại ở panel là
+//   sớm muộn 2 bên lệch nhau (xem một kiểu in một kiểu).
+export function giaTriTruong(data, ma, dinhDang, kieuTruong, thay) {
   const v = data ? data[ma] : '';
   let out;
   if (kieuTruong === 'ngay') out = dinhDangNgay(v, dinhDang);

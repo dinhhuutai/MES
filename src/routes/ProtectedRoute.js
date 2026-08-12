@@ -3,6 +3,7 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useSelector, useDispatch } from 'react-redux';
 import { selectIsAuthenticated, selectAuth, fetchMeThunk } from '../store/authSlice';
 import usePresenceTracker from '../hooks/usePresenceTracker';
+import useBiDangXuat from '../hooks/useBiDangXuat';
 
 export default function ProtectedRoute() {
   const dispatch = useDispatch();
@@ -12,6 +13,8 @@ export default function ProtectedRoute() {
 
   // Theo dõi online + lịch sử điều hướng (chỉ chạy khi đã đăng nhập).
   usePresenceTracker();
+  // Bị đăng xuất từ xa (Hệ thống → Phiên đăng nhập) → về màn đăng nhập ngay.
+  useBiDangXuat();
 
   // Có token nhưng chưa có thông tin user (vd sau reload) → nạp lại.
   useEffect(() => {

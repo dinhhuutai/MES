@@ -45,9 +45,17 @@ const FILTER_FIELDS = [
 // showChuyen: chèn thêm cột "Chuyền" NGAY SAU "Tính chất in" (cả bảng lẫn Excel) — cần fetcher trả `ten_chuyen`.
 // extraColumns / extraExcelColumns: cột PHỤ nối vào CUỐI bộ cột mặc định. Nhận mảng HOẶC hàm (rows)=>mảng
 // (dùng khi số cột phụ thuộc dữ liệu — vd "Lần test 1..N" ở Test Run).
+//
+// CHỌN NHIỀU DÒNG (tùy chọn — mặc định TẮT, panel nào không truyền thì y như cũ):
+//   · `chonNhieu`  : bật ô checkbox trước mỗi dòng
+//   · `toiDaChon`  : trần số dòng chọn được (vd 2 = in 2 tem/tờ ở trang Sửa); vượt trần thì ô của
+//                    những dòng chưa chọn bị KHÓA + hiện nhắc, không âm thầm bỏ qua lượt bấm
+//   · `chonDuoc`   : (row) => true | 'lý do' — dòng không chọn được thì khóa ô + tooltip lý do
+//   · `footerChon` : ({ rows, clear }) => JSX — thanh hành động ở CHÂN panel (vd nút "In tem (N)")
 export default function DonePanel({
   open, onClose, title = 'Đã hoàn thành', maHeader = 'Mã', fetcher, columns, excelColumns, showChuyen = false,
   extraColumns, extraExcelColumns,
+  chonNhieu = false, toiDaChon = 0, chonDuoc, footerChon,
 }) {
   const { toast, show } = useToast();
   const [date, setDate] = useState(todayStr);
@@ -57,6 +65,7 @@ export default function DonePanel({
   const [q, setQ] = useState('');            // ô tìm kiếm 1-ô (quét mọi trường ở FILTER_FIELDS + mã)
   const [filters, setFilters] = useState({}); // panel lọc từng trường (kết hợp AND)
   const [showFilters, setShowFilters] = useState(false);
+  const [chon, setChon] = useState(() => new Set()); // `_k` các dòng đang tích (khi bật `chonNhieu`)
 
   // Giữ fetcher trong ref (prop thường là arrow-function nội tuyến) để không refetch mỗi giây
   // khi màn cha dùng useNow(1000) — tránh panel nháy. Chỉ nạp lại khi mở panel hoặc đổi ngày.
@@ -69,6 +78,7 @@ export default function DonePanel({
     try {
       const res = await fetcherRef.current(date);
       setRows((res.data || []).map((r, i) => ({ ...r, _k: i })));
+      setChon(new Set()); // dữ liệu đổi → bỏ tích cũ (đừng in theo lựa chọn của danh sách trước)
     } catch (e) {
       show(e.message || 'Lỗi tải danh sách', 'error');
       setRows([]);
@@ -129,8 +139,41 @@ export default function DonePanel({
   ];
 
   const resolveExtra = (x) => (typeof x === 'function' ? x(rows) : x) || [];
-  const tableCols = columns || [...defaultColumns, ...resolveExtra(extraColumns)];
+  const baseCols = columns || [...defaultColumns, ...resolveExtra(extraColumns)];
   const xlsCols = excelColumns || [...defaultExcelCols, ...resolveExtra(extraExcelColumns)];
+
+  // ── CHỌN NHIỀU DÒNG (tùy chọn) ────────────────────────────────────────────
+  // Giữ theo `_k` (chỉ số dòng do panel gán) — panel tải lại thì `_k` cấp lại nên bỏ chọn hết,
+  // đúng ý: dữ liệu đổi rồi thì đừng in theo lựa chọn cũ.
+  const dsChon = viewRows.filter((r) => chon.has(r._k));
+  const dayChon = toiDaChon > 0 && dsChon.length >= toiDaChon;
+  const lyDoKhoa = (r) => {
+    const kq = chonDuoc ? chonDuoc(r) : true;
+    if (typeof kq === 'string') return kq;
+    if (kq === false) return 'Dòng này không chọn được';
+    if (!chon.has(r._k) && dayChon) return `Chỉ chọn được tối đa ${toiDaChon} dòng`;
+    return null;
+  };
+  const doiChon = (r) => setChon((s) => {
+    const n = new Set(s);
+    if (n.has(r._k)) n.delete(r._k); else n.add(r._k);
+    return n;
+  });
+
+  const colChon = {
+    key: '_chon',
+    selection: true,
+    header: '',
+    render: (r) => {
+      const khoa = lyDoKhoa(r);
+      return (
+        <input type="checkbox" title={khoa || undefined} disabled={!!khoa}
+          checked={chon.has(r._k)} onChange={() => doiChon(r)}
+          className="h-4 w-4 rounded border-line text-primary focus:ring-primary/30 disabled:opacity-40" />
+      );
+    },
+  };
+  const tableCols = chonNhieu ? [colChon, ...baseCols] : baseCols;
 
   const doExport = async () => {
     setExporting(true);
@@ -160,7 +203,10 @@ export default function DonePanel({
       subtitle={soLoc
         ? `${viewRows.length}/${rows.length} đã hoàn thành trong ngày (đang lọc)`
         : `${rows.length} đã hoàn thành trong ngày`}
-      width="max-w-3xl">
+      width="max-w-3xl"
+      footer={chonNhieu && footerChon
+        ? footerChon({ rows: dsChon, clear: () => setChon(new Set()) })
+        : undefined}>
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <label className="text-sm font-medium text-ink">Ngày</label>
         <input

@@ -82,6 +82,7 @@ import {
   Paintbrush,
   Eraser,
   Maximize2,
+  List,
 } from 'lucide-react';
 
 // Map tên kebab → component Lucide.
@@ -137,6 +138,9 @@ const MAP = {
   check: Check,
   'trash-2': Trash2,
   pencil: Pencil,
+  // `list`: nút "Danh sách release" (Tạo đợt SX + Release 1) — trước đây chưa khai nên ra icon
+  // tròn mặc định của `Icon`.
+  list: List,
   // Bổ sung cho module Thiết kế tem (mig 073)
   undo: Undo2,
   redo: Redo2,

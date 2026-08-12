@@ -25,8 +25,10 @@ import LichSuTrangThaiPage from './features/system/pages/LichSuTrangThaiPage';
 import ErpSyncPage from './features/system/pages/ErpSyncPage';
 import OnlineUsersPage from './features/system/pages/OnlineUsersPage';
 import ActivityLogPage from './features/system/pages/ActivityLogPage';
+import PhienDangNhapPage from './features/system/pages/PhienDangNhapPage';
 import FormTemplatesPage from './features/system/pages/FormTemplatesPage';
 import ThietKeTemPage from './features/system/pages/ThietKeTemPage';
+import QuanTriPhanInPage from './features/system/pages/QuanTriPhanInPage';
 import HienThiPainPage from './features/system/pages/HienThiPainPage';
 import ManualEntryPage from './features/system/pages/ManualEntryPage';
 import VaiVeUpdatePage from './features/system/pages/VaiVeUpdatePage';
@@ -118,9 +120,11 @@ const PAGES = {
   '/he-thong/nhap-tay': <ManualEntryPage />,
   '/he-thong/cap-nhat-vai': <VaiVeUpdatePage />,
   '/he-thong/online': <OnlineUsersPage />,
+  '/he-thong/phien-dang-nhap': <PhienDangNhapPage />,
   '/he-thong/nhat-ky': <ActivityLogPage />,
   '/he-thong/mau-form': <FormTemplatesPage />,
   '/he-thong/thiet-ke-tem': <ThietKeTemPage />,
+  '/he-thong/quan-tri-phan-in': <QuanTriPhanInPage />,
   '/he-thong/hien-thi-pain': <HienThiPainPage />,
 };
 

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Button from '../../../components/common/Button';
 import Icon from '../../../components/common/Icon';
 import { Field, Input, Select, inputClass } from '../../../components/common/controls';
-import { hienChuMa, giaTriMa, HE_MA_VACH, heMaCuaO } from '../../production/utils/renderMauTem';
+import { hienChuMa, giaTriMa, giaTriTruong, HE_MA_VACH, heMaCuaO } from '../../production/utils/renderMauTem';
 import { tenCot } from './TemGrid';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -22,9 +22,20 @@ const SEL_NHO = 'h-7 rounded-control border border-line bg-surface px-1 text-bas
 const KIEU_LUAT = [
   { ma: 'THAY', ten: 'Tìm & thay' },
   { ma: 'VITRI', ten: 'Thay tại vị trí' },
+  // 2 kiểu CẮT LẤY (2026-08-12) — bỏ phần không cần in thay vì phải liệt kê từng chuỗi cần thay.
+  // `LAY_TU` là kiểu dùng cho TÊN NGƯỜI: "NGUYỄN VĂN ANH TUẤN" → lấy 2 từ cuối → "ANH TUẤN".
+  { ma: 'LAY_TU', ten: 'Chỉ lấy mấy TỪ' },
+  { ma: 'LAY_KT', ten: 'Chỉ lấy mấy KÝ TỰ' },
   { ma: 'DAU', ten: 'Thêm vào đầu' },
   { ma: 'CUOI', ten: 'Thêm vào cuối' },
 ];
+
+// Mặc định hợp lý khi đổi kiểu luật — để người dùng chọn xong là thấy tác dụng ngay, khỏi đoán.
+const MAC_DINH_LUAT = {
+  VITRI: { vi_tri: 1, so_kt: 1 },          // thay ĐÚNG 1 ký tự
+  LAY_TU: { so_tu: 2, tu_cuoi: true },     // 2 từ cuối = tên lót + tên (ca dùng nhiều nhất)
+  LAY_KT: { vi_tri: 1, so_kt: 0 },         // 0 = lấy tới hết
+};
 
 // Luật đã đủ thông tin để có tác dụng chưa (dùng cho badge + dòng tóm tắt, không dùng để LỌC BỎ —
 // lọc bỏ khi đang gõ sẽ làm dòng luật biến mất giữa chừng).
@@ -32,6 +43,8 @@ const luatCoNghia = (r) => {
   if (!r) return false;
   if (r.kieu === 'DAU' || r.kieu === 'CUOI') return !!r.thanh;
   if (r.kieu === 'VITRI') return Number(r.vi_tri) > 0;
+  if (r.kieu === 'LAY_TU') return Number(r.so_tu) > 0;   // chưa nhập số từ thì luật không làm gì
+  if (r.kieu === 'LAY_KT') return Number(r.vi_tri) > 0;
   return !!r.tu;
 };
 
@@ -44,6 +57,14 @@ const moTaLuat = (r) => {
     const n = Number(r.so_kt) || 0;
     const pham = n > 1 ? `ký tự ${vt}–${vt + n - 1}` : (n === 1 ? `ký tự ${vt}` : `chèn trước ký tự ${vt}`);
     return `${pham} → “${t}”`;
+  }
+  if (r.kieu === 'LAY_TU') {
+    return `lấy ${Number(r.so_tu) || 0} từ ${r.tu_cuoi === false ? 'đầu' : 'cuối'}`;
+  }
+  if (r.kieu === 'LAY_KT') {
+    const vt = Number(r.vi_tri) || 1;
+    const n = Number(r.so_kt) || 0;
+    return n > 0 ? `lấy ký tự ${vt}–${vt + n - 1}` : `lấy từ ký tự ${vt} tới hết`;
   }
   return `“${r.tu || ''}”→“${t}”`;
 };
@@ -67,10 +88,12 @@ function BangLuat({ thay, onDoi }) {
               <select value={kieu} className={SEL_NHO}
                 onChange={(e) => {
                   const k = e.target.value;
-                  // Đổi kiểu thì nạp mặc định hợp lý: VITRI mặc định thay ĐÚNG 1 ký tự.
-                  doiLuat(j, k === 'VITRI'
-                    ? { kieu: k, vi_tri: r.vi_tri || 1, so_kt: r.so_kt == null ? 1 : r.so_kt }
-                    : { kieu: k });
+                  // Đổi kiểu thì nạp mặc định hợp lý (xem `MAC_DINH_LUAT`) — giữ giá trị người dùng
+                  // đã gõ nếu có, chỉ điền vào ô còn trống.
+                  const md = MAC_DINH_LUAT[k] || {};
+                  const giu = {};
+                  Object.keys(md).forEach((key) => { giu[key] = r[key] == null ? md[key] : r[key]; });
+                  doiLuat(j, { kieu: k, ...giu });
                 }}>
                 {KIEU_LUAT.map((k) => <option key={k.ma} value={k.ma}>{k.ten}</option>)}
               </select>
@@ -101,6 +124,41 @@ function BangLuat({ thay, onDoi }) {
                     onChange={(e) => doiLuat(j, { thanh: e.target.value })} />
                   <span className="basis-full text-[10px]">
                     Đếm từ 1. Số ký tự = 0 thì chỉ chèn thêm, không xóa gì.
+                  </span>
+                </>
+              )}
+              {/* CHỈ LẤY MẤY TỪ — ca dùng nhiều nhất: tên người 4 chữ, chỉ in tên lót + tên. */}
+              {kieu === 'LAY_TU' && (
+                <>
+                  <span>chỉ lấy</span>
+                  <input type="number" min="1" value={r.so_tu ?? 2} className={O_SO}
+                    onChange={(e) => doiLuat(j, { so_tu: e.target.value === '' ? '' : Number(e.target.value) })} />
+                  <span>từ, tính từ</span>
+                  <select value={r.tu_cuoi === false ? 'DAU' : 'CUOI'} className={SEL_NHO}
+                    onChange={(e) => doiLuat(j, { tu_cuoi: e.target.value === 'CUOI' })}>
+                    <option value="CUOI">cuối</option>
+                    <option value="DAU">đầu</option>
+                  </select>
+                  <span className="basis-full text-[10px]">
+                    Từ = cách nhau bằng khoảng trắng. vd <b>NGUYỄN VĂN ANH TUẤN</b> → lấy <b>2</b> từ
+                    <b> cuối</b> → <b>ANH TUẤN</b> (bỏ họ, giữ tên lót + tên).
+                    Nếu tên ít từ hơn số đã nhập thì lấy hết những gì có, không để trống.
+                  </span>
+                </>
+              )}
+              {/* CHỈ LẤY MẤY KÝ TỰ — cắt theo vị trí ký tự (mã hàng, mã tem…). */}
+              {kieu === 'LAY_KT' && (
+                <>
+                  <span>từ ký tự</span>
+                  <input type="number" min="1" value={r.vi_tri ?? 1} className={O_SO}
+                    onChange={(e) => doiLuat(j, { vi_tri: e.target.value === '' ? '' : Number(e.target.value) })} />
+                  <span>, lấy</span>
+                  <input type="number" min="0" value={r.so_kt ?? 0} className={O_SO}
+                    onChange={(e) => doiLuat(j, { so_kt: e.target.value === '' ? '' : Number(e.target.value) })} />
+                  <span>ký tự</span>
+                  <span className="basis-full text-[10px]">
+                    Đếm từ 1. Số ký tự <b>0 = lấy tới hết</b>. vd <b>GL-2607-011</b> → từ ký tự <b>4</b>,
+                    lấy <b>4</b> → <b>2607</b>.
                   </span>
                 </>
               )}
@@ -297,6 +355,23 @@ export default function TemOPanel({
                         Đổi cách hiển thị khi in (dữ liệu gốc giữ nguyên). Các luật chạy lần lượt từ trên xuống.
                       </div>
                       <BangLuat thay={thay} onDoi={datThay} />
+                      {/* XEM TRƯỚC ngay tại chỗ với dữ liệu mẫu — cần nhất cho luật CẮT (lấy mấy từ /
+                          mấy ký tự): thấy liền kết quả, khỏi phải bấm Xem trước hay in thử.
+                          ⚠ Tính bằng CHÍNH `giaTriTruong` của đường IN, không tự tính lại. */}
+                      {data && (() => {
+                        const kt = p.kieu || (p.dinh_dang ? 'ngay' : 'chu');
+                        const cu = giaTriTruong(data, p.ma, p.dinh_dang, kt, null);
+                        const moi = giaTriTruong(data, p.ma, p.dinh_dang, kt, thay);
+                        return (
+                          <div className="rounded-control bg-surface-muted px-2 py-1.5 text-[11px]">
+                            <div className="text-ink-soft">Với dữ liệu mẫu:</div>
+                            <div className="mt-0.5 break-all font-mono text-ink">
+                              {cu || '(rỗng)'}
+                              {cu !== moi && <> → <span className="font-semibold text-primary">{moi || '(rỗng)'}</span></>}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
                 </div>
