@@ -11,7 +11,7 @@ import TimeSelect from '../../../components/common/TimeSelect';
 import { Field, Input, Textarea, Select } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import { getRun, printTem, printTemBatch, reprintTem, getTemLabel, getTemLogs, finishRun, stopLine, resumeLine, addVaiHuy, savePhanCong, pauseLenhChay, listProductionCandidates, startProduction, vuotSanXuat, doiChuyen, listChuyen, listLyDoNgung, luuLyDoBoSungDotVai } from '../../../services/productionService';
+import { getRun, printTem, printTemBatch, reprintTem, getTemLabel, getTemLogs, finishRun, stopLine, resumeLine, addVaiHuy, savePhanCong, pauseLenhChay, listProductionCandidates, startProduction, vuotSanXuat, doiChuyen, traVeKyThuatSanXuat, listChuyen, listLyDoNgung, luuLyDoBoSungDotVai } from '../../../services/productionService';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import { listUserOptions } from '../../../services/userService';
 import printTemLabel from '../utils/printTemLabel';
@@ -455,6 +455,8 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
   const [doiChuyenId, setDoiChuyenId] = useState('');
   const [doiGhiChu, setDoiGhiChu] = useState('');
   const [chuyenList, setChuyenList] = useState([]);
+  const [traVeOpen, setTraVeOpen] = useState(false);   // modal "Trả về Kỹ thuật" (lý do bắt buộc)
+  const [traVeReason, setTraVeReason] = useState('');
 
   const phieu = data?.phieu;
   const running = phieu?.trang_thai === 'DANG_CHAY';
@@ -584,6 +586,29 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
       onChanged?.();
     } catch (e) {
       show(e.message || 'Đổi chuyền thất bại', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // TRẢ VỀ KỸ THUẬT: đang chạy mới phát hiện khuôn/film/mực sai ⇒ HỦY LỆNH (kèm tem đã in) và đưa
+  // phần in quay lại READY. Cùng ý nghĩa với nút "Trả về Kỹ thuật" ở Release 1 — lý do BẮT BUỘC,
+  // nhập trong Modal (không dùng window.prompt) và hiện lại ở màn Chuẩn bị kỹ thuật.
+  // ⚠ Backend chặn khi tem đã qua KCS/Sửa/OQC/giao (409 `TEM_DA_XU_LY`) — sổ cái số lượng đã chạy tiếp.
+  const doTraVeKyThuat = async () => {
+    const lyDo = traVeReason.trim();
+    if (!lyDo) { show('Nhập lý do trả về Kỹ thuật', 'error'); return; }
+    setBusy(true);
+    try {
+      const res = await traVeKyThuatSanXuat(lenhId, lyDo);
+      const d = res.data || {};
+      show(`Đã trả về Kỹ thuật — ${fmtNum(d.phan_in || 1)} phần in quay lại READY`
+        + (d.so_tem_huy ? ` · hủy ${fmtNum(d.so_tem_huy)} tem đã in` : ''));
+      setTraVeOpen(false); setTraVeReason('');
+      onChanged?.();
+      onClose?.();                       // lệnh đã hủy → không còn gì để xem trong panel
+    } catch (e) {
+      show(e.message || 'Trả về Kỹ thuật thất bại', 'error');
     } finally {
       setBusy(false);
     }
@@ -794,6 +819,12 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
                 không phải hành động kết thúc ⇒ để nút phụ. */}
             <Button variant="secondary" icon="shuffle" className="mr-auto" onClick={moDoiChuyen} disabled={busy}>
               Đổi chuyền
+            </Button>
+            {/* Trả về Kỹ thuật đứng GIỮA "Đổi chuyền" và "Chạy hoàn tất": phát hiện khuôn/film/mực sai
+                giữa chừng ⇒ hủy lệnh + phần in quay lại READY (giống nút cùng tên ở Release 1). */}
+            <Button variant="secondary" icon="chevron-left" disabled={busy}
+              onClick={() => { setTraVeReason(''); setTraVeOpen(true); }}>
+              Trả về Kỹ thuật
             </Button>
             <Button variant="danger" onClick={doFinish} loading={busy} disabled={printed < minFinish}>
               Chạy hoàn tất
@@ -1135,6 +1166,32 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
       {/* GOM SET: nhập SL in từng phần in → in nhiều tem liên tiếp */}
       <PrintSetModal open={printSetOpen} onClose={() => setPrintSetOpen(false)} rows={dotVaiList}
         onPrintRow={doPrintRow} busy={busy} meta={temMeta} setMeta={setTemMeta} goiY={goiYTem} />
+
+      {/* Trả về Kỹ thuật — lý do bắt buộc (hiện lại ở màn READY / QC READY) */}
+      <Modal open={traVeOpen} onClose={() => setTraVeOpen(false)} size="sm"
+        title={`Trả về Kỹ thuật — ${data?.lenh?.ma_lenh_san_xuat || ''}`}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setTraVeOpen(false)}>Hủy</Button>
+            <Button variant="danger" onClick={doTraVeKyThuat} loading={busy} disabled={!traVeReason.trim()}>
+              Xác nhận trả về
+            </Button>
+          </>
+        }
+      >
+        <p className="mb-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
+          Lệnh <b>{data?.lenh?.ma_lenh_san_xuat}</b> sẽ bị <b>HỦY</b>, phần in quay lại <b>READY</b>:
+          hủy xác nhận Khuôn/Film/Mực + QC, kỹ thuật phải làm lại rồi Kế hoạch Release 1 lần nữa.
+          Lý do sẽ hiện ở màn Chuẩn bị kỹ thuật.
+          {printed > 0 && (
+            <> <b className="text-danger">Toàn bộ {fmtNum(printed)} đã in (tem + phiếu) cũng bị hủy theo.</b></>
+          )}
+        </p>
+        <Field label="Lý do trả về" required>
+          <Textarea rows={3} value={traVeReason} onChange={(e) => setTraVeReason(e.target.value)}
+            placeholder="Vì sao trả về kỹ thuật (vd: sai film, khuôn chưa đạt...)" />
+        </Field>
+      </Modal>
 
       {/* Đổi chuyền lượt chạy — chọn chuyền khác, tem đã in giữ nguyên */}
       <Modal open={doiOpen} onClose={() => setDoiOpen(false)} title="Đổi chuyền" size="sm"

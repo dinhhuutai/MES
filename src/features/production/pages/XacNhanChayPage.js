@@ -7,7 +7,7 @@ import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
 import Toast from '../../../components/common/Toast';
 import Icon from '../../../components/common/Icon';
-import { Field, Input } from '../../../components/common/controls';
+import { Field, Input, Textarea } from '../../../components/common/controls';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
@@ -15,7 +15,7 @@ import useSocketReload from '../../../hooks/useSocketReload';
 import useNghenMap from '../../../hooks/useNghenMap';
 import { slaRowClass } from '../../../utils/sla';
 import {
-  listProductionCandidates, startProduction, getMonitor, listChuyen,
+  listProductionCandidates, startProduction, getMonitor, listChuyen, traVeKyThuatSanXuat,
 } from '../../../services/productionService';
 import { fmtNum, fmtDate } from '../../../utils/format';
 import exportCheckpointExcel, { COT_LENH, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
@@ -40,6 +40,8 @@ export default function XacNhanChayPage() {
   const [sel, setSel] = useState(null);
   const [confirmRun, setConfirmRun] = useState(null); // lệnh đang xác nhận chạy
   const [runChuyenId, setRunChuyenId] = useState('');
+  const [traVe, setTraVe] = useState(null);           // lệnh đang trả về Kỹ thuật (lý do bắt buộc)
+  const [traVeReason, setTraVeReason] = useState('');
   const [busy, setBusy] = useState(false);
   // Chip LOẠI CHUYỀN + KHU BÀN — cùng bộ với "Theo dõi chuyền" / "Test Run - QA".
   // Áp cho CẢ 2 bảng (Đang chạy & Chờ chạy) để 2 bảng luôn nói về cùng một nhóm chuyền.
@@ -161,6 +163,26 @@ export default function XacNhanChayPage() {
     }
   };
 
+  // TRẢ VỀ KỸ THUẬT (chờ chạy): lệnh chưa in gì mà kỹ thuật phải làm lại ⇒ hủy lệnh + phần in quay
+  // về READY. Cùng ý nghĩa với nút "Trả về Kỹ thuật" ở Release 1; lý do BẮT BUỘC, nhập trong Modal.
+  const doTraVeKyThuat = async () => {
+    if (!traVe) return;
+    const lyDo = traVeReason.trim();
+    if (!lyDo) { show('Nhập lý do trả về Kỹ thuật', 'error'); return; }
+    setBusy(true);
+    try {
+      const res = await traVeKyThuatSanXuat(traVe.id, lyDo);
+      const d = res.data || {};
+      show(`Đã trả về Kỹ thuật — ${fmtNum(d.phan_in || 1)} phần in quay lại READY`);
+      setTraVe(null); setTraVeReason('');
+      load();
+    } catch (e) {
+      show(e.message || 'Trả về Kỹ thuật thất bại', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   // LỆNH GOM SET → tách 1 dòng / PHẦN IN (prop `subRows` của DataTable). Cột nào thuộc về LỆNH
   // (chuyền, SL release, ngày SX, trạng thái, nút thao tác) đánh `merge: true` để hợp nhất ô bằng
   // rowSpan — cùng với STT. Cột thuộc PHẦN IN (khách/đơn/mã hàng/code phần/màu/kích/hạn giao) hiện
@@ -195,8 +217,15 @@ export default function XacNhanChayPage() {
     { key: 'so_luong_release', header: 'SL release', className: 'text-right tabular-nums', merge: true, render: (r) => fmtNum(r.so_luong_release) },
     { key: 'ngay_ke_hoach', header: 'Ngày SX KH', merge: true, render: (r) => fmtDate(r.ngay_ke_hoach) },
     { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => fmtDate(r.han_giao_hang) },
+    // 2 nút xếp CHỒNG (cột dọc): "Xác nhận chạy" ở trên, "Trả về Kỹ thuật" ngay dưới.
     { key: 'actions', header: '', className: 'text-right whitespace-nowrap', merge: true, render: (r) =>
-      canRun && <Button className="px-2.5 py-1 text-xs" onClick={() => openConfirm(r)}>Xác nhận chạy</Button> },
+      canRun && (
+        <div className="flex flex-col items-stretch gap-1">
+          <Button className="px-2.5 py-1 text-xs" onClick={() => openConfirm(r)}>Xác nhận chạy</Button>
+          <Button variant="secondary" className="px-2.5 py-1 text-xs"
+            onClick={() => { setTraVeReason(''); setTraVe(r); }}>Trả về Kỹ thuật</Button>
+        </div>
+      ) },
   ];
 
   const runCols = [
@@ -297,6 +326,38 @@ export default function XacNhanChayPage() {
             </div>
             <Field label="Chuyền thực tế" required hint="Kế thừa chuyền kế hoạch — đổi nếu chạy chuyền khác">
               <ChuyenPicker chuyen={chuyen} value={runChuyenId} onChange={setRunChuyenId} />
+            </Field>
+          </div>
+        )}
+      </Modal>
+
+      {/* Trả về Kỹ thuật — lý do bắt buộc (hiện lại ở màn READY / QC READY) */}
+      <Modal open={!!traVe} onClose={() => setTraVe(null)} size="sm"
+        title={`Trả về Kỹ thuật — ${traVe?.ma_lenh_san_xuat || ''}`}
+        footer={<>
+          <Button variant="ghost" onClick={() => setTraVe(null)}>Hủy</Button>
+          <Button variant="danger" onClick={doTraVeKyThuat} loading={busy} disabled={!traVeReason.trim()}>
+            Xác nhận trả về
+          </Button>
+        </>}>
+        {traVe && (
+          <div className="space-y-3">
+            <div className="rounded-control bg-surface-muted px-3 py-2 text-sm text-ink-soft">
+              <div><b className="text-ink">{traVe.ten_khach_hang}</b> · {traVe.ma_don_hang}</div>
+              <div>{traVe.ma_hang} · {traVe.mau_vai} · {traVe.kich_vai}/{traVe.kich_phim}</div>
+              <div>Code phần: {traVe.ma_phan || '—'} · SL release: <b className="text-ink">{fmtNum(traVe.so_luong_release)}</b></div>
+            </div>
+            <p className="rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
+              Lệnh sẽ bị <b>HỦY</b>, phần in quay lại <b>READY</b>: hủy xác nhận Khuôn/Film/Mực + QC,
+              kỹ thuật phải làm lại rồi Kế hoạch Release 1 lần nữa. Lý do sẽ hiện ở màn Chuẩn bị kỹ thuật.
+              {/* Lệnh "chờ chạy" vẫn có thể đã in tem ở lượt trước (bị Ngừng lệnh chạy) — nói rõ trước khi bấm. */}
+              {Number(traVe.da_in_truoc) > 0 && (
+                <> <b className="text-danger">Toàn bộ {fmtNum(traVe.da_in_truoc)} đã in trước đó (tem + phiếu) cũng bị hủy theo.</b></>
+              )}
+            </p>
+            <Field label="Lý do trả về" required>
+              <Textarea rows={3} value={traVeReason} onChange={(e) => setTraVeReason(e.target.value)}
+                placeholder="Vì sao trả về kỹ thuật (vd: sai film, khuôn chưa đạt...)" />
             </Field>
           </div>
         )}

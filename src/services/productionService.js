@@ -65,6 +65,10 @@ export const reopenProduction = (phieuId) => client.post(`/production/mo-lai/${p
 export const pauseLenhChay = (phieuId) => client.post(`/production/phieu/${phieuId}/ngung-lenh`);
 // Đổi chuyền của lượt chạy (máy hỏng / dồn tải) — đổi CẢ phiếu lẫn lệnh, giữ nguyên tem đã in.
 export const doiChuyen = (phieuId, body) => client.post(`/production/phieu/${phieuId}/doi-chuyen`, body);
+// Trả về Kỹ thuật từ màn Xác nhận chạy (chờ chạy / đang chạy) → hủy lệnh + phần in quay lại READY.
+// ⚠ Theo LỆNH, không phải phiếu — bảng "Chờ chạy" chưa có phiếu SX nào.
+export const traVeKyThuatSanXuat = (lenhId, lyDo) =>
+  client.post(`/production/lenh/${lenhId}/tra-ve-ky-thuat`, { lyDo });
 // Vượt sản xuất: cộng SL vượt vào release + trừ đợt vải chưa release cùng phần in
 export const vuotSanXuat = (phieuId, soLuong) => client.post(`/production/phieu/${phieuId}/vuot-san-xuat`, { soLuong });
 
