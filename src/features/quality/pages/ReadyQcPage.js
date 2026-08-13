@@ -22,7 +22,7 @@ import { listReadyQcCandidates, getReadyDetail, confirmReadyQC, confirmReadyQcBa
 import LoaiDotVaiBadge from '../../planning/components/LoaiDotVaiBadge';
 import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
-import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
+import PhuongAnInCell from '../../../components/common/PhuongAnInCell';
 import exportReadyQcExcel from '../utils/exportReadyQcExcel';
 import { khuonRequired } from '../../technical-ready/constants';
 
@@ -46,6 +46,10 @@ export default function ReadyQcPage() {
   const { can } = usePermissions();
   const { toast, show } = useToast();
   const canQC = can('READY_QC');
+  // Đổi phương án in ngay tại cột — khớp đúng rbac của `PATCH /hskt/:id/phuong-an-in`
+  // (`READY_KHUON | READY_FILM | READY_MUC | READY_QC`). Vai trò QA chỉ có `READY_QC` nên
+  // KHÔNG được rút gọn thành `permItems.length > 0` như bên màn READY của Kỹ thuật.
+  const canDoiPain = canQC || can('READY_KHUON') || can('READY_FILM') || can('READY_MUC');
   const now = useNow(1000);
 
   const [rows, setRows] = useState([]);
@@ -293,7 +297,12 @@ export default function ReadyQcPage() {
     ) },
     { key: 'loai_dot_vai', header: 'Loại đợt vải', render: (r) => <LoaiDotVaiBadge value={r.loai_dot_vai} /> },
     // Phương án in (ERP `Pain` trên HSKT): 1 Bàn · 2 Máy · 3 Robot.
-    { key: 'phuong_an_in', header: 'Phương án in', render: (r) => <PhuongAnInBadge value={r.phuong_an_in} /> },
+    // Đổi được ngay tại chỗ như màn READY của Kỹ thuật: ⟳ xoay Bàn → Robot → Máy, ✓ mới ghi
+    // (kèm đổi số cuối mã vạch HSKT + đặt `pa_in_sua_tay` để job ERP không đè lại).
+    { key: 'phuong_an_in', header: 'Phương án in', render: (r) => (
+      <PhuongAnInCell value={r.phuong_an_in} hsktId={r.hskt_id} barcode={r.barcode_hskt}
+        disabled={!canDoiPain} show={show} onChanged={refresh} />
+    ) },
     { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => <HanGiaoCell value={r.han_giao_hang} /> },
     { key: 'tech', header: 'Kỹ thuật', render: (r) => (
       <div className="flex flex-wrap items-center gap-1">
@@ -419,7 +428,6 @@ export default function ReadyQcPage() {
         open={scanOpen}
         onClose={() => setScanOpen(false)}
         title="Quét / tích phần in — QC READY"
-        help="Chọn QR (code phần) hoặc Mã vạch ở trên rồi đưa vào khung camera. Chỉ chọn được phần in đã đủ 3 mục kỹ thuật. Quét nhiều rồi bấm QC xác nhận cùng lúc; mỗi dòng có nút Trả về nếu cần trả kỹ thuật."
         rows={rows}
         getId={(r) => r.id}
         getCodes={(r) => [r.ma_phan]}

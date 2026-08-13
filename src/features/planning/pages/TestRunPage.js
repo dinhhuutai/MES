@@ -22,6 +22,8 @@ import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
 import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import TraVeBadge from '../../../components/common/TraVeBadge';
+import DateRangePicker from '../../../components/common/DateRangePicker';
+import { fmtDate, trongKhoangNgay } from '../../../utils/format';
 import { LOAI_TABS, hopChipChuyen as hopChip, nhanChip, demChip } from '../../../utils/khuChuyen';
 import ChipTabs from '../../../components/common/ChipTabs';
 import exportCheckpointExcel, { COT_LENH, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
@@ -83,15 +85,22 @@ export default function TestRunPage() {
   const [scanOpen, setScanOpen] = useState(false);
   const [onlyPending, setOnlyPending] = useState(true); // mặc định chỉ hiện lệnh CHƯA QA xong (khớp Test Run ở dashboard)
   const [loai, setLoai] = useState(''); // chip loại chuyền / khu Bàn ('' = tất cả)
+  // Lọc theo NGÀY KẾ HOẠCH SẢN XUẤT (`lenh_san_xuat.ngay_ke_hoach`) — chọn được NHIỀU NGÀY bằng
+  // cùng 1 ô như trang Hồ sơ kỹ thuật. Mặc định RỖNG = không lọc: đây là màn thao tác hằng ngày,
+  // mặc định lọc "hôm nay" sẽ giấu mất lệnh của các ngày khác mà QA không biết vì sao.
+  const [ngayKH, setNgayKH] = useState({ from: '', to: '' });
+  const locNgay = useCallback((rs) => rs.filter((r) => trongKhoangNgay(r.ngay_ke_hoach, ngayKH.from, ngayKH.to)),
+    [ngayKH]);
   const filtered = useMemo(() => {
     let base = onlyPending ? rows.filter((r) => !r.qa_done) : rows;
+    base = locNgay(base);
     if (loai) base = base.filter((r) => hopChip(r, loai));
     return filterRows(base, filters, FILTER_FIELDS);
-  }, [rows, filters, onlyPending, loai]);
-  // Đếm cho badge chip — tính trên tập ĐANG XÉT (theo ô "Chỉ chờ QA") để số khớp bảng.
+  }, [rows, filters, onlyPending, loai, locNgay]);
+  // Đếm cho badge chip — tính trên tập ĐANG XÉT (ô "Chỉ chờ QA" + khoảng ngày) để số khớp bảng.
   const countChip = useMemo(
-    () => demChip(onlyPending ? rows.filter((r) => !r.qa_done) : rows),
-    [rows, onlyPending]
+    () => demChip(locNgay(onlyPending ? rows.filter((r) => !r.qa_done) : rows)),
+    [rows, onlyPending, locNgay]
   );
   const activeCount = Object.values(filters).filter(Boolean).length;
   const doneCount = useMemo(() => rows.filter((r) => r.qa_done).length, [rows]);
@@ -110,6 +119,7 @@ export default function TestRunPage() {
     fileName: 'test-run',
     moTaLoc: moTaBoLoc({
       'tìm kiếm': search, 'chỉ chờ QA': onlyPending ? 'có' : '',
+      'ngày SX kế hoạch': [ngayKH.from, ngayKH.to].filter(Boolean).join(' → '),
       khu: nhanChip(loai), ...filters,
     }),
   });
@@ -200,6 +210,8 @@ export default function TestRunPage() {
     { key: 'loai_dot_vai', header: 'Loại đợt vải', render: (r) => <LoaiDotVaiBadge value={r.loai_dot_vai} /> },
     { key: 'nha_gia_cong', header: 'Nhà gia công', render: (r) => r.nha_gia_cong || '—' },
     { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => <HanGiaoCell value={r.han_giao_hang} /> },
+    // Hiện luôn cột đang được lọc — lọc theo một giá trị không nhìn thấy thì không đối chiếu được.
+    { key: 'ngay_ke_hoach', header: 'Ngày SX KH', className: 'whitespace-nowrap', render: (r) => fmtDate(r.ngay_ke_hoach) },
     { key: 'so_lan_test', header: 'Lần test', className: 'text-right tabular-nums', render: (r) => r.so_lan_test },
     { key: 'qa_done', header: 'QA', render: (r) => r.qa_done ? <Badge tone="success">✓</Badge> : <Badge tone="warning">Chờ</Badge> },
   ];
@@ -219,6 +231,9 @@ export default function TestRunPage() {
             </Button>
           </div>
         )}
+        {/* Lọc theo NGÀY KẾ HOẠCH SẢN XUẤT — 1 ô chọn cả từ→đến (chọn được nhiều ngày),
+            giống ô "Ngày lên MES" của trang Hồ sơ kỹ thuật. */}
+        <DateRangePicker value={ngayKH} onChange={setNgayKH} placeholder="Ngày SX kế hoạch" />
         <label className="flex cursor-pointer items-center gap-1.5 text-xs font-medium text-ink-soft">
           <input type="checkbox" checked={onlyPending} onChange={(e) => setOnlyPending(e.target.checked)} />
           Chỉ chờ QA{doneCount ? ` (ẩn ${doneCount} đã xong)` : ''}

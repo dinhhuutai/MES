@@ -11,6 +11,33 @@ export const fmtDate = (d) => {
   return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString('vi-VN');
 };
 
+// Ngày (giờ LOCAL) của một giá trị ngày/giờ, dạng 'YYYY-MM-DD' — để SO SÁNH với ô chọn khoảng ngày
+// (`DateRangePicker` cũng phát ra chuỗi theo giờ local, và `fmtDate` ở trên cũng hiển thị theo local
+// ⇒ ba chỗ cùng một mốc, không lệch ngày).
+// ⚠⚠ KHÔNG dùng `toISOString().slice(0,10)`: node-pg trả cột DATE thành Date lúc 00:00 GIỜ LOCAL,
+//    quy về UTC ở giờ VN (UTC+7) sẽ LÙI 1 NGÀY (ngày 07/08 hóa thành '2026-08-06') ⇒ lọc trượt hết.
+export const ngayLocalISO = (v) => {
+  if (!v) return '';
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return '';
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
+
+// Lọc theo KHOẢNG ngày. Đầu nào rỗng thì không chặn đầu đó (chọn mỗi ngày bắt đầu = "từ ngày đó
+// trở đi") ⇒ khớp cách `DateRangePicker` phát giá trị lúc mới chọn được 1 đầu.
+// So sánh CHUỖI 'YYYY-MM-DD' — định dạng này sắp xếp đúng thứ tự thời gian nên không cần parse lại.
+// ⚠ Dòng KHÔNG có ngày (NULL) bị LOẠI khi đang lọc: đang hỏi "ngày nào" thì dòng không có ngày
+//   không trả lời được câu hỏi đó. Bỏ lọc là nó hiện lại.
+export const trongKhoangNgay = (v, from, to) => {
+  if (!from && !to) return true;
+  const s = ngayLocalISO(v);
+  if (!s) return false;
+  if (from && s < from) return false;
+  if (to && s > to) return false;
+  return true;
+};
+
 // Đưa mã vừa quét về ĐÚNG `ma_tem` đang lưu trong bảng `tem`, để tra cứu (QR mã hóa cả tiền tố công đoạn).
 // Xử được CẢ HAI định dạng (xem `printTemLabel.js` → temCode):
 //   · '162608057689'   → '152608057689'  — barcode ERP 12 số: mọi công đoạn quy về tiền tố gốc `15`
