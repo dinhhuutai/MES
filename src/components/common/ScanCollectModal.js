@@ -45,8 +45,10 @@ function ScanViz() {
  *   primaryLabel, secondaryLabel, renderHeader (node trên cùng, vd checkbox chọn mục ở READY), disabledScan,
  *   usbBarcode (chỉ READY — bật đầu đọc mã vạch USB trên máy tính),
  *   canSelect (dòng khớp nhưng chưa đủ điều kiện → nêu lý do), onNotFound (quét trượt hẳn → tra thêm để nêu lý do).
+ *   size ('md' mặc định — chỉ READY dùng 'xl' vì hiện phiên quét dạng bảng).
  * COLLECT: isSelected, onToggle, onConfirm, confirmLabel, rowAction={label,icon,onClick(row)}.
- * IMMEDIATE: onScanAction(row)->Promise, onUndo(row)->Promise, actionLabel(row).
+ * IMMEDIATE: onScanAction(row)->Promise, onUndo(row)->Promise, actionLabel(row),
+ *   sessionColumns (khai cột → phiên quét hiện dạng BẢNG thay cho danh sách 2 dòng chữ).
  */
 export default function ScanCollectModal({
   open, onClose, title = 'Quét / tích mã', help,
@@ -92,6 +94,15 @@ export default function ScanCollectModal({
   renderHeader, disabledScan = false,
   immediate = false, onScanAction, onUndo, actionLabel,
   usbBarcode = false,
+  // Bề rộng modal. Mặc định 'md' = hành vi cũ của MỌI màn; chỉ READY truyền 'xl' vì nó hiện phiên quét
+  // dạng BẢNG nhiều cột. ⚠ Đừng đổi mặc định — component này dùng chung 9 màn.
+  size = 'md',
+  // IMMEDIATE: khai cột để hiện phiên quét dạng BẢNG thay cho danh sách 2 dòng chữ.
+  // Mảng `{ key, header, className, render(row) }`; KHÔNG truyền ⇒ giữ nguyên danh sách như cũ.
+  sessionColumns,
+  // Neo modal cách mép trên bao nhiêu px (null = canh giữa như cũ). Chỉ READY dùng — modal đó cao
+  // và dài dần ra theo số mã đã quét, canh giữa thì mỗi lần quét cả hộp lại nhích lên.
+  canhTren = null,
 }) {
   const hasBarcode = typeof getBarcodes === 'function';
   // ⚠⚠ 2 CHẾ ĐỘ TÁCH RIÊNG (chốt 2026-07-30) — 'qr' | 'barcode'. Trước đây camera quét CHUNG QR + 1D
@@ -368,7 +379,7 @@ export default function ScanCollectModal({
   const selectedRows = immediate ? [] : rows.filter((r) => isSelected(r));
 
   return (
-    <Modal open={open} onClose={handleClose} title={title} size="md"
+    <Modal open={open} onClose={handleClose} title={title} size={size} canhTren={canhTren}
       footer={(
         <>
           <Button variant="ghost" onClick={handleClose}>Đóng</Button>
@@ -401,17 +412,7 @@ export default function ScanCollectModal({
         </div>
 
         {/* ĐẦU ĐỌC USB (chỉ READY trên máy tính): không có camera, bắt phím tự động → tự xác nhận. */}
-        {usbMode && (
-          <div className="space-y-1">
-            <ScanViz />
-            <p className="flex items-center justify-center gap-1.5 text-center text-xs text-ink-soft">
-              <Icon name="barcode" size={14} /> Dùng đầu đọc mã vạch để tích — tự động xác nhận, hiện ngay bên dưới.
-            </p>
-            <p className="text-center text-xs text-amber-600">
-              Đầu đọc mã vạch KHÔNG đọc được QR — muốn quét <b>QR code phần</b> thì bấm <b>QR</b> ở trên.
-            </p>
-          </div>
-        )}
+        {usbMode && <ScanViz />}
 
         {/* CAMERA — chỉ đọc đúng loại mã đang chọn (QR hoặc mã vạch 1D) */}
         {camMode && (
@@ -482,6 +483,39 @@ export default function ScanCollectModal({
             </div>
             {session.length === 0 ? (
               <p className="px-3 py-4 text-center text-xs text-ink-soft">Chưa xác nhận mã nào — quét/tích để xác nhận ngay.</p>
+            ) : sessionColumns ? (
+              /* Dạng BẢNG (READY): nhiều cột thông tin + ô đổi phương án in ngay tại dòng.
+                 ⚠ `e.row` là ẢNH CHỤP lúc quét — cell nào cần sống theo dữ liệu mới phải tự giữ state
+                 (xem `PhuongAnInCell`), vì khối này không được cha làm mới. */
+              <div className="max-h-[22rem] overflow-auto">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 z-10 bg-surface-muted">
+                    <tr>
+                      {sessionColumns.map((c) => (
+                        <th key={c.key} className={`whitespace-nowrap px-2.5 py-2 text-left text-[11px] font-bold uppercase tracking-wide text-ink-soft ${c.headerClassName || ''}`}>
+                          {c.header}
+                        </th>
+                      ))}
+                      <th className="px-2.5 py-2" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-line">
+                    {session.map((e) => (
+                      <tr key={e.id}>
+                        {sessionColumns.map((c) => (
+                          <td key={c.key} className={`px-2.5 py-2 text-ink ${c.className || ''}`}>
+                            {c.render ? c.render(e.row, e) : (e.row?.[c.key] ?? '—')}
+                          </td>
+                        ))}
+                        <td className="px-2.5 py-2 text-right">
+                          <button type="button" onClick={() => undoEntry(e)}
+                            className="shrink-0 rounded-control px-2 py-1 text-xs font-medium text-danger hover:bg-surface-muted">Hủy</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             ) : (
               <ul className="max-h-56 divide-y divide-line overflow-auto">
                 {session.map((e) => (

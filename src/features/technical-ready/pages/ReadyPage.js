@@ -25,7 +25,7 @@ import ReadyPanel from '../components/ReadyPanel';
 import LoaiDotVaiBadge from '../../planning/components/LoaiDotVaiBadge';
 import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
-import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
+import PhuongAnInCell from '../../../components/common/PhuongAnInCell';
 import { fmtDateTime } from '../../../utils/format';
 import { khuonRequired } from '../constants';
 import exportReadyExcel from '../utils/exportReadyExcel';
@@ -77,6 +77,9 @@ export default function ReadyPage() {
   const [counts, setCounts] = useState({ khuon: 0, film: 0, muc: 0 }); // chưa xác nhận từng mục (toàn hệ thống)
 
   const permItems = ITEMS.filter((it) => can(it.perm));
+  // Đổi phương án in ngay tại cột — khớp đúng rbac của `PATCH /hskt/:id/phuong-an-in`
+  // (`READY_KHUON | READY_FILM | READY_MUC`), tức bằng `permItems.length > 0`.
+  const canDoiPain = permItems.length > 0;
   // Mục sẽ xác nhận khi quét/tích (mặc định = tất cả mục mình có quyền). Người phụ trách 1 mục → tự khóa mục đó.
   const [scanSel, setScanSel] = useState(() => new Set());
   const scanItemsRef = useRef({}); // rowId -> mảng mục đã xác nhận (để Hủy đúng)
@@ -202,7 +205,11 @@ export default function ReadyPage() {
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
     { key: 'loai_dot_vai', header: 'Loại đợt vải', render: (r) => <LoaiDotVaiBadge value={r.loai_dot_vai} /> },
     // Phương án in (ERP `Pain`, lấy từ HSKT đang hoạt động): 1 Bàn · 2 Máy · 3 Robot.
-    { key: 'phuong_an_in', header: 'Phương án in', render: (r) => <PhuongAnInBadge value={r.phuong_an_in} /> },
+    // Đổi được ngay tại chỗ: ⟳ xoay Bàn → Robot → Máy, ✓ mới ghi (kèm đổi số cuối mã vạch HSKT).
+    { key: 'phuong_an_in', header: 'Phương án in', render: (r) => (
+      <PhuongAnInCell value={r.phuong_an_in} hsktId={r.hskt_id} barcode={r.barcode_hskt}
+        disabled={!canDoiPain} show={show} onChanged={refresh} />
+    ) },
     { key: 'film_done', header: `Film${counts.film ? ` (${counts.film})` : ''}`, className: 'text-center', render: (r) => DoneCell(r.film_done) },
     { key: 'khuon_done', header: `Khuôn${counts.khuon ? ` (${counts.khuon})` : ''}`, className: 'text-center',
       render: (r) => (khuonRequired(r.ten_khach_hang)
@@ -280,10 +287,14 @@ export default function ReadyPage() {
         open={scanOpen}
         onClose={() => { setScanOpen(false); load(); }}
         title="Quét / tích phần in — READY"
-        help="Chọn loại mã ở trên: QR (code phần) hoặc Mã vạch (TDTHĐH của phần in). Máy tính mặc định là Mã vạch qua đầu đọc USB — muốn quét QR thì bấm QR để dùng camera. Quét mã nào XÁC NHẬN NGAY đúng phần in đó (không kéo theo các phần cùng gom set). Tích lộn thì bấm Hủy ở dòng đó."
         rows={rows}
         immediate
         usbBarcode
+        // Rộng ra để phiên quét hiện được dạng BẢNG (8 cột). Các màn khác giữ 'md' mặc định.
+        size="xl"
+        // Neo cách mép trên 100px thay vì canh giữa: danh sách "Đã xác nhận phiên này" dài dần ra
+        // theo số mã quét, canh giữa thì mỗi lần quét cả hộp lại nhích lên.
+        canhTren={100}
         getId={(r) => r.id}
         getCodes={(r) => [r.ma_phan]}
         getBarcodes={(r) => String(r.barcode || '').split(',').map((s) => s.trim()).filter(Boolean)}
@@ -316,6 +327,23 @@ export default function ReadyPage() {
           </div>
         )}
         actionLabel={(r) => `${r.ma_phan || r.barcode} — ${[...scanSel].map(labelOf).join(' + ')}`}
+        // Phiên quét hiện dạng BẢNG. Cố ý BỎ cột "Code phần" để nhường chỗ cho Khách hàng → Kích phim.
+        // ⚠ `row` là ẢNH CHỤP lúc quét (không tự làm mới) — nên ô Phương án in tự giữ state riêng.
+        sessionColumns={[
+          { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium', render: (r) => r.ten_khach_hang || '—' },
+          { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
+          { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
+          { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
+          { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
+          { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
+          { key: 'phuong_an_in', header: 'Phương án in', render: (r) => (
+            <PhuongAnInCell value={r.phuong_an_in} hsktId={r.hskt_id} barcode={r.barcode_hskt}
+              disabled={!canDoiPain} show={show} onChanged={refresh} />
+          ) },
+          { key: 'da_xac_nhan', header: 'Đã xác nhận', render: (r) => (
+            <span className="text-ink-soft">{(scanItemsRef.current[r.id] || []).map(labelOf).join(' + ') || '—'}</span>
+          ) },
+        ]}
         onScanAction={async (r) => {
           const items = [...scanSel];
           if (items.length === 0) throw new Error('Chọn mục cần xác nhận');

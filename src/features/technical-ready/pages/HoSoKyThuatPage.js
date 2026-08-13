@@ -15,7 +15,10 @@ import DateRangePicker from '../../../components/common/DateRangePicker';
 import Pagination from '../../../components/common/Pagination';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import { listHskt, getHskt, getHsktByBarcode, changePhuongAnIn, PHUONG_AN_IN } from '../../../services/hsktService';
+import { listHskt, getHskt, getHsktByBarcode, changePhuongAnIn } from '../../../services/hsktService';
+// Nguồn nhãn phương án in DUY NHẤT (có key 0 = "Chưa xác định"). Bản trùng ở `hsktService` đã bỏ:
+// nó thiếu key 0 nên Pain=0 bị in ra số `0` trần.
+import { PHUONG_AN_IN } from '../../../components/common/PhuongAnInBadge';
 import { fmtNum } from '../../../utils/format';
 
 const COLS = 14; // số cột bảng (cho colSpan hàng trống)

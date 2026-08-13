@@ -1,6 +1,7 @@
 import {
   Undo2,
   Redo2,
+  RotateCw,
   LayoutGrid,
   Copy,
   Type,
@@ -144,6 +145,8 @@ const MAP = {
   // Bổ sung cho module Thiết kế tem (mig 073)
   undo: Undo2,
   redo: Redo2,
+  // Mũi tên xoay TRÒN — dùng cho ô đổi phương án in ở READY (xoay vòng Bàn → Robot → Máy).
+  'rotate-cw': RotateCw,
   layout: LayoutGrid,
   copy: Copy,
   trash: Trash2,

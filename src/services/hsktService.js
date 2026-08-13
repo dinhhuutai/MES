@@ -10,5 +10,6 @@ export const getHsktByBarcode = (barcode, kieu) =>
 export const changePhuongAnIn = (id, phuongAnIn) =>
   client.patch(`/hskt/${id}/phuong-an-in`, { phuong_an_in: phuongAnIn });
 
-// Phương án in (Pain): 1 Bàn, 2 Máy, 3 Robot.
-export const PHUONG_AN_IN = { 1: 'Bàn', 2: 'Máy', 3: 'Robot' };
+// ⚠ Nhãn phương án in nay CHỈ CÓ MỘT NGUỒN: `components/common/PhuongAnInBadge.js` (`PHUONG_AN_IN`).
+// Bản trùng ở đây đã bỏ vì nó THIẾU key `0` ("Chưa xác định" — ERP có gửi thật) ⇒ trang nào import
+// nhầm bản này sẽ in ra số `0` trần thay vì nhãn tiếng Việt.
