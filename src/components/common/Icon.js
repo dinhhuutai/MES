@@ -2,6 +2,7 @@ import {
   Undo2,
   Redo2,
   RotateCw,
+  Wifi,
   LayoutGrid,
   Copy,
   Type,
@@ -147,6 +148,8 @@ const MAP = {
   redo: Redo2,
   // Mũi tên xoay TRÒN — dùng cho ô đổi phương án in ở READY (xoay vòng Bàn → Robot → Máy).
   'rotate-cw': RotateCw,
+  // Nút "Thử kết nối" ở Hệ thống > Cài đặt API.
+  wifi: Wifi,
   layout: LayoutGrid,
   copy: Copy,
   trash: Trash2,

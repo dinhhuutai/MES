@@ -15,6 +15,8 @@ import useSocketReload from '../../../hooks/useSocketReload';
 import usePermissions from '../../../hooks/usePermissions';
 import TraVeBadge from '../../../components/common/TraVeBadge';
 import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
+import PhanInLenhCell from '../components/PhanInLenhCell';
+import { codesCuaLenh } from '../utils/phanInLenh';
 import taiHetTrang from '../../../utils/taiHetTrang';
 import { listGiaCong, giaCongToOqc, giaCongTraLai } from '../../../services/planningService';
 import { printGiaCongVeTem } from '../../production/utils/printTemLabel';
@@ -193,7 +195,7 @@ export default function GiaCongPage() {
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
     // Hiện Code phần vì đây là trường được lọc — lọc theo giá trị không nhìn thấy thì không đối chiếu được.
-    { key: 'ma_phan', header: 'Code phần', render: (r) => r.ma_phan || '—' },
+    { key: 'ma_phan', header: 'Code phần', render: (r) => <PhanInLenhCell row={r} /> },
     { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
     { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },

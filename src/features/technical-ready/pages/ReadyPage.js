@@ -27,7 +27,7 @@ import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import PhuongAnInCell from '../../../components/common/PhuongAnInCell';
 import { fmtDateTime } from '../../../utils/format';
-import { khuonRequired } from '../constants';
+import { khuonRequired, filmHien } from '../constants';
 import exportReadyExcel from '../utils/exportReadyExcel';
 
 const FILTER_FIELDS = [
@@ -210,11 +210,16 @@ export default function ReadyPage() {
       <PhuongAnInCell value={r.phuong_an_in} hsktId={r.hskt_id} barcode={r.barcode_hskt}
         disabled={!canDoiPain} show={show} onChanged={refresh} />
     ) },
-    { key: 'film_done', header: `Film${counts.film ? ` (${counts.film})` : ''}`, className: 'text-center', render: (r) => DoneCell(r.film_done) },
+    // Film KHÔNG còn phải bấm riêng: xác nhận Khuôn là backend tự đặt Film = ĐẠT. Cột vẫn giữ để
+    // nhìn thấy trạng thái; hàng GIA CÔNG (II/AD) không làm khuôn nên ẩn luôn cả 2 cột.
+    { key: 'film_done', header: `Film${counts.film ? ` (${counts.film})` : ''}`, className: 'text-center',
+      render: (r) => (filmHien(r.ten_khach_hang)
+        ? DoneCell(r.film_done)
+        : <span className="text-ink-soft" title="Hàng gia công — không cần xác nhận Film">—</span>) },
     { key: 'khuon_done', header: `Khuôn${counts.khuon ? ` (${counts.khuon})` : ''}`, className: 'text-center',
       render: (r) => (khuonRequired(r.ten_khach_hang)
         ? DoneCell(r.khuon_done)
-        : <span className="text-ink-soft" title="Khách này không cần xác nhận Khuôn">—</span>) },
+        : <span className="text-ink-soft" title="Hàng gia công — không cần xác nhận Khuôn">—</span>) },
     { key: 'muc_done', header: `Mực${counts.muc ? ` (${counts.muc})` : ''}`, className: 'text-center', render: (r) => DoneCell(r.muc_done) },
     { key: 'trang_thai_ready', header: 'Trạng thái', render: (r) => {
       const s = STATUS[r.trang_thai_ready] || STATUS.CHUA;

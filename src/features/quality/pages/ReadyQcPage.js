@@ -24,7 +24,7 @@ import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import PhuongAnInCell from '../../../components/common/PhuongAnInCell';
 import exportReadyQcExcel from '../utils/exportReadyQcExcel';
-import { khuonRequired } from '../../technical-ready/constants';
+import { khuonRequired, filmHien } from '../../technical-ready/constants';
 
 // Thứ tự hiển thị: FILM → KHUÔN → MỰC (HSKT đã bỏ khỏi checklist READY).
 const TECH_ITEMS = [
@@ -306,7 +306,11 @@ export default function ReadyQcPage() {
     { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => <HanGiaoCell value={r.han_giao_hang} /> },
     { key: 'tech', header: 'Kỹ thuật', render: (r) => (
       <div className="flex flex-wrap items-center gap-1">
-        {TECH_ITEMS.filter((it) => it.ma !== 'KHUON' || khuonRequired(r.ten_khach_hang)).map((it) => {
+        {/* Hàng gia công (II/AD): ẩn cả Khuôn lẫn Film — chỉ còn Mực. */}
+        {TECH_ITEMS.filter((it) => (
+          (it.ma !== 'KHUON' || khuonRequired(r.ten_khach_hang))
+          && (it.ma !== 'FILM' || filmHien(r.ten_khach_hang))
+        )).map((it) => {
           const done = r[`${it.ma.toLowerCase()}_done`];
           return <Badge key={it.ma} tone={done ? 'success' : 'default'}>{it.label}</Badge>;
         })}
@@ -316,7 +320,7 @@ export default function ReadyQcPage() {
 
   return (
     <div>
-      <Toolbar title="QC chuẩn bị kỹ thuật" subtitle="Toàn bộ phần in ở READY — QC xác nhận khi đủ mục kỹ thuật (khách II/AD chỉ cần Film + Mực). SLA nghẽn QC chỉ tính sau khi kỹ thuật đủ mục."
+      <Toolbar title="QC chuẩn bị kỹ thuật" subtitle="Toàn bộ phần in ở READY — QC xác nhận khi đủ mục kỹ thuật (xác nhận Khuôn là Film tự đạt theo; hàng gia công II/AD chỉ cần Mực). SLA nghẽn QC chỉ tính sau khi kỹ thuật đủ mục."
         search={search} onSearch={(v) => { setSearch(v); setPage(1); }}
         searchPlaceholder="Tìm code phần, mã hàng, màu/kích vải, kích phim...">
         {/* Làm tươi NGAY khi mở modal quét: phòng trường hợp tab để lâu / mất socket giữa chừng. */}

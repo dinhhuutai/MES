@@ -143,6 +143,8 @@ export const MODULES = [
       // Quyền riêng PHAN_IN_ADMIN, cấp hẹp (role ADMIN có '*' nên dùng được ngay).
       { ten: 'Quản trị phần in', route: '/he-thong/quan-tri-phan-in', perm: 'PHAN_IN_ADMIN' },
       { ten: 'Hiển thị theo phương án in', route: '/he-thong/hien-thi-pain', perm: 'WORKFLOW_VIEW' },
+      // Cài đặt API (mig 083) — bật/tắt 3 API ERP ngay trên giao diện, khỏi sửa .env + restart BE.
+      { ten: 'Cài đặt API', route: '/he-thong/cai-dat-api', perm: 'WORKFLOW_VIEW' },
       { ten: 'Người dùng online', route: '/he-thong/online', perm: 'PRESENCE_VIEW' },
       // Phiên đăng nhập theo THIẾT BỊ (mig 081): xem 1 tài khoản đang đăng nhập ở những máy nào và
       // đăng xuất máy không dùng nữa. Xem chỉ cần PRESENCE_VIEW; đăng xuất người KHÁC cần PHIEN_MANAGE.

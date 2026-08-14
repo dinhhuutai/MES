@@ -54,10 +54,17 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
 
   const byMa = (detail?.checkpoints || []).reduce((acc, c) => ({ ...acc, [c.ma_checkpoint]: c }), {});
   const state = detail?.state || {};
-  // Khách II/AD: Khuôn không bắt buộc (backend trả state.khuon_required=false) → ẩn mục Khuôn.
-  const items = ITEMS.filter((it) => it.ma !== 'KHUON' || state.khuon_required !== false);
-  const reqCount = items.length;
-  const doneCount = items.filter((it) => state[`${it.ma.toLowerCase()}_done`]).length;
+  // HÀNG GIA CÔNG (II/AD): ẩn CẢ Khuôn LẪN Film (backend trả `khuon_required=false`/`film_hien=false`)
+  // → chỉ còn Mực. Khách thường: hiện đủ 3 mục, nhưng Film TỰ ĐẠT khi xác nhận Khuôn.
+  const items = ITEMS.filter((it) => (
+    (it.ma !== 'KHUON' || state.khuon_required !== false)
+    && (it.ma !== 'FILM' || state.film_hien !== false)
+  ));
+  // ⚠ Số mục PHẢI BẤM ≠ số mục HIỆN: Film hiện nhưng không phải bấm (Khuôn kéo theo) ⇒ đếm Film
+  //   vào thì nhãn "x/N" không bao giờ chạm N và banner "đã đủ mục" không khớp `state.tech_done`.
+  const phaiBam = items.filter((it) => it.ma !== 'FILM');
+  const reqCount = phaiBam.length;
+  const doneCount = phaiBam.filter((it) => state[`${it.ma.toLowerCase()}_done`]).length;
 
   const load = useCallback(async () => {
     if (!phanInId) return;
@@ -177,7 +184,9 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
           ) : (
             <div className="rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
               Mỗi bộ phận xác nhận mục của mình. Đủ {reqCount} mục sẽ chuyển sang chờ QC.
-              {state.khuon_required === false && ' (Khách này không cần xác nhận Khuôn.)'}
+              {state.khuon_required === false
+                ? ' (Hàng gia công — không cần xác nhận Khuôn và Film.)'
+                : ' (Xác nhận Khuôn thì Film tự đạt theo.)'}
             </div>
           )}
 

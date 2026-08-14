@@ -2,10 +2,11 @@
 // Kèm NGƯỜI + GIỜ xác nhận từng mục (Film / Khuôn / Mực).
 // Định dạng sẵn: tiêu đề, header tô nền + gộp nhóm, viền, zebra, ✓ xanh, hạn giao trễ tô đỏ. Lazy import exceljs.
 
-import { khuonRequired } from '../constants';
+import { khuonRequired, filmHien, soMucKtCan } from '../constants';
 
 const pad = (n) => String(n).padStart(2, '0');
-const reqCount = (r) => (khuonRequired(r.ten_khach_hang) ? 3 : 2);
+// Số mục PHẢI BẤM: gia công 1 (Mực) · còn lại 2 (Khuôn + Mực). Film tự đạt theo Khuôn nên không tính.
+const reqCount = (r) => soMucKtCan(r.ten_khach_hang);
 const fmtDMY = (s) => { if (!s) return ''; const x = new Date(s); return Number.isNaN(+x) ? '' : `${pad(x.getDate())}/${pad(x.getMonth() + 1)}/${x.getFullYear()}`; };
 const fmtDT = (s) => {
   if (!s) return '';
@@ -33,11 +34,14 @@ const COLS = [
   { h: 'Kích vải', w: 12, key: (r) => r.kich_vai || '' },
   { h: 'Kích phim', w: 12, key: (r) => r.kich_phim || '' },
   { h: 'Loại đợt vải', w: 14, key: (r) => r.loai_dot_vai || '' },
-  // --- FILM ---
-  { h: 'XN', w: 6, grp: 'FILM', center: true, key: (r) => (r.film_done ? '✓' : '–'), done: (r) => r.film_done },
-  { h: 'Người xác nhận', w: 20, grp: 'FILM', key: (r) => r.film_nguoi || '' },
-  { h: 'Giờ xác nhận', w: 17, grp: 'FILM', center: true, key: (r) => fmtDT(r.film_tg) },
-  // --- KHUÔN (khách II/AD không cần) ---
+  // --- FILM (hàng gia công II/AD không cần; khách khác thì Film tự đạt theo Khuôn nên người/giờ
+  //     ở đây chính là người đã bấm Khuôn) ---
+  { h: 'XN', w: 6, grp: 'FILM', center: true,
+    key: (r) => (!filmHien(r.ten_khach_hang) ? '—' : r.film_done ? '✓' : '–'),
+    done: (r) => filmHien(r.ten_khach_hang) && r.film_done },
+  { h: 'Người xác nhận', w: 20, grp: 'FILM', key: (r) => (filmHien(r.ten_khach_hang) ? r.film_nguoi || '' : '') },
+  { h: 'Giờ xác nhận', w: 17, grp: 'FILM', center: true, key: (r) => (filmHien(r.ten_khach_hang) ? fmtDT(r.film_tg) : '') },
+  // --- KHUÔN (hàng gia công II/AD không cần) ---
   { h: 'XN', w: 6, grp: 'KHUÔN', center: true,
     key: (r) => (!khuonRequired(r.ten_khach_hang) ? '—' : r.khuon_done ? '✓' : '–'),
     done: (r) => khuonRequired(r.ten_khach_hang) && r.khuon_done },

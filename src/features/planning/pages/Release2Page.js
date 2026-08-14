@@ -10,6 +10,7 @@ import Toast from '../../../components/common/Toast';
 import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
 import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
+import { codesCuaLenh } from '../utils/phanInLenh';
 import useToast from '../../../hooks/useToast';
 import useSocketReload from '../../../hooks/useSocketReload';
 import usePermissions from '../../../hooks/usePermissions';
@@ -249,7 +250,7 @@ export default function Release2Page() {
         help="Quét QR code phần để chọn các lệnh chờ duyệt của phần in đó. Quét nhiều rồi bấm Duyệt để duyệt tất cả cùng lúc."
         rows={rows}
         getId={(r) => r.id}
-        getCodes={(r) => [r.ma_phan]}
+        getCodes={codesCuaLenh}
         matchMultiple
         isSelected={(r) => selected.has(r.id)}
         onToggle={(r) => toggleOne(r.id)}

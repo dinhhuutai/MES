@@ -1,10 +1,11 @@
 // Xuất Excel danh sách "QC CHUẨN BỊ KỸ THUẬT (READY)" — theo đúng danh sách ĐANG LỌC trên màn hình.
 // Định dạng sẵn: tiêu đề, header tô nền, viền, ✓ xanh, hạn giao trễ tô đỏ. Lazy import exceljs.
 
-import { khuonRequired } from '../../technical-ready/constants';
+import { khuonRequired, filmHien, soMucKtCan } from '../../technical-ready/constants';
 
 const pad = (n) => String(n).padStart(2, '0');
-const reqCount = (r) => (khuonRequired(r.ten_khach_hang) ? 3 : 2);
+// Số mục PHẢI BẤM: gia công 1 (Mực) · còn lại 2 (Khuôn + Mực). Film tự đạt theo Khuôn nên không tính.
+const reqCount = (r) => soMucKtCan(r.ten_khach_hang);
 const fmtDMY = (s) => { if (!s) return ''; const x = new Date(s); return Number.isNaN(+x) ? '' : `${pad(x.getDate())}/${pad(x.getMonth() + 1)}/${x.getFullYear()}`; };
 const daysDiff = (s) => {
   if (!s) return null;
@@ -23,7 +24,7 @@ const COLS = [
   { h: 'Kích vải', w: 12, key: (r) => r.kich_vai || '' },
   { h: 'Kích phim', w: 12, key: (r) => r.kich_phim || '' },
   { h: 'Loại đợt vải', w: 14, key: (r) => r.loai_dot_vai || '' },
-  { h: 'Film', w: 8, key: (r) => (r.film_done ? '✓' : '–'), center: true, done: (r) => r.film_done },
+  { h: 'Film', w: 8, key: (r) => (!filmHien(r.ten_khach_hang) ? '—' : r.film_done ? '✓' : '–'), center: true, done: (r) => filmHien(r.ten_khach_hang) && r.film_done },
   { h: 'Khuôn', w: 8, key: (r) => (!khuonRequired(r.ten_khach_hang) ? '—' : r.khuon_done ? '✓' : '–'), center: true, done: (r) => khuonRequired(r.ten_khach_hang) && r.khuon_done },
   { h: 'Mực', w: 8, key: (r) => (r.muc_done ? '✓' : '–'), center: true, done: (r) => r.muc_done },
   { h: 'Trạng thái KT', w: 16, key: (r) => (r.tech_done ? `Đủ ${reqCount(r)} mục` : `${r.n_tech_done || 0}/${reqCount(r)} mục`), center: true },

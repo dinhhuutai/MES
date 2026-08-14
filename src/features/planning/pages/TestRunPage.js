@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
 import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
+import { codesCuaLenh } from '../utils/phanInLenh';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import Toast from '../../../components/common/Toast';
@@ -274,7 +275,7 @@ export default function TestRunPage() {
         help="Chọn QR (code phần) hoặc Mã vạch ở trên rồi đưa vào khung camera. Quét nhiều lệnh (chưa QA) rồi nhập người test & bấm QA xác nhận đạt cùng lúc; mỗi dòng có nút Trả về Release 1 nếu test không đạt."
         rows={rows}
         getId={(r) => r.id}
-        getCodes={(r) => [r.ma_phan]}
+        getCodes={codesCuaLenh}
         getBarcodes={(r) => [r.barcode]}
         matchMultiple
         canSelect={(r) => (r.cho_ky_thuat

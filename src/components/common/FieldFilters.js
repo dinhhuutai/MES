@@ -44,10 +44,25 @@ export default function FieldFilters({ fields, values, onField, onClear, open, l
 
 // Lọc CLIENT-SIDE danh sách theo các trường (fields có `col` = tên thuộc tính hàng). Kết hợp AND,
 // khớp CHỨA — **không phân biệt hoa–thường, KHÔNG PHÂN BIỆT DẤU**, tự bỏ khoảng trắng thừa (`khop`).
+//
+// ⚠⚠ HÀNG CỦA LỆNH **GOM SET** MANG NHIỀU PHẦN IN: các query mức lệnh dùng `PHAN_INFO_LATERAL`
+//   với `LIMIT 1` nên `r.ma_phan`/`r.ma_hang`/`r.mau_vai`… chỉ là **phần in ĐẠI DIỆN**. Chỉ so
+//   `r[f.col]` thì lọc theo phần in THỨ HAI sẽ **LÀM MẤT CẢ LỆNH** — người dùng tưởng hàng không
+//   tồn tại. (Lỗi thật 14/08/2026 ở màn Lập kế hoạch lại: lọc `SL-2608-006-A07-F01-C05` không ra
+//   vì lệnh LSX0605 hiện phần in đại diện `…-C02`. Đo prod: 175/837 lệnh Replan · 166/608 Test Run
+//   · 74/211 Gia công là gom set.)
+// ⇒ Hàng nào có `phan_in_list` thì khớp khi **BẤT KỲ phần in nào** trong đó khớp — cùng cách hiểu
+//   với dòng gom set ở màn Release 1. Hàng không có `phan_in_list` chạy y như cũ.
+const khopHang = (r, col, kw) => {
+  if (khop(r[col], kw)) return true;
+  const ds = r.phan_in_list;
+  return Array.isArray(ds) && ds.some((p) => khop(p[col], kw));
+};
+
 export function filterRows(rows, filters, fields) {
   const active = fields.filter((f) => chuanTuKhoa(filters[f.key]));
   if (!active.length) return rows || [];
-  return (rows || []).filter((r) => active.every((f) => khop(r[f.col], filters[f.key])));
+  return (rows || []).filter((r) => active.every((f) => khopHang(r, f.col, filters[f.key])));
 }
 
 // Nút bật/tắt panel lọc (kèm số lọc đang bật).

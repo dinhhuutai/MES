@@ -21,6 +21,7 @@ import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
+import { codesCuaLenh, laGomSet } from '../utils/phanInLenh';
 import taiHetTrang from '../../../utils/taiHetTrang';
 import { listReplanCandidates, replan, replanBatch, listChuyen, planHistory, replanDone } from '../../../services/planningService';
 import { fmtNum, fmtDate } from '../../../utils/format';
@@ -197,29 +198,45 @@ export default function ReplanPage() {
           onClick={(e) => e.stopPropagation()}
           onChange={() => toggleOne(r.id)} aria-label="Chọn lệnh" />
       ) }] : []),
-    { key: 'ma_lenh_san_xuat', header: 'Mã đợt SX', render: (r) => <Badge tone="info">{r.ma_lenh_san_xuat}</Badge> },
-    { key: 'giai_doan', header: 'Giai đoạn', render: (r) => (
+    // LỆNH GOM SET hiện GIỐNG MÀN RELEASE 1: mỗi phần in 1 DÒNG, các ô ở mức LỆNH hợp nhất bằng
+    // `rowSpan` (prop `subRows` + cột `merge` của DataTable — cùng cơ chế màn Xác nhận chạy).
+    { key: 'ma_lenh_san_xuat', header: 'Mã đợt SX', merge: true, render: (r) => (
+      <div className="space-y-1">
+        <Badge tone="info">{r.ma_lenh_san_xuat}</Badge>
+        {laGomSet(r) && (
+          <div className="text-xs text-primary">gom set · {r.so_phan_in} phần in · in chung</div>
+        )}
+      </div>
+    ) },
+    { key: 'giai_doan', header: 'Giai đoạn', merge: true, render: (r) => (
       r.trang_thai === 'RELEASE_1'
         ? <Badge tone="warning">Test Run</Badge>
         : <Badge tone="success">Release 2</Badge>
     ) },
+    // ↓ Các cột THEO PHẦN IN — dòng con ghi đè giá trị nên mỗi phần in hiện đúng dữ liệu của nó.
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
-    // Hiện Code phần vì đây là trường được lọc — lọc theo giá trị không nhìn thấy thì không đối chiếu được.
     { key: 'ma_phan', header: 'Code phần', render: (r) => r.ma_phan || '—' },
     { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
     { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
     { key: 'tinh_chat_in', header: 'Tính chất in', render: (r) => <TinhChatInCell value={r.tinh_chat_in} /> },
-    { key: 'phuong_an_in', header: 'Phương án in', render: (r) => <PhuongAnInBadge value={r.phuong_an_in} /> },
-    { key: 'loai_dot_vai', header: 'Loại đợt vải', render: (r) => <LoaiDotVaiBadge value={r.loai_dot_vai} /> },
-    { key: 'nha_gia_cong', header: 'Nhà gia công', render: (r) => r.nha_gia_cong || '—' },
-    { key: 'so_luong_vai_ve', header: 'SLNV', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong_vai_ve) },
-    { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => fmtDate(r.han_giao_hang) },
-    { key: 'chuyen', header: 'Chuyền hiện tại', render: (r) => r.ten_chuyen || '—' },
-    { key: 'ngay_ke_hoach', header: 'Ngày SX kế hoạch', render: (r) => fmtDate(r.ngay_ke_hoach) },
+    // ↓ Từ đây là mức LỆNH → hợp nhất ô.
+    // ⚠ `phuong_an_in`/`loai_dot_vai`/`SLNV`/`Hạn giao` lấy từ ĐỢT VẢI ĐẠI DIỆN (`PHAN_INFO_LATERAL`
+    //   `LIMIT 1`) nên với lệnh gom set chỉ có MỘT giá trị — hợp nhất ô là cách trung thực nhất,
+    //   lặp lại ở từng dòng con sẽ khiến người đọc tưởng mọi phần in đều đúng như vậy.
+    { key: 'phuong_an_in', header: 'Phương án in', merge: true, render: (r) => <PhuongAnInBadge value={r.phuong_an_in} /> },
+    { key: 'loai_dot_vai', header: 'Loại đợt vải', merge: true, render: (r) => <LoaiDotVaiBadge value={r.loai_dot_vai} /> },
+    { key: 'nha_gia_cong', header: 'Nhà gia công', merge: true, render: (r) => r.nha_gia_cong || '—' },
+    { key: 'so_luong_vai_ve', header: 'SLNV', className: 'text-right tabular-nums', merge: true, render: (r) => fmtNum(r.so_luong_vai_ve) },
+    { key: 'han_giao_hang', header: 'Hạn giao', merge: true, render: (r) => fmtDate(r.han_giao_hang) },
+    { key: 'chuyen', header: 'Chuyền hiện tại', merge: true, render: (r) => r.ten_chuyen || '—' },
+    { key: 'ngay_ke_hoach', header: 'Ngày SX kế hoạch', merge: true, render: (r) => fmtDate(r.ngay_ke_hoach) },
   ];
+
+  // Lệnh GOM SET → tách 1 dòng / PHẦN IN. Lệnh thường trả `null` ⇒ render y như cũ.
+  const subRows = (r) => (r.phan_in_list ? r.phan_in_list.map((p) => ({ ...p, __sub: true })) : null);
 
   return (
     <div>
@@ -242,8 +259,11 @@ export default function ReplanPage() {
         onField={(k, v) => setFilters((f) => ({ ...f, [k]: v }))}
         onClear={() => setFilters({})} open={showFilters} />
 
+      {/* Khối gom set: tách dòng theo phần in + VIỀN TRÁI xanh như màn Release 1.
+          ⚠ Dùng `border-l`, KHÔNG đổi nền — nền đang dành cho màu cảnh báo SLA nghẽn. */}
       <DataTable columns={columns} rows={filtered} loading={loading} onRowClick={openDetail} sttStart={0}
-        rowClassName={(r) => slaRowClass(statusLenh(r.id))}
+        subRows={subRows}
+        rowClassName={(r) => `${slaRowClass(statusLenh(r.id))} ${laGomSet(r) ? 'border-l-[3px] border-l-primary' : ''}`}
         emptyText="Không có lệnh nào để lập lại kế hoạch" />
 
       <SidePanel
@@ -349,7 +369,7 @@ export default function ReplanPage() {
         help="Quét QR code phần để chọn các lệnh của phần in đó. Quét nhiều rồi bấm Lập lại kế hoạch cho tất cả cùng lúc."
         rows={rows}
         getId={(r) => r.id}
-        getCodes={(r) => [r.ma_phan]}
+        getCodes={codesCuaLenh}
         matchMultiple
         isSelected={(r) => selected.has(r.id)}
         onToggle={(r) => toggleOne(r.id)}
