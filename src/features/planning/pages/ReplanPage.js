@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
 import Badge from '../../../components/common/Badge';
@@ -8,7 +8,9 @@ import Modal from '../../../components/common/Modal';
 import Toast from '../../../components/common/Toast';
 import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
-import { Field, Input, Select, Textarea } from '../../../components/common/controls';
+import { Field, Input, Textarea } from '../../../components/common/controls';
+import ChuyenPicker from '../../../components/common/ChuyenPicker';
+import TimeSelect from '../../../components/common/TimeSelect';
 import useToast from '../../../hooks/useToast';
 import useSocketReload from '../../../hooks/useSocketReload';
 import usePermissions from '../../../hooks/usePermissions';
@@ -18,8 +20,25 @@ import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
+import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
+import taiHetTrang from '../../../utils/taiHetTrang';
 import { listReplanCandidates, replan, replanBatch, listChuyen, planHistory, replanDone } from '../../../services/planningService';
 import { fmtNum, fmtDate } from '../../../utils/format';
+
+// Lọc nhiều trường (client-side, kết hợp AND) — trang tải-hết (limit 500) nên lọc đủ mọi dòng.
+// `col` = tên thuộc tính trên hàng do `listReplanCandidates` trả về.
+const FILTER_FIELDS = [
+  { key: 'maLenh', label: 'Mã đợt SX', col: 'ma_lenh_san_xuat' },
+  { key: 'codePhan', label: 'Code phần', col: 'ma_phan' },
+  { key: 'khach', label: 'Khách hàng', col: 'ten_khach_hang' },
+  { key: 'don', label: 'Đơn hàng', col: 'ma_don_hang' },
+  { key: 'maHang', label: 'Mã hàng', col: 'ma_hang' },
+  { key: 'mauVai', label: 'Màu vải', col: 'mau_vai' },
+  { key: 'kichVai', label: 'Kích vải', col: 'kich_vai' },
+  { key: 'kichPhim', label: 'Kích phim', col: 'kich_phim' },
+  { key: 'chuyen', label: 'Chuyền hiện tại', col: 'ten_chuyen' },
+  { key: 'nhaGiaCong', label: 'Nhà gia công', col: 'nha_gia_cong' },
+];
 
 // Ngày (Date/ISO) → 'YYYY-MM-DD' theo giờ địa phương cho input[type=date] (tránh lệch ngày do slice ISO/UTC).
 const dateStr = (d) => {
@@ -28,6 +47,18 @@ const dateStr = (d) => {
   if (Number.isNaN(date.getTime())) return '';
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 };
+
+// Giờ trong ngày ('HH:MM') của `tg_bd_kh`/`tg_kt_kh` đã lưu → đổ sẵn vào ô TimeSelect.
+const gioStr = (d) => {
+  if (!d) return '';
+  const date = new Date(d);
+  if (Number.isNaN(date.getTime())) return '';
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+};
+
+// Ghép ngày kế hoạch + giờ thành mốc gửi lên backend — GIỐNG HỆT màn Release 1.
+// Thiếu ngày hoặc thiếu giờ ⇒ null: backend sẽ tự DỜI giờ cũ sang ngày mới, không mất giờ đã đặt.
+const mkTs = (ngay, gio) => (ngay && gio ? `${ngay}T${gio}:00` : null);
 
 export default function ReplanPage() {
   const { can } = usePermissions();
@@ -42,23 +73,30 @@ export default function ReplanPage() {
   const [chuyen, setChuyen] = useState([]);
   const [histOpen, setHistOpen] = useState(false);
   const [doneOpen, setDoneOpen] = useState(false);
+  const [filters, setFilters] = useState({});
+  const [showFilters, setShowFilters] = useState(false);
+  const activeCount = Object.values(filters).filter(Boolean).length;
+  const filtered = useMemo(() => filterRows(rows, filters, FILTER_FIELDS), [rows, filters]);
 
   const [detail, setDetail] = useState(null);
-  const [form, setForm] = useState({ chuyenId: '', ngayKeHoach: '', lyDo: '' });
+  const [form, setForm] = useState({ chuyenId: '', ngayKeHoach: '', gioBd: '', gioKt: '', lyDo: '' });
   const [saving, setSaving] = useState(false);
 
   const [selected, setSelected] = useState(() => new Set());
   const [batchOpen, setBatchOpen] = useState(false);
-  const [batchForm, setBatchForm] = useState({ chuyenId: '', ngayKeHoach: '', lyDo: '' });
+  const [batchForm, setBatchForm] = useState({ chuyenId: '', ngayKeHoach: '', gioBd: '', gioKt: '', lyDo: '' });
   const [scanOpen, setScanOpen] = useState(false);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      // Tải-hết (limit cao) để quét/tích khớp mọi lệnh; DataTable tự phân trang 20/trang client-side.
-      const res = await listReplanCandidates({ search, limit: 500 });
-      setRows(res.data.items);
-      setMeta(res.data.meta);
+      // TẢI HẾT MỌI TRANG để lọc/quét ở client khớp đủ dòng; DataTable tự phân trang 20/trang.
+      // ⚠ KHÔNG truyền `limit: 500` — `getPaging` cắt còn 200, mà prod đang có ~760 lệnh ở màn này
+      //   ⇒ bộ lọc sẽ chỉ soi được 200 dòng đầu và im lặng bỏ sót phần còn lại.
+      const { items, total, thieu } = await taiHetTrang((p) => listReplanCandidates({ search, ...p }));
+      setRows(items);
+      setMeta({ page: 1, totalPages: 1, total });
+      if (thieu && !silent) show(`Mới tải được ${items.length}/${total} lệnh — hãy thu hẹp tìm kiếm`, 'error');
       if (!silent) setSelected(new Set());
     } catch (e) {
       if (!silent) show(e.message || 'Lỗi tải', 'error');
@@ -79,9 +117,16 @@ export default function ReplanPage() {
   // thay bằng spinner) và KHÔNG xóa dòng đang tích. Nhiều sự kiện trong 400ms gộp thành 1 lần tải.
   useSocketReload(['workflow:updated'], () => load(true));
 
+  // Đổ sẵn chuyền / ngày / GIỜ hiện tại của lệnh ⇒ không đụng gì thì giữ nguyên kế hoạch cũ.
   const openDetail = (row) => {
     setDetail(row);
-    setForm({ chuyenId: row.chuyen_id || '', ngayKeHoach: dateStr(row.ngay_ke_hoach), lyDo: '' });
+    setForm({
+      chuyenId: row.chuyen_id || '',
+      ngayKeHoach: dateStr(row.ngay_ke_hoach),
+      gioBd: gioStr(row.tg_bd_kh),
+      gioKt: gioStr(row.tg_kt_kh),
+      lyDo: '',
+    });
   };
 
   const toggleOne = (id) => setSelected((s) => {
@@ -89,23 +134,26 @@ export default function ReplanPage() {
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
-  const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.id));
-  const toggleAll = () => setSelected(() => (allChecked ? new Set() : new Set(rows.map((r) => r.id))));
+  // "Chọn tất cả" theo tập ĐANG HIỆN (đã lọc) — tick xong mà lệnh ngoài bộ lọc cũng bị chọn thì
+  // người dùng không kiểm soát được mình đang lập lại kế hoạch cho những lệnh nào.
+  const allChecked = filtered.length > 0 && filtered.every((r) => selected.has(r.id));
+  const toggleAll = () => setSelected(() => (allChecked ? new Set() : new Set(filtered.map((r) => r.id))));
 
   const openBatch = () => {
-    setBatchForm({ chuyenId: '', ngayKeHoach: '', lyDo: '' });
+    setBatchForm({ chuyenId: '', ngayKeHoach: '', gioBd: '', gioKt: '', lyDo: '' });
     setBatchOpen(true);
   };
 
   const submitBatch = async () => {
     if (!batchForm.ngayKeHoach) { show('Chọn ngày sản xuất kế hoạch', 'error'); return; }
-    if (!batchForm.lyDo.trim()) { show('Nhập lý do lập kế hoạch lại', 'error'); return; }
     setSaving(true);
     try {
       const res = await replanBatch({
         lenhIds: [...selected],
         chuyenId: batchForm.chuyenId || null,
         ngayKeHoach: batchForm.ngayKeHoach,
+        tgBdKh: mkTs(batchForm.ngayKeHoach, batchForm.gioBd),
+        tgKtKh: mkTs(batchForm.ngayKeHoach, batchForm.gioKt),
         lyDo: batchForm.lyDo.trim(),
       });
       const { okCount, failedCount } = res.data;
@@ -122,12 +170,13 @@ export default function ReplanPage() {
 
   const submit = async () => {
     if (!form.ngayKeHoach) { show('Chọn ngày sản xuất kế hoạch', 'error'); return; }
-    if (!form.lyDo.trim()) { show('Nhập lý do lập kế hoạch lại', 'error'); return; }
     setSaving(true);
     try {
       await replan(detail.id, {
         chuyenId: form.chuyenId || null,
         ngayKeHoach: form.ngayKeHoach,
+        tgBdKh: mkTs(form.ngayKeHoach, form.gioBd),
+        tgKtKh: mkTs(form.ngayKeHoach, form.gioKt),
         lyDo: form.lyDo.trim(),
       });
       show(`Đã lập lại kế hoạch cho ${detail.ma_lenh_san_xuat}`);
@@ -157,6 +206,8 @@ export default function ReplanPage() {
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
+    // Hiện Code phần vì đây là trường được lọc — lọc theo giá trị không nhìn thấy thì không đối chiếu được.
+    { key: 'ma_phan', header: 'Code phần', render: (r) => r.ma_phan || '—' },
     { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
     { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
@@ -181,12 +232,17 @@ export default function ReplanPage() {
         {canReplan && selected.size > 0 && (
           <Button onClick={openBatch}>Lập lại kế hoạch ({selected.size})</Button>
         )}
+        <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
-        <Badge tone="info">{meta.total} lệnh</Badge>
+        <Badge tone="info">{activeCount ? `${filtered.length}/` : ''}{meta.total} lệnh</Badge>
       </Toolbar>
 
-      <DataTable columns={columns} rows={rows} loading={loading} onRowClick={openDetail} sttStart={0}
+      <FieldFilters fields={FILTER_FIELDS} values={filters}
+        onField={(k, v) => setFilters((f) => ({ ...f, [k]: v }))}
+        onClear={() => setFilters({})} open={showFilters} />
+
+      <DataTable columns={columns} rows={filtered} loading={loading} onRowClick={openDetail} sttStart={0}
         rowClassName={(r) => slaRowClass(statusLenh(r.id))}
         emptyText="Không có lệnh nào để lập lại kế hoạch" />
 
@@ -215,17 +271,28 @@ export default function ReplanPage() {
               <Info label="Hạn giao" value={fmtDate(detail.han_giao_hang)} />
             </div>
             <div className="space-y-3 border-t border-line pt-4">
+              {/* Chọn chuyền GIỐNG MÀN RELEASE 1: `ChuyenPicker` có chip lọc theo loại + ô tìm mã/tên
+                  (danh sách chuyền đã dài, `Select` trơn phải cuộn tìm rất lâu). */}
               <Field label="Chuyền in" hint="Mặc định kế thừa chuyền của kế hoạch cũ">
-                <Select value={form.chuyenId} onChange={(e) => setForm({ ...form, chuyenId: e.target.value })}>
-                  <option value="">— Chọn chuyền —</option>
-                  {chuyen.map((c) => <option key={c.id} value={c.id}>{c.ma_chuyen} — {c.ten_chuyen}</option>)}
-                </Select>
+                <ChuyenPicker chuyen={chuyen} value={form.chuyenId}
+                  onChange={(id) => setForm({ ...form, chuyenId: id })} />
               </Field>
               <Field label="Ngày sản xuất kế hoạch" required>
                 <Input type="date" value={form.ngayKeHoach}
                   onChange={(e) => setForm({ ...form, ngayKeHoach: e.target.value })} />
               </Field>
-              <Field label="Lý do lập lại" required>
+              {/* Giờ BD/KT — ghép với ngày kế hoạch thành `tg_bd_kh`/`tg_kt_kh`, y như Release 1.
+                  Đổ sẵn giờ đang lưu của lệnh; xóa trắng thì backend DỜI giờ cũ sang ngày mới.
+                  Dùng `TimeSelect` (24h) chứ KHÔNG `<input type="time">` — ô đó hiện AM/PM theo locale máy. */}
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Giờ bắt đầu">
+                  <TimeSelect value={form.gioBd} onChange={(v) => setForm({ ...form, gioBd: v })} minuteStep={5} />
+                </Field>
+                <Field label="Giờ kết thúc">
+                  <TimeSelect value={form.gioKt} onChange={(v) => setForm({ ...form, gioKt: v })} minuteStep={5} />
+                </Field>
+              </div>
+              <Field label="Lý do lập lại" hint="Không bắt buộc — có nhập thì hiện ở sidebar Lịch sử">
                 <Textarea rows={3} value={form.lyDo}
                   onChange={(e) => setForm({ ...form, lyDo: e.target.value })}
                   placeholder="Vd: không kịp tiến độ, dời ngày sản xuất..." />
@@ -250,16 +317,25 @@ export default function ReplanPage() {
           Áp dụng cùng chuyền / ngày / lý do cho <b>{selected.size}</b> lệnh đã chọn.
         </div>
         <Field label="Chuyền in" hint="Để trống = giữ chuyền hiện tại của từng lệnh">
-          <Select value={batchForm.chuyenId} onChange={(e) => setBatchForm({ ...batchForm, chuyenId: e.target.value })}>
-            <option value="">— Giữ chuyền hiện tại —</option>
-            {chuyen.map((c) => <option key={c.id} value={c.id}>{c.ma_chuyen} — {c.ten_chuyen}</option>)}
-          </Select>
+          <ChuyenPicker chuyen={chuyen} value={batchForm.chuyenId}
+            onChange={(id) => setBatchForm({ ...batchForm, chuyenId: id })}
+            placeholder="— Giữ chuyền hiện tại —" />
         </Field>
         <Field label="Ngày sản xuất kế hoạch" required>
           <Input type="date" value={batchForm.ngayKeHoach}
             onChange={(e) => setBatchForm({ ...batchForm, ngayKeHoach: e.target.value })} />
         </Field>
-        <Field label="Lý do lập lại" required>
+        {/* Áp CÙNG giờ cho mọi lệnh đã chọn. Để trống = giữ giờ riêng của từng lệnh (backend dời
+            sang ngày mới) — cố ý không xóa trắng, vì mỗi lệnh có thể đã đặt giờ khác nhau. */}
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Giờ bắt đầu" hint="Trống = giữ giờ từng lệnh">
+            <TimeSelect value={batchForm.gioBd} onChange={(v) => setBatchForm({ ...batchForm, gioBd: v })} minuteStep={5} />
+          </Field>
+          <Field label="Giờ kết thúc" hint="Trống = giữ giờ từng lệnh">
+            <TimeSelect value={batchForm.gioKt} onChange={(v) => setBatchForm({ ...batchForm, gioKt: v })} minuteStep={5} />
+          </Field>
+        </div>
+        <Field label="Lý do lập lại" hint="Không bắt buộc — có nhập thì hiện ở sidebar Lịch sử">
           <Textarea rows={3} value={batchForm.lyDo}
             onChange={(e) => setBatchForm({ ...batchForm, lyDo: e.target.value })}
             placeholder="Vd: không kịp tiến độ, dời ngày sản xuất..." />

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
 import Badge from '../../../components/common/Badge';
@@ -14,9 +14,26 @@ import useToast from '../../../hooks/useToast';
 import useSocketReload from '../../../hooks/useSocketReload';
 import usePermissions from '../../../hooks/usePermissions';
 import TraVeBadge from '../../../components/common/TraVeBadge';
+import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
+import taiHetTrang from '../../../utils/taiHetTrang';
 import { listGiaCong, giaCongToOqc, giaCongTraLai } from '../../../services/planningService';
 import { printGiaCongVeTem } from '../../production/utils/printTemLabel';
 import { fmtNum, fmtDate } from '../../../utils/format';
+
+// Lọc nhiều trường (client-side, kết hợp AND) — trang tải-hết (limit 500) nên lọc đủ mọi dòng.
+// `col` = tên thuộc tính trên hàng do `listGiaCong` trả về.
+const FILTER_FIELDS = [
+  { key: 'maLenh', label: 'Mã đợt SX', col: 'ma_lenh_san_xuat' },
+  { key: 'codePhan', label: 'Code phần', col: 'ma_phan' },
+  { key: 'khach', label: 'Khách hàng', col: 'ten_khach_hang' },
+  { key: 'don', label: 'Đơn hàng', col: 'ma_don_hang' },
+  { key: 'maHang', label: 'Mã hàng', col: 'ma_hang' },
+  { key: 'mauVai', label: 'Màu vải', col: 'mau_vai' },
+  { key: 'kichVai', label: 'Kích vải', col: 'kich_vai' },
+  { key: 'kichPhim', label: 'Kích phim', col: 'kich_phim' },
+  { key: 'nhaGiaCong', label: 'Nhà gia công', col: 'nha_gia_cong' },
+  { key: 'chuyen', label: 'Chuyền gia công', col: 'ten_chuyen' },
+];
 
 // Chuẩn hóa 1 dòng (lệnh gia công hoặc dòng lịch sử) → dữ liệu nhãn "TH VỀ" (đầu 13).
 // SL trên tem = SL của ĐÚNG lần nhận (`so_luong_lan_nay`, hàng gia công về nhiều lần); dòng lịch sử cũ
@@ -52,6 +69,10 @@ export default function GiaCongPage() {
   const [traLai, setTraLai] = useState(null); // { row, ghiChu } — trả hàng bị OQC trả về cho nhà gia công
   const [saving, setSaving] = useState(false);
   const [histOpen, setHistOpen] = useState(false);
+  const [filters, setFilters] = useState({});
+  const [showFilters, setShowFilters] = useState(false);
+  const activeCount = Object.values(filters).filter(Boolean).length;
+  const filtered = useMemo(() => filterRows(rows, filters, FILTER_FIELDS), [rows, filters]);
 
   const printVe = async (r) => {
     try { await printGiaCongVeTem(buildVeLabel(r)); }
@@ -61,9 +82,12 @@ export default function GiaCongPage() {
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const res = await listGiaCong({ search, limit: 500 });
-      setRows(res.data.items);
-      setMeta(res.data.meta || { total: res.data.items.length });
+      // TẢI HẾT MỌI TRANG — bộ lọc chạy ở client nên phải có đủ dòng mới lọc đúng.
+      // ⚠ `getPaging` cắt `limit` còn 200; danh sách ≤200 dòng thì vòng lặp chỉ tốn 1 lời gọi.
+      const { items, total, thieu } = await taiHetTrang((p) => listGiaCong({ search, ...p }));
+      setRows(items);
+      setMeta({ total });
+      if (thieu && !silent) show(`Mới tải được ${items.length}/${total} lệnh — hãy thu hẹp tìm kiếm`, 'error');
       if (!silent) setSelected(new Set());
     } catch (e) {
       if (!silent) show(e.message || 'Lỗi tải', 'error');
@@ -89,7 +113,9 @@ export default function GiaCongPage() {
     return next;
   });
   // Lệnh đang CHỜ TRẢ LẠI nhà gia công không nhận hàng tiếp được ⇒ loại khỏi chọn hàng loạt.
-  const rowsChon = rows.filter((r) => !r.cho_tra_lai);
+  // Tính trên tập ĐANG HIỆN (đã lọc): "chọn tất cả" mà ôm luôn lệnh ngoài bộ lọc thì người dùng
+  // không kiểm soát được mình đang chuyển OQC cho những lệnh nào.
+  const rowsChon = filtered.filter((r) => !r.cho_tra_lai);
   const allChecked = rowsChon.length > 0 && rowsChon.every((r) => selected.has(r.id));
   const toggleAll = () => setSelected(() => (allChecked ? new Set() : new Set(rowsChon.map((r) => r.id))));
 
@@ -166,6 +192,8 @@ export default function GiaCongPage() {
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
+    // Hiện Code phần vì đây là trường được lọc — lọc theo giá trị không nhìn thấy thì không đối chiếu được.
+    { key: 'ma_phan', header: 'Code phần', render: (r) => r.ma_phan || '—' },
     { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
     { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
@@ -214,12 +242,17 @@ export default function GiaCongPage() {
             Chuyển OQC ({selected.size})
           </Button>
         )}
+        <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử chuyển</Button>
-        <Badge tone="info">{meta.total || rows.length} lệnh</Badge>
+        <Badge tone="info">{activeCount ? `${filtered.length}/` : ''}{meta.total || rows.length} lệnh</Badge>
       </Toolbar>
 
-      <DataTable columns={columns} rows={rows} loading={loading} sttStart={0}
-        emptyText="Không có lệnh gia công nào đang chờ chuyển OQC" />
+      <FieldFilters fields={FILTER_FIELDS} values={filters}
+        onField={(k, v) => setFilters((f) => ({ ...f, [k]: v }))}
+        onClear={() => setFilters({})} open={showFilters} />
+
+      <DataTable columns={columns} rows={filtered} loading={loading} sttStart={0}
+        emptyText={activeCount ? 'Không có lệnh nào khớp bộ lọc' : 'Không có lệnh gia công nào đang chờ chuyển OQC'} />
 
       <ConfirmDialog
         open={!!confirm}

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
 import Badge from '../../../components/common/Badge';
@@ -22,7 +22,24 @@ import {
   listKeHoachTam, confirmKeHoachTam, updateKeHoachTam, deleteKeHoachTam, listChuyen,
   keHoachTamHistory, keHoachTamDone, release1TraVeKyThuat,
 } from '../../../services/planningService';
+import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
+import taiHetTrang from '../../../utils/taiHetTrang';
 import { fmtNum, fmtDate } from '../../../utils/format';
+
+// Lọc nhiều trường (client-side, kết hợp AND) — trang tải-hết (limit 500) nên lọc đủ mọi dòng.
+// `col` = tên thuộc tính trên hàng do `listKeHoachTam` trả về.
+const FILTER_FIELDS = [
+  { key: 'codePhan', label: 'Code phần', col: 'ma_phan' },
+  { key: 'khach', label: 'Khách hàng', col: 'ten_khach_hang' },
+  { key: 'don', label: 'Đơn hàng', col: 'ma_don_hang' },
+  { key: 'maHang', label: 'Mã hàng', col: 'ma_hang' },
+  { key: 'mauVai', label: 'Màu vải', col: 'mau_vai' },
+  { key: 'kichVai', label: 'Kích vải', col: 'kich_vai' },
+  { key: 'kichPhim', label: 'Kích phim', col: 'kich_phim' },
+  { key: 'chuyen', label: 'Chuyền dự kiến', col: 'ten_chuyen' },
+  { key: 'gomSet', label: 'Gom set', col: 'ma_set' },
+  { key: 'nhaGiaCong', label: 'Nhà gia công', col: 'nha_gia_cong' },
+];
 
 // timestamptz → 'YYYY-MM-DD' cho ô <input type="date"> (ngày local).
 const toDateInput = (t) => {
@@ -62,13 +79,20 @@ export default function KeHoachTamPage() {
   const [editForm, setEditForm] = useState({ chuyenId: '', soLuongRelease: '', ngayKeHoach: '' });
   const [traVeOpen, setTraVeOpen] = useState(false); // modal "Trả về Kỹ thuật" (lý do bắt buộc)
   const [traVeReason, setTraVeReason] = useState('');
+  const [filters, setFilters] = useState({});
+  const [showFilters, setShowFilters] = useState(false);
+  const activeCount = Object.values(filters).filter(Boolean).length;
+  const filtered = useMemo(() => filterRows(rows, filters, FILTER_FIELDS), [rows, filters]);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const res = await listKeHoachTam({ search, limit: 500 });
-      setRows(res.data.items);
-      setMeta(res.data.meta || { total: res.data.items.length });
+      // TẢI HẾT MỌI TRANG — bộ lọc chạy ở client nên phải có đủ dòng mới lọc đúng.
+      // ⚠ `getPaging` cắt `limit` còn 200; danh sách ≤200 dòng thì vòng lặp chỉ tốn 1 lời gọi.
+      const { items, total, thieu } = await taiHetTrang((p) => listKeHoachTam({ search, ...p }));
+      setRows(items);
+      setMeta({ total });
+      if (thieu && !silent) show(`Mới tải được ${items.length}/${total} bản — hãy thu hẹp tìm kiếm`, 'error');
       if (!silent) setSelected(new Set());
     } catch (e) {
       if (!silent) show(e.message || 'Lỗi tải', 'error');
@@ -145,11 +169,15 @@ export default function KeHoachTamPage() {
 
   // Nút chỉ có nghĩa khi CÓ thứ để hủy: dòng đã Ready, hoặc dòng thuộc set mà set có phần in đã Ready
   // (dòng đang xem chưa Ready nhưng trả cả set vẫn hợp lý) — cùng luật với màn Release 1.
+  // ⚠ CỐ Ý xét trên `rows` ĐẦY ĐỦ, KHÔNG phải `filtered`: thành viên của set là dữ kiện thật, không
+  //   phụ thuộc người dùng đang lọc gì. Đổi sang `filtered` sẽ làm nút biến mất chỉ vì thành viên
+  //   còn lại của set bị bộ lọc ẩn đi.
   const setDaReady = !!edit?.ma_set && rows.some((r) => r.ma_set === edit.ma_set && r.qc_done);
   const choPhepTraVe = canDo && !!edit && (edit.qc_done === true || setDaReady);
 
   // Chỉ phần in ĐÃ Ready (qc_done) mới xác nhận Release 1 được → chỉ những dòng này chọn được.
-  const readyRows = rows.filter((r) => r.qc_done);
+  // Tính trên tập ĐANG HIỆN (đã lọc) để "chọn tất cả" không ôm luôn dòng ngoài bộ lọc.
+  const readyRows = filtered.filter((r) => r.qc_done);
   const toggleOne = (id) => setSelected((s) => {
     const next = new Set(s);
     if (next.has(id)) next.delete(id); else next.add(id);
@@ -256,14 +284,19 @@ export default function KeHoachTamPage() {
             Xác nhận Release 1 ({selected.size})
           </Button>
         )}
+        <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
-        <Badge tone="info">{meta.total || rows.length} bản</Badge>
+        <Badge tone="info">{activeCount ? `${filtered.length}/` : ''}{meta.total || rows.length} bản</Badge>
       </Toolbar>
 
-      <DataTable columns={columns} rows={rows} loading={loading} sttStart={0}
+      <FieldFilters fields={FILTER_FIELDS} values={filters}
+        onField={(k, v) => setFilters((f) => ({ ...f, [k]: v }))}
+        onClear={() => setFilters({})} open={showFilters} />
+
+      <DataTable columns={columns} rows={filtered} loading={loading} sttStart={0}
         onRowClick={(r) => openEdit(r)}
-        emptyText="Chưa có kế hoạch tạm nào" />
+        emptyText={activeCount ? 'Không có bản nào khớp bộ lọc' : 'Chưa có kế hoạch tạm nào'} />
 
       {/* ĐỦ `rows` (không phải `readyRows`) — quét dòng đang hiện trên bảng cũng khớp; dòng chưa Ready
           thì `canSelect` nói rõ lý do thay vì báo "Không thấy". */}
