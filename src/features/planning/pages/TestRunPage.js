@@ -184,6 +184,13 @@ export default function TestRunPage() {
           onClick={(e) => e.stopPropagation()}
           onChange={() => toggleOne(r.id)} aria-label="Chọn lệnh" />
       ) },
+    // CHUYỀN IN do Kế hoạch chọn lúc Release 1 / Tạo đợt SX (`lenh_san_xuat.chuyen_id`).
+    // ⚠ Đặt NGAY SAU STT ⇒ phải là cột KHÔNG-selection ĐẦU TIÊN của mảng: `DataTable` render theo
+    // thứ tự [cột chọn] → [STT] → [các cột còn lại theo đúng thứ tự khai ở đây].
+    // Nguồn `lenhListSql` vốn đã trả `ma_chuyen`/`ten_chuyen` (cùng chỗ nuôi dải chip loại chuyền)
+    // ⇒ KHÔNG phải sửa backend. Excel cũng đã có sẵn cột "Chuyền" trong `COT_LENH`.
+    { key: 'ten_chuyen', header: 'Chuyền', className: 'whitespace-nowrap font-medium text-ink',
+      render: (r) => r.ten_chuyen || r.ma_chuyen || '—' },
     { key: 'khach_don', header: 'Khách hàng · Đơn hàng', render: (r) => (
       <div className="leading-tight">
         <div className="font-medium text-ink">{r.ten_khach_hang || '—'}</div>
