@@ -162,7 +162,18 @@ export default function CaiDatApiPage() {
 
                 {/* Giới hạn phạm vi — chỉ hiện khi API ĐANG BẬT và API đó cho phép lọc theo code phần.
                     Tắt rồi thì danh sách vô nghĩa, hiện ra chỉ làm rối. */}
-                {r.bat && r.loc_code_phan && (
+                {r.bat && r.loc_code_phan && r.thieu_cot_code_phan && (
+                  <div className="mt-3 flex items-start gap-2 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                    <Icon name="alert-triangle" size={16} className="mt-0.5 shrink-0" />
+                    <span>
+                      Chưa dùng được ô <b>giới hạn code phần</b> — cơ sở dữ liệu còn thiếu cột.
+                      Chạy lại <code>database/migrations/083_cai_dat_api.sql</code> (idempotent) là xong,
+                      không cần khởi động lại máy chủ. Bật/tắt API vẫn hoạt động bình thường.
+                    </span>
+                  </div>
+                )}
+
+                {r.bat && r.loc_code_phan && !r.thieu_cot_code_phan && (
                   <div className="mt-3">
                     <div className="mb-1 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink-soft">
                       Chỉ áp dụng cho code phần
