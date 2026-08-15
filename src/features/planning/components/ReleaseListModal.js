@@ -9,6 +9,8 @@ import exportReleaseListExcel from '../utils/exportReleaseListExcel';
 import printReleaseList from '../utils/printReleaseList';
 import ChipTabs from '../../../components/common/ChipTabs';
 import Icon from '../../../components/common/Icon';
+import Badge from '../../../components/common/Badge';
+import PhanInTraCuuPanel from './PhanInTraCuuPanel';
 import FieldFilters, { filterRows, FilterToggle } from '../../../components/common/FieldFilters';
 import { khopNhieu } from '../../../utils/timKiem';
 import { LOAI_TABS, hopChipChuyen, nhanChip, demChip } from '../../../utils/khuChuyen';
@@ -60,6 +62,8 @@ export default function ReleaseListModal({ open, onClose }) {
   // CHE DO NGAY: 'KE_HOACH' (ngay hang len chuyen - de in phieu release) | 'RELEASE' (ngay bam
   // Release 1). Dung 'RELEASE' thi chip "Tat ca" khop dung voi sidebar "Da hoan thanh" cua Release 1.
   const [mode, setMode] = useState('KE_HOACH');
+  // Dòng đang tra cứu → SidePanel "phần in này giờ đang ở đâu + hành trình".
+  const [traCuu, setTraCuu] = useState(null);
 
   const load = useCallback(async () => {
     if (!open) return;
@@ -192,6 +196,9 @@ export default function ReleaseListModal({ open, onClose }) {
               <th className={`${th} text-left`}>PO</th>
               <th className={`${th} text-left`}>Mã</th>
               <th className={`${th} text-left`}>Code phần</th>
+              {/* ĐANG Ở — giai đoạn HIỆN TẠI của phần in (backend tính bằng cùng `dominantStageScalar`
+                  với dashboard). Cột này để đối chiếu "release N phần, giờ chúng nằm đâu". */}
+              <th className={`${th} text-left`}>Đang ở</th>
               <th className={`${th} text-left`}>Màu vải</th>
               <th className={`${th} text-left`}>Kích vải</th>
               <th className={`${th} text-left`}>Kích phim</th>
@@ -207,9 +214,9 @@ export default function ReleaseListModal({ open, onClose }) {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={17} className="px-3 py-8 text-center text-ink-soft">Đang tải...</td></tr>
+              <tr><td colSpan={18} className="px-3 py-8 text-center text-ink-soft">Đang tải...</td></tr>
             ) : viewItems.length === 0 ? (
-              <tr><td colSpan={17} className="px-3 py-8 text-center text-ink-soft">
+              <tr><td colSpan={18} className="px-3 py-8 text-center text-ink-soft">
                 {soLoc ? 'Không có dòng nào khớp ô tìm / bộ lọc'
                   : chip ? `Không có đợt sản xuất nào thuộc ${nhanChip(chip)} trong ngày này`
                     : 'Không có đợt sản xuất release cho ngày này'}
@@ -219,8 +226,12 @@ export default function ReleaseListModal({ open, onClose }) {
                  Giờ BD/KT) chỉ vẽ ở DÒNG ĐẦU của đợt và hợp nhất bằng `rowSpan`; các dòng sau chỉ
                  mang thông tin riêng của phần in. Viền TRÊN chỉ kẻ ở dòng đầu ⇒ nhìn ra ngay 1 đợt SX
                  là 1 khối. `_span`/`_dau`/`_stt` do `gopTheoLenh` gắn (tính trên tập ĐANG HIỂN THỊ). */
+              /* Bấm 1 dòng → tra cứu phần in đó: đang ở checkpoint nào + toàn bộ thông tin + hành trình.
+                 Đây là đường trả lời câu "release N phần mà Test Run/Release 2 không khớp". */
               <tr key={`${r.lenh_id}-${r.ma_phan}`}
-                className={r._dau ? 'border-t border-line/60' : ''}>
+                onClick={() => setTraCuu(r)}
+                title="Bấm để xem phần in này đang ở đâu + hành trình"
+                className={`cursor-pointer transition hover:bg-surface-muted/50 ${r._dau ? 'border-t border-line/60' : ''}`}>
                 {r._dau && (
                   <td rowSpan={r._span} className={`${td} text-center font-medium text-ink-soft`}>
                     {r._stt}
@@ -242,6 +253,11 @@ export default function ReleaseListModal({ open, onClose }) {
                 <td className={td}>{r.ma_don_hang || '—'}</td>
                 <td className={`${td} max-w-[200px] truncate`}>{r.ten_ma_hang || r.ma_hang || '—'}</td>
                 <td className={td}>{r.ma_phan || '—'}</td>
+                <td className={td}>
+                  <Badge tone={r.giai_doan_hien_tai === 'DA_GIAO' ? 'success' : 'info'}>
+                    {r.giai_doan_ten || '—'}
+                  </Badge>
+                </td>
                 <td className={td}>{r.mau_vai || '—'}</td>
                 <td className={td}>{r.kich_vai || '—'}</td>
                 <td className={td}>{r.kich_phim || '—'}</td>
@@ -260,6 +276,9 @@ export default function ReleaseListModal({ open, onClose }) {
           </tbody>
         </table>
       </div>
+      {/* SidePanel nằm TRÊN modal (Headless UI xếp chồng theo thứ tự mở) nên không cần đóng modal. */}
+      <PhanInTraCuuPanel open={!!traCuu} onClose={() => setTraCuu(null)} row={traCuu} />
+
       <Toast toast={toast} />
     </Modal>
   );

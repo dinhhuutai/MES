@@ -10,3 +10,9 @@ export const saveCaiDatApi = (items) => client.put('/cai-dat-api', { items });
 // Thử kết nối — CHỈ ping máy chủ ERP, KHÔNG gọi endpoint nghiệp vụ (gọi thật sẽ tiêu mã tem /
 // ghi bản ghi rác / chạy proc nặng). Trả `{ ok, url, goc, http, ms, thong_diep }`.
 export const thuKetNoiApi = (ma) => client.post(`/cai-dat-api/thu/${ma}`);
+
+// Lịch sử gọi API (chỉ `ERP_BARCODE_TEM` và `ERP_GHI_IN_TEM`) — xem đã LẤY / GỬI những gì.
+// Trả `{ items: [{ thoi_gian, thanh_cong, id_mes, ma_tem, url, loi, so_lan_thu, thoi_gian_ms,
+//                  chi_tiet:{gui,nhan,...}, nguoi }], meta }`.
+// ⚠ `id_mes` là khóa đối soát MES ↔ ERP — `search` tìm theo IDMES hoặc mã tem.
+export const lichSuApi = (ma, params) => client.get(`/cai-dat-api/lich-su/${ma}`, { params });

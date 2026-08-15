@@ -35,6 +35,7 @@ export default function TestRunPanel({ lenhId, onClose, onChanged }) {
   const [returnMode, setReturnMode] = useState(false);
   const [returnReason, setReturnReason] = useState('');
   const [returnItems, setReturnItems] = useState(() => new Set()); // mục kỹ thuật rớt
+  const [returnLoai, setReturnLoai] = useState('TEST_LOI');        // 'TEST_LOI' | 'DOI_PA_IN'
 
   const state = data?.state || {};
   const done = state.qa_done;
@@ -132,16 +133,24 @@ export default function TestRunPanel({ lenhId, onClose, onChanged }) {
     }
   };
 
-  // Test không đạt → trả về KỸ THUẬT (READY) theo các mục rớt. Lệnh GIỮ NGUYÊN: QC xác nhận READY xong
-  // là đợt vải nhảy thẳng lại Test Run, Kế hoạch KHÔNG phải Release 1 lần nữa.
+  // Trả về KỸ THUẬT (READY) — 2 LÝ DO, khác nhau ở chỗ lệnh có được giữ hay không:
+  //  · TEST_LOI  — test run lỗi: GIỮ lệnh ⇒ QC xong là nhảy thẳng lại Test Run (cách cũ).
+  //  · DOI_PA_IN — đổi phương án in: HỦY lệnh ⇒ đợt vải về pool Release 1 để Kế hoạch release lại.
   const doReturn = async () => {
-    if (returnItems.size === 0) { show('Chọn ít nhất 1 mục không đạt (Khuôn / Film / Mực)', 'error'); return; }
+    const doiPaIn = returnLoai === 'DOI_PA_IN';
+    if (!doiPaIn && returnItems.size === 0) { show('Chọn ít nhất 1 mục không đạt (Khuôn / Film / Mực)', 'error'); return; }
     if (!returnReason.trim()) { show('Nhập lý do trả về Kỹ thuật', 'error'); return; }
     setBusy('return');
     try {
-      const res = await returnTestRunToReady(lenhId, { checklists: [...returnItems], lyDo: returnReason.trim() });
-      const mucs = (res?.data?.checklists || [...returnItems]).map((m) => TECH_LABEL[m] || m).join(', ');
-      show(`Đã trả về Kỹ thuật (${mucs}) — phần in quay lại READY, QC xong sẽ tự về Test Run`);
+      const res = await returnTestRunToReady(lenhId, {
+        checklists: [...returnItems], lyDo: returnReason.trim(), loai: returnLoai,
+      });
+      if (res?.data?.huy_lenh) {
+        show('Đã trả về Kỹ thuật (đổi phương án in) — đã hủy lệnh, đợt vải quay lại màn Release 1 để release lại');
+      } else {
+        const mucs = (res?.data?.checklists || [...returnItems]).map((m) => TECH_LABEL[m] || m).join(', ');
+        show(`Đã trả về Kỹ thuật (${mucs}) — phần in quay lại READY, QC xong sẽ tự về Test Run`);
+      }
       onChanged?.();
       onClose?.();
     } catch (e) {
@@ -209,37 +218,68 @@ export default function TestRunPanel({ lenhId, onClose, onChanged }) {
             <section className="border-t border-line pt-4">
               {!returnMode ? (
                 <button type="button" onClick={() => setReturnMode(true)}
-                  className="text-xs font-medium text-danger hover:underline">↩ Trả về Kỹ thuật (test không đạt)</button>
+                  className="text-xs font-medium text-danger hover:underline">↩ Trả về Kỹ thuật</button>
               ) : (
                 <div className="rounded-control border border-rose-200 bg-rose-50 p-3 dark:border-rose-900/60 dark:bg-rose-950/40">
-                  <p className="mb-2 text-xs font-medium text-rose-700 dark:text-rose-300">
-                    Chọn mục <b>không đạt</b> — đúng mục đó phải xác nhận lại ở READY. Lệnh được <b>GIỮ NGUYÊN</b>
-                    {' '}(không phải Release 1 lại): QC xác nhận READY xong là lệnh <b>tự quay lại Test Run</b>.
-                  </p>
-                  <div className="mb-2 flex flex-wrap gap-3">
-                    {TECH_ITEMS.map((it) => (
-                      <label key={it.ma} className="flex cursor-pointer items-center gap-1.5 text-sm text-ink">
-                        <input type="checkbox" checked={returnItems.has(it.ma)} onChange={() => toggleItem(it.ma)}
-                          className="h-4 w-4 rounded border-line text-primary focus:ring-primary" />
-                        {it.label}
+                  {/* LÝ DO TRẢ VỀ — quyết định lệnh có được giữ hay bị hủy, nên phải chọn TRƯỚC. */}
+                  <div className="mb-3 space-y-1.5">
+                    {[
+                      { v: 'TEST_LOI', nhan: 'Test run lỗi', mo: 'Giữ lệnh — QC xác nhận READY xong là tự quay lại Test Run, Kế hoạch không phải Release 1 lại.' },
+                      { v: 'DOI_PA_IN', nhan: 'Đổi phương án in', mo: 'HỦY lệnh — đợt vải quay lại màn Release 1 để Kế hoạch release lại theo phương án/chuyền mới.' },
+                    ].map((o) => (
+                      <label key={o.v} className="flex cursor-pointer items-start gap-2 text-sm text-ink">
+                        <input type="radio" name="loai-tra-ve" checked={returnLoai === o.v}
+                          onChange={() => setReturnLoai(o.v)}
+                          className="mt-0.5 h-4 w-4 border-line text-primary focus:ring-primary" />
+                        <span>
+                          <b>{o.nhan}</b>
+                          <span className="block text-xs text-ink-soft">{o.mo}</span>
+                        </span>
                       </label>
                     ))}
                   </div>
-                  {returnItems.has('FILM') && (
-                    <p className="mb-2 text-xs text-amber-700 dark:text-amber-400">
-                      Làm lại <b>Film</b> ⇒ <b>Khuôn</b> phải chụp lại (đã tự chọn kèm).
+
+                  {/* Mục Khuôn/Film/Mực chỉ BẮT BUỘC khi test run lỗi — đổi phương án in thì kỹ thuật
+                      làm lại theo phương án mới, chưa biết mục nào phải sửa. */}
+                  {returnLoai === 'TEST_LOI' ? (
+                    <>
+                      <p className="mb-2 text-xs font-medium text-rose-700 dark:text-rose-300">
+                        Chọn mục <b>không đạt</b> — đúng mục đó phải xác nhận lại ở READY.
+                      </p>
+                      <div className="mb-2 flex flex-wrap gap-3">
+                        {TECH_ITEMS.map((it) => (
+                          <label key={it.ma} className="flex cursor-pointer items-center gap-1.5 text-sm text-ink">
+                            <input type="checkbox" checked={returnItems.has(it.ma)} onChange={() => toggleItem(it.ma)}
+                              className="h-4 w-4 rounded border-line text-primary focus:ring-primary" />
+                            {it.label}
+                          </label>
+                        ))}
+                      </div>
+                      {returnItems.has('FILM') && (
+                        <p className="mb-2 text-xs text-amber-700 dark:text-amber-400">
+                          Làm lại <b>Film</b> ⇒ <b>Khuôn</b> phải chụp lại (đã tự chọn kèm).
+                        </p>
+                      )}
+                    </>
+                  ) : (
+                    <p className="mb-2 rounded-control border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
+                      Lệnh <b>{data.ma_lenh_san_xuat}</b> sẽ bị <b>HỦY</b> và đợt vải quay lại màn
+                      <b> Release 1</b>. Kỹ thuật đổi phương án in ở trang <i>Hồ sơ kỹ thuật</i> (hoặc ngay
+                      tại cột &ldquo;Phương án in&rdquo; màn READY), rồi Kế hoạch release lại theo chuyền mới.
+                      {' '}Có thể chọn thêm mục Khuôn/Film/Mực cần làm lại — không bắt buộc.
                     </p>
                   )}
+
                   <Field label="Lý do trả về Kỹ thuật" required>
                     <Textarea rows={2} value={returnReason} onChange={(e) => setReturnReason(e.target.value)}
-                      placeholder="Vì sao test không đạt..." />
+                      placeholder={returnLoai === 'DOI_PA_IN' ? 'Vì sao phải đổi phương án in...' : 'Vì sao test không đạt...'} />
                   </Field>
                   <div className="flex justify-end gap-2">
                     <Button variant="ghost" className="px-3 py-1.5"
-                      onClick={() => { setReturnMode(false); setReturnReason(''); setReturnItems(new Set()); }}>Hủy</Button>
+                      onClick={() => { setReturnMode(false); setReturnReason(''); setReturnItems(new Set()); setReturnLoai('TEST_LOI'); }}>Hủy</Button>
                     <Button variant="danger" className="px-3 py-1.5" onClick={doReturn} loading={busy === 'return'}
-                      disabled={returnItems.size === 0 || !returnReason.trim()}>
-                      Trả về Kỹ thuật ({returnItems.size})
+                      disabled={(returnLoai === 'TEST_LOI' && returnItems.size === 0) || !returnReason.trim()}>
+                      {returnLoai === 'DOI_PA_IN' ? 'Trả về & hủy lệnh' : `Trả về Kỹ thuật (${returnItems.size})`}
                     </Button>
                   </div>
                 </div>

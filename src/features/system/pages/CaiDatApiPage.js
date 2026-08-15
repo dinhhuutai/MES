@@ -10,6 +10,11 @@ import { Textarea } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import { listCaiDatApi, saveCaiDatApi, thuKetNoiApi } from '../../../services/caiDatApiService';
+import LichSuApiPanel from '../components/LichSuApiPanel';
+
+// 2 API có ghi vết từng lượt gọi ⇒ hiện nút "Lịch sử". API đồng bộ đợt vải KHÔNG nằm đây vì nó đã
+// có màn *Đồng bộ ERP* riêng (bảng `erp_sync_log`), đưa vào đây sẽ thành 2 chỗ xem cùng một thứ.
+const CO_LICH_SU = new Set(['ERP_BARCODE_TEM', 'ERP_GHI_IN_TEM']);
 
 // Công tắc gạt — dựng lại y hệt `HienThiPainPage` để 2 trang cấu hình nhìn như một.
 function Toggle({ on, onChange, disabled, title }) {
@@ -42,6 +47,7 @@ export default function CaiDatApiPage() {
   const [dirty, setDirty] = useState(false);
   const [thu, setThu] = useState({});       // { ma: {dangThu, ok, thong_diep} }
   const [xacNhan, setXacNhan] = useState(null); // { ma, ten, canh_bao } — hỏi lại trước khi TẮT
+  const [lichSu, setLichSu] = useState(null);   // { ma, ten } — panel lịch sử đang mở
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -130,6 +136,12 @@ export default function CaiDatApiPage() {
                     )}
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
+                    {CO_LICH_SU.has(r.ma) && (
+                      <Button variant="secondary" icon="history"
+                        onClick={() => setLichSu({ ma: r.ma, ten: r.ten })}>
+                        Lịch sử
+                      </Button>
+                    )}
                     <Button variant="secondary" icon="wifi" loading={t.dangThu} onClick={() => doThu(r.ma)}>
                       Thử kết nối
                     </Button>
@@ -205,6 +217,9 @@ export default function CaiDatApiPage() {
           </p>
         </div>
       )}
+
+      <LichSuApiPanel open={!!lichSu} onClose={() => setLichSu(null)}
+        ma={lichSu?.ma} ten={lichSu?.ten} laGhiInTem={lichSu?.ma === 'ERP_GHI_IN_TEM'} />
 
       <ConfirmDialog open={!!xacNhan} onClose={() => setXacNhan(null)}
         title={`Tắt: ${xacNhan?.ten || ''}?`}

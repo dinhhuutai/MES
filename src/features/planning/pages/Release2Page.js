@@ -21,8 +21,15 @@ import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import PhuongAnInBadge, { PHUONG_AN_IN } from '../../../components/common/PhuongAnInBadge';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import { listRelease2Candidates, approveRelease2, approveRelease2Batch, planHistory, release2Done } from '../../../services/planningService';
-import { fmtNum, fmtDate } from '../../../utils/format';
+import { fmtNum, fmtDate, trongKhoangNgay } from '../../../utils/format';
+import DateRangePicker from '../../../components/common/DateRangePicker';
 import exportCheckpointExcel, { COT_LENH, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
+// Chip lọc theo LOẠI CHUYỀN + KHU của chuyền Bàn — nguồn chung `utils/khuChuyen.js`, dùng chung với
+// "Theo dõi chuyền" · "Test Run - QA" · "Xác nhận chạy" ⇒ 4 màn luôn giống hệt nhau.
+// ⚠ KHÔNG cần sửa backend: `lenhListSql` (dùng chung Test Run/Release 2/Replan) đã trả sẵn
+//   `ma_chuyen` + `ma_loai_chuyen` — 2 cột mà chip khu và chip loại cần.
+import { LOAI_TABS, hopChipChuyen as hopChip, nhanChip, demChip } from '../../../utils/khuChuyen';
+import ChipTabs from '../../../components/common/ChipTabs';
 
 const FILTER_FIELDS = [
   { key: 'codePhan', label: 'Code phần', col: 'ma_phan' }, { key: 'khach', label: 'Khách hàng', col: 'ten_khach_hang' },
@@ -59,7 +66,24 @@ export default function Release2Page() {
   const [showFilters, setShowFilters] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const [detail, setDetail] = useState(null); // bấm vào hàng → SidePanel chi tiết lệnh
-  const filtered = useMemo(() => filterRows(rows, filters, FILTER_FIELDS), [rows, filters]);
+  const [loai, setLoai] = useState(''); // chip loại chuyền / khu bàn ('' = tất cả)
+  // Lọc theo NGÀY SX KẾ HOẠCH (`lenh_san_xuat.ngay_ke_hoach`) — cùng khuôn màn Xác nhận chạy.
+  // ⚠ Mặc định KHÔNG lọc: đây là màn thao tác hằng ngày, lọc sẵn hôm nay sẽ giấu hàng của ngày khác
+  //   mà người dùng không biết vì sao (bài học ghi ở §6 Sản xuất).
+  const [ngayKH, setNgayKH] = useState({ from: '', to: '' });
+  // ⚠ So sánh ngày PHẢI qua `trongKhoangNgay` — `ngay_ke_hoach` là cột DATE, node-pg trả Date lúc
+  //   00:00 giờ LOCAL; dùng `toISOString()` sẽ LÙI 1 NGÀY ở giờ VN ⇒ lọc trượt hết.
+  const locNgay = useCallback((ds) => (ds || []).filter((r) => trongKhoangNgay(r.ngay_ke_hoach, ngayKH.from, ngayKH.to)), [ngayKH]);
+
+  // Chip chồng lên bộ lọc trường + khoảng ngày theo AND (giống Test Run).
+  const filtered = useMemo(() => {
+    let base = locNgay(rows);
+    if (loai) base = base.filter((r) => hopChip(r, loai));
+    return filterRows(base, filters, FILTER_FIELDS);
+  }, [rows, filters, loai, locNgay]);
+  // ⚠ Đếm cho chip tính trên tập ĐÃ qua khoảng ngày (nhưng chưa qua chip) — nếu không trừ theo ngày
+  //   thì số trên chip sẽ LỚN HƠN tổng số dòng của bảng.
+  const countChip = useMemo(() => demChip(locNgay(rows)), [rows, locNgay]);
   const activeCount = Object.values(filters).filter(Boolean).length;
 
   // Xuất Excel TOÀN BỘ lệnh sau bộ lọc (trang tải-hết rồi phân trang client ⇒ không giới hạn trang xem).
@@ -68,7 +92,11 @@ export default function Release2Page() {
     rows: filtered,
     title: 'Release 2 — chờ duyệt cuối',
     fileName: 'release-2',
-    moTaLoc: moTaBoLoc({ 'tìm kiếm': search, ...filters }),
+    moTaLoc: moTaBoLoc({
+      'tìm kiếm': search, khu: nhanChip(loai),
+      'ngày SX kế hoạch': [ngayKH.from, ngayKH.to].filter(Boolean).join(' → '),
+      ...filters,
+    }),
   });
 
   const load = useCallback(async (silent = false) => {
@@ -176,6 +204,7 @@ export default function Release2Page() {
         {canApprove && selected.size > 0 && (
           <Button onClick={() => setConfirm({ batch: true })}>Duyệt Release 2 ({selected.size})</Button>
         )}
+        <DateRangePicker value={ngayKH} onChange={setNgayKH} placeholder="Ngày SX kế hoạch" />
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
         <Button variant="secondary" icon="download" onClick={doExcel} disabled={!filtered.length}>
           Excel ({filtered.length})
@@ -185,12 +214,16 @@ export default function Release2Page() {
         <Badge tone="info">{filtered.length} chờ duyệt</Badge>
       </Toolbar>
 
+      <ChipTabs tabs={LOAI_TABS} value={loai} counts={countChip} onChange={setLoai} />
+
       <FieldFilters fields={FILTER_FIELDS} values={filters} onField={(k, v) => setFilters((f) => ({ ...f, [k]: v }))} onClear={() => setFilters({})} open={showFilters} />
 
       <DataTable columns={columns} rows={filtered} loading={loading} sttStart={0}
         onRowClick={(r) => setDetail(r)}
         rowClassName={(r) => slaRowClass(statusLenh(r.id))}
-        emptyText="Không có lệnh nào chờ Release 2" />
+        emptyText={loai
+          ? `Không có lệnh nào thuộc "${nhanChip(loai)}" đang chờ Release 2`
+          : 'Không có lệnh nào chờ Release 2'} />
 
       {/* Bấm vào HÀNG (không phải ô chọn / nút) → SidePanel chi tiết lệnh, duyệt được ngay tại đây. */}
       <SidePanel
