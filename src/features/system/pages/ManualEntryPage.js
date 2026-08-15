@@ -7,6 +7,7 @@ import Toast from '../../../components/common/Toast';
 import { Field, Input, Select, inputClass } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import { searchKhach, searchDon, searchMaHang, searchPhanIn, listLoaiDotVai, createManualChain } from '../../../services/manualEntryService';
+import { PHUONG_AN_IN } from '../../../components/common/PhuongAnInBadge';
 
 // Ô tìm-chọn "có sẵn" (server-search, debounce). onSelect(item|null). resetKey đổi → nạp lại.
 function AsyncPicker({ fetcher, resetKey, selected, onSelect, placeholder, renderLabel, disabled }) {
@@ -77,7 +78,12 @@ function LevelTabs({ mode, onMode, existingDisabled }) {
   );
 }
 
-const emptyDot = () => ({ ma_dot_vai: '', so_luong_vai_ve: '', ngay_vai_ve: '', han_giao_hang: '', loai_dot_vai_id: '' });
+// Đợt vải — khai ĐỦ các trường mà đồng bộ ERP ghi xuống `dot_vai_ve`, để nhập tay không thiếu gì
+// so với hàng tự động. Trong ngoặc ở nhãn là TÊN TRƯỜNG BÊN ERP (người dùng chép từ bảng ERP sang).
+const emptyDot = () => ({
+  ma_dot_vai: '', so_luong_vai_ve: '', ngay_vai_ve: '', han_giao_hang: '', loai_dot_vai_id: '',
+  barcode: '', inset: '', nha_gia_cong: '', ddh_sub_id: '', du_an: '', kt_can_kiem_tra: '',
+});
 
 // Đặt NGOÀI component: nếu định nghĩa trong ManualEntryPage, mỗi lần gõ (setState → re-render)
 // sẽ tạo hàm Section mới → React remount cả section → input MẤT FOCUS sau 1 ký tự.
@@ -98,9 +104,12 @@ export default function ManualEntryPage() {
   const [mode, setMode] = useState({ khach: 'new', don: 'new', maHang: 'new', phanIn: 'new' });
   const [sel, setSel] = useState({ khach: null, don: null, maHang: null, phanIn: null });
   const [khach, setKhach] = useState({ ma_khach_hang: '', ten_khach_hang: '' });
-  const [don, setDon] = useState({ ma_don_hang: '', so_po: '', ten_don_hang: '', ngay_dat_hang: '' });
+  const [don, setDon] = useState({ ma_don_hang: '', so_po: '', ten_don_hang: '', ngay_dat_hang: '', ddh_id: '' });
   const [maHang, setMaHang] = useState({ ma_hang: '', ten_ma_hang: '' });
-  const [phanIn, setPhanIn] = useState({ ma_phan: '', mau_vai: '', kich_vai: '', kich_phim: '', tinh_chat_in: '', do_in: '', mau_in: '', so_luong_don_hang: '', la_in_kieng: false, thoi_gian_cho_kho_phut: '' });
+  const [phanIn, setPhanIn] = useState({ ma_phan: '', mau_vai: '', kich_vai: '', kich_phim: '', tinh_chat_in: '', do_in: '', mau_in: '', so_luong_don_hang: '', la_in_kieng: false, thoi_gian_cho_kho_phut: '', barcode: '' });
+  // HỒ SƠ KỸ THUẬT — thiếu khối này thì phần in nhập tay KHÔNG có phương án in (cột trống ở
+  // READY / Kế hoạch, và rơi vào nhóm "Khác" của cấu hình Hiển thị theo phương án in).
+  const [hskt, setHskt] = useState({ barcode_hskt: '', phuong_an_in: '', ma_don_ready: '' });
   const [dots, setDots] = useState([emptyDot()]);
   const [loaiList, setLoaiList] = useState([]);
   const [saving, setSaving] = useState(false);
@@ -125,9 +134,10 @@ export default function ManualEntryPage() {
     setMode({ khach: 'new', don: 'new', maHang: 'new', phanIn: 'new' });
     setSel({ khach: null, don: null, maHang: null, phanIn: null });
     setKhach({ ma_khach_hang: '', ten_khach_hang: '' });
-    setDon({ ma_don_hang: '', so_po: '', ten_don_hang: '', ngay_dat_hang: '' });
+    setDon({ ma_don_hang: '', so_po: '', ten_don_hang: '', ngay_dat_hang: '', ddh_id: '' });
     setMaHang({ ma_hang: '', ten_ma_hang: '' });
-    setPhanIn({ ma_phan: '', mau_vai: '', kich_vai: '', kich_phim: '', tinh_chat_in: '', do_in: '', mau_in: '', so_luong_don_hang: '', la_in_kieng: false, thoi_gian_cho_kho_phut: '' });
+    setPhanIn({ ma_phan: '', mau_vai: '', kich_vai: '', kich_phim: '', tinh_chat_in: '', do_in: '', mau_in: '', so_luong_don_hang: '', la_in_kieng: false, thoi_gian_cho_kho_phut: '', barcode: '' });
+    setHskt({ barcode_hskt: '', phuong_an_in: '', ma_don_ready: '' });
     setDots([emptyDot()]);
   };
 
@@ -148,24 +158,43 @@ export default function ManualEntryPage() {
       if (mode.maHang === 'existing' && !sel.maHang) { show('Chọn mã hàng có sẵn hoặc chuyển sang Tạo mới', 'error'); return; }
     }
 
-    const dotVai = dots.map((d) => ({ ma_dot_vai: d.ma_dot_vai.trim() || null, so_luong_vai_ve: num(d.so_luong_vai_ve) ?? 0, ngay_vai_ve: d.ngay_vai_ve || null, han_giao_hang: d.han_giao_hang || null, loai_dot_vai_id: d.loai_dot_vai_id || null }));
+    const dotVai = dots.map((d) => ({
+      ma_dot_vai: d.ma_dot_vai.trim() || null, so_luong_vai_ve: num(d.so_luong_vai_ve) ?? 0,
+      ngay_vai_ve: d.ngay_vai_ve || null, han_giao_hang: d.han_giao_hang || null,
+      loai_dot_vai_id: d.loai_dot_vai_id || null,
+      barcode: d.barcode.trim() || null, inset: num(d.inset), nha_gia_cong: d.nha_gia_cong.trim() || null,
+      ddh_sub_id: d.ddh_sub_id.trim() || null, du_an: d.du_an.trim() || null,
+      // ERP gửi 1/0 → cột BOOLEAN. Để trống = không biết ⇒ null (KHÔNG mặc định false).
+      kt_can_kiem_tra: d.kt_can_kiem_tra === '' ? null : d.kt_can_kiem_tra === '1',
+    }));
+    // ⚠ ERP dùng CÙNG một giá trị `Inset` cho cả `dot_vai_ve` lẫn `ho_so_ky_thuat` ⇒ lấy inset của
+    //   đợt vải đầu tiên có nhập, khỏi bắt người dùng gõ 2 lần cùng một số.
+    const insetHskt = dotVai.map((d) => d.inset).find((v) => v != null) ?? null;
+    const hsktPayload = { ...hskt, barcode_hskt: hskt.barcode_hskt.trim() || null, ma_don_ready: hskt.ma_don_ready.trim() || null, inset: insetHskt };
+
     const payload = phanInExisting ? { phanIn: { id: sel.phanIn.id }, dotVai } : {
       khach: mode.khach === 'existing' ? { id: sel.khach.id } : { ma_khach_hang: khach.ma_khach_hang.trim() || null, ten_khach_hang: khach.ten_khach_hang.trim() },
-      don: mode.don === 'existing' ? { id: sel.don.id } : { ma_don_hang: don.ma_don_hang.trim() || null, so_po: don.so_po.trim() || null, ten_don_hang: don.ten_don_hang.trim() || null, ngay_dat_hang: don.ngay_dat_hang || null },
+      don: mode.don === 'existing' ? { id: sel.don.id } : { ma_don_hang: don.ma_don_hang.trim() || null, so_po: don.so_po.trim() || null, ten_don_hang: don.ten_don_hang.trim() || null, ngay_dat_hang: don.ngay_dat_hang || null, ddh_id: don.ddh_id.trim() || null },
       maHang: mode.maHang === 'existing' ? { id: sel.maHang.id } : { ma_hang: maHang.ma_hang.trim() || null, ten_ma_hang: maHang.ten_ma_hang.trim() || null },
       phanIn: {
         ma_phan: phanIn.ma_phan.trim() || null, mau_vai: phanIn.mau_vai.trim() || null, kich_vai: phanIn.kich_vai.trim() || null,
         kich_phim: phanIn.kich_phim.trim() || null, tinh_chat_in: phanIn.tinh_chat_in.trim() || null, do_in: phanIn.do_in.trim() || null,
         mau_in: phanIn.mau_in.trim() || null, so_luong_don_hang: num(phanIn.so_luong_don_hang), la_in_kieng: phanIn.la_in_kieng,
-        thoi_gian_cho_kho_phut: num(phanIn.thoi_gian_cho_kho_phut),
+        thoi_gian_cho_kho_phut: num(phanIn.thoi_gian_cho_kho_phut), barcode: phanIn.barcode.trim() || null,
       },
+      hskt: hsktPayload,
       dotVai,
     };
 
     setSaving(true);
     try {
       const r = await createManualChain(payload);
-      show(`✓ ${r.message || 'Đã tạo'} — phần in ${r.data.ma_phan}`);
+      const d = r.data || {};
+      // Báo luôn PHƯƠNG ÁN IN cuối cùng: luật sản lượng (≥2000 m → Máy) có thể đổi khác giá trị
+      // vừa nhập — im lặng thì người dùng tưởng hệ thống ghi sai.
+      const pa = d.phuong_an_in != null ? ` · phương án in: ${PHUONG_AN_IN[d.phuong_an_in] || d.phuong_an_in}${d.doi_phuong_an_in ? ` (tự đổi theo sản lượng ${d.tong_vai_hskt} m)` : ''}` : '';
+      show(`✓ ${r.message || 'Đã tạo'} — phần in ${d.ma_phan}${pa}`, d.hskt_loi ? 'error' : 'success');
+      if (d.hskt_loi) show(`Đã tạo phần in + đợt vải, nhưng hồ sơ kỹ thuật lỗi: ${d.hskt_loi}`, 'error');
       reset();
     } catch (e) {
       show(e.message || 'Tạo thất bại', 'error');
@@ -208,6 +237,7 @@ export default function ManualEntryPage() {
               <Field label="Số PO"><Input value={don.so_po} onChange={(e) => setDon((s) => ({ ...s, so_po: e.target.value }))} /></Field>
               <Field label="Tên đơn hàng"><Input value={don.ten_don_hang} onChange={(e) => setDon((s) => ({ ...s, ten_don_hang: e.target.value }))} /></Field>
               <Field label="Ngày đặt hàng"><Input type="date" value={don.ngay_dat_hang} onChange={(e) => setDon((s) => ({ ...s, ngay_dat_hang: e.target.value }))} /></Field>
+              <Field label="Mã DDH (ERP)" hint="DDHID — vd DH026LA-005105"><Input value={don.ddh_id} onChange={(e) => setDon((s) => ({ ...s, ddh_id: e.target.value }))} placeholder="DH0..." /></Field>
             </div>
           )}
         </Section>
@@ -245,7 +275,10 @@ export default function ManualEntryPage() {
             <Field label="Tính chất in"><Input value={phanIn.tinh_chat_in} onChange={(e) => setPhanIn((s) => ({ ...s, tinh_chat_in: e.target.value }))} /></Field>
             <Field label="Độ in"><Input value={phanIn.do_in} onChange={(e) => setPhanIn((s) => ({ ...s, do_in: e.target.value }))} /></Field>
             <Field label="Màu in"><Input value={phanIn.mau_in} onChange={(e) => setPhanIn((s) => ({ ...s, mau_in: e.target.value }))} /></Field>
-            <Field label="Thời gian chờ khô (phút)"><Input type="number" min="0" value={phanIn.thoi_gian_cho_kho_phut} onChange={(e) => setPhanIn((s) => ({ ...s, thoi_gian_cho_kho_phut: e.target.value }))} placeholder="mặc định 60" /></Field>
+            <Field label="Thời gian chờ khô (phút)" hint="tgphoi"><Input type="number" min="0" value={phanIn.thoi_gian_cho_kho_phut} onChange={(e) => setPhanIn((s) => ({ ...s, thoi_gian_cho_kho_phut: e.target.value }))} placeholder="mặc định 60" /></Field>
+            {/* Mã vạch của CHÍNH phần in (11 số). ⚠ KHÁC "Mã đợt Ready" ở đợt vải — mã kia ở mức đợt
+                và dùng chung nhiều phần in. Quét mã vạch ở READY ưu tiên tra mã này trước. */}
+            <Field label="Mã vạch TDTHĐH" hint="BarcodePTHDH — 11 số, riêng từng phần in"><Input value={phanIn.barcode} onChange={(e) => setPhanIn((s) => ({ ...s, barcode: e.target.value }))} placeholder="vd 26022790132" /></Field>
             <label className="mt-6 flex cursor-pointer items-center gap-2 text-sm text-ink">
               <input type="checkbox" checked={phanIn.la_in_kieng} onChange={(e) => setPhanIn((s) => ({ ...s, la_in_kieng: e.target.checked }))} />
               In kiếng (tạo thêm đợt ép ủi khi lên KH)
@@ -253,6 +286,36 @@ export default function ManualEntryPage() {
           </div>
           )}
         </Section>
+
+        {/* 4b. Hồ sơ kỹ thuật — nguồn của PHƯƠNG ÁN IN. Chỉ hiện khi TẠO MỚI phần in:
+             phần in có sẵn thì hồ sơ đã có rồi, sửa ở trang Hồ sơ kỹ thuật. */}
+        {!phanInExisting && (
+          <Section n="4b" title="Hồ sơ kỹ thuật (phương án in)">
+            <p className="mb-3 text-xs text-ink-soft">
+              Bỏ trống cả 2 ô đầu thì phần in sẽ <b>không có phương án in</b> — cột đó để trống ở màn READY / Kế hoạch
+              và hàng rơi vào nhóm <b>Khác</b> của cấu hình <i>Hiển thị theo phương án in</i>.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Mã vạch HSKT" hint="BarcodeHKT — 12 số, số cuối = phương án in">
+                <Input value={hskt.barcode_hskt} onChange={(e) => setHskt((s) => ({ ...s, barcode_hskt: e.target.value }))} placeholder="vd 260051051322" />
+              </Field>
+              <Field label="Phương án in" hint="Pain">
+                <Select value={hskt.phuong_an_in} onChange={(e) => setHskt((s) => ({ ...s, phuong_an_in: e.target.value }))}>
+                  <option value="">— Chưa chọn —</option>
+                  {[1, 2, 3].map((v) => <option key={v} value={v}>{v} · {PHUONG_AN_IN[v]}</option>)}
+                </Select>
+              </Field>
+              <Field label="Mã đợt Ready" hint="ma_don_ready (tùy chọn)">
+                <Input value={hskt.ma_don_ready} onChange={(e) => setHskt((s) => ({ ...s, ma_don_ready: e.target.value }))} />
+              </Field>
+            </div>
+            <p className="mt-2 text-xs text-ink-soft">
+              ⚠ Phương án in được <b>tính lại theo tổng SL vải của cả hồ sơ</b> (≥ 2000 m → Máy, &lt; 2000 → Bàn) —
+              đúng luật đang chạy cho hàng ERP. Nếu mã vạch trùng hồ sơ đã có (so 11 số đầu) thì phần in
+              được <b>nối vào hồ sơ đó</b> và giữ nguyên phương án in của nó.
+            </p>
+          </Section>
+        )}
       </div>
 
       {/* 5. Đợt vải */}
@@ -267,10 +330,10 @@ export default function ManualEntryPage() {
         <div className="space-y-3">
           {dots.map((d, i) => (
             <div key={i} className="grid grid-cols-2 gap-3 rounded-control border border-line p-3 md:grid-cols-6">
-              <Field label="SL vải về" required><Input type="number" min="0" value={d.so_luong_vai_ve} onChange={(e) => setDot(i, 'so_luong_vai_ve', e.target.value)} /></Field>
-              <Field label="Ngày vải về"><Input type="date" value={d.ngay_vai_ve} onChange={(e) => setDot(i, 'ngay_vai_ve', e.target.value)} /></Field>
-              <Field label="Hạn giao"><Input type="date" value={d.han_giao_hang} onChange={(e) => setDot(i, 'han_giao_hang', e.target.value)} /></Field>
-              <Field label="Loại đợt vải">
+              <Field label="SL vải về" required hint="SLnhanvai"><Input type="number" min="0" value={d.so_luong_vai_ve} onChange={(e) => setDot(i, 'so_luong_vai_ve', e.target.value)} /></Field>
+              <Field label="Ngày vải về" hint="ngaynhanvai"><Input type="date" value={d.ngay_vai_ve} onChange={(e) => setDot(i, 'ngay_vai_ve', e.target.value)} /></Field>
+              <Field label="Hạn giao" hint="hangiaohang"><Input type="date" value={d.han_giao_hang} onChange={(e) => setDot(i, 'han_giao_hang', e.target.value)} /></Field>
+              <Field label="Loại đợt vải" hint="loaikd">
                 <Select value={d.loai_dot_vai_id} onChange={(e) => setDot(i, 'loai_dot_vai_id', e.target.value)}>
                   <option value="">—</option>
                   {loaiList.map((l) => <option key={l.id} value={l.id}>{l.ten_loai}</option>)}
@@ -280,6 +343,21 @@ export default function ManualEntryPage() {
               <div className="flex items-end">
                 <Button variant="ghost" className="!text-danger" icon="trash-2" onClick={() => removeDot(i)} disabled={dots.length <= 1}>Xóa</Button>
               </div>
+
+              {/* Các trường ERP còn lại của đợt vải — trước đây nhập tay KHÔNG có, khiến hàng nhập tay
+                  thiếu dữ liệu so với hàng tự động (không quét được mã đợt, không biết nhà gia công…). */}
+              <Field label="Mã đợt Ready" hint="IDDotReady — mã vạch của ĐỢT"><Input value={d.barcode} onChange={(e) => setDot(i, 'barcode', e.target.value)} placeholder="vd RD026LA-001330" /></Field>
+              <Field label="Nhà gia công" hint="NGC"><Input value={d.nha_gia_cong} onChange={(e) => setDot(i, 'nha_gia_cong', e.target.value)} placeholder="vd KK / VS / VN" /></Field>
+              <Field label="Gom set (Inset)" hint="0 = không gom set"><Input type="number" min="0" value={d.inset} onChange={(e) => setDot(i, 'inset', e.target.value)} /></Field>
+              <Field label="Dòng chi tiết đơn" hint="DDHSUBID"><Input value={d.ddh_sub_id} onChange={(e) => setDot(i, 'ddh_sub_id', e.target.value)} placeholder="vd 132" /></Field>
+              <Field label="Dự án" hint="Duan"><Input value={d.du_an} onChange={(e) => setDot(i, 'du_an', e.target.value)} placeholder="vd 260814024898LA_VO" /></Field>
+              <Field label="KT cần kiểm tra" hint="KTCankiemtra">
+                <Select value={d.kt_can_kiem_tra} onChange={(e) => setDot(i, 'kt_can_kiem_tra', e.target.value)}>
+                  <option value="">—</option>
+                  <option value="1">1 · Có (làm lại READY)</option>
+                  <option value="0">0 · Không</option>
+                </Select>
+              </Field>
             </div>
           ))}
         </div>

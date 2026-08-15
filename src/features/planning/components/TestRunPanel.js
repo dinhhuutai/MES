@@ -146,7 +146,7 @@ export default function TestRunPanel({ lenhId, onClose, onChanged }) {
         checklists: [...returnItems], lyDo: returnReason.trim(), loai: returnLoai,
       });
       if (res?.data?.huy_lenh) {
-        show('Đã trả về Kỹ thuật (đổi phương án in) — đã hủy lệnh, đợt vải quay lại màn Release 1 để release lại');
+        show('Đã trả về READY (Kỹ thuật) — hủy cả 3 mục Khuôn/Film/Mực + QC; lệnh đã hủy, đợt vải quay lại màn Release 1');
       } else {
         const mucs = (res?.data?.checklists || [...returnItems]).map((m) => TECH_LABEL[m] || m).join(', ');
         show(`Đã trả về Kỹ thuật (${mucs}) — phần in quay lại READY, QC xong sẽ tự về Test Run`);
@@ -225,7 +225,7 @@ export default function TestRunPanel({ lenhId, onClose, onChanged }) {
                   <div className="mb-3 space-y-1.5">
                     {[
                       { v: 'TEST_LOI', nhan: 'Test run lỗi', mo: 'Giữ lệnh — QC xác nhận READY xong là tự quay lại Test Run, Kế hoạch không phải Release 1 lại.' },
-                      { v: 'DOI_PA_IN', nhan: 'Đổi phương án in', mo: 'HỦY lệnh — đợt vải quay lại màn Release 1 để Kế hoạch release lại theo phương án/chuyền mới.' },
+                      { v: 'DOI_PA_IN', nhan: 'Đổi phương án in', mo: 'Về READY (Kỹ thuật) — hủy cả 3 mục Khuôn/Film/Mực + QC, đồng thời HỦY lệnh để Kế hoạch release lại theo phương án/chuyền mới.' },
                     ].map((o) => (
                       <label key={o.v} className="flex cursor-pointer items-start gap-2 text-sm text-ink">
                         <input type="radio" name="loai-tra-ve" checked={returnLoai === o.v}
@@ -262,11 +262,15 @@ export default function TestRunPanel({ lenhId, onClose, onChanged }) {
                       )}
                     </>
                   ) : (
+                    /* Đổi phương án in = đổi hẳn cách in ⇒ khuôn/film/mực phải làm lại từ đầu,
+                       nên hủy CẢ 3 mục (không cho tick lẻ) và phần in về READY (Kỹ thuật). */
                     <p className="mb-2 rounded-control border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
-                      Lệnh <b>{data.ma_lenh_san_xuat}</b> sẽ bị <b>HỦY</b> và đợt vải quay lại màn
-                      <b> Release 1</b>. Kỹ thuật đổi phương án in ở trang <i>Hồ sơ kỹ thuật</i> (hoặc ngay
-                      tại cột &ldquo;Phương án in&rdquo; màn READY), rồi Kế hoạch release lại theo chuyền mới.
-                      {' '}Có thể chọn thêm mục Khuôn/Film/Mực cần làm lại — không bắt buộc.
+                      Phần in quay lại <b>READY (Kỹ thuật)</b>: hủy xác nhận <b>cả 3 mục Khuôn · Film · Mực</b> và
+                      QC — đổi cách in thì khuôn/film/mực phải làm lại từ đầu.
+                      {' '}Lệnh <b>{data.ma_lenh_san_xuat}</b> bị <b>HỦY</b>, đợt vải quay về màn <b>Release 1</b>.
+                      {' '}Kỹ thuật đổi phương án in ở trang <i>Hồ sơ kỹ thuật</i> (hoặc ngay tại cột
+                      &ldquo;Phương án in&rdquo; màn READY), làm lại 3 mục, QC duyệt, rồi Kế hoạch release lại
+                      theo chuyền mới.
                     </p>
                   )}
 
