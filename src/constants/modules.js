@@ -145,6 +145,8 @@ export const MODULES = [
       { ten: 'Hiển thị theo phương án in', route: '/he-thong/hien-thi-pain', perm: 'WORKFLOW_VIEW' },
       // Cài đặt API (mig 083) — bật/tắt 3 API ERP ngay trên giao diện, khỏi sửa .env + restart BE.
       { ten: 'Cài đặt API', route: '/he-thong/cai-dat-api', perm: 'WORKFLOW_VIEW' },
+      // Danh mục TỔ IN (mig 084) — mã tổ gửi thẳng lên ERP qua `@pToin` mỗi lần in tem.
+      { ten: 'Danh mục tổ in', route: '/he-thong/to-in', perm: 'TO_IN_MANAGE' },
       { ten: 'Người dùng online', route: '/he-thong/online', perm: 'PRESENCE_VIEW' },
       // Phiên đăng nhập theo THIẾT BỊ (mig 081): xem 1 tài khoản đang đăng nhập ở những máy nào và
       // đăng xuất máy không dùng nữa. Xem chỉ cần PRESENCE_VIEW; đăng xuất người KHÁC cần PHIEN_MANAGE.

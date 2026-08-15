@@ -31,6 +31,7 @@ import ThietKeTemPage from './features/system/pages/ThietKeTemPage';
 import QuanTriPhanInPage from './features/system/pages/QuanTriPhanInPage';
 import HienThiPainPage from './features/system/pages/HienThiPainPage';
 import CaiDatApiPage from './features/system/pages/CaiDatApiPage';
+import ToInPage from './features/system/pages/ToInPage';
 import ManualEntryPage from './features/system/pages/ManualEntryPage';
 import VaiVeUpdatePage from './features/system/pages/VaiVeUpdatePage';
 import PhanInListPage from './features/orders/pages/PhanInListPage';
@@ -128,6 +129,7 @@ const PAGES = {
   '/he-thong/quan-tri-phan-in': <QuanTriPhanInPage />,
   '/he-thong/hien-thi-pain': <HienThiPainPage />,
   '/he-thong/cai-dat-api': <CaiDatApiPage />,
+  '/he-thong/to-in': <ToInPage />,
 };
 
 const moduleRoutes = MODULES.flatMap((m) =>

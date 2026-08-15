@@ -28,6 +28,12 @@ export const createLyDoNgung = (body) => client.post('/production/ly-do-ngung', 
 export const updateLyDoNgung = (id, body) => client.patch(`/production/ly-do-ngung/${id}`, body);
 export const toggleLyDoNgung = (id, active) => client.patch(`/production/ly-do-ngung/${id}/active`, { active });
 
+// Danh mục TỔ IN (mig 084) — ô chọn ở khối Phân công + trang Hệ thống > Danh mục tổ in
+export const listToIn = (params) => client.get('/production/to-in', { params });
+export const createToIn = (body) => client.post('/production/to-in', body);
+export const updateToIn = (id, body) => client.patch(`/production/to-in/${id}`, body);
+export const toggleToIn = (id, active) => client.patch(`/production/to-in/${id}/active`, { active });
+
 // Danh mục LÝ DO BỔ SUNG (mig 077) + ghi lý do cho 1 đợt vải
 export const listLyDoBoSung = (params) => client.get('/production/ly-do-bo-sung', { params });
 export const createLyDoBoSung = (body) => client.post('/production/ly-do-bo-sung', body);

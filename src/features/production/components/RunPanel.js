@@ -11,7 +11,7 @@ import TimeSelect from '../../../components/common/TimeSelect';
 import { Field, Input, Textarea, Select } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import { getRun, printTem, printTemBatch, reprintTem, getTemLabel, getTemLogs, finishRun, stopLine, resumeLine, addVaiHuy, savePhanCong, pauseLenhChay, listProductionCandidates, startProduction, vuotSanXuat, doiChuyen, traVeKyThuatSanXuat, listChuyen, listLyDoNgung, luuLyDoBoSungDotVai } from '../../../services/productionService';
+import { getRun, printTem, printTemBatch, reprintTem, getTemLabel, getTemLogs, finishRun, stopLine, resumeLine, addVaiHuy, savePhanCong, pauseLenhChay, listProductionCandidates, startProduction, vuotSanXuat, doiChuyen, traVeKyThuatSanXuat, listChuyen, listLyDoNgung, listToIn, luuLyDoBoSungDotVai } from '../../../services/productionService';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import { listUserOptions } from '../../../services/userService';
 import printTemLabel from '../utils/printTemLabel';
@@ -211,15 +211,20 @@ function LyDoBoSungInline({ dot, canRun, onSave }) {
 //   Ca trưởng lưu **id** (`phieu_san_xuat.ca_truong_id`), còn Chuyền trưởng / Thợ in lưu **TÊN**
 //   (`chuyen_truong` VARCHAR · `tho_in` TEXT) ⇒ đổi sang ô chọn KHÔNG cần migration, và vẫn cho gõ
 //   tên người chưa có tài khoản (thợ khoán) — xem `NhieuNguoiSelect`.
-function PhanCongInline({ pc, users, onSave, busy, canRun }) {
-  const daLuu = !!(pc?.ca_truong_id || pc?.chuyen_truong || pc?.tho_in);
+function PhanCongInline({ pc, users, toIns = [], onSave, busy, canRun }) {
+  const daLuu = !!(pc?.ca_truong_id || pc?.chuyen_truong || pc?.tho_in || pc?.to_in_id);
   const [sua, setSua] = useState(false);
-  const [form, setForm] = useState({ caTruongId: '', chuyenTruong: '', thoIn: '' });
+  const [form, setForm] = useState({ caTruongId: '', chuyenTruong: '', thoIn: '', toInId: '' });
+  // Danh mục rỗng = chưa chạy mig 084 (hoặc xưởng chưa nhập tổ nào) ⇒ ẩn hẳn ô, đừng hiện ô chọn trống.
+  const coToIn = toIns.length > 0;
 
   // Nạp lại mỗi khi dữ liệu server đổi (sau khi lưu) hoặc khi bấm Sửa.
   useEffect(() => {
-    setForm({ caTruongId: pc?.ca_truong_id || '', chuyenTruong: pc?.chuyen_truong || '', thoIn: pc?.tho_in || '' });
-  }, [pc?.ca_truong_id, pc?.chuyen_truong, pc?.tho_in, sua]);
+    setForm({
+      caTruongId: pc?.ca_truong_id || '', chuyenTruong: pc?.chuyen_truong || '',
+      thoIn: pc?.tho_in || '', toInId: pc?.to_in_id || '',
+    });
+  }, [pc?.ca_truong_id, pc?.chuyen_truong, pc?.tho_in, pc?.to_in_id, sua]);
 
   const dangSua = canRun && (!daLuu || sua); // không có quyền PROD_RUN → chỉ xem
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
@@ -231,6 +236,12 @@ function PhanCongInline({ pc, users, onSave, busy, canRun }) {
           <div><span className="text-ink-soft">Ca trưởng:</span> <b className="text-ink">{pc?.ca_truong_ten || '—'}</b></div>
           <div><span className="text-ink-soft">Chuyền trưởng:</span> <b className="text-ink">{pc?.chuyen_truong || '—'}</b></div>
           <div><span className="text-ink-soft">Thợ in:</span> <b className="text-ink">{pc?.tho_in || '—'}</b></div>
+          {coToIn && (
+            <div>
+              <span className="text-ink-soft">Tổ in:</span>{' '}
+              <b className="text-ink">{pc?.ma_to ? `${pc.ma_to}${pc.ten_to ? ` — ${pc.ten_to}` : ''}` : '—'}</b>
+            </div>
+          )}
         </div>
         {canRun && (
           <Button variant="secondary" className="mt-2 w-full" icon="edit" onClick={() => setSua(true)} disabled={busy}>
@@ -276,6 +287,23 @@ function PhanCongInline({ pc, users, onSave, busy, canRun }) {
           placeholder="Gõ tên thợ in để tìm rồi chọn / Enter..."
         />
       </Field>
+      {/* TỔ IN (mig 084) — `ma_to` được GỬI THẲNG lên ERP qua `@pToin`. Ô chọn thuần danh mục, KHÔNG
+          bật `chapNhanTuDo` như ô Chuyền trưởng: gõ tự do sẽ ra mã tổ ERP không có, gửi lên là hỏng
+          đối soát. Muốn thêm tổ thì vào Hệ thống > Danh mục tổ in. */}
+      {coToIn && (
+        <Field label="Tổ in" hint="Gửi lên ERP theo mã tổ — thêm tổ mới ở Hệ thống › Danh mục tổ in">
+          <SearchableSelect
+            moNgay
+            value={form.toInId}
+            onChange={(v) => set('toInId', v)}
+            options={toIns}
+            getValue={(t) => t.id}
+            getLabel={(t) => `${t.ma_to} — ${t.ten_to}`}
+            getSearch={(t) => `${t.ma_to} ${t.ten_to}`}
+            placeholder="Chọn tổ in..."
+          />
+        </Field>
+      )}
       <div className="flex gap-2">
         {daLuu && <Button variant="ghost" className="flex-1" onClick={() => setSua(false)} disabled={busy}>Hủy</Button>}
         <Button className="flex-1" icon="check" loading={busy}
@@ -284,6 +312,9 @@ function PhanCongInline({ pc, users, onSave, busy, canRun }) {
               caTruongId: form.caTruongId || null,
               chuyenTruong: form.chuyenTruong,
               thoIn: form.thoIn,
+              // ⚠ Chỉ gửi khóa này khi ô THẬT SỰ hiện: backend chỉ ghi `to_in_id` khi `toInId !==
+              //   undefined`, nên chưa chạy mig 084 thì không đụng gì tới cột.
+              ...(coToIn ? { toInId: form.toInId || null } : {}),
             });
             if (ok) setSua(false);
           }}>
@@ -451,6 +482,7 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
   const [temMeta, setTemMeta] = useState(META_MAC_DINH()); // ngày ca · giờ SX · BTP của lượt in (mig 066)
   const [printSetOpen, setPrintSetOpen] = useState(false); // modal in tem gom set
   const [users, setUsers] = useState([]);              // tài khoản để chọn ca trưởng
+  const [toInDs, setToInDs] = useState([]);            // danh mục tổ in (mig 084) cho khối Phân công
   const [doiOpen, setDoiOpen] = useState(false);       // modal đổi chuyền (máy hỏng / dồn tải)
   const [doiChuyenId, setDoiChuyenId] = useState('');
   const [doiGhiChu, setDoiGhiChu] = useState('');
@@ -506,6 +538,14 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
     listLyDoNgung()
       .then((r) => setLyDoNgungDs(r.data || []))
       .catch(() => setLyDoNgungDs([]));
+  }, []);
+
+  // Danh mục TỔ IN (mig 084) — ô chọn ở khối Phân công. Chưa chạy migration / lỗi → mảng rỗng ⇒
+  // ô Tổ in tự ẩn, phân công vẫn lưu được như cũ (ERP nhận `Toin` rỗng, đúng bằng hiện trạng cũ).
+  useEffect(() => {
+    listToIn()
+      .then((r) => setToInDs(r.data || []))
+      .catch(() => setToInDs([]));
   }, []);
 
   // Lấy dữ liệu nhãn tem rồi mở cửa sổ in (barcode Code128 = mã tem).
@@ -921,7 +961,7 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
           {phieu && dotVaiList.length > 0 && (
             <section className="border-t border-line pt-4">
               <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-soft">Phân công</h3>
-              <PhanCongInline pc={data.phan_cong} users={users} onSave={doSavePhanCong} busy={busy} canRun={canRun} />
+              <PhanCongInline pc={data.phan_cong} users={users} toIns={toInDs} onSave={doSavePhanCong} busy={busy} canRun={canRun} />
             </section>
           )}
 
