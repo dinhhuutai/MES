@@ -31,6 +31,34 @@ export function gopTheoLenh(items) {
 // Số ĐỢT SX trong tập đang hiển thị.
 export const demLenh = (items) => new Set((items || []).map((r) => r.lenh_id)).size;
 
+// Thứ tự tiến độ để xếp bảng đếm "Đang ở" — **GƯƠNG `STAGE_ORDER` của backend** (`utils/stage.js`).
+// ⚠ Chỉ dùng để SẮP XẾP cho dễ đọc (kém tiến độ nhất lên trước), KHÔNG dùng để tính toán gì ⇒ thiếu
+//   một mã mới thêm ở backend thì mã đó rơi xuống CUỐI chứ không mất dòng nào.
+export const THU_TU_GIAI_DOAN = [
+  'CHO_CHUYEN', 'READY_KT', 'READY_QA', 'RELEASE_1', 'TESTRUN_CNSP', 'TESTRUN_QA', 'RELEASE_2',
+  'CHO_SAN_XUAT', 'SAN_XUAT', 'CHO_KHO', 'KCS', 'SUA', 'GIA_CONG', 'OQC', 'DANG_GIAO', 'DA_GIAO',
+];
+
+// Đếm PHẦN IN theo giai đoạn hiện tại → [{ ma, ten, so }] + tổng.
+//
+// ⚠⚠ ĐẾM **DISTINCT PHẦN IN**, KHÔNG đếm dòng: `giai_doan_hien_tai` là giai đoạn của PHẦN IN, mà 1
+//   phần in release nhiều lần thì hiện ra NHIỀU DÒNG với CÙNG một giai đoạn ⇒ đếm dòng là cộng trùng.
+//   Đếm phần in thì **Σ các giai đoạn = đúng "Tổng phần"** ở đầu modal — hai con số tự đối chiếu nhau.
+export function demGiaiDoan(items) {
+  const theoMa = new Map();               // ma_giai_doan -> { ma, ten, pins:Set }
+  for (const r of items || []) {
+    const ma = r.giai_doan_hien_tai || '_KHAC';
+    if (!theoMa.has(ma)) theoMa.set(ma, { ma, ten: r.giai_doan_ten || 'Không rõ', pins: new Set() });
+    theoMa.get(ma).pins.add(r.phan_in_id || r.ma_phan);
+  }
+  const viTri = (ma) => { const i = THU_TU_GIAI_DOAN.indexOf(ma); return i < 0 ? 999 : i; };
+  const dong = [...theoMa.values()]
+    .map(({ ma, ten, pins }) => ({ ma, ten, so: pins.size }))
+    .sort((a, b) => viTri(a.ma) - viTri(b.ma));
+  // Tổng cũng phải DISTINCT trên toàn bộ (1 phần in chỉ có 1 giai đoạn nên cộng dồn là đủ).
+  return { dong, tong: dong.reduce((s, d) => s + d.so, 0) };
+}
+
 // Các cột ở MỨC LỆNH — hợp nhất ô trên các dòng của cùng 1 đợt SX.
 // ⚠ CỐ Ý KHÔNG gộp Khách hàng / PO / Mã hàng: dữ liệu prod hiện cho thấy mọi lệnh gom set đều CÙNG
 //   khách·đơn·mã hàng nên gộp cũng đúng, NHƯNG nếu về sau ERP gửi set trộn đơn thì gộp sẽ GIẤU MẤT

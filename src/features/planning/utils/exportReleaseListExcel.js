@@ -7,15 +7,19 @@
 //   Dùng chung `gopTheoLenh` với modal + bản in.
 import { gopTheoLenh, demLenh } from './gopDongRelease';
 
+// ⚠ Cột "ĐANG Ở" (giai đoạn HIỆN TẠI của phần in) đặt ngay sau CODE PHẦN — khớp thứ tự cột trên màn
+//   hình. Đây là cột ở MỨC PHẦN IN nên KHÔNG nằm trong `COT_GOP` (lệnh gom set có thể mỗi phần in một
+//   giai đoạn khác nhau — gộp ô là giấu mất giá trị của dòng dưới).
+// ⚠ Thêm/bớt cột ở đây phải sửa KÈM `NUM_COLS` + `COT_GOP` (2 hằng đó đánh số theo vị trí cột).
 const HEADERS = [
-  'STT', 'CHUYỀN', 'KH', 'PO', 'MÃ', 'CODE PHẦN', 'Màu vải', 'Kích vải', 'Kích phim',
+  'STT', 'CHUYỀN', 'KH', 'PO', 'MÃ', 'CODE PHẦN', 'ĐANG Ở', 'Màu vải', 'Kích vải', 'Kích phim',
   'SLĐH', 'SLNV', 'SL ĐÃ IN', 'SL ĐÃ GIAO', 'SL RELEASE',
   'OWNER', 'GIỜ BD', 'GIỜ KT', 'XÁC NHẬN RELEASE',
 ];
-const WIDTHS = [5, 10, 8, 15, 22, 18, 20, 12, 14, 9, 9, 10, 11, 11, 12, 10, 10, 16];
-const NUM_COLS = [1, 10, 11, 12, 13, 14]; // căn phải: STT + SLĐH..SL RELEASE
+const WIDTHS = [5, 10, 8, 15, 22, 18, 16, 20, 12, 14, 9, 9, 10, 11, 11, 12, 10, 10, 16];
+const NUM_COLS = [1, 11, 12, 13, 14, 15]; // căn phải: STT + SLĐH..SL RELEASE
 // Cột ở MỨC LỆNH (1-indexed theo HEADERS) — merge dọc trên các dòng của cùng 1 đợt SX.
-const COT_GOP = [1, 2, 12, 13, 15, 16, 17, 18];
+const COT_GOP = [1, 2, 13, 14, 16, 17, 18, 19];
 
 const pad = (n) => String(n).padStart(2, '0');
 const fmtDMY = (s) => { if (!s) return ''; const x = new Date(s); return Number.isNaN(+x) ? '' : `${pad(x.getDate())}/${pad(x.getMonth() + 1)}/${x.getFullYear()}`; };
@@ -73,7 +77,8 @@ export default async function exportReleaseListExcel(items, meta, fileName = 'da
       // STT + các ô mức LỆNH chỉ ghi giá trị ở DÒNG ĐẦU của đợt; dòng sau để trống rồi merge lên.
       r._dau ? r._stt : '', r._dau ? (r.ten_chuyen || '') : '',
       r.ten_khach_hang || '', r.ma_don_hang || '', r.ten_ma_hang || r.ma_hang || '',
-      r.ma_phan || '', r.mau_vai || '', r.kich_vai || '', r.kich_phim || '',
+      r.ma_phan || '', r.giai_doan_ten || '',
+      r.mau_vai || '', r.kich_vai || '', r.kich_phim || '',
       r.so_luong_don_hang ?? '', r.slnv ?? 0,
       // ⚠ SL ĐÃ IN / ĐÃ GIAO chỉ tính được ở mức LỆNH ⇒ ghi 1 lần rồi merge, KHÔNG lặp số ở từng dòng
       //   (lặp là sẽ có người cộng dồn cột này thành số sai).

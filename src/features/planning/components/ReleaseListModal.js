@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef, useLayoutEffect } from 'react';
 import Modal from '../../../components/common/Modal';
 import Button from '../../../components/common/Button';
 import Toast from '../../../components/common/Toast';
@@ -14,7 +14,7 @@ import PhanInTraCuuPanel from './PhanInTraCuuPanel';
 import FieldFilters, { filterRows, FilterToggle } from '../../../components/common/FieldFilters';
 import { khopNhieu } from '../../../utils/timKiem';
 import { LOAI_TABS, hopChipChuyen, nhanChip, demChip } from '../../../utils/khuChuyen';
-import { gopTheoLenh, demLenh } from '../utils/gopDongRelease';
+import { gopTheoLenh, demLenh, demGiaiDoan } from '../utils/gopDongRelease';
 
 // Bộ lọc từng trường (client-side — modal tải trọn 1 ngày nên lọc tại chỗ là đủ).
 const FILTER_FIELDS = [
@@ -46,6 +46,101 @@ const fmtClock = (ts) => {
   return `${h}:${pad(m)} ${ap}`;
 };
 const fmtDMY = (s) => { if (!s) return ''; const [y, m, d] = s.split('-'); return `${d}/${m}/${y}`; };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Ô CHỮ CÓ THỂ DÀI — XUỐNG DÒNG + TỰ THU NHỎ CỠ CHỮ, **KHÔNG cắt bằng "…"**.
+// ⚠ Bảng này để ĐỐI CHIẾU nên cắt chữ là mất đúng cái người ta đang tra (vd 2 mã hàng chỉ khác nhau
+//   ở đuôi, cắt xong nhìn y hệt nhau). `break-words` cho bẻ giữa từ vì mã hàng/code phần là 1 chuỗi
+//   liền không có khoảng trắng để xuống dòng.
+// ⚠ `white-space` được KẾ THỪA, nên `whitespace-normal` ở div CON đè được `whitespace-nowrap` của
+//   `<td>` cha ⇒ các cột số/giờ vẫn giữ 1 dòng như cũ, không phải sửa gì.
+const coChuTheoDoDai = (s) => (s.length > 30 ? 'text-[11px] leading-tight' : s.length > 20 ? 'text-xs leading-tight' : '');
+function OChu({ v, rong = '12rem', className = '' }) {
+  const s = v == null || v === '' ? '—' : String(v);
+  return (
+    <div className={`whitespace-normal break-words ${coChuTheoDoDai(s)} ${className}`} style={{ maxWidth: rong }}>{s}</div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HEADER CỘT "ĐANG Ở" — hover hoặc bấm để xem SỐ PHẦN IN theo từng checkpoint.
+// Trả lời ngay câu hỏi gốc của xưởng: "release N phần, giờ chúng nằm ở đâu, mỗi trạm bao nhiêu".
+//
+// ⚠⚠ POPOVER PHẢI `position: fixed` + đo `getBoundingClientRect`, KHÔNG dùng `absolute`: vùng bảng là
+//   khối `overflow-auto` nên hộp `absolute` sẽ bị **CẮT CỤT** ngay mép bảng (và `<thead>` còn đang
+//   `sticky` nữa). Đo toạ độ thật rồi vẽ `fixed` là cách duy nhất thoát khỏi khung cắt đó.
+function ThDangO({ th, dong, tong }) {
+  const [ghim, setGhim] = useState(false);      // bấm = GHIM mở (để rê chuột xuống đọc / cuộn danh sách)
+  const [hover, setHover] = useState(false);    // rê chuột = xem nhanh
+  // ⚠ Bấm để ĐÓNG trong khi con trỏ vẫn nằm trên header thì `hover` còn true ⇒ hộp KHÔNG chịu đóng,
+  //   người dùng bấm mãi không được. Cờ này chặn hover cho tới khi rê chuột ra chỗ khác.
+  const [chanHover, setChanHover] = useState(false);
+  const neo = useRef(null);
+  const hop = useRef(null);
+  const [viTri, setViTri] = useState(null);
+  const hien = ghim || (hover && !chanHover);
+
+  useLayoutEffect(() => {
+    if (!hien || !neo.current) { setViTri(null); return; }
+    const r = neo.current.getBoundingClientRect();
+    // Kẹp mép phải để hộp không tràn ra ngoài màn hình (cột này nằm giữa bảng rất rộng).
+    setViTri({ top: r.bottom + 6, left: Math.max(8, Math.min(r.left, window.innerWidth - 268)) });
+  }, [hien, dong]);
+
+  // Đang GHIM thì bấm ra ngoài mới đóng (hover tự đóng nên không cần).
+  useEffect(() => {
+    if (!ghim) return undefined;
+    const ngoai = (e) => {
+      if (neo.current?.contains(e.target) || hop.current?.contains(e.target)) return;
+      setGhim(false);
+    };
+    document.addEventListener('mousedown', ngoai);
+    return () => document.removeEventListener('mousedown', ngoai);
+  }, [ghim]);
+
+  return (
+    <th className={`${th} text-left`}>
+      <button ref={neo} type="button"
+        onClick={() => { if (hien) { setGhim(false); setChanHover(true); } else { setGhim(true); } }}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => { setHover(false); setChanHover(false); }}
+        title="Xem số phần in ở từng checkpoint"
+        className="inline-flex items-center gap-1 font-semibold text-ink-soft underline decoration-dotted underline-offset-4 hover:text-primary">
+        Đang ở
+        <Icon name="chevron-down" size={13} className={hien ? 'rotate-180 transition-transform' : 'transition-transform'} />
+      </button>
+      {hien && viTri && (
+        <div ref={hop} style={{ top: viTri.top, left: viTri.left }}
+          className="fixed z-[60] w-[260px] rounded-control border border-line bg-surface p-3 shadow-card-hover">
+          <div className="mb-2 text-xs font-semibold text-ink">Phần in đang ở checkpoint</div>
+          {dong.length === 0 ? (
+            <div className="text-xs text-ink-soft">Không có dòng nào.</div>
+          ) : (
+            <>
+              <div className="max-h-[46vh] space-y-1 overflow-auto">
+                {dong.map((d) => (
+                  <div key={d.ma} className="flex items-baseline justify-between gap-3 text-xs">
+                    <span className="min-w-0 break-words text-ink-soft">{d.ten}</span>
+                    <b className="shrink-0 tabular-nums text-ink">{fmtNum(d.so)}</b>
+                  </div>
+                ))}
+              </div>
+              {/* Tổng ở đây = "Tổng phần" trên đầu modal (cùng cách đếm DISTINCT phần in) ⇒ 2 con số
+                  tự kiểm chéo nhau, lệch là biết có chỗ sai ngay. */}
+              <div className="mt-2 flex items-baseline justify-between gap-3 border-t border-line pt-2 text-xs">
+                <span className="font-medium text-ink">Tổng phần in</span>
+                <b className="tabular-nums text-primary">{fmtNum(tong)}</b>
+              </div>
+            </>
+          )}
+          <div className="mt-1.5 text-[11px] leading-snug text-ink-soft">
+            Đếm theo phần in (1 phần in release nhiều lần vẫn tính 1).
+          </div>
+        </div>
+      )}
+    </th>
+  );
+}
 
 // Modal "Danh sách release" theo ngày kế hoạch — bảng bám form + Xuất Excel + In A4.
 export default function ReleaseListModal({ open, onClose }) {
@@ -115,11 +210,20 @@ export default function ReleaseListModal({ open, onClose }) {
     };
   }, [meta, dangLoc, viewItems]);
 
+  // Số phần in ở từng checkpoint — tính trên tập ĐANG XEM để khớp với bảng + "Tổng phần" ở đầu modal.
+  const bangGiaiDoan = useMemo(() => demGiaiDoan(viewItems), [viewItems]);
+
   const th = 'px-2 py-2 text-xs font-semibold text-ink-soft whitespace-nowrap';
-  const td = 'px-2 py-1.5 whitespace-nowrap';
+  // `align-top` để hàng có ô xuống dòng vẫn thẳng lối (và ô hợp nhất rowSpan bám đỉnh khối đợt SX).
+  const td = 'px-2 py-1.5 align-top whitespace-nowrap';
 
   return (
-    <Modal open={open} onClose={onClose} size="xl" title={`Danh sách release ${fmtDMY(date)}`}>
+    /* `size="full"` + `lapDay`: bảng 18 cột nên cần gần trọn bề ngang, và modal LUÔN cao hết mức để
+       CHỈ BẢNG cuộn (đầu modal đứng yên) — trước đây vừa cuộn modal vừa cuộn bảng, thao tác rất rối. */
+    <Modal open={open} onClose={onClose} size="full" lapDay title={`Danh sách release ${fmtDMY(date)}`}>
+      {/* KHỐI ĐẦU (ngày · nút · số tổng · ô tìm · bộ lọc · chip) — `shrink-0` để không bị bảng ép co lại;
+          phần chiều cao còn lại dành hết cho bảng. */}
+      <div className="shrink-0">
       {/* HÀNG 1 — gọn 1 dòng: [Ngày] [toggle chế độ ngày] ....... [Xuất Excel] [In].
           ⚠ Các số tổng ĐÃ TÁCH xuống hàng riêng: để chung hàng thì nó chiếm hết chỗ, đẩy 2 nút xuống
           dòng dưới và đầu modal trông rối. */}
@@ -186,7 +290,12 @@ export default function ReleaseListModal({ open, onClose }) {
         onClear={() => { setFilters({}); setQ(''); }} />
 
       <ChipTabs tabs={LOAI_TABS} value={chip} counts={counts} onChange={setChip} />
-      <div className="max-h-[62vh] overflow-auto rounded-control border border-line">
+      </div>
+
+      {/* VÙNG CUỘN DUY NHẤT — `flex-1 min-h-0` ăn hết chiều cao còn lại của modal.
+          ⚠ `min-h-0` BẮT BUỘC: mặc định flex item có `min-height:auto` nên bảng dài sẽ đẩy phồng
+          khối này ra ngoài modal thay vì cuộn bên trong. */}
+      <div className="min-h-0 flex-1 overflow-auto rounded-control border border-line">
         <table className="w-full text-sm">
           <thead className="sticky top-0 z-10 bg-surface-muted">
             <tr className="border-b border-line">
@@ -197,8 +306,9 @@ export default function ReleaseListModal({ open, onClose }) {
               <th className={`${th} text-left`}>Mã</th>
               <th className={`${th} text-left`}>Code phần</th>
               {/* ĐANG Ở — giai đoạn HIỆN TẠI của phần in (backend tính bằng cùng `dominantStageScalar`
-                  với dashboard). Cột này để đối chiếu "release N phần, giờ chúng nằm đâu". */}
-              <th className={`${th} text-left`}>Đang ở</th>
+                  với dashboard). Cột này để đối chiếu "release N phần, giờ chúng nằm đâu";
+                  hover/bấm vào header ra luôn số phần in của TỪNG checkpoint. */}
+              <ThDangO th={th} dong={bangGiaiDoan.dong} tong={bangGiaiDoan.tong} />
               <th className={`${th} text-left`}>Màu vải</th>
               <th className={`${th} text-left`}>Kích vải</th>
               <th className={`${th} text-left`}>Kích phim</th>
@@ -239,7 +349,7 @@ export default function ReleaseListModal({ open, onClose }) {
                 )}
                 {r._dau && (
                   <td rowSpan={r._span} className={`${td} font-medium text-ink`}>
-                    {r.ten_chuyen || '—'}
+                    <OChu v={r.ten_chuyen} rong="8rem" />
                     {r._span > 1 && (
                       <div className="mt-0.5">
                         <span className="rounded-full bg-primary-wash px-1.5 py-0.5 text-[10px] font-medium text-primary">
@@ -249,18 +359,22 @@ export default function ReleaseListModal({ open, onClose }) {
                     )}
                   </td>
                 )}
-                <td className={td}>{r.ten_khach_hang || '—'}</td>
-                <td className={td}>{r.ma_don_hang || '—'}</td>
-                <td className={`${td} max-w-[200px] truncate`}>{r.ten_ma_hang || r.ma_hang || '—'}</td>
-                <td className={td}>{r.ma_phan || '—'}</td>
+                {/* Các ô CHỮ dùng `OChu`: dài thì XUỐNG DÒNG + thu nhỏ cỡ chữ, KHÔNG cắt "…" */}
+                <td className={td}><OChu v={r.ten_khach_hang} rong="9rem" /></td>
+                <td className={td}><OChu v={r.ma_don_hang} rong="10rem" /></td>
+                <td className={td}><OChu v={r.ten_ma_hang || r.ma_hang} rong="14rem" /></td>
+                <td className={td}><OChu v={r.ma_phan} rong="13rem" /></td>
                 <td className={td}>
-                  <Badge tone={r.giai_doan_hien_tai === 'DA_GIAO' ? 'success' : 'info'}>
+                  {/* Nhãn dài nhất là "Gia công (chờ chuyển OQC)" ⇒ cho pill XUỐNG DÒNG trong 8.5rem
+                      thay vì kéo phình cả cột (Badge là `inline-flex` nên phải kẹp `max-w` mới bẻ được). */}
+                  <Badge tone={r.giai_doan_hien_tai === 'DA_GIAO' ? 'success' : 'info'}
+                    className="max-w-[8.5rem] whitespace-normal break-words">
                     {r.giai_doan_ten || '—'}
                   </Badge>
                 </td>
-                <td className={td}>{r.mau_vai || '—'}</td>
-                <td className={td}>{r.kich_vai || '—'}</td>
-                <td className={td}>{r.kich_phim || '—'}</td>
+                <td className={td}><OChu v={r.mau_vai} rong="11rem" /></td>
+                <td className={td}><OChu v={r.kich_vai} rong="7rem" /></td>
+                <td className={td}><OChu v={r.kich_phim} rong="7rem" /></td>
                 <td className={`${td} text-right tabular-nums`}>{fmtNum(r.so_luong_don_hang)}</td>
                 <td className={`${td} text-right tabular-nums`}>{fmtNum(r.slnv)}</td>
                 {/* SL đã in / đã giao chỉ tính được ở mức LỆNH (tem không lưu phần in) ⇒ hợp nhất ô,
