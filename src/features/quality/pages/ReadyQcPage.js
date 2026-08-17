@@ -24,7 +24,7 @@ import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import PhuongAnInCell from '../../../components/common/PhuongAnInCell';
 import exportReadyQcExcel from '../utils/exportReadyQcExcel';
-import { khuonRequired, filmHien } from '../../technical-ready/constants';
+import { khuonRequired } from '../../technical-ready/constants';
 
 // Thứ tự hiển thị: FILM → KHUÔN → MỰC (HSKT đã bỏ khỏi checklist READY).
 const TECH_ITEMS = [
@@ -304,16 +304,18 @@ export default function ReadyQcPage() {
         disabled={!canDoiPain} show={show} onChanged={refresh} />
     ) },
     { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => <HanGiaoCell value={r.han_giao_hang} /> },
+    // ⚠ Film + Khuôn GỘP thành 1 nhãn "Film-Khuôn" (16/08/2026) — xác nhận Khuôn thì Film tự đạt
+    // theo nên 2 nhãn riêng gần như luôn giống nhau. Bám theo KHUÔN (mục quyết định "đủ mục KT");
+    // ca lẻ chỉ mới có Film thì hiện VÀNG để không giấu mất. Hàng gia công (II/AD) ẩn hẳn nhãn này.
     { key: 'tech', header: 'Kỹ thuật', render: (r) => (
       <div className="flex flex-wrap items-center gap-1">
-        {/* Hàng gia công (II/AD): ẩn cả Khuôn lẫn Film — chỉ còn Mực. */}
-        {TECH_ITEMS.filter((it) => (
-          (it.ma !== 'KHUON' || khuonRequired(r.ten_khach_hang))
-          && (it.ma !== 'FILM' || filmHien(r.ten_khach_hang))
-        )).map((it) => {
-          const done = r[`${it.ma.toLowerCase()}_done`];
-          return <Badge key={it.ma} tone={done ? 'success' : 'default'}>{it.label}</Badge>;
-        })}
+        {khuonRequired(r.ten_khach_hang) && (
+          r.khuon_done
+            ? <Badge tone="success">Film-Khuôn</Badge>
+            : <Badge tone={r.film_done ? 'warning' : 'default'}
+                title={r.film_done ? 'Đã xác nhận Film, còn chờ Khuôn' : undefined}>Film-Khuôn</Badge>
+        )}
+        <Badge tone={r.muc_done ? 'success' : 'default'}>Mực</Badge>
       </div>
     ) },
   ];

@@ -20,7 +20,7 @@ export const MODULES = [
     perm: 'READY_VIEW',
     mau: 'bg-amber-50 text-amber-600',
     children: [
-      { ten: 'Xác nhận READY', route: '/ky-thuat/ready', perm: 'READY_VIEW' },
+      { ten: 'Xác nhận READY', route: '/ky-thuat/ready', perm: 'READY_VIEW', siSo: 'KT_READY' },
       { ten: 'Hồ sơ kỹ thuật', route: '/ky-thuat/ho-so-ky-thuat', perm: 'READY_VIEW' },
       { ten: 'Gom set', route: '/ky-thuat/gom-set', perm: 'READY_GOMSET' },
       // Test Run - CNSP đã GỘP về màn Test Run QA (điểm 11) — bỏ menu.
@@ -35,9 +35,9 @@ export const MODULES = [
     mau: 'bg-violet-50 text-violet-600',
     children: [
       { ten: 'Tạo đợt sản xuất', route: '/ke-hoach/tao-dot-san-xuat', perm: 'RELEASE1' },
-      { ten: 'Release 1', route: '/ke-hoach/release-1', perm: 'RELEASE1' },
-      { ten: 'Release 2', route: '/ke-hoach/release-2', perm: 'RELEASE2' },
-      { ten: 'Gia công', route: '/ke-hoach/gia-cong', perm: ['RELEASE1', 'RELEASE2'] },
+      { ten: 'Release 1', route: '/ke-hoach/release-1', perm: 'RELEASE1', siSo: 'KH_RELEASE1' },
+      { ten: 'Release 2', route: '/ke-hoach/release-2', perm: 'RELEASE2', siSo: 'KH_RELEASE2' },
+      { ten: 'Gia công', route: '/ke-hoach/gia-cong', perm: ['RELEASE1', 'RELEASE2'], siSo: 'KH_GIA_CONG' },
       { ten: 'Kế hoạch tạm', route: '/ke-hoach/ke-hoach-tam', perm: ['RELEASE1', 'RELEASE2'] },
       { ten: 'Lập kế hoạch lại', route: '/ke-hoach/lap-lai', perm: 'RELEASE2' },
       { ten: 'Cài đặt', route: '/ke-hoach/cai-dat', perm: ['RELEASE1', 'RELEASE2'] },
@@ -51,12 +51,12 @@ export const MODULES = [
     perm: 'PROD_MONITOR',
     mau: 'bg-emerald-50 text-emerald-600',
     children: [
-      { ten: 'Xác nhận chạy', route: '/san-xuat/xac-nhan-chay', perm: 'PROD_RUN' },
+      { ten: 'Xác nhận chạy', route: '/san-xuat/xac-nhan-chay', perm: 'PROD_RUN', siSo: 'SX_CHO_CHAY' },
       { ten: 'Theo dõi chuyền', route: '/san-xuat/theo-doi-chuyen', perm: 'PROD_MONITOR' },
       { ten: 'Tình trạng xe phơi', route: '/san-xuat/xe-phoi', perm: 'XEPHOI' },
-      { ten: 'KCS', route: '/san-xuat/kcs', perm: 'KCS' },
+      { ten: 'KCS', route: '/san-xuat/kcs', perm: 'KCS', siSo: 'SX_KCS' },
       { ten: 'Phân loại lỗi', route: '/san-xuat/phan-loai-loi', perm: ['PHAN_LOAI_LOI', 'KCS'] },
-      { ten: 'Sửa', route: '/san-xuat/sua', perm: 'SUA' },
+      { ten: 'Sửa', route: '/san-xuat/sua', perm: 'SUA', siSo: 'SX_SUA' },
       // 2 trang DANH MỤC đặt cuối module (dưới Sửa) — là màn cấu hình, không phải màn thao tác
       // hằng ngày. "Danh mục lỗi" dùng CHUNG component với trang bên Chất lượng: 1 nguồn, 2 lối vào.
       { ten: 'Danh mục lỗi', route: '/san-xuat/danh-muc-loi', perm: 'LOI_MANAGE' },
@@ -73,10 +73,10 @@ export const MODULES = [
     perm: 'TESTRUN_QA',
     mau: 'bg-teal-50 text-teal-600',
     children: [
-      { ten: 'QC chuẩn bị kỹ thuật', route: '/chat-luong/ready-qc', perm: 'READY_QC' },
-      { ten: 'Test Run - QA', route: '/chat-luong/test-run', perm: 'TESTRUN_QA' },
+      { ten: 'QC chuẩn bị kỹ thuật', route: '/chat-luong/ready-qc', perm: 'READY_QC', siSo: 'CL_QC_READY' },
+      { ten: 'Test Run - QA', route: '/chat-luong/test-run', perm: 'TESTRUN_QA', siSo: 'CL_TEST_RUN' },
       { ten: 'QC in line', route: '/chat-luong/qc-in-line', perm: 'QC_INLINE' },
-      { ten: 'OQC', route: '/chat-luong/oqc', perm: 'OQC' },
+      { ten: 'OQC', route: '/chat-luong/oqc', perm: 'OQC', siSo: 'CL_OQC' },
       { ten: 'Lịch sử QC trả về', route: '/chat-luong/qc-tra-ve', perm: 'QC_TRAVE_VIEW' },
       { ten: 'Danh mục lỗi', route: '/chat-luong/danh-muc-loi', perm: 'LOI_MANAGE' },
       { ten: 'Trường hợp giao đặc biệt', route: '/chat-luong/giao-dac-biet', perm: 'GIAODB_MANAGE' },
@@ -89,7 +89,7 @@ export const MODULES = [
     base: '/giao-hang',
     perm: 'DELIVERY_VIEW',
     mau: 'bg-orange-50 text-orange-600',
-    children: [{ ten: 'Phiếu giao', route: '/giao-hang', perm: 'DELIVERY_VIEW' }],
+    children: [{ ten: 'Phiếu giao', route: '/giao-hang', perm: 'DELIVERY_VIEW', siSo: 'GH_TEM' }],
   },
   {
     ma: 'DASHBOARD',

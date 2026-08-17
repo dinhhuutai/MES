@@ -16,7 +16,6 @@ import usePermissions from '../../../hooks/usePermissions';
 import TraVeBadge from '../../../components/common/TraVeBadge';
 import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
 import PhanInLenhCell from '../components/PhanInLenhCell';
-import { codesCuaLenh } from '../utils/phanInLenh';
 import taiHetTrang from '../../../utils/taiHetTrang';
 import { listGiaCong, giaCongToOqc, giaCongTraLai } from '../../../services/planningService';
 import { printGiaCongVeTem } from '../../production/utils/printTemLabel';

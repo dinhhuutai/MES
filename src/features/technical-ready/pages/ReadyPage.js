@@ -27,7 +27,7 @@ import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import PhuongAnInCell from '../../../components/common/PhuongAnInCell';
 import { fmtDateTime } from '../../../utils/format';
-import { khuonRequired, filmHien } from '../constants';
+import { khuonRequired } from '../constants';
 import exportReadyExcel from '../utils/exportReadyExcel';
 
 const FILTER_FIELDS = [
@@ -53,6 +53,15 @@ const ITEMS = [
 
 const DoneCell = (done) =>
   done ? <Badge tone="success">✓</Badge> : <span className="text-ink-soft">–</span>;
+
+// Ô "Film-Khuôn" — 3 trạng thái. Bám theo KHUÔN vì đó là mục quyết định "đủ mục kỹ thuật"
+// (`utils/tech.js` CỐ Ý không xét Film). Ca "mới có Film, chưa Khuôn" hiện VÀNG chứ không hiện ✓ —
+// nếu hiện ✓ thì người dùng tưởng xong trong khi backend vẫn coi là chưa.
+const FilmKhuonCell = (r) => {
+  if (r.khuon_done) return <Badge tone="success">✓</Badge>;
+  if (r.film_done) return <Badge tone="warning" title="Đã xác nhận Film, còn chờ Khuôn">Film</Badge>;
+  return <span className="text-ink-soft">–</span>;
+};
 
 export default function ReadyPage() {
   const { can } = usePermissions();
@@ -210,16 +219,15 @@ export default function ReadyPage() {
       <PhuongAnInCell value={r.phuong_an_in} hsktId={r.hskt_id} barcode={r.barcode_hskt}
         disabled={!canDoiPain} show={show} onChanged={refresh} />
     ) },
-    // Film KHÔNG còn phải bấm riêng: xác nhận Khuôn là backend tự đặt Film = ĐẠT. Cột vẫn giữ để
-    // nhìn thấy trạng thái; hàng GIA CÔNG (II/AD) không làm khuôn nên ẩn luôn cả 2 cột.
-    { key: 'film_done', header: `Film${counts.film ? ` (${counts.film})` : ''}`, className: 'text-center',
-      render: (r) => (filmHien(r.ten_khach_hang)
-        ? DoneCell(r.film_done)
-        : <span className="text-ink-soft" title="Hàng gia công — không cần xác nhận Film">—</span>) },
-    { key: 'khuon_done', header: `Khuôn${counts.khuon ? ` (${counts.khuon})` : ''}`, className: 'text-center',
+    // ⚠ 1 CỘT "Film-Khuôn" (gộp 16/08/2026): xác nhận Khuôn thì backend TỰ đặt Film = ĐẠT nên 2 cột
+    // riêng gần như luôn giống nhau, chỉ tốn bề ngang. Ô này bám theo KHUÔN (đó là mục quyết định
+    // "đủ mục KT"); trường hợp lẻ chỉ mới có Film mà chưa Khuôn thì hiện vàng để không giấu mất.
+    // ⚠ Backend/quyền/checkpoint GIỮ NGUYÊN — Film vẫn là mục thật, vẫn bấm riêng được trong panel.
+    // Hàng GIA CÔNG (II/AD) không làm khuôn lẫn film ⇒ ô này để trống.
+    { key: 'khuon_done', header: `Film-Khuôn${counts.khuon ? ` (${counts.khuon})` : ''}`, className: 'text-center',
       render: (r) => (khuonRequired(r.ten_khach_hang)
-        ? DoneCell(r.khuon_done)
-        : <span className="text-ink-soft" title="Hàng gia công — không cần xác nhận Khuôn">—</span>) },
+        ? FilmKhuonCell(r)
+        : <span className="text-ink-soft" title="Hàng gia công — không cần xác nhận Film/Khuôn">—</span>) },
     { key: 'muc_done', header: `Mực${counts.muc ? ` (${counts.muc})` : ''}`, className: 'text-center', render: (r) => DoneCell(r.muc_done) },
     { key: 'trang_thai_ready', header: 'Trạng thái', render: (r) => {
       const s = STATUS[r.trang_thai_ready] || STATUS.CHUA;

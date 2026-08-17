@@ -13,6 +13,7 @@ import { Input, Select } from '../../../components/common/controls';
 import FieldFilters, { FilterToggle } from '../../../components/common/FieldFilters';
 import DateRangePicker from '../../../components/common/DateRangePicker';
 import Pagination from '../../../components/common/Pagination';
+import Spinner from '../../../components/common/Spinner';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import { listHskt, getHskt, getHsktByBarcode, changePhuongAnIn } from '../../../services/hsktService';
@@ -253,7 +254,11 @@ export default function HoSoKyThuatPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={COLS} className="py-10 text-center text-ink-soft">Đang tải...</td></tr>
+                <tr><td colSpan={COLS} className="py-10 text-center">
+                  <div className="flex items-center justify-center gap-2 text-ink-soft">
+                    <Spinner size={22} /><span>Đang tải...</span>
+                  </div>
+                </td></tr>
               ) : rows.length === 0 ? (
                 <tr><td colSpan={COLS} className="py-10 text-center text-ink-soft">
                   {filterCount || search ? 'Không có HSKT khớp bộ lọc' : 'Chưa có HSKT'}
@@ -291,7 +296,9 @@ export default function HoSoKyThuatPage() {
         subtitle={detail?.phan_in ? `${detail.phan_in.length} phần in · phiên bản ${detail.hskt.phien_ban}` : ''}
         width="max-w-2xl">
         {loadingDetail || !detail?.hskt?.id ? (
-          <div className="py-10 text-center text-ink-soft">Đang tải...</div>
+          <div className="flex items-center justify-center gap-2 py-10 text-ink-soft">
+            <Spinner size={22} /><span>Đang tải...</span>
+          </div>
         ) : (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3 rounded-control border border-line p-3 text-sm">
