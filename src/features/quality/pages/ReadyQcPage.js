@@ -1,4 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
+import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
 import Pagination from '../../../components/common/Pagination';
@@ -53,6 +55,7 @@ export default function ReadyQcPage() {
   const now = useNow(1000);
 
   const [rows, setRows] = useState([]);
+  const [nghenOpen, setNghenOpen] = useState(false); // modal "Danh sách nghẽn"
   const [meta, setMeta] = useState({ page: 1, totalPages: 1, total: 0 });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -71,6 +74,9 @@ export default function ReadyQcPage() {
   const [returnChecklists, setReturnChecklists] = useState(() => new Set());
   const [returnReason, setReturnReason] = useState('');
   const [filters, setFilters] = useState({});
+
+  // Dải "Theo dõi" (sĩ số) bám ĐÚNG ô tìm + panel lọc của màn này — xem hooks/useSiSoLoc.js.
+  useSiSoLoc({ timKiem: search, ...filters });
   const [showFilters, setShowFilters] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const activeCount = Object.values(filters).filter(Boolean).length;
@@ -332,6 +338,7 @@ export default function ReadyQcPage() {
         )}
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
         <Button variant="secondary" icon="file-spreadsheet" loading={exporting} onClick={doExport}>Excel ({filtered.length})</Button>
+        <NghenButton rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} onClick={() => setNghenOpen(true)} />
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="warning">{readyRows.length} đủ mục · {meta.total} ở READY</Badge>
@@ -460,6 +467,8 @@ export default function ReadyQcPage() {
         title="Phần in đã QC (READY hoàn thành)" maHeader="Phần in"
         fetcher={(date) => readyDone(date, 'qc')} />
 
+      <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
+        tenMan="QC chuẩn bị kỹ thuật" rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} tenFile="nghen-qc-ready" />
       <Toast toast={toast} />
     </div>
   );

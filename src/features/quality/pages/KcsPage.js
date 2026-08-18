@@ -1,9 +1,13 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
+import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import Toolbar from '../../../components/common/Toolbar';
 import OwnerHint from '../../../components/common/OwnerHint';
 import DataTable from '../../../components/common/DataTable';
 import Badge from '../../../components/common/Badge';
 import TraVeBadge from '../../../components/common/TraVeBadge';
+import TraVeFilter from '../../../components/common/TraVeFilter';
+import { locTraVe } from '../../../utils/traVeNgay';
 import Button from '../../../components/common/Button';
 import SidePanel from '../../../components/common/SidePanel';
 import Modal from '../../../components/common/Modal';
@@ -46,9 +50,11 @@ export default function KcsPage() {
   const now = useNow(1000);
 
   const [rows, setRows] = useState([]);
+  const [nghenOpen, setNghenOpen] = useState(false); // modal "Danh sách nghẽn"
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState({});
+
   const [range, setRange] = useState(() => ({ from: '', to: '' }));
   const [showFilters, setShowFilters] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -60,6 +66,23 @@ export default function KcsPage() {
   const [redryMin, setRedryMin] = useState('30');
   const [redrying, setRedrying] = useState(false);
   const [onlyReturned, setOnlyReturned] = useState(false); // lọc tem bị OQC trả về
+  // Khoảng NGÀY TRẢ VỀ (chỉ dùng khi `onlyReturned`) — rỗng = mọi ngày. Luật ở `utils/traVeNgay`.
+  // ⚠ KHÁC ô "Ngày in tem" (`range`) ở Toolbar: đây là ngày OQC BẤM TRẢ VỀ, không phải ngày in.
+  const [traVeRange, setTraVeRange] = useState({ from: '', to: '' });
+
+  // Dải "Theo dõi" (sĩ số) bám ĐÚNG ô tìm + panel lọc + ô tích "Chỉ hiện tem bị trả về" của màn này.
+  // ⚠ Đặt Ở ĐÂY (sau `onlyReturned`/`traVeRange`), không đặt cạnh `filters` như các màn khác —
+  //   ESLint `no-use-before-define` chặn build nếu dùng state khai bên dưới.
+  // ⚠ `traVeRange` là ngày OQC BẤM TRẢ VỀ — KHÁC ô "Ngày in tem" (`range`) ở Toolbar. Ô ngày in tem
+  //   lọc ở SERVER lúc tải danh sách nên đã nằm trong tập rồi, không gửi lại ở đây.
+  useSiSoLoc({
+    timKiem: search,
+    ...filters,
+    biTraVe: onlyReturned ? '1' : '',
+    ...(onlyReturned && (traVeRange.from || traVeRange.to)
+      ? { loaiNgay: 'NGAY_TRA_VE', ngayTu: traVeRange.from, ngayDen: traVeRange.to } : {}),
+  });
+
   const [journey, setJourney] = useState(null); // { temId, maTem } — panel hành trình
   const [scanOpen, setScanOpen] = useState(false);
   const [selected, setSelected] = useState(() => new Set()); // tem_id đã chọn để GỘP
@@ -67,7 +90,7 @@ export default function KcsPage() {
   const [targetId, setTargetId] = useState('');
   const [gopping, setGopping] = useState(false);
 
-  const viewRows = onlyReturned ? rows.filter((r) => r.tra_ve_ly_do) : rows;
+  const viewRows = onlyReturned ? locTraVe(rows, traVeRange) : rows;
   const toggleOne = (id) => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   const allSelected = viewRows.length > 0 && viewRows.every((r) => selected.has(r.tem_id));
   const toggleAll = () => setSelected(() => (allSelected ? new Set() : new Set(viewRows.map((r) => r.tem_id))));
@@ -269,10 +292,9 @@ export default function KcsPage() {
         </div>
         <Button variant={showFilters || activeFilters.length ? 'secondary' : 'ghost'} icon="filter"
           onClick={() => setShowFilters((v) => !v)}>Bộ lọc{activeFilters.length ? ` (${activeFilters.length})` : ''}</Button>
-        <label className="flex items-center gap-1.5 text-xs text-ink-soft">
-          <input type="checkbox" checked={onlyReturned} onChange={(e) => setOnlyReturned(e.target.checked)} />
-          Chỉ hiện tem bị trả về
-        </label>
+        <TraVeFilter checked={onlyReturned} onChecked={setOnlyReturned}
+          range={traVeRange} onRange={setTraVeRange} label="Chỉ hiện tem bị trả về" />
+        <NghenButton rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} onClick={() => setNghenOpen(true)} />
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="warning">{rows.length} tem chờ kiểm</Badge>
@@ -445,6 +467,8 @@ export default function KcsPage() {
 
       <QrScanner open={scanOpen} onClose={() => setScanOpen(false)} onResult={onScan} />
 
+      <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
+        tenMan="KCS" rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} tenFile="nghen-kcs" />
       <Toast toast={toast} />
     </div>
   );

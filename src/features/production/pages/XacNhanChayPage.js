@@ -1,4 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
+import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
 import Badge from '../../../components/common/Badge';
@@ -21,7 +23,7 @@ import { fmtNum, fmtDate, trongKhoangNgay } from '../../../utils/format';
 import DateRangePicker from '../../../components/common/DateRangePicker';
 import exportCheckpointExcel, { COT_LENH, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
 import ChipTabs from '../../../components/common/ChipTabs';
-import { LOAI_TABS, hopChipChuyen, nhanChip, demChip } from '../../../utils/khuChuyen';
+import { LOAI_TABS, hopChipChuyen, nhanChip, demChip, locSiSoTheoChip } from '../../../utils/khuChuyen';
 import RunPanel from '../components/RunPanel';
 import { khop } from '../../../utils/timKiem';
 
@@ -32,6 +34,7 @@ export default function XacNhanChayPage() {
   const canRun = can('PROD_RUN');
 
   const [candidates, setCandidates] = useState([]);
+  const [nghenOpen, setNghenOpen] = useState(false); // modal "Danh sách nghẽn"
   const [running, setRunning] = useState([]);
   const [chuyen, setChuyen] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -47,6 +50,23 @@ export default function XacNhanChayPage() {
   // Chip LOẠI CHUYỀN + KHU BÀN — cùng bộ với "Theo dõi chuyền" / "Test Run - QA".
   // Áp cho CẢ 2 bảng (Đang chạy & Chờ chạy) để 2 bảng luôn nói về cùng một nhóm chuyền.
   const [loai, setLoai] = useState('');
+
+  // Dải "Theo dõi" (sĩ số) bám ô tìm + panel lọc + dải chip loại chuyền/khu + ô chọn CHUYỀN.
+  // ⚠⚠ Ô lọc chuyền giữ `chuyenId` (UUID) — backend KHÔNG hiểu UUID, nó khớp theo `ma_chuyen`.
+  //   Phải quy đổi, nếu không ô đó im lặng không tác dụng lên 4 con số.
+  // ⚠ Chip khu bàn CŨNG đặt `maChuyen` (một DANH SÁCH mã) ⇒ khi cả hai cùng bật thì phải GIAO NHAU,
+  //   không được để cái sau đè cái trước: chọn chuyền nằm ngoài khu đang lọc thì đúng ra bảng rỗng,
+  //   nên gửi mã sentinel để khớp rỗng thay vì lặng lẽ bỏ một trong hai điều kiện.
+  useSiSoLoc((() => {
+    const chip = locSiSoTheoChip(loai);
+    const maChon = (chuyen || []).find((x) => x.id === filters.chuyenId)?.ma_chuyen || '';
+    let maChuyen = chip.maChuyen || '';
+    if (maChon) {
+      const ds = maChuyen ? maChuyen.split(',') : null;
+      maChuyen = !ds || ds.includes(maChon) ? maChon : '__KHONG_KHOP__';
+    }
+    return { timKiem: search, ...filters, ...chip, ...(maChuyen ? { maChuyen } : {}) };
+  })());
   // Lọc theo NGÀY KẾ HOẠCH SẢN XUẤT (`lenh_san_xuat.ngay_ke_hoach`) — chọn được NHIỀU NGÀY bằng
   // cùng 1 ô như trang Hồ sơ kỹ thuật. ⚠ MỖI BẢNG MỘT Ô RIÊNG (khác chip loại chuyền vốn dùng
   // chung): 2 bảng trả lời 2 câu hỏi khác nhau — "hôm nay chuyền đang chạy hàng của ngày nào" và
@@ -111,6 +131,17 @@ export default function XacNhanChayPage() {
     [applyFilters, locTheoChip, locNgay, candidates, ngayCand]);
   const runFiltered = useMemo(() => locNgay(locTheoChip(applyFilters(running)), ngayRun),
     [applyFilters, locTheoChip, locNgay, running, ngayRun]);
+  // Nguồn cho "Danh sách nghẽn": GỘP cả 2 bảng, lấy tập ĐẦY ĐỦ (chưa lọc) — danh sách nghẽn là bức
+  // tranh của cả trạm; muốn thu hẹp thì dùng ô tìm ngay trong modal.
+  // ⚠ 2 bảng có thể trùng `lenh_id` không? Không — lệnh đang chạy đã có phiếu nên rời khỏi "chờ chạy";
+  //   vẫn khử trùng theo `lenh_id` cho chắc, để 1 lệnh không bị đếm 2 lần trên nút.
+  const rowsNghen = useMemo(() => {
+    const m = new Map();
+    [...(running || []), ...(candidates || [])].forEach((r) => {
+      if (r && r.lenh_id && !m.has(r.lenh_id)) m.set(r.lenh_id, r);
+    });
+    return [...m.values()];
+  }, [running, candidates]);
   // Số trên chip đếm trên tập ĐÃ qua bộ lọc trường + khoảng ngày (bỏ chip) để khớp với bảng đang xem.
   // Gộp cả 2 bảng: 1 dải chip điều khiển cả "Đang chạy" lẫn "Chờ chạy" — nhưng mỗi bảng vẫn trừ đi
   // theo khoảng ngày CỦA CHÍNH NÓ, nếu không số trên chip sẽ nhiều hơn tổng 2 bảng.
@@ -276,6 +307,9 @@ export default function XacNhanChayPage() {
         <Button variant={showFilter || hasFilter ? 'secondary' : 'ghost'} icon="filter" onClick={() => setShowFilter((v) => !v)}>
           Bộ lọc{hasFilter ? ' ●' : ''}
         </Button>
+        {/* ⚠ Gộp CẢ 2 bảng "Đang chạy" + "Chờ chạy" — màn này điều hành cả hai, tách ra thì người
+            dùng phải mở 2 danh sách nghẽn cho cùng một việc. */}
+        <NghenButton rows={rowsNghen} trangThai={(r) => statusLenh(r.lenh_id)} onClick={() => setNghenOpen(true)} />
       </Toolbar>
 
       {showFilter && (
@@ -391,6 +425,8 @@ export default function XacNhanChayPage() {
       </Modal>
 
       {sel && <RunPanel lenhId={sel} onClose={() => setSel(null)} onChanged={load} />}
+      <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
+        tenMan="Xác nhận chạy" rows={rowsNghen} trangThai={(r) => statusLenh(r.lenh_id)} tenFile="nghen-xac-nhan-chay" />
       <Toast toast={toast} />
     </div>
   );

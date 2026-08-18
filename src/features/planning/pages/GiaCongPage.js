@@ -1,4 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
+import useNghenMap from '../../../hooks/useNghenMap';
+import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
 import Badge from '../../../components/common/Badge';
@@ -61,6 +64,10 @@ export default function GiaCongPage() {
   const canDo = can('RELEASE1') || can('RELEASE2');
 
   const [rows, setRows] = useState([]);
+  const [nghenOpen, setNghenOpen] = useState(false); // modal "Danh sách nghẽn"
+  // Nguồn nghẽn dùng CHUNG với các màn Kế hoạch khác (dashboard `flowRows`).
+  // ⚠ Hàng gia công KHÔNG tính SLA ở OQC (§5) nhưng vẫn có SLA ở chặng gia công — bản đồ này lo đúng.
+  const { statusLenh } = useNghenMap();
   const [meta, setMeta] = useState({ total: 0 });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -71,6 +78,9 @@ export default function GiaCongPage() {
   const [saving, setSaving] = useState(false);
   const [histOpen, setHistOpen] = useState(false);
   const [filters, setFilters] = useState({});
+
+  // Dải "Theo dõi" (sĩ số) bám ĐÚNG ô tìm + panel lọc của màn này — xem hooks/useSiSoLoc.js.
+  useSiSoLoc({ timKiem: search, ...filters });
   const [showFilters, setShowFilters] = useState(false);
   const activeCount = Object.values(filters).filter(Boolean).length;
   const filtered = useMemo(() => filterRows(rows, filters, FILTER_FIELDS), [rows, filters]);
@@ -264,6 +274,7 @@ export default function GiaCongPage() {
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử chuyển</Button>
         <Badge tone="info">{activeCount ? `${filtered.length}/` : ''}{meta.total || rows.length} lệnh</Badge>
+        <NghenButton rows={rows} trangThai={(r) => statusLenh(r.id)} onClick={() => setNghenOpen(true)} />
       </Toolbar>
 
       <FieldFilters fields={FILTER_FIELDS} values={filters}
@@ -350,6 +361,8 @@ export default function GiaCongPage() {
 
       <GiaCongHistoryPanel open={histOpen} onClose={() => setHistOpen(false)} onPrint={printVe} />
 
+      <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
+        tenMan="Gia công" rows={rows} trangThai={(r) => statusLenh(r.id)} tenFile="nghen-gia-cong" />
       <Toast toast={toast} />
     </div>
   );

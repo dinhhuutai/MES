@@ -1,4 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
+import useNghenMap from '../../../hooks/useNghenMap';
+import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
 import Badge from '../../../components/common/Badge';
@@ -64,6 +67,10 @@ export default function KeHoachTamPage() {
   const canDo = can('RELEASE1') || can('RELEASE2');
 
   const [rows, setRows] = useState([]);
+  const [nghenOpen, setNghenOpen] = useState(false); // modal "Danh sách nghẽn"
+  // Nguồn nghẽn dùng CHUNG với các màn Kế hoạch khác (dashboard `flowRows`) — cùng một bản đồ nên
+  // danh sách nghẽn ở đây không bao giờ lệch với Release 1/2.
+  const { statusDot } = useNghenMap();
   const [meta, setMeta] = useState({ total: 0 });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -80,6 +87,9 @@ export default function KeHoachTamPage() {
   const [traVeOpen, setTraVeOpen] = useState(false); // modal "Trả về Kỹ thuật" (lý do bắt buộc)
   const [traVeReason, setTraVeReason] = useState('');
   const [filters, setFilters] = useState({});
+
+  // Dải "Theo dõi" (sĩ số) bám ĐÚNG ô tìm + panel lọc của màn này — xem hooks/useSiSoLoc.js.
+  useSiSoLoc({ timKiem: search, ...filters });
   const [showFilters, setShowFilters] = useState(false);
   const activeCount = Object.values(filters).filter(Boolean).length;
   const filtered = useMemo(() => filterRows(rows, filters, FILTER_FIELDS), [rows, filters]);
@@ -285,6 +295,7 @@ export default function KeHoachTamPage() {
           </Button>
         )}
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
+        <NghenButton rows={rows} trangThai={(r) => statusDot(r.dot_vai_ve_id)} onClick={() => setNghenOpen(true)} />
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="info">{activeCount ? `${filtered.length}/` : ''}{meta.total || rows.length} bản</Badge>
@@ -428,6 +439,8 @@ export default function KeHoachTamPage() {
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
         title="Kế hoạch tạm đã xác nhận Release 1" maHeader="Lệnh" showChuyen fetcher={keHoachTamDone} />
 
+      <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
+        tenMan="Kế hoạch tạm" rows={rows} trangThai={(r) => statusDot(r.dot_vai_ve_id)} tenFile="nghen-ke-hoach-tam" />
       <Toast toast={toast} />
     </div>
   );

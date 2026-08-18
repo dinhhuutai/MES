@@ -1,4 +1,5 @@
-// Cấu trúc 9 module + menu con. `perm` = quyền tối thiểu để thấy/ vào.
+// Cấu trúc 10 module + menu con. `perm` = quyền tối thiểu để thấy/ vào.
+// ⚠ Thứ tự khai ở đây CHÍNH LÀ thứ tự ô trên Trang chủ và thứ tự module trong Sidebar.
 // P0 hardcode khớp seed bảng `module`; P6 sẽ nạp động từ API /modules.
 export const MODULES = [
   {
@@ -114,6 +115,26 @@ export const MODULES = [
       { ten: 'Báo cáo phòng ban', route: '/bao-cao/phong-ban', perm: 'BAOCAO_VIEW' },
     ],
   },
+  // ─── YÊU CẦU & DUYỆT (mig 086) ────────────────────────────────────────────
+  // ⚠⚠ MODULE RIÊNG, KHÔNG để trong "Hệ thống" (chốt 18/08/2026): đây là việc ĐIỀU HÀNH hằng ngày
+  //   của Kế hoạch/Kỹ thuật, không phải màn cấu hình của quản trị viên. Để trong Hệ thống thì
+  //   người duyệt phải đi vòng qua một module toàn màn quản trị mà họ không có quyền dùng.
+  // ⚠ `perm` là MẢNG gồm CẢ 2 nhóm ⇒ module chỉ hiện cho người duyệt (`PA_IN_APPROVE`) và người
+  //   gửi được yêu cầu (kỹ thuật/QC). Người ngoài 2 nhóm KHÔNG thấy ô module ở Trang chủ.
+  //   Backend vẫn tự lọc: người gửi chỉ thấy yêu cầu CỦA CHÍNH MÌNH (`chi_cua_toi`).
+  // ⚠ Thêm loại duyệt mới về sau mà nhóm gửi khác đi thì NHỚ nới danh sách này, nếu không họ
+  //   không thấy module dù backend cho phép.
+  {
+    ma: 'DUYET',
+    ten: 'Yêu cầu & Duyệt',
+    icon: 'check-circle',
+    base: '/duyet',
+    perm: ['PA_IN_APPROVE', 'READY_KHUON', 'READY_FILM', 'READY_MUC', 'READY_QC'],
+    mau: 'bg-amber-50 text-amber-600',
+    children: [
+      { ten: 'Duyệt yêu cầu', route: '/duyet', perm: ['PA_IN_APPROVE', 'READY_KHUON', 'READY_FILM', 'READY_MUC', 'READY_QC'] },
+    ],
+  },
   {
     ma: 'HE_THONG',
     ten: 'Hệ thống',
@@ -145,6 +166,8 @@ export const MODULES = [
       { ten: 'Hiển thị theo phương án in', route: '/he-thong/hien-thi-pain', perm: 'WORKFLOW_VIEW' },
       // Cài đặt API (mig 083) — bật/tắt 3 API ERP ngay trên giao diện, khỏi sửa .env + restart BE.
       { ten: 'Cài đặt API', route: '/he-thong/cai-dat-api', perm: 'WORKFLOW_VIEW' },
+      // Bật/tắt thông báo cho CẢ HỆ THỐNG (mig 085) — dùng chung quyền với Cài đặt API.
+      { ten: 'Cài đặt thông báo', route: '/he-thong/cai-dat-thong-bao', perm: 'WORKFLOW_VIEW' },
       // Danh mục TỔ IN (mig 084) — mã tổ gửi thẳng lên ERP qua `@pToin` mỗi lần in tem.
       { ten: 'Danh mục tổ in', route: '/he-thong/to-in', perm: 'TO_IN_MANAGE' },
       { ten: 'Người dùng online', route: '/he-thong/online', perm: 'PRESENCE_VIEW' },

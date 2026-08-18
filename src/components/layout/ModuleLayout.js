@@ -6,6 +6,7 @@ import Sidebar from './Sidebar';
 import BottomNav from './BottomNav';
 import Icon from '../common/Icon';
 import SiSoTram from '../common/SiSoTram';
+import { SiSoLocProvider } from '../../hooks/useSiSoLoc';
 import { openMobileNav, closeMobileNav } from '../../store/uiSlice';
 import { findModuleByPath } from '../../constants/modules';
 
@@ -20,6 +21,9 @@ export default function ModuleLayout() {
   useEffect(() => { dispatch(closeMobileNav()); }, [pathname, dispatch]);
 
   return (
+    // ⚠ `SiSoLocProvider` phải bọc CẢ dải sĩ số LẪN `<Outlet/>`: trang (trong Outlet) công bố bộ
+    //   lọc, dải sĩ số (ngoài Outlet) đọc lại — 2 bên phải chung 1 provider.
+    <SiSoLocProvider>
     <div className="flex min-h-full flex-col">
       <Topbar />
       <div className="flex flex-1">
@@ -63,5 +67,6 @@ export default function ModuleLayout() {
       </div>
       <BottomNav />
     </div>
+    </SiSoLocProvider>
   );
 }

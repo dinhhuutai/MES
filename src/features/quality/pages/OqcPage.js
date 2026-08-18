@@ -1,4 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
+import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import Toolbar from '../../../components/common/Toolbar';
 import OwnerHint from '../../../components/common/OwnerHint';
 import DataTable from '../../../components/common/DataTable';
@@ -37,10 +39,14 @@ export default function OqcPage() {
   const canOqc = can('OQC');
 
   const [rows, setRows] = useState([]);
+  const [nghenOpen, setNghenOpen] = useState(false); // modal "Danh sách nghẽn"
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [range, setRange] = useState(() => ({ from: '', to: '' }));
   const [filters, setFilters] = useState({});
+
+  // Dải "Theo dõi" (sĩ số) bám ĐÚNG ô tìm + panel lọc của màn này — xem hooks/useSiSoLoc.js.
+  useSiSoLoc({ timKiem: search, ...filters });
   const [showFilters, setShowFilters] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ soLuongKiem: '', soLuongDat: '', ketQua: 'DAT', ownerChoGiaoId: '', lyDoChoGiao: '' });
@@ -208,6 +214,7 @@ export default function OqcPage() {
           {(range.from || range.to) && <button type="button" onClick={() => setRange({ from: '', to: '' })} className="text-ink-soft hover:text-danger" aria-label="Bỏ lọc ngày"><Icon name="x" size={14} /></button>}
         </div>
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
+        <NghenButton rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} onClick={() => setNghenOpen(true)} />
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="warning">{displayRows.length} dòng chờ OQC</Badge>
@@ -357,6 +364,8 @@ export default function OqcPage() {
 
       <QrScanner open={scanOpen} onClose={() => setScanOpen(false)} onResult={onScan} />
 
+      <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
+        tenMan="OQC" rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} tenFile="nghen-oqc" />
       <Toast toast={toast} />
     </div>
   );

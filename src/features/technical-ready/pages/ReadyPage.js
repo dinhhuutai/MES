@@ -1,4 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
+import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
+import useSiSoLoc from '../../../hooks/useSiSoLoc';
+import { useLocation } from 'react-router-dom';
 import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
 import Pagination from '../../../components/common/Pagination';
@@ -17,6 +20,8 @@ import useNow from '../../../hooks/useNow';
 import useSocketReload from '../../../hooks/useSocketReload';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 import TraVeBadge from '../../../components/common/TraVeBadge';
+import TraVeFilter from '../../../components/common/TraVeFilter';
+import { locTraVe, demTraVe } from '../../../utils/traVeNgay';
 import {
   listReadyCandidates, confirmReadyBulk, readyHistory, readyDone, getReadyItemCounts,
   confirmReadyItemsBatch, uncheckReadyItem, traCuuMaQuet,
@@ -67,10 +72,14 @@ export default function ReadyPage() {
   const { can } = usePermissions();
   const { toast, show } = useToast();
   const now = useNow(1000);
+  // ⚠ Bấm thông báo "phần in bị trả về" (mig 085) dẫn tới `/ky-thuat/ready?q=<code phần>` ⇒ ô tìm
+  //   phải ĐIỀN SẴN mã đó. Đọc lúc dựng để lần tải ĐẦU đã đúng, khỏi tải 2 lượt.
+  const location = useLocation();
   const [rows, setRows] = useState([]);
+  const [nghenOpen, setNghenOpen] = useState(false); // modal "Danh sách nghẽn"
   const [meta, setMeta] = useState({ page: 1, totalPages: 1, total: 0 });
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(() => new URLSearchParams(location.search).get('q') || '');
   const [page, setPage] = useState(1);
   const [sel, setSel] = useState(null);
 
@@ -80,10 +89,37 @@ export default function ReadyPage() {
   const [histOpen, setHistOpen] = useState(false);
   const [doneOpen, setDoneOpen] = useState(false);
   const [onlyReturned, setOnlyReturned] = useState(false); // lọc phần bị QC trả về
+  // Khoảng NGÀY TRẢ VỀ (chỉ dùng khi `onlyReturned`) — rỗng = mọi ngày. Luật ở `utils/traVeNgay`.
+  const [traVeRange, setTraVeRange] = useState({ from: '', to: '' });
   const [filters, setFilters] = useState({});
+
+  // Dải "Theo dõi" (sĩ số) bám ĐÚNG ô tìm + panel lọc của màn này — xem hooks/useSiSoLoc.js.
+  // ⚠ Gửi cả ô tích "Chỉ hiện phần bị trả về" + khoảng NGÀY TRẢ VỀ ⇒ 4 số khớp đúng bảng bên dưới.
+  //   Backend hiểu `biTraVe` (bool) và tái dùng luôn `loaiNgay=NGAY_TRA_VE` cho khoảng ngày.
+  useSiSoLoc({
+    timKiem: search,
+    ...filters,
+    biTraVe: onlyReturned ? '1' : '',
+    ...(onlyReturned && (traVeRange.from || traVeRange.to)
+      ? { loaiNgay: 'NGAY_TRA_VE', ngayTu: traVeRange.from, ngayDen: traVeRange.to } : {}),
+  });
   const [showFilters, setShowFilters] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const [counts, setCounts] = useState({ khuon: 0, film: 0, muc: 0 }); // chưa xác nhận từng mục (toàn hệ thống)
+
+  // ⚠⚠ ĐANG Ở SẴN TRANG NÀY MÀ BẤM THÔNG BÁO thì component KHÔNG mount lại (cùng route, chỉ đổi
+  //   query) ⇒ lazy initializer của `useState` ở trên KHÔNG chạy lần nữa và ô tìm đứng im. Phải có
+  //   effect này mới áp được mã mới. (Lỗi thật, người dùng bắt được 18/08/2026.)
+  // ⚠ Phụ thuộc CẢ OBJECT `location` chứ KHÔNG phải `location.search`: bấm LẠI cùng một thông báo
+  //   cho ra URL y hệt ⇒ `search` không đổi, nhưng `useLocation()` vẫn trả OBJECT MỚI cho mỗi lần
+  //   điều hướng. Bám `search` thì lần bấm thứ hai (sau khi người dùng đã gõ tay thứ khác) sẽ không
+  //   có tác dụng. Object này CHỈ đổi khi điều hướng ⇒ gõ tay trong ô tìm không bị URL ghi đè.
+  useEffect(() => {
+    const q = new URLSearchParams(location.search).get('q') || '';
+    if (!q) return; // vào trang không kèm `?q` → giữ nguyên thứ đang gõ
+    setSearch(q);
+    setPage(1);
+  }, [location]);
 
   const permItems = ITEMS.filter((it) => can(it.perm));
   // Đổi phương án in ngay tại cột — khớp đúng rbac của `PATCH /hskt/:id/phuong-an-in`
@@ -101,12 +137,16 @@ export default function ReadyPage() {
     const n = new Set(s); if (n.has(ma)) n.delete(ma); else n.add(ma); return n;
   });
   const activeCount = Object.values(filters).filter(Boolean).length;
-  // "Chỉ hiện phần bị trả về" gồm CẢ 2 nguồn: QC READY trả về + Kế hoạch (Release 1) trả về Kỹ thuật.
-  // "Chỉ hiện phần bị trả về" gộp CẢ 3 nguồn: QC READY · Kế hoạch (Release 1) · Test Run (QA).
+  // "Chỉ hiện phần bị trả về" gộp CẢ 3 nguồn: QC READY · Kế hoạch (Release 1) · Test Run (QA),
+  // kèm lọc theo NGÀY TRẢ VỀ khi người dùng chọn khoảng ngày (`locTraVe` — utils/traVeNgay).
+  // ⚠ Khớp khi CÓ ÍT NHẤT MỘT lần trả về rơi trong khoảng, không phải lần mới nhất.
   const viewRows = filterRows(
-    onlyReturned ? rows.filter((r) => r.tra_ve_ly_do || r.tra_ve_kh || r.tra_ve_test) : rows,
+    onlyReturned ? locTraVe(rows, traVeRange) : rows,
     filters, FILTER_FIELDS,
   );
+  // Số phần in bị trả về TRƯỚC khi lọc ngày — để badge nói rõ "đang lọc N/M", tránh cảnh tick ô
+  // rồi thấy bảng trống mà không hiểu là do khoảng ngày.
+  const tongTraVe = onlyReturned ? demTraVe(rows) : 0;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -250,15 +290,17 @@ export default function ReadyPage() {
         {permItems.length > 0 && selected.size > 0 && (
           <Button onClick={openBulk}>Xác nhận hàng loạt ({selected.size})</Button>
         )}
-        <label className="flex items-center gap-1.5 text-xs text-ink-soft">
-          <input type="checkbox" checked={onlyReturned} onChange={(e) => setOnlyReturned(e.target.checked)} />
-          Chỉ hiện phần bị trả về
-        </label>
+        <TraVeFilter checked={onlyReturned} onChecked={setOnlyReturned}
+          range={traVeRange} onRange={setTraVeRange} label="Chỉ hiện phần bị trả về" />
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
         <Button variant="secondary" icon="file-spreadsheet" loading={exporting} onClick={doExport}>Excel ({viewRows.length})</Button>
+        <NghenButton rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} onClick={() => setNghenOpen(true)} />
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
-        <Badge tone="warning">{activeCount ? `${viewRows.length}/` : ''}{meta.total} chưa READY</Badge>
+        {/* Đang lọc ngày trả về → nói rõ đang thấy bao nhiêu trên tổng số phần bị trả về. */}
+        {onlyReturned
+          ? <Badge tone="danger">{viewRows.length}/{tongTraVe} bị trả về</Badge>
+          : <Badge tone="warning">{activeCount ? `${viewRows.length}/` : ''}{meta.total} chưa READY</Badge>}
       </Toolbar>
 
       <FieldFilters fields={FILTER_FIELDS} values={filters} onField={(k, v) => setFilters((f) => ({ ...f, [k]: v }))} onClear={() => setFilters({})} open={showFilters} />
@@ -380,6 +422,8 @@ export default function ReadyPage() {
         title="Phần in đã hoàn tất kỹ thuật (3 mục)" maHeader="Phần in"
         fetcher={(date) => readyDone(date, 'tech')} />
 
+      <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
+        tenMan="Chuẩn bị kỹ thuật — READY" rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} tenFile="nghen-ready" />
       <Toast toast={toast} />
     </div>
   );

@@ -89,6 +89,49 @@ async function networkFirst(request) {
   }
 }
 
+/* ─── WEB PUSH (mig 085) — nhận thông báo CẢ KHI ĐÃ ĐÓNG APP ────────────────────
+ * ⚠⚠ THUẦN BỔ SUNG: 2 handler dưới đây KHÔNG đụng `fetch`, KHÔNG đụng `caches`, KHÔNG đổi
+ * `CACHE`. Sự cố trắng trang iPhone (v1) là do `respondWith` reject — vùng đó giữ nguyên 100%.
+ * ⚠ Backend chỉ gửi push khi cờ hệ thống `PUSH_NEN` BẬT (Hệ thống > Cài đặt thông báo). SW không
+ * tự quyết định gì — không có push tới thì 2 handler này đơn giản là không chạy.
+ */
+self.addEventListener('push', (event) => {
+  // ⚠ Payload hỏng / push rỗng (một số dịch vụ gửi "ping" không kèm data) → vẫn phải hiện MỘT thông
+  //   báo: Chrome đã bắt buộc `userVisibleOnly`, im lặng nhiều lần sẽ bị thu hồi quyền push.
+  let d = {};
+  try { d = event.data ? event.data.json() : {}; } catch (e) { d = {}; }
+  const tieuDe = d.tieu_de || 'THLA MES';
+  const opts = {
+    body: d.than || 'Bạn có thông báo mới',
+    icon: '/assets/logo.png',
+    badge: '/assets/logo.png',
+    tag: d.the || undefined,
+    renotify: !!d.the,
+    data: { duong_dan: d.duong_dan || '/thong-bao' },
+  };
+  event.waitUntil(self.registration.showNotification(tieuDe, opts));
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const dich = (event.notification.data && event.notification.data.duong_dan) || '/thong-bao';
+  event.waitUntil((async () => {
+    try {
+      // ⚠ ƯU TIÊN TAB ĐANG MỞ: mở thêm cửa sổ mới mỗi lần bấm thì người dùng có cả chục tab MES.
+      const ds = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      const goc = self.location.origin;
+      for (const c of ds) {
+        if (c.url.startsWith(goc) && 'focus' in c) {
+          try { await c.navigate(goc + dich); } catch (e) { /* một số trình duyệt chặn navigate */ }
+          return c.focus();
+        }
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(dich);
+    } catch (e) { /* không được phép mở cửa sổ — bỏ qua, thông báo đã đóng */ }
+    return undefined;
+  })());
+});
+
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;

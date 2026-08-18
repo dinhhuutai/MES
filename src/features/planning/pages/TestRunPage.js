@@ -1,4 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
+import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
 import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
@@ -25,7 +27,7 @@ import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import TraVeBadge from '../../../components/common/TraVeBadge';
 import DateRangePicker from '../../../components/common/DateRangePicker';
 import { fmtDate, trongKhoangNgay } from '../../../utils/format';
-import { LOAI_TABS, hopChipChuyen as hopChip, nhanChip, demChip } from '../../../utils/khuChuyen';
+import { LOAI_TABS, hopChipChuyen as hopChip, nhanChip, demChip, locSiSoTheoChip } from '../../../utils/khuChuyen';
 import ChipTabs from '../../../components/common/ChipTabs';
 import exportCheckpointExcel, { COT_LENH, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
 
@@ -73,6 +75,7 @@ export default function TestRunPage() {
   const canQA = can('TESTRUN_QA');
 
   const [rows, setRows] = useState([]);
+  const [nghenOpen, setNghenOpen] = useState(false); // modal "Danh sách nghẽn"
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [sel, setSel] = useState(null);
@@ -86,6 +89,9 @@ export default function TestRunPage() {
   const [scanOpen, setScanOpen] = useState(false);
   const [onlyPending, setOnlyPending] = useState(true); // mặc định chỉ hiện lệnh CHƯA QA xong (khớp Test Run ở dashboard)
   const [loai, setLoai] = useState(''); // chip loại chuyền / khu Bàn ('' = tất cả)
+
+  // Dải "Theo dõi" (sĩ số) bám ô tìm + panel lọc + dải chip loại chuyền/khu của màn này.
+  useSiSoLoc({ timKiem: search, ...filters, ...locSiSoTheoChip(loai) });
   // Lọc theo NGÀY KẾ HOẠCH SẢN XUẤT (`lenh_san_xuat.ngay_ke_hoach`) — chọn được NHIỀU NGÀY bằng
   // cùng 1 ô như trang Hồ sơ kỹ thuật. Mặc định RỖNG = không lọc: đây là màn thao tác hằng ngày,
   // mặc định lọc "hôm nay" sẽ giấu mất lệnh của các ngày khác mà QA không biết vì sao.
@@ -264,6 +270,7 @@ export default function TestRunPage() {
         <Button variant="secondary" icon="download" onClick={doExcel} disabled={!filtered.length}>
           Excel ({filtered.length})
         </Button>
+        <NghenButton rows={rows} trangThai={(r) => statusLenh(r.id)} onClick={() => setNghenOpen(true)} />
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="info">{filtered.length} lệnh</Badge>
@@ -325,6 +332,8 @@ export default function TestRunPage() {
         title="Lệnh đã QA xác nhận" maHeader="Lệnh" fetcher={testQaDone} showChuyen
         extraColumns={testRunColumns} extraExcelColumns={testRunExcelColumns} />
 
+      <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
+        tenMan="Test Run - QA" rows={rows} trangThai={(r) => statusLenh(r.id)} tenFile="nghen-test-run" />
       <Toast toast={toast} />
     </div>
   );

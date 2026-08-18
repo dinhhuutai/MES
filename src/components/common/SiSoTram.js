@@ -12,6 +12,7 @@ import useToast from '../../hooks/useToast';
 import useSocketReload from '../../hooks/useSocketReload';
 import { fmtNum, fmtDate, ngayLocalISO } from '../../utils/format';
 import { laySiSo, laySiSoChiTiet } from '../../services/siSoService';
+import { useSiSoLocHienTai } from '../../hooks/useSiSoLoc';
 import PhuongAnInBadge from './PhuongAnInBadge';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -45,6 +46,16 @@ import PhuongAnInBadge from './PhuongAnInBadge';
 const SU_KIEN = ['ready:confirmed', 'workflow:updated', 'production:updated',
   'quality:updated', 'delivery:updated', 'drying:updated'];
 const DELAY_SOCKET = 800;
+
+// Bộ lọc của TRANG gửi lên với tiền tố `t_` để KHÔNG đụng bộ lọc riêng trong modal — backend AND
+// 2 tầng với nhau (`dungLocKep`). Trộn chung 1 tên khóa thì tầng này đè mất tầng kia.
+const thamSoTrang = (goiLoc) => {
+  let loc = {};
+  try { loc = JSON.parse(goiLoc || '{}') || {}; } catch (e) { loc = {}; }
+  return Object.entries(loc).reduce((a, [k, v]) => (
+    v === undefined || v === null || v === '' ? a : { ...a, [`t_${k}`]: v }
+  ), {});
+};
 
 const O_LIST = [
   { ma: 'ton_dau', ten: 'Tồn đầu kỳ', ngan: 'Đầu', mau: 'text-ink-soft' },
@@ -113,16 +124,24 @@ export default function SiSoTram({ maTrang, tuDong = true }) {
 
   // `ngam = true` (socket bắn) → KHÔNG bật spinner và KHÔNG xóa số đang hiện khi lỗi: dải này nằm
   // ngay hàng breadcrumb, nháy mỗi lần đồng nghiệp xác nhận là chối mắt.
+  // Bộ lọc ĐANG BẬT TRÊN TRANG (ô tìm + panel lọc + dải chip) — trang công bố qua `useSiSoLoc`.
+  // `null` = trang chưa nối ⇒ đếm TOÀN TRẠM y như trước.
+  const locTrang = useSiSoLocHienTai();
+  // ⚠ Chuỗi hóa để đưa vào deps: object mới mỗi render sẽ làm `tai` đổi mỗi render ⇒ effect bắn
+  //   request không ngừng (bẫy deps §9). Chuỗi này cũng là thứ so sánh "bộ lọc có đổi không".
+  const goiLoc = JSON.stringify(locTrang || {});
+  const coLocTrang = !!locTrang && Object.keys(locTrang).length > 0;
+
   const tai = useCallback(async (ngam = false) => {
     if (!ngam) setDangTai(true);
     try {
-      const r = await laySiSo(maTrang, { tu: ky.tu, den: ky.den });
+      const r = await laySiSo(maTrang, { tu: ky.tu, den: ky.den, ...thamSoTrang(goiLoc) });
       setSo(r.data);
     } catch (e) {
       // Không chặn màn thao tác — sĩ số chỉ là số liệu phụ.
       if (!ngam) setSo(null);
     } finally { if (!ngam) setDangTai(false); }
-  }, [maTrang, ky.tu, ky.den]);
+  }, [maTrang, ky.tu, ky.den, goiLoc]);
 
   useEffect(() => { if (tuDong) tai(); }, [tai, tuDong]);
 
@@ -142,6 +161,16 @@ export default function SiSoTram({ maTrang, tuDong = true }) {
           Theo dõi {so?.don_vi_nhan || ''}
         </span>
         <span className="hidden whitespace-nowrap text-[11px] font-medium text-ink sm:inline">{nhanKy}</span>
+        {/* ⚠ PHẢI có dấu hiệu khi 4 số đang bị bộ lọc trang thu hẹp: không có thì người dùng thấy
+            số tụt xuống mà tưởng hệ thống đếm sai / mất hàng. */}
+        {coLocTrang && (
+          <span
+            className="whitespace-nowrap rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary"
+            title="4 số đang tính theo đúng bộ lọc / ô tìm / chip của trang. Xóa lọc để xem toàn trạm."
+          >
+            đang lọc
+          </span>
+        )}
         {so && !so.can && (
           <span title="4 số không cân — có dữ liệu mốc thời gian bất thường">
             <Icon name="alert-triangle" size={13} className="text-amber-500" />
@@ -175,6 +204,7 @@ export default function SiSoTram({ maTrang, tuDong = true }) {
           donViNhan={so?.don_vi_nhan}
           onClose={() => setODangMo(null)}
           onShow={show}
+          goiLoc={goiLoc}
         />
       )}
       <Toast toast={toast} />
@@ -183,7 +213,7 @@ export default function SiSoTram({ maTrang, tuDong = true }) {
 }
 
 // ─── Modal danh sách chi tiết ────────────────────────────────────────────────
-function SiSoModal({ maTrang, o, ky, onDoiKy, tenMan, donViNhan, onClose, onShow }) {
+function SiSoModal({ maTrang, o, ky, onDoiKy, tenMan, donViNhan, onClose, onShow, goiLoc }) {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -194,11 +224,13 @@ function SiSoModal({ maTrang, o, ky, onDoiKy, tenMan, donViNhan, onClose, onShow
   const [xuat, setXuat] = useState(false);
   const LIMIT = 20;
 
+  // ⚠ Modal PHẢI mang theo bộ lọc của TRANG (`t_*`), nếu không: bấm ô "Tồn cuối" đang hiện 12 mà
+  //   danh sách mở ra 300 dòng — số trên ô và số dòng trong modal đá nhau ngay trước mắt người dùng.
   const params = useMemo(() => {
-    const p = { tu: ky.tu, den: ky.den };
+    const p = { tu: ky.tu, den: ky.den, ...thamSoTrang(goiLoc) };
     Object.entries(f).forEach(([k, v]) => { if (v) p[k] = v; });
     return p;
-  }, [ky.tu, ky.den, f]);
+  }, [ky.tu, ky.den, f, goiLoc]);
 
   const tai = useCallback(async (ngam = false) => {
     if (!ngam) setLoading(true);

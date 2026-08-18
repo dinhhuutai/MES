@@ -1,9 +1,13 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
+import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import Toolbar from '../../../components/common/Toolbar';
 import Pagination from '../../../components/common/Pagination';
 import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
 import Badge from '../../../components/common/Badge';
 import TraVeBadge from '../../../components/common/TraVeBadge';
+import TraVeFilter from '../../../components/common/TraVeFilter';
+import { locTraVe } from '../../../utils/traVeNgay';
 import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
 import SidePanel from '../../../components/common/SidePanel';
@@ -103,6 +107,7 @@ function DataCells({ r }) {
 export default function Release1Page() {
   const { toast, show } = useToast();
   const [rows, setRows] = useState([]);
+  const [nghenOpen, setNghenOpen] = useState(false); // modal "Danh sách nghẽn"
   const [meta, setMeta] = useState({ page: 1, totalPages: 1, total: 0 });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -115,9 +120,27 @@ export default function Release1Page() {
   const [doneOpen, setDoneOpen] = useState(false);
   const [releaseListOpen, setReleaseListOpen] = useState(false); // modal "Danh sách release" (dùng chung với Tạo đợt SX)
   const [onlyReturned, setOnlyReturned] = useState(false); // lọc đợt vải bị QC trả về
+  // Khoảng NGÀY TRẢ VỀ (chỉ dùng khi `onlyReturned`) — rỗng = mọi ngày. Luật ở `utils/traVeNgay`.
+  const [traVeRange, setTraVeRange] = useState({ from: '', to: '' });
   const [showReady, setShowReady] = useState(false); // lọc: hiện đợt "Đã Ready" (qc_done) — mặc định KHÔNG tick (hiện tất cả)
   const [showWait, setShowWait] = useState(false);   // lọc: hiện đợt "Chờ Ready" (chưa QC) — mặc định KHÔNG tick (hiện tất cả)
   const [filters, setFilters] = useState({});
+
+  // Dải "Theo dõi" (sĩ số) bám ô tìm + panel lọc + chip PHƯƠNG ÁN IN của màn này.
+  // ⚠ `phuongAnIn` phải gửi cả giá trị `'0'` (Chưa xác định) — đó là chip THẬT, không phải "rỗng".
+  // ⚠ Gửi cả 3 ô tích của màn: "Chỉ hiện phần bị trả về" (+ khoảng ngày trả về) và cặp
+  //   "Đã Ready / Chờ Ready". Tick CẢ HAI ô tình trạng = không lọc (đúng hành vi trên bảng).
+  useSiSoLoc({
+    timKiem: search,
+    ...filters,
+    phuongAnIn: loaiPain,
+    biTraVe: onlyReturned ? '1' : '',
+    daReady: showReady ? '1' : '',
+    choReady: showWait ? '1' : '',
+    ...(onlyReturned && (traVeRange.from || traVeRange.to)
+      ? { loaiNgay: 'NGAY_TRA_VE', ngayTu: traVeRange.from, ngayDen: traVeRange.to } : {}),
+  });
+
   const [showFilters, setShowFilters] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const [cpage, setCpage] = useState(1);             // phân trang CLIENT (chọn-tất-cả vẫn spanning mọi trang)
@@ -161,19 +184,19 @@ export default function Release1Page() {
   // sách đợt vải. Nhờ vậy hết luôn cả họ lỗi cũ "sửa bộ lọc/tìm kiếm/cột một bên thì bên kia lệch"
   // (fix 2026-08-08 từng phải vá riêng cho set).
   const viewRows = useMemo(() => {
-    let base = onlyReturned ? rows.filter((r) => r.tra_ve_ly_do) : rows;
+    let base = onlyReturned ? locTraVe(rows, traVeRange) : rows;
     if (loaiPain) base = base.filter((r) => hopChipPain(r, loaiPain));
     return filterRows(base, filters, FILTER_FIELDS).filter((r) => readyPass(!!r.qc_done));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onlyReturned, rows, filters, showReady, showWait, loaiPain]);
+  }, [onlyReturned, traVeRange, rows, filters, showReady, showWait, loaiPain]);
 
   // ⚠ Đếm chip tính trên tập TRƯỚC khi lọc chip (nhưng SAU các bộ lọc khác) — bấm 1 chip mà các chip
   //   còn lại về 0 thì không còn biết chỗ khác có bao nhiêu hàng.
   const countPain = useMemo(() => {
-    const base = onlyReturned ? rows.filter((r) => r.tra_ve_ly_do) : rows;
+    const base = onlyReturned ? locTraVe(rows, traVeRange) : rows;
     return demChipPain(filterRows(base, filters, FILTER_FIELDS).filter((r) => readyPass(!!r.qc_done)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onlyReturned, rows, filters, showReady, showWait]);
+  }, [onlyReturned, traVeRange, rows, filters, showReady, showWait]);
 
   // GOM TẠI CHỖ các đợt vải cùng gom set: giữ NGUYÊN vị trí của thành viên đầu tiên rồi kéo các
   // thành viên còn lại xuống ngay dưới ⇒ nhìn thành 1 khối liền mạch mà KHÔNG đẩy set lên đầu bảng.
@@ -319,10 +342,8 @@ export default function Release1Page() {
         search={search} onSearch={(v) => { setSearch(v); setPage(1); }}
         searchPlaceholder="Tìm code phần, mã hàng, màu, kích...">
         <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét QR code phần</Button>
-        <label className="flex items-center gap-1.5 text-xs text-ink-soft">
-          <input type="checkbox" checked={onlyReturned} onChange={(e) => setOnlyReturned(e.target.checked)} />
-          Chỉ hiện phần bị trả về
-        </label>
+        <TraVeFilter checked={onlyReturned} onChecked={setOnlyReturned}
+          range={traVeRange} onRange={setTraVeRange} label="Chỉ hiện phần bị trả về" />
         <span className="flex items-center gap-2 rounded-control border border-line px-2 py-1 text-xs text-ink-soft">
           <span className="font-medium">Tình trạng:</span>
           <label className="flex items-center gap-1"><input type="checkbox" checked={showReady} onChange={(e) => setShowReady(e.target.checked)} />Đã Ready</label>
@@ -334,6 +355,7 @@ export default function Release1Page() {
         <Button variant="secondary" icon="list" onClick={() => setReleaseListOpen(true)}>Danh sách release</Button>
         <Button variant="secondary" icon="download" onClick={doExcel}
           disabled={!viewRowsGom.length}>Excel</Button>
+        <NghenButton rows={rows} trangThai={(r) => statusDot(r.dot_vai_id)} onClick={() => setNghenOpen(true)} />
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="info">{activeCount || loaiPain ? `${viewRowsGom.length}/` : ''}{meta.total} đợt vải</Badge>
@@ -596,6 +618,8 @@ export default function Release1Page() {
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
         title="Lệnh đã Release 1" maHeader="Lệnh" fetcher={release1Done} />
       <ReleaseListModal open={releaseListOpen} onClose={() => setReleaseListOpen(false)} />
+      <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
+        tenMan="Release 1" rows={rows} trangThai={(r) => statusDot(r.dot_vai_id)} tenFile="nghen-release-1" />
       <Toast toast={toast} />
     </div>
   );

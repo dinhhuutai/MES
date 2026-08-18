@@ -6,6 +6,7 @@ import Icon from '../../../components/common/Icon';
 import Toast from '../../../components/common/Toast';
 import { Field, Input, Select } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
+import ThongBaoSettings from '../components/ThongBaoSettings';
 import { avatarFor } from '../../../utils/brand';
 import { apiChangePassword } from '../../../services/authService';
 import {
@@ -232,6 +233,9 @@ export default function ProfilePage() {
                 disabled={!pwd.cu || !pwd.moi || !pwd.xacNhan}>Đổi mật khẩu</Button>
             </div>
           </div>
+
+          {/* Thông báo phần in bị trả về (mig 085) — tự ẩn nếu không thuộc diện nhận. */}
+          <ThongBaoSettings onThongBao={show} />
 
           {/* Giao diện sáng/tối (lưu theo tài khoản trên thiết bị này) */}
           <div className="card p-6">

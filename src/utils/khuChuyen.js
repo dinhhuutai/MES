@@ -44,6 +44,21 @@ export const hopChipChuyen = (row, v) => {
   return row.ma_loai_chuyen === v;
 };
 
+// Chip đang chọn → bộ lọc gửi cho dải "Theo dõi" (sĩ số). Cùng luật với `hopChipChuyen` ở trên,
+// chỉ khác là diễn đạt cho SQL thay vì cho 1 hàng đã tải sẵn:
+//   chip khu  → `maChuyen`   = danh sách mã chuyền của khu (backend khớp NGUYÊN TOKEN)
+//   chip loại → `loaiChuyen` = mã loại (`MAY` · `BAN` · `ROBOT` …)
+// ⚠ TUYỆT ĐỐI KHÔNG gửi chip khu dưới dạng `loaiChuyen='KHU:BAN_A'` — backend không hiểu tiền tố
+//   đó, sẽ khớp rỗng và dải số ra 0 trong khi bảng vẫn đầy hàng.
+export const locSiSoTheoChip = (v) => {
+  if (!v) return {};
+  if (v.startsWith('KHU:')) {
+    const khu = KHU_BAN.find((k) => k.key === v.slice(4));
+    return khu ? { maChuyen: khu.ma.join(',') } : {};
+  }
+  return { loaiChuyen: v };
+};
+
 // Nhãn chip (cho phụ đề Excel / câu "không có hàng nào thuộc loại …").
 export const nhanChip = (v) => (LOAI_TABS.find((t) => t.v === v) || {}).label || '';
 

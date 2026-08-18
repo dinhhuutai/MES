@@ -1,4 +1,6 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
+import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import Toolbar from '../../../components/common/Toolbar';
 import Modal from '../../../components/common/Modal';
 import SearchableSelect from '../../../components/common/SearchableSelect';
@@ -47,9 +49,13 @@ export default function SuaPage() {
   const canSua = can('SUA');
 
   const [rows, setRows] = useState([]);
+  const [nghenOpen, setNghenOpen] = useState(false); // modal "Danh sách nghẽn"
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState({});
+
+  // Dải "Theo dõi" (sĩ số) bám ĐÚNG ô tìm + panel lọc của màn này — xem hooks/useSiSoLoc.js.
+  useSiSoLoc({ timKiem: search, ...filters });
   const [range, setRange] = useState(() => ({ from: '', to: '' }));
   const [showFilters, setShowFilters] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -252,6 +258,7 @@ export default function SuaPage() {
         </div>
         <Button variant={showFilters || activeFilters.length ? 'secondary' : 'ghost'} icon="filter"
           onClick={() => setShowFilters((v) => !v)}>Bộ lọc{activeFilters.length ? ` (${activeFilters.length})` : ''}</Button>
+        <NghenButton rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} onClick={() => setNghenOpen(true)} />
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="warning">{rows.length} tem chờ sửa</Badge>
@@ -430,6 +437,8 @@ export default function SuaPage() {
 
       <QrScanner open={scanOpen} onClose={() => setScanOpen(false)} onResult={onScan} />
 
+      <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
+        tenMan="Sửa" rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} tenFile="nghen-sua" />
       <Toast toast={toast} />
     </div>
   );

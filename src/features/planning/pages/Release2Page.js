@@ -1,4 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
+import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
 import Badge from '../../../components/common/Badge';
@@ -28,7 +30,7 @@ import exportCheckpointExcel, { COT_LENH, moTaBoLoc } from '../../../utils/expor
 // "Theo dõi chuyền" · "Test Run - QA" · "Xác nhận chạy" ⇒ 4 màn luôn giống hệt nhau.
 // ⚠ KHÔNG cần sửa backend: `lenhListSql` (dùng chung Test Run/Release 2/Replan) đã trả sẵn
 //   `ma_chuyen` + `ma_loai_chuyen` — 2 cột mà chip khu và chip loại cần.
-import { LOAI_TABS, hopChipChuyen as hopChip, nhanChip, demChip } from '../../../utils/khuChuyen';
+import { LOAI_TABS, hopChipChuyen as hopChip, nhanChip, demChip, locSiSoTheoChip } from '../../../utils/khuChuyen';
 import ChipTabs from '../../../components/common/ChipTabs';
 
 const FILTER_FIELDS = [
@@ -55,6 +57,7 @@ export default function Release2Page() {
   const canApprove = can('RELEASE2');
 
   const [rows, setRows] = useState([]);
+  const [nghenOpen, setNghenOpen] = useState(false); // modal "Danh sách nghẽn"
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [confirm, setConfirm] = useState(null); // row (đơn) hoặc { batch: true }
@@ -67,6 +70,9 @@ export default function Release2Page() {
   const [scanOpen, setScanOpen] = useState(false);
   const [detail, setDetail] = useState(null); // bấm vào hàng → SidePanel chi tiết lệnh
   const [loai, setLoai] = useState(''); // chip loại chuyền / khu bàn ('' = tất cả)
+
+  // Dải "Theo dõi" (sĩ số) bám ô tìm + panel lọc + dải chip loại chuyền/khu của màn này.
+  useSiSoLoc({ timKiem: search, ...filters, ...locSiSoTheoChip(loai) });
   // Lọc theo NGÀY SX KẾ HOẠCH (`lenh_san_xuat.ngay_ke_hoach`) — cùng khuôn màn Xác nhận chạy.
   // ⚠ Mặc định KHÔNG lọc: đây là màn thao tác hằng ngày, lọc sẵn hôm nay sẽ giấu hàng của ngày khác
   //   mà người dùng không biết vì sao (bài học ghi ở §6 Sản xuất).
@@ -225,6 +231,7 @@ export default function Release2Page() {
         <Button variant="secondary" icon="download" onClick={doExcel} disabled={!filtered.length}>
           Excel ({filtered.length})
         </Button>
+        <NghenButton rows={rows} trangThai={(r) => statusLenh(r.id)} onClick={() => setNghenOpen(true)} />
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="info">{filtered.length} chờ duyệt</Badge>
@@ -317,6 +324,8 @@ export default function Release2Page() {
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
         title="Lệnh đã Release 2" maHeader="Lệnh" fetcher={release2Done} />
 
+      <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
+        tenMan="Release 2" rows={rows} trangThai={(r) => statusLenh(r.id)} tenFile="nghen-release-2" />
       <Toast toast={toast} />
     </div>
   );

@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import Toolbar from '../../../components/common/Toolbar';
 import Pagination from '../../../components/common/Pagination';
 import Badge from '../../../components/common/Badge';
@@ -191,8 +192,12 @@ export default function PhanInListPage() {
   const [rows, setRows] = useState([]);
   const [meta, setMeta] = useState({ page: 1, totalPages: 1, total: 0 });
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [stage, setStage] = useState('READY');
+  // ⚠ Bấm thông báo "đổi phương án in" (mig 086) dẫn tới `/don-hang/phan-in?stage=ALL&boNgay=1&q=…`
+  //   ⇒ đọc SẴN từ URL lúc dựng để lần tải ĐẦU đã đúng, khỏi tải 2 lượt rồi nhảy số.
+  const location = useLocation();
+  const urlParams = () => new URLSearchParams(location.search);
+  const [search, setSearch] = useState(() => urlParams().get('q') || '');
+  const [stage, setStage] = useState(() => urlParams().get('stage') || 'READY');
   const [filters, setFilters] = useState({});
   const [showFilters, setShowFilters] = useState(false);
   const [page, setPage] = useState(1);
@@ -285,6 +290,27 @@ export default function PhanInListPage() {
       </th>
     );
   };
+
+  // ⚠⚠ ĐANG Ở SẴN TRANG NÀY MÀ BẤM THÔNG BÁO thì component KHÔNG mount lại (cùng route, chỉ đổi
+  //   query) ⇒ lazy initializer ở trên KHÔNG chạy nữa và màn đứng im. Phải có effect này.
+  // ⚠ Phụ thuộc CẢ OBJECT `location`, KHÔNG phải `location.search`: bấm LẠI cùng một thông báo cho
+  //   ra URL y hệt ⇒ `search` không đổi, nhưng `useLocation()` vẫn trả object MỚI mỗi lần điều
+  //   hướng. Object này chỉ đổi khi ĐIỀU HƯỚNG ⇒ gõ tay trong ô tìm không bị URL ghi đè.
+  //   (Cùng khuôn với `ReadyPage` — xem §6 Thông báo.)
+  useEffect(() => {
+    const p = new URLSearchParams(location.search);
+    const q = p.get('q');
+    const st = p.get('stage');
+    if (!q && !st) return; // vào trang không kèm tham số → giữ nguyên thứ đang xem
+    if (st) setStage(st);
+    if (q) setSearch(q);
+    setPage(1);
+    // ⚠⚠ `boNgay=1`: chip "Tất cả" vốn TỰ đặt lọc ngày vải về = HÔM NAY. Thông báo có thể trỏ tới
+    //   phần in của ngày khác ⇒ không bỏ lọc ngày thì bảng ra TRỐNG và người dùng tưởng mất hàng.
+    if (p.get('boNgay') === '1') {
+      setFilters(({ ngayVaiTu, ngayVaiDen, ...rest }) => rest);
+    }
+  }, [location]);
 
   const setField = (key, value) => { setFilters((f) => ({ ...f, [key]: value })); setPage(1); };
   const clearFilters = () => { setFilters({}); setPage(1); };

@@ -2,6 +2,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { Menu } from '@headlessui/react';
 import Icon from '../common/Icon';
+import NotificationBell from './NotificationBell';
 import { logout, selectAuth } from '../../store/authSlice';
 import { LOGO_SRC, avatarFor } from '../../utils/brand';
 
@@ -26,6 +27,10 @@ export default function Topbar() {
           </div>
         </div>
       </Link>
+
+      <div className="flex items-center gap-1">
+      {/* Chuông thông báo — tự ẩn nếu người dùng không thuộc diện nhận (mig 085). */}
+      <NotificationBell />
 
       <Menu as="div" className="relative">
         <Menu.Button className="flex items-center gap-3 rounded-control px-2 py-1.5 hover:bg-surface-muted">
@@ -63,6 +68,7 @@ export default function Topbar() {
           </Menu.Item>
         </Menu.Items>
       </Menu>
+      </div>
     </header>
   );
 }

@@ -1,4 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import useSiSoLoc from '../../../hooks/useSiSoLoc';
+import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
 import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
 import Badge from '../../../components/common/Badge';
@@ -38,6 +40,7 @@ export default function GiaoHangPage() {
   const canManage = can('DELIVERY_MANAGE');
 
   const [tab, setTab] = useState('tao');
+  const [nghenOpen, setNghenOpen] = useState(false); // modal "Danh sách nghẽn"
   const [tems, setTems] = useState([]);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -48,6 +51,9 @@ export default function GiaoHangPage() {
   // Mặc định lọc KHOẢNG ngày in tem = hôm nay → hôm nay (giờ máy = giờ VN).
   const [range, setRange] = useState(() => ({ from: '', to: '' }));
   const [filters, setFilters] = useState({});
+
+  // Dải "Theo dõi" (sĩ số) bám ô tìm + panel lọc của màn này.
+  useSiSoLoc({ ...filters });
   const [showFilters, setShowFilters] = useState(false);
 
   const rangeKey = useMemo(() => `${range.from || ''}|${range.to || ''}`, [range]);
@@ -178,7 +184,12 @@ export default function GiaoHangPage() {
 
   return (
     <div>
-      <Toolbar title="Giao hàng" subtitle="Gom tem OQC đạt thành phiếu giao → DONE DELIVERY" />
+      <Toolbar title="Giao hàng" subtitle="Gom tem OQC đạt thành phiếu giao → DONE DELIVERY">
+        {/* ⚠ Màn này dùng `displayRows` (1 tem TÁCH 2 dòng theo nguồn KCS/Sửa), không phải `tems` —
+            phải đúng tập đang hiện trên bảng thì số trên nút mới khớp số hàng đỏ. */}
+        <NghenButton rows={displayRows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status}
+          onClick={() => setNghenOpen(true)} />
+      </Toolbar>
 
       <div className="mb-4 flex gap-1 rounded-control bg-surface-muted p-1">
         {[['tao', `Tạo phiếu (${displayRows.length})`], ['lichsu', `Lịch sử (${history.length})`]].map(([k, label]) => (
@@ -254,6 +265,9 @@ export default function GiaoHangPage() {
         <TemJourneyPanel temId={journey.temId} maTem={journey.maTem}
           fetcher={getTemHanhTrinh} onClose={() => setJourney(null)} />
       )}
+      <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
+        tenMan="Giao hàng" rows={displayRows} tenFile="nghen-giao-hang"
+        trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} />
       <Toast toast={toast} />
     </div>
   );

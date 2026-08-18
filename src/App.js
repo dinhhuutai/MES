@@ -31,6 +31,9 @@ import ThietKeTemPage from './features/system/pages/ThietKeTemPage';
 import QuanTriPhanInPage from './features/system/pages/QuanTriPhanInPage';
 import HienThiPainPage from './features/system/pages/HienThiPainPage';
 import CaiDatApiPage from './features/system/pages/CaiDatApiPage';
+import DuyetPage from './features/duyet/pages/DuyetPage';
+import CaiDatThongBaoPage from './features/system/pages/CaiDatThongBaoPage';
+import NotificationsPage from './features/notifications/pages/NotificationsPage';
 import ToInPage from './features/system/pages/ToInPage';
 import ManualEntryPage from './features/system/pages/ManualEntryPage';
 import VaiVeUpdatePage from './features/system/pages/VaiVeUpdatePage';
@@ -129,6 +132,8 @@ const PAGES = {
   '/he-thong/quan-tri-phan-in': <QuanTriPhanInPage />,
   '/he-thong/hien-thi-pain': <HienThiPainPage />,
   '/he-thong/cai-dat-api': <CaiDatApiPage />,
+  '/duyet': <DuyetPage />,
+  '/he-thong/cai-dat-thong-bao': <CaiDatThongBaoPage />,
   '/he-thong/to-in': <ToInPage />,
 };
 
@@ -161,6 +166,10 @@ export default function App() {
         <Route element={<PortalLayout />}>
           <Route index path="/" element={<HomePortal />} />
           <Route path="/thong-tin-ca-nhan" element={<ProfilePage />} />
+          {/* Trang Thông báo (mig 085) — vào từ nút "Xem thêm" của chuông, KHÔNG nằm trong menu
+              module nào. Không khai `perm`: người ngoài diện nhận vẫn mở được nhưng thấy rỗng,
+              đúng cách cái chuông tự ẩn. */}
+          <Route path="/thong-bao" element={<NotificationsPage />} />
         </Route>
 
         <Route element={<ModuleLayout />}>

@@ -1,9 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import Icon from './Icon';
 import Spinner from './Spinner';
-import ConfirmDialog from './ConfirmDialog';
+import Modal from './Modal';
+import Button from './Button';
+import { Field, Textarea } from './controls';
 import PhuongAnInBadge, { PHUONG_AN_IN } from './PhuongAnInBadge';
-import { changePhuongAnIn, getHskt } from '../../services/hsktService';
+import { getHskt } from '../../services/hsktService';
+// ⚠ Đổi phương án in nay đi qua HÀNG ĐỢI DUYỆT (mig 086), KHÔNG gọi `changePhuongAnIn` trực tiếp
+//   nữa — endpoint đó vẫn còn nhưng chỉ `duyet.service` được gọi (nó là bước ÁP DỤNG sau khi duyệt).
+import { guiYeuCauDoiPain } from '../../services/duyetService';
 
 // Ô ĐỔI PHƯƠNG ÁN IN ngay tại chỗ (màn READY + bảng trong modal Quét/tích).
 //
@@ -54,32 +59,48 @@ export default function PhuongAnInCell({ value, hsktId, barcode, disabled = fals
   const [chon, setChon] = useState(null);    // giá trị XEM TRƯỚC (null = không có)
   const [saving, setSaving] = useState(false);
   const [confirm, setConfirm] = useState(null); // { pa, maCu, maMoi, dsPhanIn[] }
+  const [lyDo, setLyDo] = useState('');         // LÝ DO BẮT BUỘC (mig 086)
 
   // Cha tải lại (socket `ready:confirmed` / refresh) → nhận giá trị mới, nhưng KHÔNG đè khi người dùng
   // đang có xem trước dở dang.
   useEffect(() => { if (chon == null) setThuc(value); }, [value, chon]);
 
-  const luu = useCallback(async (pa) => {
+  // ⚠⚠ TỪ 18/08/2026 KHÔNG GỌI THẲNG `changePhuongAnIn` NỮA — mọi lần đổi phương án in phải đi qua
+  //   `POST /duyet/doi-phuong-an-in` (mig 086) vì nay BẮT BUỘC có LÝ DO và phải được NGƯỜI DUYỆT
+  //   thông qua. Backend tự rẽ nhánh: người có quyền `PA_IN_APPROVE` → áp dụng NGAY
+  //   (`da_ap_dung=true`); người khác → tạo yêu cầu chờ duyệt và **giá trị GIỮ NGUYÊN**.
+  // ⚠ Vì vậy chỉ `setThuc(pa)` khi thật sự đã áp dụng — đặt trước là ô hiện giá trị mới trong khi
+  //   dữ liệu chưa đổi, người dùng tưởng xong rồi.
+  const luu = useCallback(async (pa, lyDo) => {
     setSaving(true);
     try {
-      const res = await changePhuongAnIn(hsktId, pa);
-      const { barcode_cu: maCu, barcode_moi: maMoi } = res.data || {};
-      setThuc(pa);          // tự cập nhật: dòng trong modal là ẢNH CHỤP lúc quét, cha không làm mới nó
+      const res = await guiYeuCauDoiPain({ hsktId, phuongAnIn: pa, lyDo });
+      const d = res.data || {};
+      if (d.da_ap_dung) {
+        const h = d.hskt || {};
+        const maCu = h.barcode_cu;
+        const maMoi = h.barcode_moi;
+        setThuc(pa); // dòng trong modal quét là ẢNH CHỤP lúc quét — cha không làm mới nó
+        show?.(`Đã đổi phương án in → ${PHUONG_AN_IN[pa]}`
+          + (maMoi && maMoi !== maCu ? ` · mã vạch ${maCu} → ${maMoi}` : ''));
+      } else {
+        show?.(`Đã gửi yêu cầu đổi sang ${PHUONG_AN_IN[pa]} — chờ người duyệt thông qua`);
+      }
       setChon(null);
       setConfirm(null);
-      show?.(`Đã đổi phương án in → ${PHUONG_AN_IN[pa]}`
-        + (maMoi && maMoi !== maCu ? ` · mã vạch ${maCu} → ${maMoi}` : ''));
       onChanged?.();
     } catch (e) {
-      // Backend ném câu tiếng Việt đầy đủ (vd BARCODE_TRUNG) → hiện nguyên văn.
+      // Backend ném câu tiếng Việt đầy đủ (BARCODE_TRUNG · DANG_CHO_DUYET · NO_LY_DO) → hiện nguyên văn.
       show?.(e.message || 'Đổi phương án in thất bại', 'error');
     } finally {
       setSaving(false);
     }
   }, [hsktId, show, onChanged]);
 
-  // Bấm ✓: HSKT gắn NHIỀU phần in (gom set) thì hỏi lại + liệt kê, vì đổi 1 dòng là đổi cho cả nhóm
-  // mà người bấm không nhìn thấy trên màn hình. HSKT 1 phần in → đổi luôn (⟳ rồi ✓ đã đủ xác nhận).
+  // Bấm ✓ → MỞ HỘP NHẬP LÝ DO (không đổi ngay nữa).
+  // ⚠⚠ LÝ DO BẮT BUỘC nên KHÔNG còn đường "1 phần in thì đổi luôn" như trước — mọi ca đều phải qua
+  //   hộp này. Vẫn tra HSKT trước để liệt kê nhóm phần in dùng chung (đổi 1 dòng là đổi cả nhóm mà
+  //   người bấm không nhìn thấy trên màn hình).
   const bamCheck = async () => {
     if (chon == null || !hsktId) return;
     setSaving(true);
@@ -88,16 +109,11 @@ export default function PhuongAnInCell({ value, hsktId, barcode, disabled = fals
       const res = await getHskt(hsktId);
       dsPhanIn = (res.data?.phan_in || []).map((p) => p.ma_phan).filter(Boolean);
     } catch (e) {
-      // Không tra được danh sách thì vẫn cho đổi (chỉ mất phần cảnh báo) — đây là thao tác của người dùng.
+      // Không tra được danh sách thì vẫn cho gửi (chỉ mất phần cảnh báo nhóm).
     }
-    if (dsPhanIn.length > 1) {
-      setSaving(false); // dừng quay: chờ người dùng đọc hộp xác nhận
-      setConfirm({ pa: chon, maCu: barcode || null, maMoi: maVachTheoPa(barcode, chon), dsPhanIn });
-      return;
-    }
-    // ⚠ KHÔNG tắt `saving` giữa 2 lời gọi — `luu` tự tắt ở `finally`. Tắt ở đây thì vòng quay
-    //   nháy một nhịp giữa lúc tra HSKT xong và lúc bắt đầu lưu.
-    await luu(chon);
+    setSaving(false); // dừng quay: chờ người dùng gõ lý do
+    setLyDo('');
+    setConfirm({ pa: chon, maCu: barcode || null, maMoi: maVachTheoPa(barcode, chon), dsPhanIn });
   };
 
   const hienThi = chon == null ? thuc : chon;
@@ -142,28 +158,51 @@ export default function PhuongAnInCell({ value, hsktId, barcode, disabled = fals
         )}
       </div>
 
-      {/* ⚠ ConfirmDialog bọc `message` trong <p> ⇒ chỉ dùng <span className="block">, không dùng <div>. */}
-      <ConfirmDialog
-        open={!!confirm}
-        onClose={() => setConfirm(null)}
-        onConfirm={() => luu(confirm.pa)}
-        loading={saving}
-        title="Đổi phương án in cho cả nhóm"
-        confirmText="Đổi phương án in"
-        message={!confirm ? '' : (
-          <span className="block space-y-2" onClick={(e) => e.stopPropagation()}>
-            <span className="block">
-              Hồ sơ kỹ thuật này dùng chung cho <b className="text-ink">{confirm.dsPhanIn.length} phần in</b> —
-              đổi sang <b className="text-ink">{PHUONG_AN_IN[confirm.pa]}</b> là đổi cho <b className="text-ink">tất cả</b>:
-            </span>
-            <span className="block text-ink">{confirm.dsPhanIn.join(' · ')}</span>
-            {confirm.maMoi
-              ? <span className="block">Số cuối mã vạch HSKT đổi theo: <b className="text-ink">{confirm.maCu}</b> → <b className="text-ink">{confirm.maMoi}</b>.</span>
-              : <span className="block">Mã vạch HSKT giữ nguyên (không đúng định dạng 11 số + số cuối 0..3).</span>}
-            <span className="block">Sau khi sửa tay, đồng bộ ERP sẽ không ghi đè phương án in này nữa.</span>
-          </span>
+      {/* HỘP NHẬP LÝ DO — bắt buộc từ 18/08/2026 (mig 086). Không dùng `ConfirmDialog` nữa vì cần ô nhập. */}
+      <Modal open={!!confirm} onClose={() => setConfirm(null)} size="md" title="Đổi phương án in">
+        {confirm && (
+          <div className="space-y-3" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-3 rounded-card border border-line bg-surface-muted p-3 text-sm">
+              <span className="text-ink-soft">{PHUONG_AN_IN[thuc] || 'Chưa xác định'}</span>
+              <Icon name="arrow-right" size={14} className="text-ink-soft" />
+              <b className="text-primary">{PHUONG_AN_IN[confirm.pa]}</b>
+            </div>
+
+            {confirm.dsPhanIn.length > 1 && (
+              <div className="rounded-card border border-warning/40 bg-warning/10 p-3 text-sm">
+                Hồ sơ kỹ thuật này dùng chung cho <b>{confirm.dsPhanIn.length} phần in</b> — đổi là
+                đổi cho <b>tất cả</b>:
+                <div className="mt-1 text-ink">{confirm.dsPhanIn.join(' · ')}</div>
+              </div>
+            )}
+
+            <div className="text-xs text-ink-soft">
+              {confirm.maMoi
+                ? <>Số cuối mã vạch HSKT đổi theo: <b className="text-ink">{confirm.maCu}</b> → <b className="text-ink">{confirm.maMoi}</b> — phiếu giấy in mã cũ cần đối chiếu lại.</>
+                : <>Mã vạch HSKT giữ nguyên (không đúng định dạng 11 số + số cuối 0..3).</>}
+              <div className="mt-1">Sau khi đổi, đồng bộ ERP sẽ không ghi đè phương án in này nữa.</div>
+            </div>
+
+            <Field label="Lý do đổi phương án in" required>
+              <Textarea value={lyDo} onChange={(e) => setLyDo(e.target.value)} rows={3}
+                placeholder="Vì sao phải đổi (vd: xếp lên chuyền máy để kịp hạn giao)..." />
+            </Field>
+
+            {/* ⚠ Nói TRƯỚC là có thể phải chờ duyệt — người dùng bấm xong thấy giá trị không đổi sẽ
+                tưởng hỏng. Không biết chắc quyền của họ ở FE nên diễn đạt theo cả 2 khả năng. */}
+            <div className="rounded-card border border-line bg-surface-muted p-2.5 text-xs text-ink-soft">
+              Nếu bạn <b className="text-ink">không có quyền duyệt</b>, đây sẽ là <b className="text-ink">yêu cầu chờ duyệt</b> —
+              phương án in giữ nguyên cho tới khi được thông qua (xem ở <b className="text-ink">Hệ thống › Duyệt yêu cầu</b>).
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setConfirm(null)}>Đóng</Button>
+              <Button onClick={() => luu(confirm.pa, lyDo.trim())} loading={saving}
+                disabled={!lyDo.trim()}>Gửi</Button>
+            </div>
+          </div>
         )}
-      />
+      </Modal>
     </>
   );
 }
