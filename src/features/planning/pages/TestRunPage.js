@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
 import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
-import { codesCuaLenh } from '../utils/phanInLenh';
+import { codesCuaLenh, laGomSet } from '../utils/phanInLenh';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import Toast from '../../../components/common/Toast';
@@ -190,23 +190,30 @@ export default function TestRunPage() {
     // thứ tự [cột chọn] → [STT] → [các cột còn lại theo đúng thứ tự khai ở đây].
     // Nguồn `lenhListSql` vốn đã trả `ma_chuyen`/`ten_chuyen` (cùng chỗ nuôi dải chip loại chuyền)
     // ⇒ KHÔNG phải sửa backend. Excel cũng đã có sẵn cột "Chuyền" trong `COT_LENH`.
-    { key: 'ten_chuyen', header: 'Chuyền', className: 'whitespace-nowrap font-medium text-ink',
+    { key: 'ten_chuyen', header: 'Chuyền', className: 'whitespace-nowrap font-medium text-ink', merge: true,
       render: (r) => r.ten_chuyen || r.ma_chuyen || '—' },
+    // ⚠ GomBadge + badge "chờ kỹ thuật" là thông tin MỨC LỆNH ⇒ phải nằm trong cột `merge`. Để ở cột
+    //   theo phần in thì nó lặp lại ở mọi dòng con, người đọc tưởng mỗi phần in là một lệnh riêng.
+    { key: 'ma_lenh_san_xuat', header: 'Mã đợt SX', merge: true, render: (r) => (
+      <div className="space-y-1">
+        <Badge tone="info">{r.ma_lenh_san_xuat}</Badge>
+        {r.so_dot_vai > 1 && <div><GomBadge soDotVai={r.so_dot_vai} soPhanIn={r.so_phan_in} /></div>}
+        {/* Test không đạt → đã trả về Kỹ thuật; lệnh GIỮ NGUYÊN, chờ QC xác nhận READY để tự về Test Run. */}
+        {r.cho_ky_thuat && (
+          <div><TraVeBadge data={r.tra_ve} label="Chờ kỹ thuật làm lại" nguon="Test Run (QA)" /></div>
+        )}
+      </div>
+    ) },
+    // ↓ Các cột THEO PHẦN IN — dòng con ghi đè giá trị nên mỗi phần in hiện đúng dữ liệu của nó.
     { key: 'khach_don', header: 'Khách hàng · Đơn hàng', render: (r) => (
       <div className="leading-tight">
         <div className="font-medium text-ink">{r.ten_khach_hang || '—'}</div>
         <div className="text-xs text-ink-soft">{r.ma_don_hang || '—'}</div>
-        {/* Test không đạt → đã trả về Kỹ thuật; lệnh GIỮ NGUYÊN, chờ QC xác nhận READY để tự về Test Run. */}
-        {r.cho_ky_thuat && (
-          <div className="mt-1">
-            <TraVeBadge data={r.tra_ve} label="Chờ kỹ thuật làm lại" nguon="Test Run (QA)" />
-          </div>
-        )}
       </div>
     ) },
-    { key: 'ma_hang', header: 'Mã hàng', render: (r) => (
-      <div>{r.ma_hang || '—'}{r.so_dot_vai > 1 && <div className="mt-0.5"><GomBadge soDotVai={r.so_dot_vai} soPhanIn={r.so_phan_in} /></div>}</div>
-    ) },
+    { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
+    // Code phần là trường ĐANG ĐƯỢC LỌC/QUÉT, và là thứ duy nhất phân biệt các dòng con của gom set.
+    { key: 'ma_phan', header: 'Code phần', render: (r) => r.ma_phan || '—' },
     { key: 'mau_kich', header: 'Màu · Kích (vải/phim)', render: (r) => (
       <div className="leading-tight">
         <div className="text-ink">{r.mau_vai || '—'}</div>
@@ -214,15 +221,22 @@ export default function TestRunPage() {
       </div>
     ) },
     { key: 'tinh_chat_in', header: 'Tính chất in', render: (r) => <TinhChatInCell value={r.tinh_chat_in} /> },
-    { key: 'phuong_an_in', header: 'Phương án in', render: (r) => <PhuongAnInBadge value={r.phuong_an_in} /> },
-    { key: 'loai_dot_vai', header: 'Loại đợt vải', render: (r) => <LoaiDotVaiBadge value={r.loai_dot_vai} /> },
-    { key: 'nha_gia_cong', header: 'Nhà gia công', render: (r) => r.nha_gia_cong || '—' },
-    { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => <HanGiaoCell value={r.han_giao_hang} /> },
+    // ↓ Từ đây là mức LỆNH → hợp nhất ô.
+    // ⚠ `phuong_an_in`/`loai_dot_vai`/`nha_gia_cong`/`han_giao_hang` lấy từ ĐỢT VẢI ĐẠI DIỆN
+    //   (`PHAN_INFO_LATERAL` `LIMIT 1`) nên chỉ có MỘT giá trị — hợp nhất ô là cách trung thực nhất;
+    //   lặp ở từng dòng con sẽ khiến người đọc tưởng mọi phần in đều đúng như vậy.
+    { key: 'phuong_an_in', header: 'Phương án in', merge: true, render: (r) => <PhuongAnInBadge value={r.phuong_an_in} /> },
+    { key: 'loai_dot_vai', header: 'Loại đợt vải', merge: true, render: (r) => <LoaiDotVaiBadge value={r.loai_dot_vai} /> },
+    { key: 'nha_gia_cong', header: 'Nhà gia công', merge: true, render: (r) => r.nha_gia_cong || '—' },
+    { key: 'han_giao_hang', header: 'Hạn giao', merge: true, render: (r) => <HanGiaoCell value={r.han_giao_hang} /> },
     // Hiện luôn cột đang được lọc — lọc theo một giá trị không nhìn thấy thì không đối chiếu được.
-    { key: 'ngay_ke_hoach', header: 'Ngày SX KH', className: 'whitespace-nowrap', render: (r) => fmtDate(r.ngay_ke_hoach) },
-    { key: 'so_lan_test', header: 'Lần test', className: 'text-right tabular-nums', render: (r) => r.so_lan_test },
-    { key: 'qa_done', header: 'QA', render: (r) => r.qa_done ? <Badge tone="success">✓</Badge> : <Badge tone="warning">Chờ</Badge> },
+    { key: 'ngay_ke_hoach', header: 'Ngày SX KH', className: 'whitespace-nowrap', merge: true, render: (r) => fmtDate(r.ngay_ke_hoach) },
+    { key: 'so_lan_test', header: 'Lần test', className: 'text-right tabular-nums', merge: true, render: (r) => r.so_lan_test },
+    { key: 'qa_done', header: 'QA', merge: true, render: (r) => r.qa_done ? <Badge tone="success">✓</Badge> : <Badge tone="warning">Chờ</Badge> },
   ];
+
+  // Lệnh GOM SET → tách 1 dòng / PHẦN IN. Lệnh thường trả `null` ⇒ render y như cũ.
+  const subRows = (r) => (r.phan_in_list ? r.phan_in_list.map((p) => ({ ...p, __sub: true })) : null);
 
   return (
     <div>
@@ -260,8 +274,11 @@ export default function TestRunPage() {
 
       <FieldFilters fields={FILTER_FIELDS} values={filters} onField={(k, v) => setFilters((f) => ({ ...f, [k]: v }))} onClear={() => setFilters({})} open={showFilters} />
 
+      {/* Khối gom set: tách dòng theo phần in + VIỀN TRÁI xanh như màn Release 1 / Lập kế hoạch lại.
+          ⚠ Dùng `border-l`, KHÔNG đổi nền — nền đang dành cho màu cảnh báo SLA nghẽn. */}
       <DataTable columns={columns} rows={filtered} loading={loading} onRowClick={(r) => setSel(r.id)} sttStart={0}
-        rowClassName={(r) => slaRowClass(statusLenh(r.id))}
+        subRows={subRows}
+        rowClassName={(r) => `${slaRowClass(statusLenh(r.id))} ${laGomSet(r) ? 'border-l-[3px] border-l-primary' : ''}`}
         emptyText="Không có lệnh nào đang Test Run" />
 
       {sel && <TestRunPanel lenhId={sel} onClose={() => setSel(null)} onChanged={load} />}

@@ -10,7 +10,7 @@ import Toast from '../../../components/common/Toast';
 import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
 import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
-import { codesCuaLenh } from '../utils/phanInLenh';
+import { codesCuaLenh, laGomSet } from '../utils/phanInLenh';
 import useToast from '../../../hooks/useToast';
 import useSocketReload from '../../../hooks/useSocketReload';
 import usePermissions from '../../../hooks/usePermissions';
@@ -161,15 +161,27 @@ export default function Release2Page() {
           onClick={(e) => e.stopPropagation()}
           onChange={() => toggleOne(r.id)} aria-label="Chọn lệnh" />
       ) }] : []),
+    // ⚠⚠ LỆNH GOM SET TÁCH 1 DÒNG / PHẦN IN — giống màn Release 1 & Lập kế hoạch lại (18/08/2026).
+    //   Bảng này đọc thẳng `r.*` mà query mức lệnh (`PHAN_INFO_LATERAL`) chỉ `LIMIT 1` ⇒ lệnh gom set
+    //   chỉ hiện phần in ĐẠI DIỆN, các phần in còn lại biến mất. Cơ chế: `subRows` + cột `merge`.
+    // ⚠ GomBadge là thông tin MỨC LỆNH ⇒ chuyển vào cột `merge` (trước nằm dưới "Mã hàng" — cột theo
+    //   phần in — nên sẽ lặp ở mọi dòng con).
+    { key: 'ma_lenh_san_xuat', header: 'Mã đợt SX', merge: true, render: (r) => (
+      <div className="space-y-1">
+        <Badge tone="info">{r.ma_lenh_san_xuat}</Badge>
+        {r.so_dot_vai > 1 && <div><GomBadge soDotVai={r.so_dot_vai} soPhanIn={r.so_phan_in} /></div>}
+      </div>
+    ) },
+    // ↓ Các cột THEO PHẦN IN — dòng con ghi đè giá trị nên mỗi phần in hiện đúng dữ liệu của nó.
     { key: 'khach_don', header: 'Khách hàng · Đơn hàng', render: (r) => (
       <div className="leading-tight">
         <div className="font-medium text-ink">{r.ten_khach_hang || '—'}</div>
         <div className="text-xs text-ink-soft">{r.ma_don_hang || '—'}</div>
       </div>
     ) },
-    { key: 'ma_hang', header: 'Mã hàng', render: (r) => (
-      <div>{r.ma_hang || '—'}{r.so_dot_vai > 1 && <div className="mt-0.5"><GomBadge soDotVai={r.so_dot_vai} soPhanIn={r.so_phan_in} /></div>}</div>
-    ) },
+    { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
+    // Code phần là trường ĐANG ĐƯỢC LỌC/QUÉT, và là thứ duy nhất phân biệt các dòng con của gom set.
+    { key: 'ma_phan', header: 'Code phần', render: (r) => r.ma_phan || '—' },
     { key: 'mau_kich', header: 'Màu · Kích (vải/phim)', render: (r) => (
       <div className="leading-tight">
         <div className="text-ink">{r.mau_vai || '—'}</div>
@@ -177,22 +189,26 @@ export default function Release2Page() {
       </div>
     ) },
     { key: 'tinh_chat_in', header: 'Tính chất in', render: (r) => <TinhChatInCell value={r.tinh_chat_in} /> },
-    { key: 'phuong_an_in', header: 'Phương án in', render: (r) => <PhuongAnInBadge value={r.phuong_an_in} /> },
-    { key: 'loai_dot_vai', header: 'Loại đợt vải', render: (r) => <LoaiDotVaiBadge value={r.loai_dot_vai} /> },
+    // ↓ Từ đây là mức LỆNH → hợp nhất ô (giá trị lấy từ đợt vải ĐẠI DIỆN nên chỉ có MỘT).
+    { key: 'phuong_an_in', header: 'Phương án in', merge: true, render: (r) => <PhuongAnInBadge value={r.phuong_an_in} /> },
+    { key: 'loai_dot_vai', header: 'Loại đợt vải', merge: true, render: (r) => <LoaiDotVaiBadge value={r.loai_dot_vai} /> },
     // Nhà gia công (ERP NGC, mig 072) — theo ĐỢT NHẬN VẢI; lệnh gộp nhiều đợt thì gộp DISTINCT ở BE.
-    { key: 'nha_gia_cong', header: 'Nhà gia công', render: (r) => r.nha_gia_cong || '—' },
-    { key: 'sl_vai_don', header: 'SL vải về / đơn', className: 'text-right tabular-nums whitespace-nowrap', render: (r) => (
+    { key: 'nha_gia_cong', header: 'Nhà gia công', merge: true, render: (r) => r.nha_gia_cong || '—' },
+    { key: 'sl_vai_don', header: 'SL vải về / đơn', className: 'text-right tabular-nums whitespace-nowrap', merge: true, render: (r) => (
       <span><b className="text-ink">{fmtNum(r.so_luong_vai_ve)}</b><span className="text-ink-soft"> / {fmtNum(r.so_luong_don_hang)}</span></span>
     ) },
-    { key: 'ngay_vai_ve', header: 'Ngày nhận vải', render: (r) => fmtDate(r.ngay_vai_ve) },
-    { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => fmtDate(r.han_giao_hang) },
-    { key: 'chuyen', header: 'Chuyền', render: (r) => r.ten_chuyen || '—' },
-    { key: 'ngay_ke_hoach', header: 'Ngày SX kế hoạch', render: (r) => fmtDate(r.ngay_ke_hoach) },
-    { key: 'test', header: 'Test', className: 'whitespace-nowrap',
+    { key: 'ngay_vai_ve', header: 'Ngày nhận vải', merge: true, render: (r) => fmtDate(r.ngay_vai_ve) },
+    { key: 'han_giao_hang', header: 'Hạn giao', merge: true, render: (r) => fmtDate(r.han_giao_hang) },
+    { key: 'chuyen', header: 'Chuyền', merge: true, render: (r) => r.ten_chuyen || '—' },
+    { key: 'ngay_ke_hoach', header: 'Ngày SX kế hoạch', merge: true, render: (r) => fmtDate(r.ngay_ke_hoach) },
+    { key: 'test', header: 'Test', className: 'whitespace-nowrap', merge: true,
       render: () => <Badge tone="success" className="whitespace-nowrap">CNSP ✓ · QA ✓</Badge> },
-    { key: 'actions', header: '', className: 'text-right whitespace-nowrap', render: (r) =>
+    { key: 'actions', header: '', className: 'text-right whitespace-nowrap', merge: true, render: (r) =>
       canApprove && <Button className="px-2.5 py-1 text-xs" onClick={() => setConfirm(r)}>Duyệt Release 2</Button> },
   ];
+
+  // Lệnh GOM SET → tách 1 dòng / PHẦN IN. Lệnh thường trả `null` ⇒ render y như cũ.
+  const subRows = (r) => (r.phan_in_list ? r.phan_in_list.map((p) => ({ ...p, __sub: true })) : null);
 
   return (
     <div>
@@ -218,9 +234,12 @@ export default function Release2Page() {
 
       <FieldFilters fields={FILTER_FIELDS} values={filters} onField={(k, v) => setFilters((f) => ({ ...f, [k]: v }))} onClear={() => setFilters({})} open={showFilters} />
 
+      {/* Khối gom set: tách dòng theo phần in + VIỀN TRÁI xanh như màn Release 1.
+          ⚠ Dùng `border-l`, KHÔNG đổi nền — nền đang dành cho màu cảnh báo SLA nghẽn. */}
       <DataTable columns={columns} rows={filtered} loading={loading} sttStart={0}
         onRowClick={(r) => setDetail(r)}
-        rowClassName={(r) => slaRowClass(statusLenh(r.id))}
+        subRows={subRows}
+        rowClassName={(r) => `${slaRowClass(statusLenh(r.id))} ${laGomSet(r) ? 'border-l-[3px] border-l-primary' : ''}`}
         emptyText={loai
           ? `Không có lệnh nào thuộc "${nhanChip(loai)}" đang chờ Release 2`
           : 'Không có lệnh nào chờ Release 2'} />

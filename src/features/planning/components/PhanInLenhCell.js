@@ -1,6 +1,12 @@
 import Badge from '../../../components/common/Badge';
 import { dsPhanIn, laGomSet } from '../utils/phanInLenh';
 
+// ⚠⚠ KHÔNG CÒN NƠI DÙNG TỪ 18/08/2026 — giữ lại làm tham chiếu, đừng nối lại vào màn nào.
+//   Cả 4 màn mức LỆNH (Release 2 · Test Run · Gia công · Lập kế hoạch lại) nay tách 1 DÒNG / PHẦN IN
+//   bằng `DataTable subRows` + cột `merge` (giống màn Release 1), nên mỗi phần in có ĐỦ bộ thông tin
+//   riêng. Cách gộp-trong-1-ô dưới đây chỉ hiện đúng danh sách MÃ, còn màu/kích/mã hàng vẫn là của
+//   phần in đại diện — chính là điều người dùng phản ánh ("gom set chỉ hiện ra 1 phần").
+//
 // Ô "Code phần" cho các màn mức LỆNH (Release 2 · Test Run · Gia công · Lập kế hoạch lại).
 //
 // ⚠⚠ Lệnh GOM SET có NHIỀU phần in nhưng query chỉ trả 1 phần in đại diện (`PHAN_INFO_LATERAL`

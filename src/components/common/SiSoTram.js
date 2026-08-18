@@ -9,6 +9,7 @@ import DateRangePicker from './DateRangePicker';
 import Toast from './Toast';
 import { Field, Input, Select } from './controls';
 import useToast from '../../hooks/useToast';
+import useSocketReload from '../../hooks/useSocketReload';
 import { fmtNum, fmtDate, ngayLocalISO } from '../../utils/format';
 import { laySiSo, laySiSoChiTiet } from '../../services/siSoService';
 import PhuongAnInBadge from './PhuongAnInBadge';
@@ -29,7 +30,21 @@ import PhuongAnInBadge from './PhuongAnInBadge';
 // ⚠ 2 TRỤC NGÀY: "kỳ" (ô ngày ở đầu modal) là mốc VÀO/RA trạm — trục của 4 con số;
 //   "lọc thêm theo ngày" là ngày NGHIỆP VỤ khác (nhận vải · lên MES · hạn giao …), chỉ thu hẹp tập
 //   đang xét. Đừng gộp 2 thứ này.
+//
+// ⚠⚠ TỰ NHẢY KHI CÓ NGƯỜI XÁC NHẬN (18/08/2026): 4 số này là ẢNH CHỤP hàng đợi, mà mỗi trạm do
+//   NHIỀU MÁY thao tác ⇒ tải 1 lần lúc mở trang là ôm số cũ cả buổi. Nay nghe socket, gộp trong
+//   `DELAY_SOCKET` ms thành ĐÚNG 1 lần tải.
+// ⚠ Dùng MỘT bộ sự kiện chung cho cả 12 màn thay vì map theo `maTrang`: thiếu 1 sự kiện là số
+//   "đứng im" — đúng lỗi đang phải sửa — trong khi thừa chỉ tốn 1 query đếm (đo prod 41–493ms).
+// ⚠ CỐ Ý BỎ `dashboard:refresh`: job phơi khô bắn kèm sự kiện đó, mà 2 sự kiện kia (`drying:updated`,
+//   `quality:updated`) đã phủ; nghe thêm chỉ nhân đôi số lần tải.
+// ⚠ Tải lại phải NGẦM (`tai(true)` — không bật spinner): dải nằm ngay hàng breadcrumb, nháy spinner
+//   mỗi lần đồng nghiệp xác nhận là rất chối mắt.
 // ─────────────────────────────────────────────────────────────────────────────
+
+const SU_KIEN = ['ready:confirmed', 'workflow:updated', 'production:updated',
+  'quality:updated', 'delivery:updated', 'drying:updated'];
+const DELAY_SOCKET = 800;
 
 const O_LIST = [
   { ma: 'ton_dau', ten: 'Tồn đầu kỳ', ngan: 'Đầu', mau: 'text-ink-soft' },
@@ -96,18 +111,23 @@ export default function SiSoTram({ maTrang, tuDong = true }) {
   const [dangTai, setDangTai] = useState(false);
   const [oDangMo, setODangMo] = useState(null);
 
-  const tai = useCallback(async () => {
-    setDangTai(true);
+  // `ngam = true` (socket bắn) → KHÔNG bật spinner và KHÔNG xóa số đang hiện khi lỗi: dải này nằm
+  // ngay hàng breadcrumb, nháy mỗi lần đồng nghiệp xác nhận là chối mắt.
+  const tai = useCallback(async (ngam = false) => {
+    if (!ngam) setDangTai(true);
     try {
       const r = await laySiSo(maTrang, { tu: ky.tu, den: ky.den });
       setSo(r.data);
     } catch (e) {
       // Không chặn màn thao tác — sĩ số chỉ là số liệu phụ.
-      setSo(null);
-    } finally { setDangTai(false); }
+      if (!ngam) setSo(null);
+    } finally { if (!ngam) setDangTai(false); }
   }, [maTrang, ky.tu, ky.den]);
 
   useEffect(() => { if (tuDong) tai(); }, [tai, tuDong]);
+
+  // Có người xác nhận ở BẤT KỲ máy nào → 4 số tự nhảy (tải ngầm, gộp nhiều sự kiện thành 1 lần).
+  useSocketReload(SU_KIEN, () => { if (tuDong) tai(true); }, DELAY_SOCKET);
 
   if (!so && !dangTai) return null;
 
@@ -180,19 +200,25 @@ function SiSoModal({ maTrang, o, ky, onDoiKy, tenMan, donViNhan, onClose, onShow
     return p;
   }, [ky.tu, ky.den, f]);
 
-  const tai = useCallback(async () => {
-    setLoading(true);
+  const tai = useCallback(async (ngam = false) => {
+    if (!ngam) setLoading(true);
     try {
       const r = await laySiSoChiTiet(maTrang, oHienTai, { ...params, page, limit: LIMIT });
       setRows(r.data.items || []);
       setTotal(r.data.meta?.total || 0);
     } catch (e) {
+      // Lỗi ở lượt tải NGẦM thì im lặng giữ danh sách cũ — đừng bắn toast đỏ khi người dùng
+      // không hề bấm gì (socket có thể bắn lúc mạng chớp).
+      if (ngam) return;
       onShow(e.message || 'Không tải được danh sách', 'error');
       setRows([]); setTotal(0);
-    } finally { setLoading(false); }
+    } finally { if (!ngam) setLoading(false); }
   }, [maTrang, oHienTai, params, page, onShow]);
 
   useEffect(() => { tai(); }, [tai]);
+
+  // Modal đang mở mà có người xác nhận → danh sách tự cập nhật cho khớp 4 số ở dải ngoài.
+  useSocketReload(SU_KIEN, () => tai(true), DELAY_SOCKET);
   useEffect(() => { setPage(1); }, [oHienTai, params]);
 
   // ⚠ Badge "Bộ lọc (N)" CHỈ đếm các ô NẰM TRONG panel — ô "Tìm nhanh" và "lọc thêm theo ngày" đã

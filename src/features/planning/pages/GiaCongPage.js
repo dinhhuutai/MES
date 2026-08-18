@@ -15,7 +15,7 @@ import useSocketReload from '../../../hooks/useSocketReload';
 import usePermissions from '../../../hooks/usePermissions';
 import TraVeBadge from '../../../components/common/TraVeBadge';
 import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
-import PhanInLenhCell from '../components/PhanInLenhCell';
+import { laGomSet } from '../utils/phanInLenh';
 import taiHetTrang from '../../../utils/taiHetTrang';
 import { listGiaCong, giaCongToOqc, giaCongTraLai } from '../../../services/planningService';
 import { printGiaCongVeTem } from '../../production/utils/printTemLabel';
@@ -184,35 +184,50 @@ export default function GiaCongPage() {
           title={r.cho_tra_lai ? 'Đang chờ trả lại nhà gia công' : undefined}
           onClick={(e) => e.stopPropagation()} onChange={() => toggleOne(r.id)} aria-label="Chọn lệnh" />
       ) }] : []),
-    { key: 'ma_lenh_san_xuat', header: 'Mã đợt SX', render: (r) => <Badge tone="info">{r.ma_lenh_san_xuat}</Badge> },
+    // ⚠⚠ LỆNH GOM SET TÁCH 1 DÒNG / PHẦN IN — giống màn Release 1 & Lập kế hoạch lại (18/08/2026).
+    //   Trước đây chỉ riêng ô "Code phần" gộp đủ mã (`PhanInLenhCell`), còn Khách/Đơn/Mã hàng/Màu/Kích
+    //   vẫn là phần in ĐẠI DIỆN (`PHAN_INFO_LATERAL` `LIMIT 1`) ⇒ 3 mã trong 1 ô nhưng chỉ 1 bộ thông
+    //   tin, không biết mã nào ứng với màu nào. Đo prod 18/08: **88/278 lệnh (32%)** ở màn này là gom set.
+    { key: 'ma_lenh_san_xuat', header: 'Mã đợt SX', merge: true, render: (r) => (
+      <div className="space-y-1">
+        <Badge tone="info">{r.ma_lenh_san_xuat}</Badge>
+        {laGomSet(r) && <div className="text-xs text-primary">gom set · {r.so_phan_in} phần in · in chung</div>}
+      </div>
+    ) },
     // Hàng bị OQC kiểm không đạt → trả về Kế hoạch; badge đỏ bấm ra lý do/người/giờ.
-    { key: 'tra_ve', header: 'Tình trạng', render: (r) => (r.cho_tra_lai
+    { key: 'tra_ve', header: 'Tình trạng', merge: true, render: (r) => (r.cho_tra_lai
       ? <TraVeBadge data={r.tra_ve} label="OQC trả về" nguon="OQC" />
       : <span className="text-xs text-ink-soft">Đang gia công</span>) },
-    { key: 'ten_chuyen', header: 'Chuyền gia công', render: (r) => r.ten_chuyen || '—' },
+    { key: 'ten_chuyen', header: 'Chuyền gia công', merge: true, render: (r) => r.ten_chuyen || '—' },
+    // ↓ Các cột THEO PHẦN IN — dòng con ghi đè giá trị nên mỗi phần in hiện đúng dữ liệu của nó.
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
     // Hiện Code phần vì đây là trường được lọc — lọc theo giá trị không nhìn thấy thì không đối chiếu được.
-    { key: 'ma_phan', header: 'Code phần', render: (r) => <PhanInLenhCell row={r} /> },
+    { key: 'ma_phan', header: 'Code phần', render: (r) => r.ma_phan || '—' },
     { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
     { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
     { key: 'tinh_chat_in', header: 'Tính chất in', render: (r) => <TinhChatInCell value={r.tinh_chat_in} /> },
-    { key: 'loai_dot_vai', header: 'Loại đợt vải', render: (r) => <LoaiDotVaiBadge value={r.loai_dot_vai} /> },
-    { key: 'nha_gia_cong', header: 'Nhà gia công', render: (r) => r.nha_gia_cong || '—' },
-    { key: 'so_luong_release', header: 'SL release', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong_release) },
+    // ↓ Từ đây là mức LỆNH → hợp nhất ô. ⚠ SL release / đã chuyển / còn lại là số của CẢ LỆNH — lặp ở
+    //   từng dòng con sẽ khiến người đọc cộng dồn thành số sai.
+    { key: 'loai_dot_vai', header: 'Loại đợt vải', merge: true, render: (r) => <LoaiDotVaiBadge value={r.loai_dot_vai} /> },
+    { key: 'nha_gia_cong', header: 'Nhà gia công', merge: true, render: (r) => r.nha_gia_cong || '—' },
+    { key: 'so_luong_release', header: 'SL release', className: 'text-right tabular-nums', merge: true, render: (r) => fmtNum(r.so_luong_release) },
     // Hàng gia công về nhiều lần → theo dõi phần đã nhận / còn phải nhận.
-    { key: 'da_chuyen', header: 'Đã chuyển OQC', className: 'text-right tabular-nums', render: (r) => fmtNum(r.da_chuyen || 0) },
-    { key: 'con_lai', header: 'Còn lại', className: 'text-right tabular-nums',
+    { key: 'da_chuyen', header: 'Đã chuyển OQC', className: 'text-right tabular-nums', merge: true, render: (r) => fmtNum(r.da_chuyen || 0) },
+    { key: 'con_lai', header: 'Còn lại', className: 'text-right tabular-nums', merge: true,
       render: (r) => {
         const c = conLaiCua(r);
         return c > 0 ? <span className="font-medium text-warning">{fmtNum(c)}</span> : fmtNum(0);
       } },
-    { key: 'nguoi_release', header: 'Người release', render: (r) => r.nguoi_release || '—' },
-    { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => fmtDate(r.han_giao_hang) },
-    { key: 'ngay_ke_hoach', header: 'Ngày SX kế hoạch', render: (r) => fmtDate(r.ngay_ke_hoach) },
-    { key: 'act', header: '', className: 'text-right whitespace-nowrap', render: (r) => (
+    { key: 'nguoi_release', header: 'Người release', merge: true, render: (r) => r.nguoi_release || '—' },
+    { key: 'han_giao_hang', header: 'Hạn giao', merge: true, render: (r) => fmtDate(r.han_giao_hang) },
+    { key: 'ngay_ke_hoach', header: 'Ngày SX kế hoạch', merge: true, render: (r) => fmtDate(r.ngay_ke_hoach) },
+    // ⚠ `merge` BẮT BUỘC: mọi thao tác ở đây (In tem · Nhận hàng → OQC · Trả lại nhà gia công) đều ở
+    //   MỨC LỆNH. Thiếu nó thì lệnh gom set 3 phần in hiện 3 bộ nút giống hệt nhau, bấm cái nào cũng
+    //   ra cùng một việc — người dùng tưởng nhận hàng được từng phần in.
+    { key: 'act', header: '', className: 'text-right whitespace-nowrap', merge: true, render: (r) => (
       <div className="flex items-center justify-end gap-1">
         <Button size="sm" variant="secondary" icon="printer" onClick={(e) => { e.stopPropagation(); printVe(r); }}>
           In tem
@@ -233,6 +248,9 @@ export default function GiaCongPage() {
     ) },
   ];
 
+  // Lệnh GOM SET → tách 1 dòng / PHẦN IN. Lệnh thường trả `null` ⇒ render y như cũ.
+  const subRows = (r) => (r.phan_in_list ? r.phan_in_list.map((p) => ({ ...p, __sub: true })) : null);
+
   return (
     <div>
       <Toolbar title="Gia công" subtitle="Lệnh đã release lên chuyền gia công — nhận lại hàng (có thể NHIỀU LẦN) rồi chuyển sang kiểm OQC; đủ số lượng thì lệnh mới rời màn này"
@@ -252,7 +270,10 @@ export default function GiaCongPage() {
         onField={(k, v) => setFilters((f) => ({ ...f, [k]: v }))}
         onClear={() => setFilters({})} open={showFilters} />
 
+      {/* Khối gom set: tách dòng theo phần in + VIỀN TRÁI xanh như màn Release 1. */}
       <DataTable columns={columns} rows={filtered} loading={loading} sttStart={0}
+        subRows={subRows}
+        rowClassName={(r) => (laGomSet(r) ? 'border-l-[3px] border-l-primary' : '')}
         emptyText={activeCount ? 'Không có lệnh nào khớp bộ lọc' : 'Không có lệnh gia công nào đang chờ chuyển OQC'} />
 
       <ConfirmDialog
