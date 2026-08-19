@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
-import taiHetTrang from '../../../utils/taiHetTrang';
+import taiHetTrang, { LIMIT_TAI_LON } from '../../../utils/taiHetTrang';
 import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
 import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
@@ -161,7 +161,7 @@ export default function TestRunPage() {
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const { items, total, thieu } = await taiHetTrang((p) => listTestRunCandidates({ search, ...p }));
+      const { items, total, thieu } = await taiHetTrang((p) => listTestRunCandidates({ search, ...p }), { limit: LIMIT_TAI_LON });
       setRows(items);
       // ⚠ Chạm trần an toàn mà vẫn chưa gom đủ thì PHẢI báo — hiển thị thiếu trong im lặng đúng là
       //   thứ vừa gây ra sự cố này.

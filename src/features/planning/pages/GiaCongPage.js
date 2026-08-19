@@ -19,7 +19,7 @@ import usePermissions from '../../../hooks/usePermissions';
 import TraVeBadge from '../../../components/common/TraVeBadge';
 import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
 import { laGomSet } from '../utils/phanInLenh';
-import taiHetTrang from '../../../utils/taiHetTrang';
+import taiHetTrang, { LIMIT_TAI_LON } from '../../../utils/taiHetTrang';
 import { listGiaCong, giaCongToOqc, giaCongTraLai } from '../../../services/planningService';
 import { printGiaCongVeTem } from '../../production/utils/printTemLabel';
 import { fmtNum, fmtDate } from '../../../utils/format';
@@ -95,7 +95,7 @@ export default function GiaCongPage() {
     try {
       // TẢI HẾT MỌI TRANG — bộ lọc chạy ở client nên phải có đủ dòng mới lọc đúng.
       // ⚠ `getPaging` cắt `limit` còn 200; danh sách ≤200 dòng thì vòng lặp chỉ tốn 1 lời gọi.
-      const { items, total, thieu } = await taiHetTrang((p) => listGiaCong({ search, ...p }));
+      const { items, total, thieu } = await taiHetTrang((p) => listGiaCong({ search, ...p }), { limit: LIMIT_TAI_LON });
       setRows(items);
       setMeta({ total });
       if (thieu && !silent) show(`Mới tải được ${items.length}/${total} lệnh — hãy thu hẹp tìm kiếm`, 'error');

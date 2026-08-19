@@ -103,9 +103,40 @@ export default function LichSuApiPanel({ open, onClose, ma, ten, laGhiInTem }) {
       render: (r) => (r.so_lan_thu == null ? '—' : r.so_lan_thu),
     },
     { key: 'nguoi', header: 'Người', render: (r) => r.nguoi || '—' },
+    // ⚠ ERP NÓI GÌ — có ở CẢ dòng thành công lẫn dòng lỗi (19/08/2026). Trước đây chỉ dòng lỗi mới
+    //   hiện gì đó, mà lại là chuỗi lỗi của MES chứ không phải câu của ERP.
+    {
+      key: 'erp_message',
+      header: 'ERP trả lời',
+      render: (r) => {
+        // `returnValue` là mã RETURN của stored procedure. Router ERP vẫn trả success=true khi proc
+        // trả mã khác 0 ⇒ tô vàng để rà được những lượt "thành công mà proc không đồng ý".
+        const rv = r.erp_return_value;
+        const rvLoi = rv != null && String(rv) !== '0';
+        if (!r.erp_message && !r.erp_error && rv == null) return <span className="text-ink-soft">—</span>;
+        return (
+          <div className="leading-tight">
+            {r.erp_message && (
+              <div className={`text-xs ${r.thanh_cong ? 'text-ink' : 'text-danger'}`} title={r.erp_message}>
+                {r.erp_message}
+              </div>
+            )}
+            {r.erp_error && (
+              <div className="mt-0.5 line-clamp-2 text-[11px] text-danger" title={r.erp_error}>{r.erp_error}</div>
+            )}
+            {rv != null && (
+              <div className={`mt-0.5 text-[11px] ${rvLoi ? 'font-semibold text-warning' : 'text-ink-soft'}`}
+                title={rvLoi ? 'Stored procedure trả về mã khác 0 — ERP nhận nhưng proc không xử lý bình thường' : ''}>
+                returnValue: {String(rv)}{rvLoi ? ' ⚠' : ''}
+              </div>
+            )}
+          </div>
+        );
+      },
+    },
     {
       key: 'loi',
-      header: 'Lỗi',
+      header: 'Lỗi (phía MES)',
       render: (r) => (r.loi
         ? <span className="line-clamp-2 text-xs text-danger" title={r.loi}>{r.loi}</span>
         : <span className="text-ink-soft">—</span>),
@@ -165,6 +196,26 @@ export default function LichSuApiPanel({ open, onClose, ma, ten, laGhiInTem }) {
               <div><span className="text-ink-soft">Mã tem: </span><MaCopy v={chon.ma_tem} /></div>
             </div>
             {chon.url && <p className="break-all font-mono text-xs text-ink-soft">{chon.url}</p>}
+
+            {/* ⚠ ERP TRẢ LỜI — hiện ở CẢ 2 nhánh. `returnValue` khác 0 nghĩa là ERP nhận được nhưng
+                stored procedure không xử lý bình thường, mà router ERP vẫn báo success=true. */}
+            {(chon.erp_message || chon.erp_error || chon.erp_return_value != null) && (
+              <div className={`rounded-control border px-3 py-2 text-sm ${
+                chon.erp_return_value != null && String(chon.erp_return_value) !== '0'
+                  ? 'border-amber-200 bg-amber-50 text-amber-800'
+                  : 'border-line bg-surface-muted text-ink'}`}>
+                <div className="text-xs uppercase tracking-wide text-ink-soft">ERP trả lời</div>
+                {chon.erp_message && <div className="mt-0.5 font-medium">{chon.erp_message}</div>}
+                {chon.erp_error && <div className="mt-0.5 break-all text-danger">{chon.erp_error}</div>}
+                {chon.erp_return_value != null && (
+                  <div className="mt-0.5 text-xs">
+                    returnValue = <b>{String(chon.erp_return_value)}</b>
+                    {String(chon.erp_return_value) !== '0'
+                      && ' — stored procedure trả mã khác 0, cần đối chiếu với ERP'}
+                  </div>
+                )}
+              </div>
+            )}
 
             {chon.loi && (
               <div className="flex items-start gap-2 rounded-control border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">

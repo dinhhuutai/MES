@@ -14,7 +14,7 @@ import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import useSocketReload from '../../../hooks/useSocketReload';
-import taiHetTrang from '../../../utils/taiHetTrang';
+import taiHetTrang, { LIMIT_TAI_LON } from '../../../utils/taiHetTrang';
 import useNghenMap from '../../../hooks/useNghenMap';
 import { slaRowClass } from '../../../utils/sla';
 import {
@@ -83,7 +83,7 @@ export default function XacNhanChayPage() {
       //   (bảng lọc + phân trang + xuất Excel đều ở CLIENT). Prod 19/08 mới 98 dòng nên chưa lộ, nhưng
       //   đây đúng kiểu lỗi vừa xảy ra ở Test Run - QA (658 lệnh, màn chỉ thấy 200).
       const [kq, m] = await Promise.all([
-        taiHetTrang((p) => listProductionCandidates({ search, ...p })),
+        taiHetTrang((p) => listProductionCandidates({ search, ...p }), { limit: LIMIT_TAI_LON }),
         getMonitor(),
       ]);
       setCandidates(kq.items);

@@ -8,21 +8,32 @@
 //
 // Cách dùng:
 //   const { items, total, thieu } = await taiHetTrang((p) => listReplanCandidates({ search, ...p }));
+//   const { items } = await taiHetTrang(fn, { limit: LIMIT_TAI_LON });   // endpoint đã nới trần
 //
 // `fetcher(p)` nhận `{ page, limit }` và phải trả về `res` có `res.data.items` + `res.data.meta.total`.
 // Trả `thieu = true` khi chạm trần an toàn mà vẫn chưa gom đủ ⇒ trang gọi NÊN báo cho người dùng
 // thay vì lặng lẽ hiển thị thiếu.
 
-export const LIMIT_TAI = 200;   // đúng trần của getPaging — xin hơn cũng không được cho
-export const MAX_TRANG = 100;   // trần an toàn: 20.000 dòng, phòng backend trả meta sai → lặp vô hạn
+export const LIMIT_TAI = 200;   // trần MẶC ĐỊNH của getPaging — xin hơn cũng không được cho
+export const MAX_TRANG = 100;   // trần an toàn: phòng backend trả meta sai → lặp vô hạn
 
-export default async function taiHetTrang(fetcher) {
+// Trần cho endpoint ĐÃ nới `tranToiDa` ở backend (xem `utils/pagination.js TRAN_TAI_HET`).
+// ⚠⚠ Vì sao cần (19/08/2026): `getPaging` cắt cứng 200 nên màn Test Run - QA (663 lệnh) phải gọi
+//   **4 lượt tuần tự**, mỗi lượt kéo theo câu đếm + câu gắn phần in ⇒ ~40 lượt gọi DB cho một lần
+//   mở màn, tải mất nhiều giây. Đo prod: SQL lấy 663 dòng tốn 156-205 ms, **bằng** lấy 200 dòng ⇒
+//   chia nhỏ KHÔNG làm truy vấn nhẹ đi, chỉ nhân số round-trip.
+// ⚠ Truyền số này cho endpoint ĐÃ nới; endpoint chưa nới vẫn bị backend cắt về 200 và vòng lặp
+//   dưới đây tự gánh — không hỏng, chỉ tốn thêm lượt.
+// ⚠ PHẢI khớp `TRAN_TAI_HET` bên backend, nếu không thì xin thừa cũng bị cắt (không hỏng, chỉ phí).
+export const LIMIT_TAI_LON = 2000;
+
+export default async function taiHetTrang(fetcher, { limit = LIMIT_TAI } = {}) {
   const items = [];
   let total = 0;
   let trang = 1;
   for (; trang <= MAX_TRANG; trang += 1) {
     // eslint-disable-next-line no-await-in-loop
-    const res = await fetcher({ page: trang, limit: LIMIT_TAI });
+    const res = await fetcher({ page: trang, limit });
     const ds = res?.data?.items || [];
     total = res?.data?.meta?.total ?? ds.length;
     items.push(...ds);

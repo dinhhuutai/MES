@@ -15,7 +15,7 @@ import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import useNow from '../../../hooks/useNow';
 import useSocketReload from '../../../hooks/useSocketReload';
-import taiHetTrang from '../../../utils/taiHetTrang';
+import taiHetTrang, { LIMIT_TAI_LON } from '../../../utils/taiHetTrang';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
@@ -120,7 +120,7 @@ export default function ReadyQcPage() {
       // ⚠⚠ `limit: 500` cũ bị `getPaging` cắt còn 200 mà KHÔNG báo gì. Màn này mới 166 dòng nên chưa
       //   lộ, nhưng vượt 200 là QC quét mã không ra hàng và bộ lọc chỉ soi 200 dòng đầu — đúng sự cố
       //   Test Run - QA 19/08/2026 (658 lệnh, màn chỉ thấy 200).
-      const { items, total, thieu } = await taiHetTrang((p) => listReadyQcCandidates({ search, ...p }));
+      const { items, total, thieu } = await taiHetTrang((p) => listReadyQcCandidates({ search, ...p }), { limit: LIMIT_TAI_LON });
       setRows(items);
       setMeta({ total });
       if (thieu) show(`Chỉ tải được ${items.length}/${total} phần in — hãy thu hẹp bằng ô tìm kiếm`, 'error');
@@ -143,7 +143,7 @@ export default function ReadyQcPage() {
   // 16:24, quét lúc 16:27 vẫn báo thiếu). KHÔNG dùng `load` vì nó xóa các dòng đang tick.
   const refresh = useCallback(async () => {
     try {
-      const { items, total } = await taiHetTrang((p) => listReadyQcCandidates({ search, ...p }));
+      const { items, total } = await taiHetTrang((p) => listReadyQcCandidates({ search, ...p }), { limit: LIMIT_TAI_LON });
       setRows(items);
       setMeta({ total });
       // ⚠ Lượt tải NGẦM: cờ `thieu` CỐ Ý không báo — người dùng không hề bấm gì, bắn toast đỏ ở đây

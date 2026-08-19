@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
-import taiHetTrang from '../../../utils/taiHetTrang';
+import taiHetTrang, { LIMIT_TAI_LON } from '../../../utils/taiHetTrang';
 import Toolbar from '../../../components/common/Toolbar';
 import Pagination from '../../../components/common/Pagination';
 import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
@@ -164,7 +164,7 @@ export default function Release1Page() {
       //   này (backend bỏ điều kiện loại chúng ra) ⇒ gọi thêm API set sẽ làm hàng hiện ĐÚP.
       // ⚠⚠ PHẢI đi qua `taiHetTrang`: `limit: 500` cũ bị `getPaging` cắt còn 200 mà không báo gì —
       //   xem sự cố Test Run - QA 19/08/2026 (658 lệnh, màn chỉ thấy 200).
-      const { items, total, thieu } = await taiHetTrang((p) => listRelease1Candidates({ search, ...p }));
+      const { items, total, thieu } = await taiHetTrang((p) => listRelease1Candidates({ search, ...p }), { limit: LIMIT_TAI_LON });
       setRows(items);
       setMeta({ total });
       if (thieu) show(`Chỉ tải được ${items.length}/${total} đợt vải — hãy thu hẹp bằng ô tìm kiếm`, 'error');

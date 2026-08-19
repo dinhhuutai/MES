@@ -26,7 +26,7 @@ import {
   keHoachTamHistory, keHoachTamDone, release1TraVeKyThuat,
 } from '../../../services/planningService';
 import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
-import taiHetTrang from '../../../utils/taiHetTrang';
+import taiHetTrang, { LIMIT_TAI_LON } from '../../../utils/taiHetTrang';
 import { fmtNum, fmtDate } from '../../../utils/format';
 
 // Lọc nhiều trường (client-side, kết hợp AND) — trang tải-hết (limit 500) nên lọc đủ mọi dòng.
@@ -99,7 +99,7 @@ export default function KeHoachTamPage() {
     try {
       // TẢI HẾT MỌI TRANG — bộ lọc chạy ở client nên phải có đủ dòng mới lọc đúng.
       // ⚠ `getPaging` cắt `limit` còn 200; danh sách ≤200 dòng thì vòng lặp chỉ tốn 1 lời gọi.
-      const { items, total, thieu } = await taiHetTrang((p) => listKeHoachTam({ search, ...p }));
+      const { items, total, thieu } = await taiHetTrang((p) => listKeHoachTam({ search, ...p }), { limit: LIMIT_TAI_LON });
       setRows(items);
       setMeta({ total });
       if (thieu && !silent) show(`Mới tải được ${items.length}/${total} bản — hãy thu hẹp tìm kiếm`, 'error');

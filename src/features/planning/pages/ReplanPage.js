@@ -22,7 +22,7 @@ import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
 import { codesCuaLenh, laGomSet } from '../utils/phanInLenh';
-import taiHetTrang from '../../../utils/taiHetTrang';
+import taiHetTrang, { LIMIT_TAI_LON } from '../../../utils/taiHetTrang';
 import { listReplanCandidates, replan, replanBatch, listChuyen, planHistory, replanDone } from '../../../services/planningService';
 import { fmtNum, fmtDate } from '../../../utils/format';
 
@@ -94,7 +94,7 @@ export default function ReplanPage() {
       // TẢI HẾT MỌI TRANG để lọc/quét ở client khớp đủ dòng; DataTable tự phân trang 20/trang.
       // ⚠ KHÔNG truyền `limit: 500` — `getPaging` cắt còn 200, mà prod đang có ~760 lệnh ở màn này
       //   ⇒ bộ lọc sẽ chỉ soi được 200 dòng đầu và im lặng bỏ sót phần còn lại.
-      const { items, total, thieu } = await taiHetTrang((p) => listReplanCandidates({ search, ...p }));
+      const { items, total, thieu } = await taiHetTrang((p) => listReplanCandidates({ search, ...p }), { limit: LIMIT_TAI_LON });
       setRows(items);
       setMeta({ page: 1, totalPages: 1, total });
       if (thieu && !silent) show(`Mới tải được ${items.length}/${total} lệnh — hãy thu hẹp tìm kiếm`, 'error');

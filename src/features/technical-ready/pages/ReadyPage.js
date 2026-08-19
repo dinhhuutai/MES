@@ -17,7 +17,7 @@ import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import useNow from '../../../hooks/useNow';
 import useSocketReload from '../../../hooks/useSocketReload';
-import taiHetTrang from '../../../utils/taiHetTrang';
+import taiHetTrang, { LIMIT_TAI_LON } from '../../../utils/taiHetTrang';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 import TraVeBadge from '../../../components/common/TraVeBadge';
 import TraVeFilter from '../../../components/common/TraVeFilter';
@@ -155,7 +155,7 @@ export default function ReadyPage() {
       // ⚠⚠ `limit: 200` cũ ĐÚNG BẰNG trần của `getPaging` ⇒ vượt 200 phần in là mất dòng ÂM THẦM.
       //   Đo prod 19/08/2026: READY đang 164 — chỉ cách trần 36 dòng. Đây là màn quét mã nhiều nhất,
       //   thiếu dòng thì kỹ thuật quét ra "không thấy" mà không hiểu vì sao (xem sự cố Test Run - QA).
-      const { items, total, thieu } = await taiHetTrang((p) => listReadyCandidates({ search, ...p }));
+      const { items, total, thieu } = await taiHetTrang((p) => listReadyCandidates({ search, ...p }), { limit: LIMIT_TAI_LON });
       setRows(items);
       setMeta({ total });
       if (thieu) show(`Chỉ tải được ${items.length}/${total} phần in — hãy thu hẹp bằng ô tìm kiếm`, 'error');
@@ -180,7 +180,7 @@ export default function ReadyPage() {
   const refresh = useCallback(async () => {
     try {
       // ⚠ Lượt tải NGẦM: cờ `thieu` CỐ Ý không báo — người dùng không bấm gì, toast đỏ ở đây là quấy rầy.
-      const { items, total } = await taiHetTrang((p) => listReadyCandidates({ search, ...p }));
+      const { items, total } = await taiHetTrang((p) => listReadyCandidates({ search, ...p }), { limit: LIMIT_TAI_LON });
       setRows(items);
       setMeta({ total });
       getReadyItemCounts().then((c) => setCounts(c.data)).catch(() => {});
