@@ -166,6 +166,9 @@ export const MODULES = [
       { ten: 'Hiển thị theo phương án in', route: '/he-thong/hien-thi-pain', perm: 'WORKFLOW_VIEW' },
       // Cài đặt API (mig 083) — bật/tắt 3 API ERP ngay trên giao diện, khỏi sửa .env + restart BE.
       { ten: 'Cài đặt API', route: '/he-thong/cai-dat-api', perm: 'WORKFLOW_VIEW' },
+      // Cài đặt tính năng (mig 087) — bật/tắt LUẬT NGHIỆP VỤ (chặn Release 1 theo loại chuyền ·
+      // duyệt đổi phương án in). Khác Cài đặt API: trang kia bật/tắt kết nối ERP (chuyện kỹ thuật).
+      { ten: 'Cài đặt tính năng', route: '/he-thong/cai-dat-tinh-nang', perm: 'WORKFLOW_VIEW' },
       // Bật/tắt thông báo cho CẢ HỆ THỐNG (mig 085) — dùng chung quyền với Cài đặt API.
       { ten: 'Cài đặt thông báo', route: '/he-thong/cai-dat-thong-bao', perm: 'WORKFLOW_VIEW' },
       // Danh mục TỔ IN (mig 084) — mã tổ gửi thẳng lên ERP qua `@pToin` mỗi lần in tem.

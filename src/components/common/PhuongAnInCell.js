@@ -9,6 +9,8 @@ import { getHskt } from '../../services/hsktService';
 // ⚠ Đổi phương án in nay đi qua HÀNG ĐỢI DUYỆT (mig 086), KHÔNG gọi `changePhuongAnIn` trực tiếp
 //   nữa — endpoint đó vẫn còn nhưng chỉ `duyet.service` được gọi (nó là bước ÁP DỤNG sau khi duyệt).
 import { guiYeuCauDoiPain } from '../../services/duyetService';
+// Công tắc *Hệ thống > Cài đặt tính năng* (mig 087) — TẮT duyệt ⇒ bấm là đổi, không hỏi lý do.
+import { layTrangThaiTinhNang } from '../../services/caiDatTinhNangService';
 
 // Ô ĐỔI PHƯƠNG ÁN IN ngay tại chỗ (màn READY + bảng trong modal Quét/tích).
 //
@@ -59,11 +61,24 @@ export default function PhuongAnInCell({ value, hsktId, barcode, disabled = fals
   const [chon, setChon] = useState(null);    // giá trị XEM TRƯỚC (null = không có)
   const [saving, setSaving] = useState(false);
   const [confirm, setConfirm] = useState(null); // { pa, maCu, maMoi, dsPhanIn[] }
-  const [lyDo, setLyDo] = useState('');         // LÝ DO BẮT BUỘC (mig 086)
+  const [lyDo, setLyDo] = useState('');         // LÝ DO — bắt buộc khi tính năng duyệt đang BẬT
+  // ⚠⚠ Tính năng duyệt có đang BẬT không (mig 087). MẶC ĐỊNH `true` — fail-open theo hướng AN TOÀN:
+  //   chưa tải xong / lỗi mạng thì cứ coi như đang bắt buộc duyệt (hiện đúng chữ + vẫn đòi lý do),
+  //   backend sẽ là chốt cuối. Ngược lại (mặc định false) sẽ hiện "bấm là đổi" rồi ăn 422 NO_LY_DO.
+  const [duyetBat, setDuyetBat] = useState(true);
 
   // Cha tải lại (socket `ready:confirmed` / refresh) → nhận giá trị mới, nhưng KHÔNG đè khi người dùng
   // đang có xem trước dở dang.
   useEffect(() => { if (chon == null) setThuc(value); }, [value, chon]);
+
+  // ⚠ Service cache ở mức module (TTL 60s) + gộp lời gọi song song ⇒ bảng 30 dòng vẫn chỉ 1 request.
+  useEffect(() => {
+    let huy = false;
+    layTrangThaiTinhNang().then((m) => {
+      if (!huy) setDuyetBat(m?.DUYET_DOI_PHUONG_AN_IN !== false);
+    });
+    return () => { huy = true; };
+  }, []);
 
   // ⚠⚠ TỪ 18/08/2026 KHÔNG GỌI THẲNG `changePhuongAnIn` NỮA — mọi lần đổi phương án in phải đi qua
   //   `POST /duyet/doi-phuong-an-in` (mig 086) vì nay BẮT BUỘC có LÝ DO và phải được NGƯỜI DUYỆT
@@ -111,7 +126,13 @@ export default function PhuongAnInCell({ value, hsktId, barcode, disabled = fals
     } catch (e) {
       // Không tra được danh sách thì vẫn cho gửi (chỉ mất phần cảnh báo nhóm).
     }
-    setSaving(false); // dừng quay: chờ người dùng gõ lý do
+    // ⚠⚠ TẮT TÍNH NĂNG DUYỆT + hồ sơ CHỈ 1 PHẦN IN ⇒ ĐỔI THẲNG, không hỏi gì (người dùng chốt
+    //   19/08/2026: "bấm là đổi"). `luu` tự tắt `saving` trong `finally`.
+    // ⚠ Hồ sơ dùng chung ≥2 PHẦN IN thì VẪN hỏi lại kể cả khi tắt duyệt: đổi 1 dòng là đổi cho CẢ
+    //   NHÓM mà người bấm không hề thấy trên màn hình (đo prod 13/08: ~25% HSKT gắn ≥2 phần in).
+    //   Đây là cảnh báo PHẠM VI, không phải bước duyệt — tắt duyệt không có nghĩa là bỏ cảnh báo này.
+    if (!duyetBat && dsPhanIn.length <= 1) { await luu(chon, ''); return; }
+    setSaving(false); // dừng quay: chờ người dùng xác nhận (và gõ lý do nếu đang bắt buộc)
     setLyDo('');
     setConfirm({ pa: chon, maCu: barcode || null, maMoi: maVachTheoPa(barcode, chon), dsPhanIn });
   };
@@ -183,22 +204,35 @@ export default function PhuongAnInCell({ value, hsktId, barcode, disabled = fals
               <div className="mt-1">Sau khi đổi, đồng bộ ERP sẽ không ghi đè phương án in này nữa.</div>
             </div>
 
-            <Field label="Lý do đổi phương án in" required>
-              <Textarea value={lyDo} onChange={(e) => setLyDo(e.target.value)} rows={3}
-                placeholder="Vì sao phải đổi (vd: xếp lên chuyền máy để kịp hạn giao)..." />
-            </Field>
+            {/* ⚠ Lý do CHỈ bắt buộc khi tính năng duyệt đang BẬT (mig 087). Tắt rồi mà vẫn bắt gõ
+                thì tắt cũng như không. */}
+            {duyetBat && (
+              <Field label="Lý do đổi phương án in" required>
+                <Textarea value={lyDo} onChange={(e) => setLyDo(e.target.value)} rows={3}
+                  placeholder="Vì sao phải đổi (vd: xếp lên chuyền máy để kịp hạn giao)..." />
+              </Field>
+            )}
 
             {/* ⚠ Nói TRƯỚC là có thể phải chờ duyệt — người dùng bấm xong thấy giá trị không đổi sẽ
                 tưởng hỏng. Không biết chắc quyền của họ ở FE nên diễn đạt theo cả 2 khả năng. */}
             <div className="rounded-card border border-line bg-surface-muted p-2.5 text-xs text-ink-soft">
-              Nếu bạn <b className="text-ink">không có quyền duyệt</b>, đây sẽ là <b className="text-ink">yêu cầu chờ duyệt</b> —
-              phương án in giữ nguyên cho tới khi được thông qua (xem ở <b className="text-ink">Hệ thống › Duyệt yêu cầu</b>).
+              {duyetBat ? (
+                <>
+                  Nếu bạn <b className="text-ink">không có quyền duyệt</b>, đây sẽ là <b className="text-ink">yêu cầu chờ duyệt</b> —
+                  phương án in giữ nguyên cho tới khi được thông qua (xem ở <b className="text-ink">Yêu cầu &amp; Duyệt</b>).
+                </>
+              ) : (
+                <>
+                  Tính năng <b className="text-ink">duyệt đổi phương án in</b> đang tắt — bấm là
+                  đổi <b className="text-ink">ngay</b>, không cần lý do và không qua hàng đợi duyệt.
+                </>
+              )}
             </div>
 
             <div className="flex justify-end gap-2">
               <Button variant="ghost" onClick={() => setConfirm(null)}>Đóng</Button>
               <Button onClick={() => luu(confirm.pa, lyDo.trim())} loading={saving}
-                disabled={!lyDo.trim()}>Gửi</Button>
+                disabled={duyetBat && !lyDo.trim()}>{duyetBat ? 'Gửi' : 'Đổi ngay'}</Button>
             </div>
           </div>
         )}

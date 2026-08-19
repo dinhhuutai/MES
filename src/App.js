@@ -31,6 +31,7 @@ import ThietKeTemPage from './features/system/pages/ThietKeTemPage';
 import QuanTriPhanInPage from './features/system/pages/QuanTriPhanInPage';
 import HienThiPainPage from './features/system/pages/HienThiPainPage';
 import CaiDatApiPage from './features/system/pages/CaiDatApiPage';
+import CaiDatTinhNangPage from './features/system/pages/CaiDatTinhNangPage';
 import DuyetPage from './features/duyet/pages/DuyetPage';
 import CaiDatThongBaoPage from './features/system/pages/CaiDatThongBaoPage';
 import NotificationsPage from './features/notifications/pages/NotificationsPage';
@@ -132,6 +133,7 @@ const PAGES = {
   '/he-thong/quan-tri-phan-in': <QuanTriPhanInPage />,
   '/he-thong/hien-thi-pain': <HienThiPainPage />,
   '/he-thong/cai-dat-api': <CaiDatApiPage />,
+  '/he-thong/cai-dat-tinh-nang': <CaiDatTinhNangPage />,
   '/duyet': <DuyetPage />,
   '/he-thong/cai-dat-thong-bao': <CaiDatThongBaoPage />,
   '/he-thong/to-in': <ToInPage />,
