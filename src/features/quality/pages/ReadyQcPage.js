@@ -3,7 +3,6 @@ import NghenListModal, { NghenButton } from '../../../components/common/NghenLis
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
-import Pagination from '../../../components/common/Pagination';
 import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
 import Badge from '../../../components/common/Badge';
 import Icon from '../../../components/common/Icon';
@@ -16,6 +15,7 @@ import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import useNow from '../../../hooks/useNow';
 import useSocketReload from '../../../hooks/useSocketReload';
+import taiHetTrang from '../../../utils/taiHetTrang';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
@@ -56,10 +56,11 @@ export default function ReadyQcPage() {
 
   const [rows, setRows] = useState([]);
   const [nghenOpen, setNghenOpen] = useState(false); // modal "Danh sách nghẽn"
-  const [meta, setMeta] = useState({ page: 1, totalPages: 1, total: 0 });
+  const [meta, setMeta] = useState({ total: 0 });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
+  // ⚠ ĐÃ BỎ state `page` + thanh `Pagination` phân trang SERVER: trang tải-hết rồi để `DataTable` tự
+  //   phân trang 20/trang ở CLIENT. Giữ cả hai là 2 thanh phân trang chồng nhau trên cùng một bảng.
 
   const [editing, setEditing] = useState(null); // phần in row
   const [detail, setDetail] = useState(null);
@@ -115,17 +116,21 @@ export default function ReadyQcPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      // load-all để lọc client trọn vẹn; DataTable tự phân trang 20/trang (dữ liệu nhỏ).
-      const res = await listReadyQcCandidates({ search, page, limit: 500 });
-      setRows(res.data.items);
-      setMeta(res.data.meta);
+      // Tải-hết để lọc client trọn vẹn; DataTable tự phân trang 20/trang.
+      // ⚠⚠ `limit: 500` cũ bị `getPaging` cắt còn 200 mà KHÔNG báo gì. Màn này mới 166 dòng nên chưa
+      //   lộ, nhưng vượt 200 là QC quét mã không ra hàng và bộ lọc chỉ soi 200 dòng đầu — đúng sự cố
+      //   Test Run - QA 19/08/2026 (658 lệnh, màn chỉ thấy 200).
+      const { items, total, thieu } = await taiHetTrang((p) => listReadyQcCandidates({ search, ...p }));
+      setRows(items);
+      setMeta({ total });
+      if (thieu) show(`Chỉ tải được ${items.length}/${total} phần in — hãy thu hẹp bằng ô tìm kiếm`, 'error');
       setSelected(new Set());
     } catch (e) {
       show(e.message || 'Lỗi tải', 'error');
     } finally {
       setLoading(false);
     }
-  }, [search, page, show]);
+  }, [search, show]);
 
   useEffect(() => {
     const t = setTimeout(load, 250);
@@ -138,11 +143,13 @@ export default function ReadyQcPage() {
   // 16:24, quét lúc 16:27 vẫn báo thiếu). KHÔNG dùng `load` vì nó xóa các dòng đang tick.
   const refresh = useCallback(async () => {
     try {
-      const res = await listReadyQcCandidates({ search, page, limit: 500 });
-      setRows(res.data.items);
-      setMeta(res.data.meta);
+      const { items, total } = await taiHetTrang((p) => listReadyQcCandidates({ search, ...p }));
+      setRows(items);
+      setMeta({ total });
+      // ⚠ Lượt tải NGẦM: cờ `thieu` CỐ Ý không báo — người dùng không hề bấm gì, bắn toast đỏ ở đây
+      //   là quấy rầy giữa lúc họ đang tick chọn. Lượt `load()` có bấm/đổi tìm kiếm đã báo rồi.
     } catch (e) { /* nền: lỗi mạng thì giữ dữ liệu cũ, không quấy người dùng */ }
-  }, [search, page]);
+  }, [search]);
   useSocketReload(['ready:confirmed'], refresh);
 
   // Quét mã mà không khớp dòng nào → tra tiếp toàn hệ thống để nói RÕ vì sao (thường là phần in đã
@@ -329,7 +336,7 @@ export default function ReadyQcPage() {
   return (
     <div>
       <Toolbar title="QC chuẩn bị kỹ thuật" subtitle="Toàn bộ phần in ở READY — QC xác nhận khi đủ mục kỹ thuật (xác nhận Khuôn là Film tự đạt theo; hàng gia công II/AD chỉ cần Mực). SLA nghẽn QC chỉ tính sau khi kỹ thuật đủ mục."
-        search={search} onSearch={(v) => { setSearch(v); setPage(1); }}
+        search={search} onSearch={setSearch}
         searchPlaceholder="Tìm code phần, mã hàng, màu/kích vải, kích phim...">
         {/* Làm tươi NGAY khi mở modal quét: phòng trường hợp tab để lâu / mất socket giữa chừng. */}
         {canQC && <Button variant="secondary" icon="scan-line" onClick={() => { refresh(); setScanOpen(true); }}>Quét / tích mã</Button>}
@@ -349,7 +356,6 @@ export default function ReadyQcPage() {
       <DataTable columns={columns} rows={viewRows} loading={loading} onRowClick={(r) => open(r)} sttStart={0}
         rowClassName={(r) => `${slaRowClass(evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status)} ${r._set ? 'border-l-[3px] border-l-primary/60' : ''}`}
         emptyText="Không có phần in nào ở READY" />
-      <Pagination page={meta.page} totalPages={meta.totalPages} total={meta.total} onPage={setPage} />
 
       <SidePanel
         open={!!editing}

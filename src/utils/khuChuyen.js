@@ -62,14 +62,33 @@ export const locSiSoTheoChip = (v) => {
 // Nhãn chip (cho phụ đề Excel / câu "không có hàng nào thuộc loại …").
 export const nhanChip = (v) => (LOAI_TABS.find((t) => t.v === v) || {}).label || '';
 
-// Đếm số hàng cho từng chip (kể cả chip khu) → hiện số nhỏ trên mỗi chip.
-export const demChip = (rows) => {
-  const m = {};
-  (rows || []).forEach((x) => {
-    if (x.ma_loai_chuyen) m[x.ma_loai_chuyen] = (m[x.ma_loai_chuyen] || 0) + 1;
+// Đếm cho từng chip (kể cả chip khu) → hiện số nhỏ trên mỗi chip.
+//
+// ⚠⚠ `layKhoa(row)` = mảng KHÓA ĐỊNH DANH của hàng, dùng để đếm **KHÔNG TRÙNG**. Mặc định mỗi hàng
+//   là một khóa riêng ⇒ *Theo dõi chuyền* và *Xác nhận chạy* vẫn đếm HÀNG y như cũ.
+//   Màn *Test Run - QA* truyền `(r) => codesCuaLenh(r)` để đếm theo PHẦN IN.
+//
+// ⚠⚠ PHẢI KHỬ TRÙNG, KHÔNG CỘNG DỒN (sửa 19/08/2026 — người dùng bắt được): bản đầu cộng
+//   `dsPhanIn(r).length` nên chip "Tất cả" ra **885** trong khi chỉ có **797 phần in khác nhau** —
+//   68 phần in được release NHIỀU LẦN (nhiều lệnh) bị đếm lặp. 885 là số DÒNG bảng vẽ ra, không phải
+//   số phần in, nên không bao giờ khớp dải "Theo dõi" (vốn đếm phần in).
+//
+// ⚠ HỆ QUẢ ĐÃ BIẾT: một phần in trải 2 loại chuyền sẽ được đếm ở CẢ HAI chip ⇒ **Σ các chip có thể
+//   lớn hơn chip "Tất cả"**. Đây là bản chất (giống ghi chú ở modal *Danh sách release*), đừng "sửa
+//   cho tổng khớp" bằng cách bỏ khử trùng — làm vậy là quay lại đúng lỗi trên.
+export const demChip = (rows, layKhoa = null) => {
+  const set = {};
+  const them = (chip, khoa) => {
+    if (!set[chip]) set[chip] = new Set();
+    khoa.forEach((k) => set[chip].add(k));
+  };
+  (rows || []).forEach((x, i) => {
+    const khoa = layKhoa ? (layKhoa(x) || []) : [i];
+    if (!khoa.length) return;
+    them('', khoa);
+    if (x.ma_loai_chuyen) them(x.ma_loai_chuyen, khoa);
     const k = khuCuaChuyen(x.ma_chuyen);
-    if (k) m[`KHU:${k}`] = (m[`KHU:${k}`] || 0) + 1;
+    if (k) them(`KHU:${k}`, khoa);
   });
-  m[''] = (rows || []).length;
-  return m;
+  return Object.fromEntries(Object.entries(set).map(([k, v]) => [k, v.size]));
 };

@@ -119,17 +119,29 @@ export default function NotificationBell() {
     <Popover className="relative">
       {({ close }) => (
         <>
+          {/* ⚠ CÒN TIN CHƯA ĐỌC → chuông đỏ + badge nháy NHẸ (keyframe `chuong-nhay`/`chuong-quang`
+              trong tailwind.config.js). Dùng `motion-safe:` để máy đặt "giảm chuyển động" thì badge
+              đứng yên — vẫn đỏ nên không mất thông tin nào. Đọc hết là mọi hiệu ứng tự tắt. */}
           <Popover.Button
             onClick={() => { if (!daTai.current) taiDanhSach(); }}
-            className="relative flex h-9 w-9 items-center justify-center rounded-control text-ink-soft transition hover:bg-surface-muted hover:text-ink"
+            className={`relative flex h-9 w-9 items-center justify-center rounded-control transition hover:bg-surface-muted ${
+              soChuaDoc > 0 ? 'text-danger hover:text-danger' : 'text-ink-soft hover:text-ink'}`}
             title={soChuaDoc ? `${soChuaDoc} thông báo chưa đọc` : 'Thông báo'}
-            aria-label="Thông báo"
+            aria-label={soChuaDoc ? `Thông báo — ${soChuaDoc} chưa đọc` : 'Thông báo'}
           >
             <Icon name="bell" size={20} />
             {soChuaDoc > 0 && (
-              <span className="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold leading-none text-white ring-2 ring-surface">
-                {soChuaDoc > 99 ? '99+' : soChuaDoc}
-              </span>
+              <>
+                {/* Quầng lan ra rồi tắt — nằm DƯỚI badge nên không che con số; `pointer-events-none`
+                    để không nuốt cú bấm vào chuông. */}
+                <span
+                  aria-hidden
+                  className="pointer-events-none absolute -right-0.5 -top-0.5 h-[18px] w-[18px] rounded-full bg-danger motion-safe:animate-chuong-quang"
+                />
+                <span className="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold leading-none text-white ring-2 ring-surface motion-safe:animate-chuong-nhay">
+                  {soChuaDoc > 99 ? '99+' : soChuaDoc}
+                </span>
+              </>
             )}
           </Popover.Button>
 

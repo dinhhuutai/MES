@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
+import taiHetTrang from '../../../utils/taiHetTrang';
 import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
 import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
@@ -90,12 +91,24 @@ export default function TestRunPage() {
   const [onlyPending, setOnlyPending] = useState(true); // mặc định chỉ hiện lệnh CHƯA QA xong (khớp Test Run ở dashboard)
   const [loai, setLoai] = useState(''); // chip loại chuyền / khu Bàn ('' = tất cả)
 
-  // Dải "Theo dõi" (sĩ số) bám ô tìm + panel lọc + dải chip loại chuyền/khu của màn này.
-  useSiSoLoc({ timKiem: search, ...filters, ...locSiSoTheoChip(loai) });
   // Lọc theo NGÀY KẾ HOẠCH SẢN XUẤT (`lenh_san_xuat.ngay_ke_hoach`) — chọn được NHIỀU NGÀY bằng
   // cùng 1 ô như trang Hồ sơ kỹ thuật. Mặc định RỖNG = không lọc: đây là màn thao tác hằng ngày,
   // mặc định lọc "hôm nay" sẽ giấu mất lệnh của các ngày khác mà QA không biết vì sao.
   const [ngayKH, setNgayKH] = useState({ from: '', to: '' });
+
+  // Dải "Theo dõi" (sĩ số) bám ô tìm + panel lọc + dải chip loại chuyền/khu của màn này.
+  // ⚠⚠ Gửi CẢ ô tích "Chỉ chờ QA" (mặc định BẬT) và khoảng NGÀY SX KẾ HOẠCH — thiếu 2 thứ này thì
+  //   4 số đếm cả lệnh đã QA xong / ngoài khoảng ngày, trong khi bảng bên dưới đã ẩn chúng đi.
+  // ⚠ PHẢI đặt SAU `useState` của `ngayKH`: đọc biến `const` trước dòng khai báo là lỗi runtime
+  //   ("Cannot access before initialization"), không phải cảnh báo lúc build.
+  useSiSoLoc({
+    timKiem: search,
+    ...filters,
+    ...locSiSoTheoChip(loai),
+    choQa: onlyPending ? '1' : '',
+    ...(ngayKH.from || ngayKH.to
+      ? { loaiNgay: 'NGAY_KE_HOACH', ngayTu: ngayKH.from, ngayDen: ngayKH.to } : {}),
+  });
   const locNgay = useCallback((rs) => rs.filter((r) => trongKhoangNgay(r.ngay_ke_hoach, ngayKH.from, ngayKH.to)),
     [ngayKH]);
   const filtered = useMemo(() => {
@@ -104,10 +117,19 @@ export default function TestRunPage() {
     if (loai) base = base.filter((r) => hopChip(r, loai));
     return filterRows(base, filters, FILTER_FIELDS);
   }, [rows, filters, onlyPending, loai, locNgay]);
-  // Đếm cho badge chip — tính trên tập ĐANG XÉT (ô "Chỉ chờ QA" + khoảng ngày) để số khớp bảng.
+  // ⚠⚠ ĐẾM THEO PHẦN IN **KHÔNG TRÙNG**, KHÔNG theo lệnh và cũng KHÔNG theo dòng (người dùng chốt
+  //   19/08/2026). Dải "Theo dõi" đếm phần in khác nhau, nên đây phải cùng đơn vị mới so được.
+  // ⚠ Bản đầu cộng `dsPhanIn(r).length` ⇒ chip "Tất cả" ra **885** trong khi chỉ có **797 phần in
+  //   khác nhau**: 68 phần in được release nhiều lần nên xuất hiện ở nhiều lệnh và bị đếm lặp.
+  //   885 là số DÒNG bảng vẽ ra — không phải số phần in.
   const countChip = useMemo(
-    () => demChip(locNgay(onlyPending ? rows.filter((r) => !r.qa_done) : rows)),
+    () => demChip(locNgay(onlyPending ? rows.filter((r) => !r.qa_done) : rows), codesCuaLenh),
     [rows, onlyPending, locNgay]
+  );
+  // Badge: số phần in KHÁC NHAU đang hiện + số lệnh, để đối chiếu được cả hai.
+  const tongPhanIn = useMemo(
+    () => new Set(filtered.flatMap((r) => codesCuaLenh(r))).size,
+    [filtered]
   );
   const activeCount = Object.values(filters).filter(Boolean).length;
   const doneCount = useMemo(() => rows.filter((r) => r.qa_done).length, [rows]);
@@ -131,11 +153,19 @@ export default function TestRunPage() {
     }),
   });
 
+  // ⚠⚠ TẢI HẾT MỌI TRANG — `getPaging` CAP CỨNG limit ở 200, xin 500 cũng chỉ nhận 200 và backend
+  //   KHÔNG báo gì. Lỗi đã lộ thật trên prod 19/08/2026: 658 lệnh chờ test mà màn chỉ tải 200 ⇒
+  //   **458 lệnh biến mất khỏi màn QA** (bảng sắp `created_date DESC` nên mất hết lệnh cũ hơn 13/08),
+  //   ô tìm + panel lọc cũng chỉ soi trong 200 dòng đó, và dải "Theo dõi" (đọc thẳng DB) báo 787
+  //   phần in trong khi chip "Tất cả" chỉ 195 — hai con số trên cùng một màn đá nhau.
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const res = await listTestRunCandidates({ search, limit: 500 });
-      setRows(res.data.items);
+      const { items, total, thieu } = await taiHetTrang((p) => listTestRunCandidates({ search, ...p }));
+      setRows(items);
+      // ⚠ Chạm trần an toàn mà vẫn chưa gom đủ thì PHẢI báo — hiển thị thiếu trong im lặng đúng là
+      //   thứ vừa gây ra sự cố này.
+      if (thieu) show(`Chỉ tải được ${items.length}/${total} lệnh — hãy thu hẹp bằng ô tìm kiếm`, 'error');
       if (!silent) setSelected(new Set());
     } catch (e) {
       if (!silent) show(e.message || 'Lỗi tải', 'error');
@@ -273,10 +303,13 @@ export default function TestRunPage() {
         <NghenButton rows={rows} trangThai={(r) => statusLenh(r.id)} onClick={() => setNghenOpen(true)} />
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
-        <Badge tone="info">{filtered.length} lệnh</Badge>
+        {/* ⚠ PHẦN IN đứng TRƯỚC vì đó là đơn vị của màn này (và của dải "Theo dõi"); số lệnh để trong
+            ngoặc cho ai cần đối chiếu. Hai số lệch nhau là ĐÚNG khi có lệnh gom set. */}
+        <Badge tone="info">{tongPhanIn} phần in{tongPhanIn !== filtered.length ? ` · ${filtered.length} lệnh` : ''}</Badge>
       </Toolbar>
 
-      {/* Chip LOẠI CHUYỀN + KHU BÀN — cùng bộ với màn "Theo dõi chuyền" */}
+      {/* Chip LOẠI CHUYỀN + KHU BÀN — cùng bộ với màn "Theo dõi chuyền".
+          ⚠ Số trên chip đếm PHẦN IN (`soPhanIn`), không đếm lệnh — khớp badge + bảng + dải Theo dõi. */}
       <ChipTabs tabs={LOAI_TABS} value={loai} counts={countChip} onChange={setLoai} />
 
       <FieldFilters fields={FILTER_FIELDS} values={filters} onField={(k, v) => setFilters((f) => ({ ...f, [k]: v }))} onClear={() => setFilters({})} open={showFilters} />

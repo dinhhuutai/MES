@@ -4,7 +4,6 @@ import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import { useLocation } from 'react-router-dom';
 import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
-import Pagination from '../../../components/common/Pagination';
 import Badge from '../../../components/common/Badge';
 import Icon from '../../../components/common/Icon';
 import Button from '../../../components/common/Button';
@@ -18,6 +17,7 @@ import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import useNow from '../../../hooks/useNow';
 import useSocketReload from '../../../hooks/useSocketReload';
+import taiHetTrang from '../../../utils/taiHetTrang';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 import TraVeBadge from '../../../components/common/TraVeBadge';
 import TraVeFilter from '../../../components/common/TraVeFilter';
@@ -77,10 +77,11 @@ export default function ReadyPage() {
   const location = useLocation();
   const [rows, setRows] = useState([]);
   const [nghenOpen, setNghenOpen] = useState(false); // modal "Danh sách nghẽn"
-  const [meta, setMeta] = useState({ page: 1, totalPages: 1, total: 0 });
+  const [meta, setMeta] = useState({ total: 0 });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState(() => new URLSearchParams(location.search).get('q') || '');
-  const [page, setPage] = useState(1);
+  // ⚠ ĐÃ BỎ state `page` + thanh `Pagination` phân trang SERVER: trang tải-hết rồi để `DataTable` tự
+  //   phân trang 20/trang ở CLIENT. Giữ cả hai là 2 thanh phân trang chồng nhau trên cùng một bảng.
   const [sel, setSel] = useState(null);
 
   const [selected, setSelected] = useState(() => new Set());
@@ -118,7 +119,6 @@ export default function ReadyPage() {
     const q = new URLSearchParams(location.search).get('q') || '';
     if (!q) return; // vào trang không kèm `?q` → giữ nguyên thứ đang gõ
     setSearch(q);
-    setPage(1);
   }, [location]);
 
   const permItems = ITEMS.filter((it) => can(it.perm));
@@ -151,10 +151,14 @@ export default function ReadyPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      // limit cao để lọc client-side trọn vẹn (dữ liệu READY nhỏ); phân trang tự ẩn khi 1 trang.
-      const res = await listReadyCandidates({ search, page, limit: 200 });
-      setRows(res.data.items);
-      setMeta(res.data.meta);
+      // Tải-hết để lọc client-side + quét mã khớp trọn vẹn; DataTable tự phân trang 20/trang.
+      // ⚠⚠ `limit: 200` cũ ĐÚNG BẰNG trần của `getPaging` ⇒ vượt 200 phần in là mất dòng ÂM THẦM.
+      //   Đo prod 19/08/2026: READY đang 164 — chỉ cách trần 36 dòng. Đây là màn quét mã nhiều nhất,
+      //   thiếu dòng thì kỹ thuật quét ra "không thấy" mà không hiểu vì sao (xem sự cố Test Run - QA).
+      const { items, total, thieu } = await taiHetTrang((p) => listReadyCandidates({ search, ...p }));
+      setRows(items);
+      setMeta({ total });
+      if (thieu) show(`Chỉ tải được ${items.length}/${total} phần in — hãy thu hẹp bằng ô tìm kiếm`, 'error');
       setSelected(new Set());
       // Số chưa xác nhận từng mục — TOÀN HỆ THỐNG (không theo trang/lọc hiện tại).
       getReadyItemCounts().then((c) => setCounts(c.data)).catch(() => {});
@@ -163,7 +167,7 @@ export default function ReadyPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, page, show]);
+  }, [search, show]);
 
   useEffect(() => {
     const t = setTimeout(load, 250);
@@ -175,12 +179,13 @@ export default function ReadyPage() {
   // KHÔNG dùng `load` vì nó xóa các dòng đang tick.
   const refresh = useCallback(async () => {
     try {
-      const res = await listReadyCandidates({ search, page, limit: 200 });
-      setRows(res.data.items);
-      setMeta(res.data.meta);
+      // ⚠ Lượt tải NGẦM: cờ `thieu` CỐ Ý không báo — người dùng không bấm gì, toast đỏ ở đây là quấy rầy.
+      const { items, total } = await taiHetTrang((p) => listReadyCandidates({ search, ...p }));
+      setRows(items);
+      setMeta({ total });
       getReadyItemCounts().then((c) => setCounts(c.data)).catch(() => {});
     } catch (e) { /* nền: giữ dữ liệu cũ khi lỗi mạng */ }
-  }, [search, page]);
+  }, [search]);
   useSocketReload(['ready:confirmed'], refresh);
 
   // Quét mã không khớp dòng nào → tra tiếp toàn hệ thống để nói RÕ vì sao (đã QC xong / đã release /
@@ -282,7 +287,7 @@ export default function ReadyPage() {
   return (
     <div>
       <Toolbar title="Chuẩn bị kỹ thuật — READY" subtitle="Xác nhận film / khuôn / mực trước khi Release"
-        search={search} onSearch={(v) => { setSearch(v); setPage(1); }}
+        search={search} onSearch={setSearch}
         searchPlaceholder="Tìm code phần, mã hàng, màu/kích vải, kích phim...">
         {permItems.length > 0 && (
           <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét / tích mã</Button>
@@ -305,10 +310,9 @@ export default function ReadyPage() {
 
       <FieldFilters fields={FILTER_FIELDS} values={filters} onField={(k, v) => setFilters((f) => ({ ...f, [k]: v }))} onClear={() => setFilters({})} open={showFilters} />
 
-      <DataTable columns={columns} rows={viewRows} loading={loading} onRowClick={(r) => setSel(r.id)} sttStart={(meta.page - 1) * 200}
+      <DataTable columns={columns} rows={viewRows} loading={loading} onRowClick={(r) => setSel(r.id)} sttStart={0}
         rowClassName={(r) => slaRowClass(evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status)}
         emptyText="Tất cả phần in đã READY 🎉" />
-      <Pagination page={meta.page} totalPages={meta.totalPages} total={meta.total} onPage={setPage} />
 
       {sel && (
         <ReadyPanel phanInId={sel} onClose={() => setSel(null)} onChanged={load} />

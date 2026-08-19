@@ -14,6 +14,7 @@ import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import useSocketReload from '../../../hooks/useSocketReload';
+import taiHetTrang from '../../../utils/taiHetTrang';
 import useNghenMap from '../../../hooks/useNghenMap';
 import { slaRowClass } from '../../../utils/sla';
 import {
@@ -78,10 +79,15 @@ export default function XacNhanChayPage() {
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      // limit 200 = trần của `getPaging` (backend). Trang lọc + phân trang CLIENT nên phải tải-hết,
-      // nếu không nút Excel chỉ xuất được phần đã tải.
-      const [c, m] = await Promise.all([listProductionCandidates({ search, limit: 200 }), getMonitor()]);
-      setCandidates(c.data.items);
+      // ⚠⚠ `limit: 200` cũ ĐÚNG BẰNG trần `getPaging` ⇒ vượt 200 lệnh chờ chạy là mất dòng ÂM THẦM
+      //   (bảng lọc + phân trang + xuất Excel đều ở CLIENT). Prod 19/08 mới 98 dòng nên chưa lộ, nhưng
+      //   đây đúng kiểu lỗi vừa xảy ra ở Test Run - QA (658 lệnh, màn chỉ thấy 200).
+      const [kq, m] = await Promise.all([
+        taiHetTrang((p) => listProductionCandidates({ search, ...p })),
+        getMonitor(),
+      ]);
+      setCandidates(kq.items);
+      if (kq.thieu) show(`Chỉ tải được ${kq.items.length}/${kq.total} lệnh — hãy thu hẹp bằng ô tìm kiếm`, 'error');
       setRunning(m.data.running);
     } catch (e) {
       if (!silent) show(e.message || 'Lỗi tải', 'error');

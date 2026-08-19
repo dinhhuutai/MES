@@ -139,8 +139,14 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
         {done ? (
           <div className="text-sm text-ink-soft">
             {cp?.gia_tri_text ? <div className="text-ink">{cp.gia_tri_text}</div> : null}
-            {cp?.nguoi_xac_nhan_ten ? <div className="text-xs font-medium text-ink">{cp.nguoi_xac_nhan_ten}</div> : null}
+            {/* ⚠ Mục do HỆ THỐNG tự đặt (ERP KTCankiemtra=0) không có người xác nhận — phải nói rõ,
+                không thì ô trống khiến người dùng tưởng dữ liệu lỗi. Backend chỉ ghi `ghi_chu` cho
+                đúng ca đó (`erpsync.simulateReadyDone`), và xóa nó khi người thật xác nhận đè lên. */}
+            {cp?.nguoi_xac_nhan_ten
+              ? <div className="text-xs font-medium text-ink">{cp.nguoi_xac_nhan_ten}</div>
+              : cp?.ghi_chu ? <div className="text-xs font-medium text-ink">Hệ thống (tự động)</div> : null}
             {cp?.tg_xac_nhan ? <div className="text-xs">Lúc {fmt(cp.tg_xac_nhan)}</div> : null}
+            {cp?.ghi_chu ? <div className="mt-0.5 text-xs italic text-ink-soft">{cp.ghi_chu}</div> : null}
           </div>
         ) : canEdit ? (
           <Button className="w-full" loading={busy === item.ma} onClick={() => doConfirm(item)}>

@@ -58,11 +58,26 @@ module.exports = {
           '50%': { transform: 'rotate(180deg) scale(1.12)' },
           '100%': { transform: 'rotate(360deg) scale(1)' },
         },
+        // Chuông thông báo có tin CHƯA ĐỌC — nháy đỏ NHẸ (components/layout/NotificationBell.js).
+        // ⚠ CỐ Ý nhẹ hơn hẳn `blink-danger`: dải này nằm ngay cạnh avatar và chạy SUỐT thời gian
+        //   còn tin chưa đọc, không phải cảnh báo nghẽn nhấp nháy vài giây rồi thôi. Chỉ đổi độ mờ
+        //   + phình rất nhỏ, KHÔNG đổi nền/viền để con số bên trong luôn đọc được.
+        'chuong-nhay': {
+          '0%, 100%': { opacity: '1', transform: 'scale(1)' },
+          '50%': { opacity: '0.55', transform: 'scale(1.12)' },
+        },
+        // Quầng đỏ lan ra rồi tắt — đặt DƯỚI badge (không che số), cho dễ bắt mắt từ xa.
+        'chuong-quang': {
+          '0%': { transform: 'scale(1)', opacity: '0.55' },
+          '70%, 100%': { transform: 'scale(2.1)', opacity: '0' },
+        },
       },
       animation: {
         'blink-danger': 'blink-danger 0.7s ease-in-out infinite',
         'blink-warning': 'blink-warning 0.9s ease-in-out infinite',
         'flower-spin': 'flower-spin 1.4s ease-in-out infinite',
+        'chuong-nhay': 'chuong-nhay 1.6s ease-in-out infinite',
+        'chuong-quang': 'chuong-quang 1.6s ease-out infinite',
       },
     },
   },

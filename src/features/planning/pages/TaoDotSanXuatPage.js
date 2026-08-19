@@ -11,6 +11,7 @@ import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 import ReleaseListModal from '../components/ReleaseListModal';
 import useToast from '../../../hooks/useToast';
+import taiHetTrang from '../../../utils/taiHetTrang';
 import useSocketReload from '../../../hooks/useSocketReload';
 import usePermissions from '../../../hooks/usePermissions';
 import { listRelease1Candidates, createDotSanXuat, listChuyen } from '../../../services/planningService';
@@ -49,8 +50,11 @@ export default function TaoDotSanXuatPage() {
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const res = await listRelease1Candidates({ search, limit: 1000 });
-      setRows(res.data.items);
+      // ⚠⚠ `limit: 1000` cũ VÔ NGHĨA — `getPaging` cắt cứng còn 200 và không báo gì. Màn này gom giỏ
+      //   bằng quét mã + lọc client nên thiếu dòng là quét không ra hàng (xem sự cố Test Run 19/08).
+      const { items, total, thieu } = await taiHetTrang((p) => listRelease1Candidates({ search, ...p }));
+      setRows(items);
+      if (thieu) show(`Chỉ tải được ${items.length}/${total} đợt vải — hãy thu hẹp bằng ô tìm kiếm`, 'error');
     } catch (e) {
       if (!silent) show(e.message || 'Lỗi tải', 'error');
     } finally {

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
+import taiHetTrang from '../../../utils/taiHetTrang';
 import Toolbar from '../../../components/common/Toolbar';
 import Pagination from '../../../components/common/Pagination';
 import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
@@ -111,7 +112,9 @@ export default function Release1Page() {
   const [meta, setMeta] = useState({ page: 1, totalPages: 1, total: 0 });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
+  // ⚠ ĐÃ BỎ state `page` (phân trang SERVER): trang này tải-hết rồi phân trang ở CLIENT bằng `cpage`.
+  //   Gửi `page` lên API chỉ tổ nhảy sang lô 200 dòng khác; đổi từ khóa tìm kiếm thì `cpage` đã tự
+  //   về 1 nhờ effect theo `viewRowsGom.length`.
   const { statusDot } = useNghenMap();
   const [selected, setSelected] = useState({});      // dot_vai_id -> row
   const [loaiPain, setLoaiPain] = useState('');      // chip lọc theo phương án in ('' = tất cả)
@@ -156,18 +159,21 @@ export default function Release1Page() {
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      // Tải-hết (limit cao) để quét/tích khớp mọi đợt vải + lọc client trọn vẹn (mirror Release 2).
+      // Tải-hết để quét/tích khớp mọi đợt vải + lọc client trọn vẹn (mirror Release 2).
       // ⚠ ĐÃ BỎ `listReleaseSets`: đợt vải trong gom set nay hiện thành DÒNG LẺ ngay trong danh sách
       //   này (backend bỏ điều kiện loại chúng ra) ⇒ gọi thêm API set sẽ làm hàng hiện ĐÚP.
-      const res = await listRelease1Candidates({ search, page, limit: 500 });
-      setRows(res.data.items);
-      setMeta(res.data.meta);
+      // ⚠⚠ PHẢI đi qua `taiHetTrang`: `limit: 500` cũ bị `getPaging` cắt còn 200 mà không báo gì —
+      //   xem sự cố Test Run - QA 19/08/2026 (658 lệnh, màn chỉ thấy 200).
+      const { items, total, thieu } = await taiHetTrang((p) => listRelease1Candidates({ search, ...p }));
+      setRows(items);
+      setMeta({ total });
+      if (thieu) show(`Chỉ tải được ${items.length}/${total} đợt vải — hãy thu hẹp bằng ô tìm kiếm`, 'error');
     } catch (e) {
       if (!silent) show(e.message || 'Lỗi tải', 'error');
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [search, page, show]);
+  }, [search, show]);
 
   useEffect(() => { listChuyen().then((r) => setChuyen(r.data)).catch(() => {}); }, []);
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
@@ -339,7 +345,7 @@ export default function Release1Page() {
   return (
     <div>
       <Toolbar title="Release 1" subtitle="Phần in đã READY — chọn đợt vải/set & chuyền để release"
-        search={search} onSearch={(v) => { setSearch(v); setPage(1); }}
+        search={search} onSearch={setSearch}
         searchPlaceholder="Tìm code phần, mã hàng, màu, kích...">
         <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét QR code phần</Button>
         <TraVeFilter checked={onlyReturned} onChecked={setOnlyReturned}

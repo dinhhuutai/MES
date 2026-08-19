@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
+import taiHetTrang from '../../../utils/taiHetTrang';
 import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
 import Badge from '../../../components/common/Badge';
@@ -105,11 +106,15 @@ export default function Release2Page() {
     }),
   });
 
+  // ⚠⚠ TẢI HẾT MỌI TRANG (xem `utils/taiHetTrang.js`): `getPaging` cắt cứng ở 200, xin 500 cũng chỉ
+  //   nhận 200 mà KHÔNG báo lỗi. Màn này hiện mới ~5 lệnh nên chưa lộ, nhưng trang tự lọc + quét mã
+  //   + xuất Excel ở CLIENT nên vượt 200 là sai trong im lặng — đúng ca đã xảy ra ở Test Run - QA.
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const res = await listRelease2Candidates({ search, limit: 500 });
-      setRows(res.data.items);
+      const { items, total, thieu } = await taiHetTrang((p) => listRelease2Candidates({ search, ...p }));
+      setRows(items);
+      if (thieu) show(`Chỉ tải được ${items.length}/${total} lệnh — hãy thu hẹp bằng ô tìm kiếm`, 'error');
       if (!silent) setSelected(new Set());
     } catch (e) {
       if (!silent) show(e.message || 'Lỗi tải', 'error');

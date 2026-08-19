@@ -8,7 +8,7 @@ import Icon from '../../../components/common/Icon';
 import SearchableSelect from '../../../components/common/SearchableSelect';
 import useToast from '../../../hooks/useToast';
 import { getActivity } from '../../../services/presenceService';
-import { listUsers } from '../../../services/userService';
+import { listUserOptions } from '../../../services/userService';
 
 const todayStr = () => {
   const d = new Date();
@@ -38,7 +38,11 @@ export default function ActivityLogPage() {
   const [loai, setLoai] = useState('');
   const [users, setUsers] = useState([]);
 
-  useEffect(() => { listUsers({ limit: 500 }).then((r) => setUsers(r.data.items || r.data || [])).catch(() => {}); }, []);
+  // ⚠ Ô chọn "Người" phải có ĐỦ tài khoản. `listUsers` (`GET /users`) đi qua `getPaging` nên bị cắt
+  //   cứng ở 200 — prod đang có 310 người ⇒ **110 người không bao giờ hiện ra để lọc**, im lặng.
+  //   `/users/options` KHÔNG qua `getPaging` (nhận thẳng `limit`, mặc định 500) nên lấy đủ trong 1
+  //   lời gọi, lại chỉ đòi đăng nhập thay vì quyền `USER_VIEW`.
+  useEffect(() => { listUserOptions({ limit: 1000 }).then((r) => setUsers(r.data || [])).catch(() => {}); }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
