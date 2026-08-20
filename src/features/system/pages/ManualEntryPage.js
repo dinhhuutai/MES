@@ -279,7 +279,7 @@ export default function ManualEntryPage() {
             <Field label="Thời gian chờ khô (phút)" hint="tgphoi"><Input type="number" min="0" value={phanIn.thoi_gian_cho_kho_phut} onChange={(e) => setPhanIn((s) => ({ ...s, thoi_gian_cho_kho_phut: e.target.value }))} placeholder="mặc định 60" /></Field>
             {/* Mã vạch của CHÍNH phần in (11 số). ⚠ KHÁC "Mã đợt Ready" ở đợt vải — mã kia ở mức đợt
                 và dùng chung nhiều phần in. Quét mã vạch ở READY ưu tiên tra mã này trước. */}
-            <Field label="Mã vạch TDTHĐH" hint="BarcodePTHDH — 11 số, riêng từng phần in"><Input value={phanIn.barcode} onChange={(e) => setPhanIn((s) => ({ ...s, barcode: e.target.value }))} placeholder="vd 26022790132" /></Field>
+            <Field label="Mã vạch TDTHĐH" hint="BarcodePTHDH — 11 số. Nhiều mã thì ngăn bằng dấu phẩy"><Input value={phanIn.barcode} onChange={(e) => setPhanIn((s) => ({ ...s, barcode: e.target.value }))} placeholder="vd 26022790132 hoặc 26022790132,26024144132" /></Field>
             {/* ⚠ DDHSUBID thuộc PHẦN IN (mig 088, trước ở đợt vải) và BẰNG 3 SỐ CUỐI của mã vạch trên.
                 Nhập lệch nhau là ERP không đối soát được lượt in tem. */}
             <Field label="Dòng chi tiết đơn" hint="DDHSUBID — bằng 3 số cuối mã vạch TDTHĐH"><Input value={phanIn.ddh_sub_id} onChange={(e) => setPhanIn((s) => ({ ...s, ddh_sub_id: e.target.value }))} placeholder="vd 132" /></Field>

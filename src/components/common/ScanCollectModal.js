@@ -3,6 +3,7 @@ import Modal from './Modal';
 import Button from './Button';
 import Icon from './Icon';
 import { startCameraDecode, cameraErrorMessage, playVideo } from './cameraDecoder';
+import { tachDsMa } from '../../utils/maPhanIn';
 
 // So khớp mã: bỏ khoảng trắng + viết thường (khớp cả code phần có chữ lẫn barcode dãy số).
 const normStr = (s) => String(s ?? '').trim().toLowerCase().replace(/\s+/g, '');
@@ -54,10 +55,13 @@ export default function ScanCollectModal({
   open, onClose, title = 'Quét / tích mã', help,
   rows = [], getId = (r) => r.id,
   getCodes = (r) => [r.ma_phan], getBarcodes,
-  // Mã vạch của CHÍNH PHẦN IN (ERP `BarcodePTHDH` → `phan_in.barcode`) — TƯƠNG ĐƯƠNG code phần, 1 mã ↔ 1
-  // phần in. Quét mã vạch thì THỬ MÃ NÀY TRƯỚC, không có mới sang mã HSKT (mã HSKT ở mức HỒ SƠ nên có
-  // thể trỏ tới nhiều phần in). Mặc định đọc `r.barcode_phan_in` — hàng nào không có thì bỏ qua.
-  getPhanInBarcodes = (r) => (r && r.barcode_phan_in ? [r.barcode_phan_in] : []),
+  // Mã vạch của CHÍNH PHẦN IN (ERP `BarcodePTHDH` → `phan_in.barcode`) — TƯƠNG ĐƯƠNG code phần. Quét mã
+  // vạch thì THỬ MÃ NÀY TRƯỚC, không có mới sang mã HSKT (mã HSKT ở mức HỒ SƠ nên có thể trỏ tới nhiều
+  // phần in). Mặc định đọc `r.barcode_phan_in` — hàng nào không có thì bỏ qua.
+  // ⚠⚠ MỘT PHẦN IN CÓ THỂ CÓ NHIỀU MÃ (chuỗi ngăn bằng dấu phẩy — ERP gửi danh sách, và MES gộp dồn mã
+  //   của các lần sync trước) ⇒ **PHẢI `tachDsMa`**, trả nguyên chuỗi thì quét từng mã sẽ không bao giờ
+  //   khớp (đúng lỗi người dùng báo 20/08/2026). Luật gương ở `backend/src/utils/maPhanIn.js`.
+  getPhanInBarcodes = (r) => (r ? tachDsMa(r.barcode_phan_in) : []),
   // ⚠⚠ TẮT HẲN GOM SET cho cả màn (chốt 2026-08-07 — mở rộng từ `barcodePhanInRieng` vốn chỉ chặn ở cột
   // mã vạch phần in). Bật ở màn READY: READY quét là **XÁC NHẬN NGAY**, mà 3 mục Khuôn/Film/Mực xác nhận
   // ĐỘC LẬP theo TỪNG phần in ⇒ kéo theo cả set = xác nhận hộ những phần in người ta chưa hề quét.

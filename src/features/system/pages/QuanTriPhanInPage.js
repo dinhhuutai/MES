@@ -266,7 +266,7 @@ export default function QuanTriPhanInPage() {
                   { key: 'kich_vai', label: 'Kích vải' },
                   { key: 'kich_phim', label: 'Kích phim' },
                   { key: 'tinh_chat_in', label: 'Tính chất in' },
-                  { key: 'barcode', label: 'Mã vạch TDTHĐH', hint: 'Mã vạch của CHÍNH phần in (ERP BarcodePTHDH)' },
+                  { key: 'barcode', label: 'Mã vạch TDTHĐH', hint: 'Mã vạch của CHÍNH phần in (ERP BarcodePTHDH). Nhiều mã thì ngăn bằng dấu phẩy — quét mã nào trong danh sách cũng ra phần in này.' },
                   { key: 'so_luong_don_hang', label: 'SL đơn hàng', type: 'number' },
                   { key: 'thoi_gian_cho_kho_phut', label: 'Thời gian chờ khô (phút)', type: 'number' },
                   { key: 'la_in_kieng', label: 'In kiếng', type: 'bool' },

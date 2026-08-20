@@ -8,6 +8,7 @@ import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import { getPhanIn } from '../../../services/orderService';
 import { fmtNum, fmtDate } from '../../../utils/format';
+import { hienDsMa } from '../../../utils/maPhanIn';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TRA CỨU 1 PHẦN IN TỪ "DANH SÁCH RELEASE" — trả lời đúng câu người dùng hay bị hỏi:
@@ -123,7 +124,7 @@ export default function PhanInTraCuuPanel({ open, onClose, row }) {
             <div className="grid grid-cols-2 gap-x-4 gap-y-3 border-t border-line pt-3 sm:grid-cols-3">
               <Dong label="Tính chất in"><TinhChatInCell value={data.tinh_chat_in} /></Dong>
               <Dong label="Phương án in"><PhuongAnInBadge value={data.phuong_an_in} /></Dong>
-              <Dong label="Barcode TDTHĐH">{data.barcode_phan_in}</Dong>
+              <Dong label="Barcode TDTHĐH">{hienDsMa(data.barcode_phan_in, '')}</Dong>
             </div>
           )}
 

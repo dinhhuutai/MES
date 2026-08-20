@@ -17,6 +17,7 @@ import useToast from '../../../hooks/useToast';
 import { listVaiVe, getPhanIn, setChoKho } from '../../../services/orderService';
 import exportPhanInVaiVeExcel from '../utils/exportPhanInVaiVeExcel';
 import { fmtNum, fmtDate, fmtDateTime, fmtCurrency } from '../../../utils/format';
+import { hienDsMa } from '../../../utils/maPhanIn';
 
 const LIMIT = 20;
 const todayISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
@@ -541,7 +542,7 @@ export default function PhanInListPage() {
                       <td rowSpan={n} className={TD}>{g.kich_phim || '—'}</td>
                       <td rowSpan={n} className={TD}><TinhChatInCell value={g.tinh_chat_in} /></td>
                       {showSxCols && <td rowSpan={n} className={TD}><PhuongAnInBadge value={g.phuong_an_in} /></td>}
-                      {showSxCols && <td rowSpan={n} className={`${TD} tabular-nums`}>{g.barcode_phan_in || '—'}</td>}
+                      {showSxCols && <td rowSpan={n} className={`${TD} tabular-nums whitespace-normal break-words`}>{hienDsMa(g.barcode_phan_in)}</td>}
                       <td rowSpan={n} className={`${TD} tabular-nums`}>{g.barcode || '—'}</td>
                       <td rowSpan={n} className={`${TD} text-right tabular-nums border-r border-line/60`}>{fmtNum(g.so_luong_don_hang)}</td>
                     </>
@@ -683,7 +684,7 @@ export default function PhanInListPage() {
                 {g.mau_vai && <Badge tone="default">{g.mau_vai}</Badge>}
                 {g.kich_vai && <Badge tone="default">Vải {g.kich_vai}</Badge>}
                 {g.kich_phim && <Badge tone="default">Phim {g.kich_phim}</Badge>}
-                {g.barcode_phan_in && <Badge tone="default">TDTHĐH {g.barcode_phan_in}</Badge>}
+                {g.barcode_phan_in && <Badge tone="default">TDTHĐH {hienDsMa(g.barcode_phan_in)}</Badge>}
                 {g.barcode && <Badge tone="default">Barcode {g.barcode}</Badge>}
                 {g.so_dot > 1 && <Badge tone="warning">{g.so_dot} đợt vải</Badge>}
               </div>
@@ -722,8 +723,9 @@ export default function PhanInListPage() {
             <section className="border-t border-line pt-4">
               <h3 className="mb-1 text-xs font-bold uppercase tracking-wide text-ink-soft">Thông số phần in</h3>
               <Row label="Code phần" value={detail.ma_phan} />
-              {/* Mã vạch của CHÍNH phần in (ERP BarcodePTHDH) — "Barcode" bên dưới là mã ĐỢT VẢI. */}
-              <Row label="BarCode TDTHĐH" value={detail.barcode_phan_in || '—'} />
+              {/* Mã vạch của CHÍNH phần in (ERP BarcodePTHDH) — "Barcode" bên dưới là mã ĐỢT VẢI.
+                  ⚠ CÓ THỂ NHIỀU MÃ (ERP gửi danh sách / gộp dồn qua các lần sync) ⇒ `hienDsMa`. */}
+              <Row label="BarCode TDTHĐH" value={hienDsMa(detail.barcode_phan_in)} />
               <Row label="Barcode" value={detail.barcode || '—'} />
               <Row label="Màu vải" value={detail.mau_vai || '—'} />
               <Row label="Kích vải" value={detail.kich_vai || '—'} />
