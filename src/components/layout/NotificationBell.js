@@ -27,14 +27,28 @@ import {
 
 const SO_HIEN = 6; // hiện tối đa 6 cái trong panel, dư thì "Xem thêm" sang trang thông báo
 
+// ⚠⚠⚠ VÌ SAO SỐ TRÊN CHUÔNG TỪNG TRỄ 10–15 PHÚT (fix 21/08/2026 — người dùng báo "chuông hiển thị
+//   lên chậm quá"): bản cũ CHỈ tải số đúng MỘT LẦN lúc mount rồi phó thác hoàn toàn cho socket.
+//   Mà socket đang bị ép **`transports:['polling']`, `upgrade:false`** (proxy `api-mes` chưa cho
+//   WebSocket upgrade — xem `services/socket.js`) ⇒ rớt một nhịp là event **MẤT VĨNH VIỄN**,
+//   socket.io KHÔNG phát lại event đã bỏ lỡ. Chuông chỉ nhảy khi người dùng đổi module làm Topbar
+//   mount lại — đúng cảm giác "một lúc lâu sau mới thấy".
+// ⇒ 3 LƯỚI AN TOÀN NGOÀI SOCKET: (1) hỏi lại mỗi `CHU_KY_MS` · (2) quay lại tab · (3) socket
+//   `connect` lại (bù đúng quãng vừa rớt). ⚠ Đừng gỡ cái nào — mỗi cái bịt một kiểu mất tin khác
+//   nhau; xong việc bật WebSocket ở proxy thì vẫn nên giữ, socket không bao giờ là bảo đảm 100%.
+// ⚠ Chỉ hỏi khi tab ĐANG HIỆN (`document.hidden`): 310 tài khoản mở sẵn tab nền mà cứ 60s gọi một
+//   lượt là gánh nặng vô ích cho DB ở xa.
+const CHU_KY_MS = 60 * 1000;
+const CHONG_LAP_MS = 5000; // `focus` + `visibilitychange` hay bắn liền nhau ⇒ chặn gọi trùng
+
 export default function NotificationBell() {
   const navigate = useNavigate();
   // ⚠ Token nằm trong REDUX (`state.auth`), KHÔNG phải localStorage — xem `services/axiosClient.js`.
   //   Lấy thẳng `user.id` cho gọn thay vì giải mã JWT.
   const myId = useSelector((s) => s.auth?.user?.id);
   const [soChuaDoc, setSoChuaDoc] = useState(0);
-  const [coQuyen, setCoQuyen] = useState(false);
   const [rows, setRows] = useState([]);
+  const lanTaiCuoi = useRef(0);
   const [tong, setTong] = useState(0);
   const [dangTai, setDangTai] = useState(false);
   const [quyen, setQuyen] = useState(quyenHienTai());
@@ -45,12 +59,19 @@ export default function NotificationBell() {
   const [nhanManh, setNhanManh] = useState(false);
 
   const taiSo = useCallback(async () => {
+    lanTaiCuoi.current = Date.now();
     try {
       const r = await laySoChuaDoc();
       setSoChuaDoc(r.data.so_chua_doc || 0);
-      setCoQuyen(!!r.data.co_quyen);
     } catch (e) { /* thông báo là phụ — không chặn, không toast */ }
   }, []);
+
+  // Gọi `taiSo` nhưng BỎ QUA nếu vừa tải xong — `focus` và `visibilitychange` hay bắn liền nhau,
+  // không chặn thì mỗi lần quay lại tab là 2 request y hệt.
+  const taiSoNeuCu = useCallback(() => {
+    if (Date.now() - lanTaiCuoi.current < CHONG_LAP_MS) return;
+    taiSo();
+  }, [taiSo]);
 
   // ⚠ BỎ QUA LẦN TẢI ĐẦU (`soTruoc.current === null`): mở app mà số nhảy 0 → N là chuyện đương nhiên,
   //   nháy mạnh mỗi lần F5 thì thành nhiễu. Nhịp nhẹ vẫn chạy nên không mất thông tin nào.
@@ -79,6 +100,23 @@ export default function NotificationBell() {
 
   // Đổi cấu hình bật/tắt (của mình hoặc của hệ thống) → số phải tính lại ngay.
   useSocketReload(['thong-bao:cai-dat'], taiSo, 600);
+
+  // 3 lưới an toàn ngoài socket — xem ghi chú `CHU_KY_MS` ở đầu file.
+  useEffect(() => {
+    const dinhKy = setInterval(() => { if (!document.hidden) taiSoNeuCu(); }, CHU_KY_MS);
+    const khiQuayLai = () => { if (!document.hidden) taiSoNeuCu(); };
+    document.addEventListener('visibilitychange', khiQuayLai);
+    window.addEventListener('focus', khiQuayLai);
+    // ⚠ Bù đúng quãng vừa mất kết nối: mọi `thong-bao:moi` bắn trong lúc rớt đều không tới được máy này.
+    const s = getSocket();
+    if (s) s.on('connect', taiSo);
+    return () => {
+      clearInterval(dinhKy);
+      document.removeEventListener('visibilitychange', khiQuayLai);
+      window.removeEventListener('focus', khiQuayLai);
+      if (s) s.off('connect', taiSo);
+    };
+  }, [taiSo, taiSoNeuCu]);
 
   // ⚠ Sự kiện MỚI: cập nhật số + bắn popup hệ điều hành. Nghe TRỰC TIẾP (không qua useSocketReload)
   //   vì cần đọc payload để biết event có dành cho mình không.
@@ -129,7 +167,11 @@ export default function NotificationBell() {
     } catch (e) { /* noop */ }
   };
 
-  if (!coQuyen) return null;
+  // ⚠⚠ ĐÃ BỎ `if (!coQuyen) return null` (21/08/2026) — đây là nguyên nhân thứ 2 của "chuông hiện
+  //   lên chậm": `coQuyen` khởi tạo `false` nên CÁI CHUÔNG chỉ xuất hiện SAU khi `/so-chua-doc` trả
+  //   về ⇒ mỗi lần vào trang / đổi module là chuông **thiếu mất một nhịp rồi mới bật ra**. Từ khi
+  //   chuông hiện ở MỌI tài khoản thì cờ đó luôn `true`, giữ lại chỉ tổ làm trễ.
+  //   Nay chuông vẽ NGAY (badge chưa có số thì chưa hiện), số điền vào sau — không còn nhấp nháy.
 
   return (
     <Popover className="relative">
