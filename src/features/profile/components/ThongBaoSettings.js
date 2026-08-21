@@ -108,14 +108,18 @@ export default function ThongBaoSettings({ onThongBao }) {
   if (loading) {
     return <div className="card flex justify-center p-6"><Spinner size={22} /></div>;
   }
-  // Không thuộc diện nhận (không có quyền kỹ thuật) → ẩn hẳn khối, đừng bày cấu hình vô nghĩa.
-  if (!data || !data.co_quyen) return null;
+  // ⚠⚠ Từ 21/08/2026 chuông hiện ở MỌI tài khoản nên `co_quyen` LUÔN true — không còn dùng được làm
+  //   điều kiện ẩn. Nay xét THẲNG danh sách loại: backend chỉ trả những loại người này thật sự nhận
+  //   được, rỗng nghĩa là không có gì để cấu hình ⇒ ẩn hẳn khối (kể cả nút bật push, vì bật cũng
+  //   không bao giờ có thông báo nào tới).
+  if (!data || !(data.loai || []).length) return null;
 
   return (
     <div className="card p-6">
       <h2 className="text-sm font-semibold text-ink">Thông báo</h2>
       <p className="mt-1 text-sm text-ink-soft">
-        Báo cho bạn khi có phần in bị trả về cho Kỹ thuật.
+        Báo cho bạn khi có việc liên quan tới bạn — cả việc bạn NHẬN lẫn việc chính bạn vừa đẩy đi.
+        Dưới đây chỉ liệt kê những loại bạn thật sự nhận được.
       </p>
 
       {/* Tầng 1 — theo TÀI KHOẢN */}

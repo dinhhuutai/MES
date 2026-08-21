@@ -72,6 +72,10 @@ export function buildDsMap(cells, danhSach, locHang) {
       const v = row[col.key];
       map[cellKey(p.r + 1 + ri, p.c + ci)] = {
         text: v == null || v === '' ? '' : String(v),
+        // ⚠⚠ GIỮ GIÁ TRỊ THÔ (21/08/2026): `text` là chuỗi, mà file Excel phải ghi ô số bằng SỐ THẬT
+        //   thì WPS/Excel mới tính tổng được. Trước đây chỉ có `text` nên mọi ô xuất ra là CHỮ —
+        //   người dùng bôi đen cột số chỉ thấy "Count", không có "Sum". Đừng bỏ cột này đi.
+        val: v,
         kieu: col.kieu || 'text',
       };
     }));

@@ -57,6 +57,22 @@ const thamSoTrang = (goiLoc) => {
   ), {});
 };
 
+// ─── ĐƠN VỊ ĐẾM — nhớ theo TỪNG NGƯỜI, TỪNG MÀN (localStorage) ───────────────
+// ⚠⚠ Người dùng chốt 21/08/2026: mỗi màn mặc định đếm theo đơn vị mà BẢNG bên dưới đang vẽ
+//   (READY → phần in · Release 1/KH tạm → đợt vải · Test Run/Release 2/Xác nhận chạy/Gia công →
+//   LỆNH SX · KCS/Sửa/OQC/Giao → tem). Ai muốn khác thì bấm nút đổi, máy NHỚ lựa chọn đó.
+// ⚠ Danh sách đơn vị + mặc định do BACKEND quyết (`utils/siSoTram.js` `MAN[].donVis`) — FE chỉ hiển
+//   thị. Đơn vị lưu trong máy mà backend không còn hỗ trợ ⇒ backend tự lùi về mặc định và trả về
+//   `don_vi` thật, nút toggle bám theo giá trị đó (KHÔNG bám `donVi` cục bộ) nên không lệch.
+// ⚠ localStorage NÉM LỖI ở chế độ riêng tư / bị chặn ⇒ bọc try/catch, hỏng thì coi như chưa chọn.
+const KHOA_LS = (maTrang) => `siso.donVi.${maTrang}`;
+const docDonVi = (maTrang) => {
+  try { return localStorage.getItem(KHOA_LS(maTrang)) || ''; } catch (e) { return ''; }
+};
+const ghiDonVi = (maTrang, v) => {
+  try { localStorage.setItem(KHOA_LS(maTrang), v); } catch (e) { /* bỏ qua */ }
+};
+
 const O_LIST = [
   { ma: 'ton_dau', ten: 'Tồn đầu kỳ', ngan: 'Đầu', mau: 'text-ink-soft' },
   { ma: 'nhan', ten: 'Nhận trong kỳ', ngan: 'Nhận', mau: 'text-primary' },
@@ -121,6 +137,9 @@ export default function SiSoTram({ maTrang, tuDong = true }) {
   const [so, setSo] = useState(null);
   const [dangTai, setDangTai] = useState(false);
   const [oDangMo, setODangMo] = useState(null);
+  // ⚠ `''` = chưa chọn ⇒ backend dùng mặc định của màn. `ModuleLayout` đặt `key={current.siSo}` nên
+  //   đổi màn là component dựng lại, initializer chạy lại và đọc đúng lựa chọn của màn mới.
+  const [donVi, setDonVi] = useState(() => docDonVi(maTrang));
 
   // `ngam = true` (socket bắn) → KHÔNG bật spinner và KHÔNG xóa số đang hiện khi lỗi: dải này nằm
   // ngay hàng breadcrumb, nháy mỗi lần đồng nghiệp xác nhận là chối mắt.
@@ -135,13 +154,13 @@ export default function SiSoTram({ maTrang, tuDong = true }) {
   const tai = useCallback(async (ngam = false) => {
     if (!ngam) setDangTai(true);
     try {
-      const r = await laySiSo(maTrang, { tu: ky.tu, den: ky.den, ...thamSoTrang(goiLoc) });
+      const r = await laySiSo(maTrang, { tu: ky.tu, den: ky.den, donVi, ...thamSoTrang(goiLoc) });
       setSo(r.data);
     } catch (e) {
       // Không chặn màn thao tác — sĩ số chỉ là số liệu phụ.
       if (!ngam) setSo(null);
     } finally { if (!ngam) setDangTai(false); }
-  }, [maTrang, ky.tu, ky.den, goiLoc]);
+  }, [maTrang, ky.tu, ky.den, goiLoc, donVi]);
 
   useEffect(() => { if (tuDong) tai(); }, [tai, tuDong]);
 
@@ -152,14 +171,44 @@ export default function SiSoTram({ maTrang, tuDong = true }) {
 
   const nhanKy = ky.tu === ky.den ? fmtDate(ky.tu) : `${fmtDate(ky.tu)} → ${fmtDate(ky.den)}`;
 
+  // Bấm để đổi đơn vị đếm — xoay vòng trong danh sách backend trả về (hiện mỗi màn nhiều nhất 2).
+  // ⚠ Vị trí hiện tại lấy từ `so.don_vi` (đơn vị backend THẬT SỰ dùng), không lấy `donVi` cục bộ:
+  //   lựa chọn cũ trong máy có thể đã bị lùi về mặc định, bám biến cục bộ sẽ xoay hụt một nhịp.
+  const dsDonVi = so?.don_vis || [];
+  const doiDonVi = () => {
+    if (dsDonVi.length < 2) return;
+    const i = dsDonVi.findIndex((x) => x.ma === so?.don_vi);
+    const ke = dsDonVi[(i + 1) % dsDonVi.length].ma;
+    ghiDonVi(maTrang, ke);
+    setDonVi(ke);
+  };
+
   return (
     <>
       {/* 1 HÀNG, cao ~28px để nằm ngang hàng breadcrumb. Nhãn dài ẩn dần ở màn hẹp. */}
       <div className="flex items-center gap-1 rounded-control border border-line bg-surface px-2 py-1">
         <Icon name="list" size={13} className="shrink-0 text-ink-soft" />
-        <span className="hidden whitespace-nowrap text-[11px] text-ink-soft xl:inline">
-          Theo dõi {so?.don_vi_nhan || ''}
-        </span>
+        <span className="hidden whitespace-nowrap text-[11px] text-ink-soft xl:inline">Theo dõi</span>
+        {/* ⚠ Nút đổi đơn vị LUÔN HIỆN (không `hidden xl:inline` như chữ "Theo dõi"): trên laptop màn
+            hẹp mà giấu nút thì người dùng không biết 4 số đang đếm theo gì, càng dễ hiểu nhầm. Màn
+            chỉ có 1 đơn vị (READY / QC READY) thì hiện chữ thường, không có gì để bấm. */}
+        {dsDonVi.length > 1 ? (
+          <button
+            type="button"
+            onClick={doiDonVi}
+            className="flex shrink-0 items-center gap-0.5 whitespace-nowrap rounded-full bg-surface-muted px-1.5 py-0.5 text-[11px] font-medium text-ink outline-none transition hover:bg-primary/10 hover:text-primary"
+            title={`Đang đếm theo ${so?.don_vi_nhan}. Bấm để chuyển sang ${
+              (dsDonVi[(dsDonVi.findIndex((x) => x.ma === so?.don_vi) + 1) % dsDonVi.length] || {}).nhan
+            } (máy sẽ nhớ lựa chọn này cho màn ${so?.ten_man || ''}).`}
+          >
+            <Icon name="shuffle" size={10} className="shrink-0" />
+            {so?.don_vi_nhan}
+          </button>
+        ) : (
+          <span className="hidden whitespace-nowrap text-[11px] text-ink-soft xl:inline">
+            {so?.don_vi_nhan || ''}
+          </span>
+        )}
         <span className="hidden whitespace-nowrap text-[11px] font-medium text-ink sm:inline">{nhanKy}</span>
         {/* ⚠ PHẢI có dấu hiệu khi 4 số đang bị bộ lọc trang thu hẹp: không có thì người dùng thấy
             số tụt xuống mà tưởng hệ thống đếm sai / mất hàng. */}
@@ -206,6 +255,7 @@ export default function SiSoTram({ maTrang, tuDong = true }) {
           onClose={() => setODangMo(null)}
           onShow={show}
           goiLoc={goiLoc}
+          donVi={so?.don_vi}
         />
       )}
       <Toast toast={toast} />
@@ -214,7 +264,7 @@ export default function SiSoTram({ maTrang, tuDong = true }) {
 }
 
 // ─── Modal danh sách chi tiết ────────────────────────────────────────────────
-function SiSoModal({ maTrang, o, ky, onDoiKy, so, tenMan, donViNhan, onClose, onShow, goiLoc }) {
+function SiSoModal({ maTrang, o, ky, onDoiKy, so, tenMan, donViNhan, onClose, onShow, goiLoc, donVi }) {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -227,11 +277,14 @@ function SiSoModal({ maTrang, o, ky, onDoiKy, so, tenMan, donViNhan, onClose, on
 
   // ⚠ Modal PHẢI mang theo bộ lọc của TRANG (`t_*`), nếu không: bấm ô "Tồn cuối" đang hiện 12 mà
   //   danh sách mở ra 300 dòng — số trên ô và số dòng trong modal đá nhau ngay trước mắt người dùng.
+  // ⚠ `donVi` phải đi kèm: mỗi dòng trong modal = 1 ĐƠN VỊ ĐANG ĐẾM (1 tem / 1 lệnh / 1 phần in /
+  //   1 đợt vải). Thiếu nó thì bảng liệt kê theo mặc định của màn trong khi ô số đang theo đơn vị
+  //   khác — đúng kiểu "2 con số đá nhau" mà dải này sinh ra để tránh.
   const params = useMemo(() => {
-    const p = { tu: ky.tu, den: ky.den, ...thamSoTrang(goiLoc) };
+    const p = { tu: ky.tu, den: ky.den, donVi, ...thamSoTrang(goiLoc) };
     Object.entries(f).forEach(([k, v]) => { if (v) p[k] = v; });
     return p;
-  }, [ky.tu, ky.den, f, goiLoc]);
+  }, [ky.tu, ky.den, f, goiLoc, donVi]);
 
   const tai = useCallback(async (ngam = false) => {
     if (!ngam) setLoading(true);

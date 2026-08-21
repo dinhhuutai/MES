@@ -9,7 +9,8 @@ import Icon from '../../../components/common/Icon';
 import { Field, Input, Select, Textarea } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import ReportGrid, { parseKey, cellKey } from '../components/ReportGrid';
+import ReportGrid, { parseKey, cellKey, buildDsMap } from '../components/ReportGrid';
+import { giaTriO, chuoiThoCsv } from '../utils/reportCells';
 import { ColorPopover, BorderPopover } from '../components/formatControls';
 import ConditionalFormatModal from '../components/ConditionalFormatModal';
 import MetricPalette from '../components/MetricPalette';
@@ -338,22 +339,31 @@ export default function ReportDesignerPage({ idProp = null, onClose = null }) {
   const doExport = async () => {
     try {
       const res = await renderReport(id, { noiDung: grid });
-      const kq = res.data.ket_qua || {};
+      const data = res.data || {};
+      const kq = data.ket_qua || {};
+      const o = data.o || grid.o || {};
+      // ⚠⚠ PHẢI DỰNG KHỐI DANH SÁCH (fix 21/08/2026): bản cũ chỉ đọc `ket_qua` (metric) nên bỏ sót
+      //   TOÀN BỘ bảng danh sách và cả những ô chữ người dùng gõ ⇒ file CSV tải về gần như RỖNG.
+      //   Nay dùng CHUNG `buildDsMap` + `giaTriO` với bản xuất Excel, 2 đường không thể lệch nhau.
+      const ds = buildDsMap(o, data.danh_sach || {}, {});
+      // ⚠ Số hàng phải NỞ theo dữ liệu khối danh sách, y như lưới trên màn hình — lấy `grid.so_hang`
+      //   trần như cũ thì bảng có 150 dòng cũng chỉ xuất được 20 dòng đầu.
+      const soHang = Math.max(data.so_hang || grid.so_hang || 20, ds.maxRow);
+      const soCot = data.so_cot || grid.so_cot || 8;
       const lines = [];
-      for (let r = 0; r < grid.so_hang; r += 1) {
+      for (let r = 0; r < soHang; r += 1) {
         const cols = [];
-        for (let c = 0; c < grid.so_cot; c += 1) {
-          const v = kq[cellKey(r, c)];
-          let s = '';
-          if (v) {
-            if (v.kieu === 'bool') s = v.value ? 'x' : '';
-            else s = String(v.value ?? '');
-          }
+        for (let c = 0; c < soCot; c += 1) {
+          const k = cellKey(r, c);
+          // ⚠ Ô số ghi THÔ (`1234.5`, không phân cách nghìn): định dạng vi-VN dùng dấu `.` cho hàng
+          //   nghìn nên nếu ghi "1.234" thì Excel/WPS đọc CSV ra 1,234 — sai số ngay từ lúc mở.
+          const s = chuoiThoCsv(giaTriO(o[k], kq[k], ds.map[k]));
           cols.push(`"${s.replace(/"/g, '""')}"`);
         }
         lines.push(cols.join(','));
       }
-      const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+      // ⚠ `\r\n` + BOM: Excel trên Windows cần cả hai mới mở đúng tiếng Việt và đúng dòng.
+      const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url; a.download = `${rep?.ma_bao_cao || 'bao-cao'}.csv`; a.click();

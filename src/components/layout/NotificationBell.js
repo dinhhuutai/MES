@@ -146,7 +146,7 @@ export default function NotificationBell() {
               ⚠ `ml-1` — chừa khoảng cách với avatar bên cạnh, trước đó bị dính sát. */}
           <Popover.Button
             onClick={() => { if (!daTai.current) taiDanhSach(); }}
-            className="relative ml-1 mr-1 flex h-9 w-9 items-center justify-center rounded-control text-ink-soft outline-none transition hover:bg-surface-muted hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+            className="relative ml-1 mr-1 flex h-9 w-9 items-center justify-center rounded-control text-ink-soft outline-none transition hover:bg-surface-muted hover:text-ink focus:outline-none focus-visible:bg-surface-muted"
             title={soChuaDoc ? `${soChuaDoc} thông báo chưa đọc` : 'Thông báo'}
             aria-label={soChuaDoc ? `Thông báo — ${soChuaDoc} chưa đọc` : 'Thông báo'}
           >
@@ -173,13 +173,21 @@ export default function NotificationBell() {
                         đúng 0; máy nào chặn mạng/không tải được Inter thì rơi về Segoe UI và lệch
                         ~0,6px. `text-box` cắt line box về đúng cap-height ⇒ căn theo THÂN CHỮ SỐ,
                         font nào cũng giữa. Trình duyệt chưa hỗ trợ thì bỏ qua dòng này, không hỏng.
-                    ⚠ `h-[18px] min-w-[18px]` giữ nguyên: 1 chữ số = hình tròn thật, 2–3 chữ số nở
-                    ngang thành viên thuốc. `tabular-nums` để mọi chữ số cùng bề rộng, số đổi
-                    (8→9→10) không làm badge giật ngang. */}
-                <span className={`absolute -right-0.5 -top-0.5 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-danger px-1 text-white ring-2 ring-surface ${
+                    (3) ⚠⚠ BADGE PHẢI LÀ HÌNH TRÒN CỐ ĐỊNH `h-[18px] w-[18px]` (fix 21/08/2026 —
+                        người dùng báo *"2 chữ số thì bị lệch, không tròn, số cũng không nằm giữa"*).
+                        Bản trước dùng `min-w-[18px] px-1` nên 2 ký tự làm badge NỞ NGANG thành viên
+                        thuốc ~20px, trong khi **quầng phía sau vẫn cứng 18×18** ⇒ hai vòng đỏ lệch
+                        nhau (cùng neo mép PHẢI), nhìn đúng như "số không nằm giữa vòng tròn".
+                        Trần hiển thị hạ xuống **9+** (người dùng chốt) ⇒ tối đa 2 ký tự, đo ~12px,
+                        thừa chỗ trong 18px nên KHÔNG cần padding. `title`/`aria-label` vẫn ghi SỐ
+                        THẬT để rê chuột/đọc màn hình biết chính xác bao nhiêu tin.
+                        ⚠ Đổi trần (vd `99+`) thì phải nới badge + quầng CÙNG LÚC, nếu không lỗi
+                        lệch vòng tròn quay lại y như cũ.
+                    ⚠ `tabular-nums` để mọi chữ số cùng bề rộng, số đổi (8→9) không làm chữ giật. */}
+                <span className={`absolute -right-0.5 -top-0.5 grid h-[18px] w-[18px] place-items-center rounded-full bg-danger text-white ring-2 ring-surface ${
                   nhanManh ? 'animate-chuong-manh' : 'animate-chuong-nhay'}`}>
                   <span className="block text-[10px] font-bold leading-none tabular-nums [text-box:trim-both_cap_alphabetic]">
-                    {soChuaDoc > 99 ? '99+' : soChuaDoc}
+                    {soChuaDoc > 9 ? '9+' : soChuaDoc}
                   </span>
                 </span>
               </>

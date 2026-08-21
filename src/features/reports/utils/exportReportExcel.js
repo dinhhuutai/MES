@@ -1,27 +1,11 @@
 // Xuất 1 báo cáo (bảng tính) ra Excel (.xlsx) — giá trị đã tính (ket_qua) + KHỐI DANH SÁCH + ô gộp
 // + bề rộng cột + cố định hàng/cột + định dạng cơ bản. Lazy import exceljs để không phình bundle chính.
-import { cellKey, parseKey, fmtSo, buildDsMap, colW, COL_W } from '../components/ReportGrid';
+import { cellKey, parseKey, buildDsMap, colW, COL_W } from '../components/ReportGrid';
+import { giaTriO } from './reportCells';
 
 const THIN = { style: 'thin', color: { argb: 'FFD0D5DD' } };
 const ALL_THIN = { top: THIN, left: THIN, bottom: THIN, right: THIN };
 const ALIGN = { left: 'left', center: 'center', right: 'right' };
-
-// Chuỗi hiển thị 1 ô ở chế độ xem (khớp ReportGrid).
-function cellText(cell, res) {
-  const dd = cell?.dinh_dang || {};
-  if (res) {
-    if (res.loi) return String(res.value ?? '');
-    if (res.kieu === 'bool') return res.value ? 'x' : '';
-    if (res.kieu === 'text') return String(res.value ?? '');
-    return fmtSo(res.value, dd.dinh_dang_so);
-  }
-  if (!cell) return '';
-  if (cell.loai === 'text') return cell.gia_tri || '';
-  if (cell.loai === 'so') return fmtSo(cell.gia_tri ?? '', dd.dinh_dang_so);
-  if (cell.loai === 'hop_kiem') return cell.gia_tri ? 'x' : '';
-  if (cell.loai === 'tha_xuong') return cell.gia_tri || '';
-  return '';
-}
 
 // content: { so_cot, so_hang, o, merges, dinh_dang, ket_qua, danh_sach, cot_w, hang_h, dong_bang, ten_bao_cao, ma_bao_cao }
 export default async function exportReportExcel(content, fileName) {
@@ -41,10 +25,15 @@ export default async function exportReportExcel(content, fileName) {
 
   for (let r = 0; r < soHang; r += 1) {
     const values = [];
+    const oGiaTri = [];
     for (let c = 0; c < soCot; c += 1) {
       const k = cellKey(r, c);
-      const d = ds.map[k];
-      values[c] = d ? d.text : cellText(o[k], kq[k]);
+      // ⚠⚠ GHI SỐ BẰNG SỐ THẬT, KHÔNG phải chuỗi đã format (fix 21/08/2026): bản cũ ghi `d.text` /
+      //   `fmtSo(...)` nên MỌI ô trong file là CHỮ — bôi đen cột số ở WPS chỉ ra `Count`, `Sum=0`.
+      //   Định dạng nghìn/%/tiền nay do `numFmt` của Excel lo (xem `NUM_FMT` ở `reportCells.js`).
+      const g = giaTriO(o[k], kq[k], ds.map[k]);
+      oGiaTri[c] = g;
+      values[c] = g.giaTri;
     }
     const row = ws.addRow(values);
     row.height = Math.round((Number(content.hang_h?.[r]) || 24) * 0.75); // px → point
@@ -53,11 +42,11 @@ export default async function exportReportExcel(content, fileName) {
       const cell = row.getCell(c + 1);
       const src = o[k];
       const dd = src?.dinh_dang || {};
-      const res = kq[k];
       const d = ds.map[k];
-      const isNum = d
-        ? (!d.la_dau && d.kieu === 'so')
-        : (res ? (res.kieu !== 'text' && res.kieu !== 'bool' && !res.loi) : src?.loai === 'so');
+      const g = oGiaTri[c];
+      const isNum = g.so;
+      // Ô số ⇒ gắn mã định dạng của Excel; giá trị bên trong vẫn là SỐ nên cộng/lọc/vẽ được.
+      if (isNum) cell.numFmt = g.dinhDang;
       cell.border = ALL_THIN;
       cell.alignment = {
         vertical: dd.can_doc === 'top' ? 'top' : dd.can_doc === 'duoi' ? 'bottom' : 'middle',
