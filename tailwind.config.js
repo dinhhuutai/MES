@@ -60,11 +60,22 @@ module.exports = {
         },
         // Chuông thông báo có tin CHƯA ĐỌC — nháy đỏ NHẸ (components/layout/NotificationBell.js).
         // ⚠ CỐ Ý nhẹ hơn hẳn `blink-danger`: dải này nằm ngay cạnh avatar và chạy SUỐT thời gian
-        //   còn tin chưa đọc, không phải cảnh báo nghẽn nhấp nháy vài giây rồi thôi. Chỉ đổi độ mờ
-        //   + phình rất nhỏ, KHÔNG đổi nền/viền để con số bên trong luôn đọc được.
+        //   còn tin chưa đọc, không phải cảnh báo nghẽn nhấp nháy vài giây rồi thôi. Chỉ đổi độ mờ,
+        //   KHÔNG đổi nền/viền để con số bên trong luôn đọc được.
+        // ⚠⚠ ĐÃ GỠ `transform: scale()` (21/08/2026) — badge này CHỨA CHỮ SỐ, mà lớp bị transform
+        //   được trình duyệt rasterize rồi phóng bitmap ⇒ ở màn 125%/150% con số nhòe và xê dịch
+        //   nửa pixel, người dùng thấy "số lệch lên trên, màn khác lại không". Phần "phình to" giao
+        //   hẳn cho `chuong-quang` (quầng phía sau, KHÔNG có chữ nên phóng bao nhiêu cũng nét).
+        //   ĐỪNG nhét `scale` lại vào 2 keyframe dưới đây.
         'chuong-nhay': {
-          '0%, 100%': { opacity: '1', transform: 'scale(1)' },
-          '50%': { opacity: '0.55', transform: 'scale(1.12)' },
+          '0%, 100%': { opacity: '1' },
+          '50%': { opacity: '0.55' },
+        },
+        // Nháy MẠNH HƠN trong ít giây khi SỐ CHƯA ĐỌC VỪA TĂNG (có tin mới đến lúc đang mở app).
+        // ⚠ Vẫn giữ tinh thần "nhẹ": chỉ nhanh gấp đôi + biên độ mờ rộng hơn. Hết vài giây tự về `chuong-nhay`.
+        'chuong-manh': {
+          '0%, 100%': { opacity: '1' },
+          '50%': { opacity: '0.3' },
         },
         // Quầng đỏ lan ra rồi tắt — đặt DƯỚI badge (không che số), cho dễ bắt mắt từ xa.
         'chuong-quang': {
@@ -77,7 +88,9 @@ module.exports = {
         'blink-warning': 'blink-warning 0.9s ease-in-out infinite',
         'flower-spin': 'flower-spin 1.4s ease-in-out infinite',
         'chuong-nhay': 'chuong-nhay 1.6s ease-in-out infinite',
+        'chuong-manh': 'chuong-manh 0.8s ease-in-out infinite',
         'chuong-quang': 'chuong-quang 1.6s ease-out infinite',
+        'chuong-quang-manh': 'chuong-quang 0.8s ease-out infinite',
       },
     },
   },

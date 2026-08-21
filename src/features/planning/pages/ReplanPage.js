@@ -23,7 +23,7 @@ import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
 import { codesCuaLenh, laGomSet } from '../utils/phanInLenh';
 import taiHetTrang, { LIMIT_TAI_LON } from '../../../utils/taiHetTrang';
-import { listReplanCandidates, replan, replanBatch, listChuyen, planHistory, replanDone } from '../../../services/planningService';
+import { listReplanCandidates, replan, getReplanDetail, replanBatch, listChuyen, planHistory, replanDone } from '../../../services/planningService';
 import { fmtNum, fmtDate } from '../../../utils/format';
 
 // Lọc nhiều trường (client-side, kết hợp AND) — trang tải-hết (limit 500) nên lọc đủ mọi dòng.
@@ -80,8 +80,21 @@ export default function ReplanPage() {
   const filtered = useMemo(() => filterRows(rows, filters, FILTER_FIELDS), [rows, filters]);
 
   const [detail, setDetail] = useState(null);
-  const [form, setForm] = useState({ chuyenId: '', ngayKeHoach: '', gioBd: '', gioKt: '', lyDo: '' });
+  // `dsDot` = đợt vải của lệnh đang mở + SL release đang giữ + trần được nâng (tải khi mở panel).
+  const [dsDot, setDsDot] = useState([]);
+  const [form, setForm] = useState({ chuyenId: '', ngayKeHoach: '', gioBd: '', gioKt: '', lyDo: '', slRelease: {} });
   const [saving, setSaving] = useState(false);
+  // Tổng SL release đang nhập + cờ chặn Lưu. Ô để TRỐNG cũng tính là sai: SL release là số bắt buộc,
+  // để trống rồi lưu thì người dùng tưởng đã xóa số mà thật ra backend giữ nguyên giá trị cũ.
+  const tongSlMoi = useMemo(
+    () => dsDot.reduce((a, d) => a + (Number(form.slRelease[d.dot_vai_id]) || 0), 0),
+    [dsDot, form.slRelease]
+  );
+  const vuotSl = useMemo(() => dsDot.some((d) => {
+    const v = form.slRelease[d.dot_vai_id];
+    const n = Number(v);
+    return v === '' || v === undefined || !Number.isInteger(n) || n <= 0 || n > d.toi_da;
+  }), [dsDot, form.slRelease]);
 
   const [selected, setSelected] = useState(() => new Set());
   const [batchOpen, setBatchOpen] = useState(false);
@@ -118,16 +131,28 @@ export default function ReplanPage() {
   // thay bằng spinner) và KHÔNG xóa dòng đang tích. Nhiều sự kiện trong 400ms gộp thành 1 lần tải.
   useSocketReload(['workflow:updated'], () => load(true));
 
-  // Đổ sẵn chuyền / ngày / GIỜ hiện tại của lệnh ⇒ không đụng gì thì giữ nguyên kế hoạch cũ.
-  const openDetail = (row) => {
+  // Đổ sẵn chuyền / ngày / GIỜ / SL RELEASE hiện tại của lệnh ⇒ không đụng gì thì giữ nguyên kế
+  // hoạch cũ; sửa 1 thứ thì không phải nhập lại những thứ còn nguyên.
+  // ⚠ SL release nằm ở mức (lệnh × ĐỢT VẢI) nên phải gọi thêm `GET /planning/replan/:id` — hàng trong
+  //   bảng chỉ có tổng `so_luong_release`, không tách được theo đợt (198/1296 lệnh gộp nhiều đợt vải).
+  // ⚠ Lỗi tải danh sách đợt vải bị NUỐT: đó là phần thêm, không được chặn việc dời ngày/chuyền.
+  const openDetail = async (row) => {
     setDetail(row);
+    setDsDot([]);
     setForm({
       chuyenId: row.chuyen_id || '',
       ngayKeHoach: dateStr(row.ngay_ke_hoach),
       gioBd: gioStr(row.tg_bd_kh),
       gioKt: gioStr(row.tg_kt_kh),
       lyDo: '',
+      slRelease: {},
     });
+    try {
+      const r = await getReplanDetail(row.id);
+      const ds = r.data.dot_vai || [];
+      setDsDot(ds);
+      setForm((f) => ({ ...f, slRelease: Object.fromEntries(ds.map((d) => [d.dot_vai_id, String(d.so_luong)])) }));
+    } catch (e) { /* im lặng — vẫn dời được ngày/chuyền/giờ */ }
   };
 
   const toggleOne = (id) => setSelected((s) => {
@@ -171,6 +196,7 @@ export default function ReplanPage() {
 
   const submit = async () => {
     if (!form.ngayKeHoach) { show('Chọn ngày sản xuất kế hoạch', 'error'); return; }
+    if (vuotSl) { show('Số lượng release không hợp lệ — kiểm tra lại các ô SL', 'error'); return; }
     setSaving(true);
     try {
       await replan(detail.id, {
@@ -179,6 +205,10 @@ export default function ReplanPage() {
         tgBdKh: mkTs(form.ngayKeHoach, form.gioBd),
         tgKtKh: mkTs(form.ngayKeHoach, form.gioKt),
         lyDo: form.lyDo.trim(),
+        // Chỉ gửi ô THỰC SỰ ĐỔI — gửi cả bộ thì audit ghi "đổi SL" cho cả lần chỉ dời ngày.
+        slRelease: Object.fromEntries(dsDot
+          .filter((d) => String(form.slRelease[d.dot_vai_id] ?? '') !== String(d.so_luong))
+          .map((d) => [d.dot_vai_id, form.slRelease[d.dot_vai_id]])),
       });
       show(`Đã lập lại kế hoạch cho ${detail.ma_lenh_san_xuat}`);
       setDetail(null);
@@ -301,6 +331,41 @@ export default function ReplanPage() {
                 <Input type="date" value={form.ngayKeHoach}
                   onChange={(e) => setForm({ ...form, ngayKeHoach: e.target.value })} />
               </Field>
+              {/* SỐ LƯỢNG RELEASE — đổ sẵn đúng số đã nhập lúc Release 1, sửa được ngay tại đây.
+                  ⚠ Ở mức (lệnh × ĐỢT VẢI): lệnh gộp nhiều đợt thì mỗi đợt một ô, tổng là SL của lệnh.
+                  ⚠ `toi_da` = SL vải về − phần các lệnh KHÁC đang giữ (1 đợt vải release được nhiều lệnh). */}
+              {dsDot.length > 0 && (
+                <div className="space-y-2 rounded-control border border-line bg-surface-muted/40 p-3">
+                  <div className="flex items-center justify-between text-xs font-semibold text-ink-soft">
+                    <span>Số lượng release{dsDot.length > 1 ? ` (${dsDot.length} đợt vải)` : ''}</span>
+                    <span className="tabular-nums">Tổng: {fmtNum(tongSlMoi)}</span>
+                  </div>
+                  {dsDot.map((d) => (
+                    <div key={d.dot_vai_id} className="flex items-center gap-2">
+                      <div className="min-w-0 flex-1 text-xs">
+                        <div className="truncate text-ink">{d.ma_dot_vai}</div>
+                        <div className="truncate text-ink-soft">
+                          {dsDot.length > 1 ? `${d.ma_phan} · ` : ''}vải về {fmtNum(d.so_luong_vai_ve)}
+                          {d.da_release_khac > 0 ? ` · lệnh khác giữ ${fmtNum(d.da_release_khac)}` : ''}
+                          {` · tối đa ${fmtNum(d.toi_da)}`}
+                        </div>
+                      </div>
+                      <div className="w-28 shrink-0">
+                        <Input type="number" min={1} max={d.toi_da}
+                          value={form.slRelease[d.dot_vai_id] ?? ''}
+                          onChange={(e) => setForm((f) => ({
+                            ...f, slRelease: { ...f.slRelease, [d.dot_vai_id]: e.target.value },
+                          }))} />
+                      </div>
+                    </div>
+                  ))}
+                  {vuotSl && (
+                    <div className="text-xs font-medium text-danger">
+                      Có đợt vượt mức tối đa hoặc để trống — sửa lại trước khi lưu.
+                    </div>
+                  )}
+                </div>
+              )}
               {/* Giờ BD/KT — ghép với ngày kế hoạch thành `tg_bd_kh`/`tg_kt_kh`, y như Release 1.
                   Đổ sẵn giờ đang lưu của lệnh; xóa trắng thì backend DỜI giờ cũ sang ngày mới.
                   Dùng `TimeSelect` (24h) chứ KHÔNG `<input type="time">` — ô đó hiện AM/PM theo locale máy. */}

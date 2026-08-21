@@ -200,6 +200,7 @@ export default function SiSoTram({ maTrang, tuDong = true }) {
           o={oDangMo}
           ky={ky}
           onDoiKy={setKy}
+          so={so}
           tenMan={so?.ten_man}
           donViNhan={so?.don_vi_nhan}
           onClose={() => setODangMo(null)}
@@ -213,7 +214,7 @@ export default function SiSoTram({ maTrang, tuDong = true }) {
 }
 
 // ─── Modal danh sách chi tiết ────────────────────────────────────────────────
-function SiSoModal({ maTrang, o, ky, onDoiKy, tenMan, donViNhan, onClose, onShow, goiLoc }) {
+function SiSoModal({ maTrang, o, ky, onDoiKy, so, tenMan, donViNhan, onClose, onShow, goiLoc }) {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -292,16 +293,24 @@ function SiSoModal({ maTrang, o, ky, onDoiKy, tenMan, donViNhan, onClose, onShow
               value={{ from: ky.tu, to: ky.den }}
               onChange={({ from, to }) => onDoiKy({ tu: from || ky.tu, den: to || from || ky.tu })}
             />
+            {/* ⚠⚠ HIỆN LUÔN 4 CON SỐ TRÊN CHIP (21/08/2026): đổi ngày ngay trong modal thì dải ở
+                hàng breadcrumb có cập nhật thật, nhưng nó **nằm dưới modal** ⇒ người dùng phải đóng
+                modal mới thấy. Nay số đi kèm tên ô, khỏi phải thoát ra vào. `so` do component cha
+                truyền xuống và tự tải lại mỗi khi `ky` đổi (cùng một nguồn với dải ngoài, không có
+                truy vấn thêm nào). */}
             <div className="flex flex-wrap gap-1">
               {O_LIST.map((x) => (
                 <button
                   key={x.ma}
                   type="button"
                   onClick={() => setOHienTai(x.ma)}
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition
+                  className={`flex items-baseline gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition
                     ${oHienTai === x.ma ? 'bg-primary text-white' : 'bg-surface-muted text-ink-soft hover:text-ink'}`}
                 >
-                  {x.ten}
+                  <span>{x.ten}</span>
+                  <span className={`text-sm font-bold leading-none ${oHienTai === x.ma ? 'text-white' : x.mau}`}>
+                    {so ? fmtNum(so[x.ma]) : '—'}
+                  </span>
                 </button>
               ))}
             </div>

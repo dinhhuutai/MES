@@ -17,7 +17,13 @@ export default function Topbar() {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-header items-center justify-between border-b border-line bg-surface px-4 sm:px-6">
+    // ⚠⚠ `z-[45]` chứ KHÔNG phải `z-30` (fix 21/08/2026 — panel chuông "bị một số trang che"):
+    //   Topbar `sticky` + z-index tạo STACKING CONTEXT, nên `z-40` của `Popover.Panel` bên trong chỉ
+    //   có nghĩa với anh em cùng Topbar — so với phần còn lại của trang thì cả Topbar chỉ là z-30,
+    //   thua BottomNav (z-40) và hoà với thanh "Đã chọn" (z-30, DOM sau nên thắng).
+    // ⚠ Chọn ĐÚNG 45: phải LỚN hơn BottomNav 40 nhưng NHỎ hơn 50 để Sidebar drawer (mobile) và
+    //   Modal/SidePanel (Headless UI Dialog, z-50) vẫn phủ được Topbar như thiết kế.
+    <header className="sticky top-0 z-[45] flex h-header items-center justify-between border-b border-line bg-surface px-4 sm:px-6">
       <Link to="/" className="flex items-center gap-3">
         <img src={LOGO_SRC} alt="THLA" className="h-9 w-9 object-contain" />
         <div className="leading-tight">

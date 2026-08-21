@@ -88,7 +88,10 @@ export default function TestRunPage() {
   const [filters, setFilters] = useState({});
   const [showFilters, setShowFilters] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
-  const [onlyPending, setOnlyPending] = useState(true); // mặc định chỉ hiện lệnh CHƯA QA xong (khớp Test Run ở dashboard)
+  // ⚠⚠ ĐÃ BỎ ô tích "Chỉ chờ QA" (20/08/2026): nó có từ thời còn màn Test Run - CNSP riêng. Nay CNSP
+  //   gộp hẳn vào màn này nên "QA chưa xác nhận, hoặc xác nhận TEST LỖI" = CHƯA XONG, mà lệnh đã QA
+  //   xong thì thuộc màn Release 2 ⇒ màn này LUÔN chỉ là hàng đợi của QA. **Lọc ở BACKEND**
+  //   (`listTestRunCandidates`) để bảng · `meta.total` · dải "Theo dõi" cùng một tập.
   const [loai, setLoai] = useState(''); // chip loại chuyền / khu Bàn ('' = tất cả)
 
   // Lọc theo NGÀY KẾ HOẠCH SẢN XUẤT (`lenh_san_xuat.ngay_ke_hoach`) — chọn được NHIỀU NGÀY bằng
@@ -97,34 +100,37 @@ export default function TestRunPage() {
   const [ngayKH, setNgayKH] = useState({ from: '', to: '' });
 
   // Dải "Theo dõi" (sĩ số) bám ô tìm + panel lọc + dải chip loại chuyền/khu của màn này.
-  // ⚠⚠ Gửi CẢ ô tích "Chỉ chờ QA" (mặc định BẬT) và khoảng NGÀY SX KẾ HOẠCH — thiếu 2 thứ này thì
-  //   4 số đếm cả lệnh đã QA xong / ngoài khoảng ngày, trong khi bảng bên dưới đã ẩn chúng đi.
+  // ⚠ Gửi kèm khoảng NGÀY SX KẾ HOẠCH — thiếu thì 4 số đếm cả lệnh ngoài khoảng ngày, trong khi bảng
+  //   bên dưới đã ẩn chúng đi.
+  // ⚠⚠ **KHÔNG còn khóa `choQa`** (bỏ 20/08/2026 cùng ô tích): mốc RA của trạm Test Run vốn đã là
+  //   "TEST_QA đạt hoặc lệnh rời chặng RELEASE_1" ⇒ ô **Tồn** tự bằng đúng tập bảng đang hiện. Lọc
+  //   thêm `cho_qa` chỉ làm hỏng 2 ô còn lại: phần in VÀO rồi RA ngay trong kỳ sẽ bị loại khỏi cả
+  //   "Nhận trong kỳ" lẫn "Làm được trong kỳ" ⇒ "Làm được" gần như luôn ra 0.
   // ⚠ PHẢI đặt SAU `useState` của `ngayKH`: đọc biến `const` trước dòng khai báo là lỗi runtime
   //   ("Cannot access before initialization"), không phải cảnh báo lúc build.
   useSiSoLoc({
     timKiem: search,
     ...filters,
     ...locSiSoTheoChip(loai),
-    choQa: onlyPending ? '1' : '',
     ...(ngayKH.from || ngayKH.to
       ? { loaiNgay: 'NGAY_KE_HOACH', ngayTu: ngayKH.from, ngayDen: ngayKH.to } : {}),
   });
   const locNgay = useCallback((rs) => rs.filter((r) => trongKhoangNgay(r.ngay_ke_hoach, ngayKH.from, ngayKH.to)),
     [ngayKH]);
+  // ⚠ KHÔNG lọc `qa_done` ở đây nữa — backend đã chỉ trả lệnh chưa QA đạt.
   const filtered = useMemo(() => {
-    let base = onlyPending ? rows.filter((r) => !r.qa_done) : rows;
-    base = locNgay(base);
+    let base = locNgay(rows);
     if (loai) base = base.filter((r) => hopChip(r, loai));
     return filterRows(base, filters, FILTER_FIELDS);
-  }, [rows, filters, onlyPending, loai, locNgay]);
+  }, [rows, filters, loai, locNgay]);
   // ⚠⚠ ĐẾM THEO PHẦN IN **KHÔNG TRÙNG**, KHÔNG theo lệnh và cũng KHÔNG theo dòng (người dùng chốt
   //   19/08/2026). Dải "Theo dõi" đếm phần in khác nhau, nên đây phải cùng đơn vị mới so được.
   // ⚠ Bản đầu cộng `dsPhanIn(r).length` ⇒ chip "Tất cả" ra **885** trong khi chỉ có **797 phần in
   //   khác nhau**: 68 phần in được release nhiều lần nên xuất hiện ở nhiều lệnh và bị đếm lặp.
   //   885 là số DÒNG bảng vẽ ra — không phải số phần in.
   const countChip = useMemo(
-    () => demChip(locNgay(onlyPending ? rows.filter((r) => !r.qa_done) : rows), codesCuaLenh),
-    [rows, onlyPending, locNgay]
+    () => demChip(locNgay(rows), codesCuaLenh),
+    [rows, locNgay]
   );
   // Badge: số phần in KHÁC NHAU đang hiện + số lệnh, để đối chiếu được cả hai.
   const tongPhanIn = useMemo(
@@ -132,14 +138,11 @@ export default function TestRunPage() {
     [filtered]
   );
   const activeCount = Object.values(filters).filter(Boolean).length;
-  const doneCount = useMemo(() => rows.filter((r) => r.qa_done).length, [rows]);
 
   // Xuất Excel: lấy `filtered` = TOÀN BỘ lệnh sau bộ lọc (trang tải-hết rồi phân trang client
   // ⇒ không bị giới hạn ở trang đang xem).
   const doExcel = () => exportCheckpointExcel({
     cols: [...COT_LENH,
-      { header: 'QA đã xác nhận', width: 14, center: true, value: (r) => (r.qa_done ? 'Đã QA' : 'Chờ QA'),
-        ok: (r) => !!r.qa_done },
       { header: 'Số lần test', width: 11, num: true, value: (r) => r.so_lan_test },
       { header: 'Chờ kỹ thuật', width: 13, center: true, value: (r) => (r.cho_ky_thuat ? 'Chờ KT làm lại' : ''),
         red: (r) => !!r.cho_ky_thuat }],
@@ -147,7 +150,7 @@ export default function TestRunPage() {
     title: 'Test Run - QA',
     fileName: 'test-run',
     moTaLoc: moTaBoLoc({
-      'tìm kiếm': search, 'chỉ chờ QA': onlyPending ? 'có' : '',
+      'tìm kiếm': search,
       'ngày SX kế hoạch': [ngayKH.from, ngayKH.to].filter(Boolean).join(' → '),
       khu: nhanChip(loai), ...filters,
     }),
@@ -185,7 +188,9 @@ export default function TestRunPage() {
   // thay bằng spinner) và KHÔNG xóa dòng đang tích. Nhiều sự kiện trong 400ms gộp thành 1 lần tải.
   useSocketReload(['workflow:updated', 'ready:confirmed'], () => load(true));
 
-  // Chỉ chọn được lệnh chưa QA đạt VÀ không đang chờ kỹ thuật làm lại (đã bị trả về READY).
+  // Chỉ chọn được lệnh KHÔNG đang chờ kỹ thuật làm lại (đã bị trả về READY).
+  // ⚠ Vẫn giữ `!r.qa_done` làm lưới an toàn: backend đã lọc, nhưng nếu về sau ai đó nới điều kiện ở
+  //   đó thì chỗ này không được phép cho QA xác nhận đạt lần hai.
   const selectable = (r) => !r.qa_done && !r.cho_ky_thuat;
   const toggleOne = (id) => setSelected((s) => {
     const next = new Set(s);
@@ -268,7 +273,8 @@ export default function TestRunPage() {
     // Hiện luôn cột đang được lọc — lọc theo một giá trị không nhìn thấy thì không đối chiếu được.
     { key: 'ngay_ke_hoach', header: 'Ngày SX KH', className: 'whitespace-nowrap', merge: true, render: (r) => fmtDate(r.ngay_ke_hoach) },
     { key: 'so_lan_test', header: 'Lần test', className: 'text-right tabular-nums', merge: true, render: (r) => r.so_lan_test },
-    { key: 'qa_done', header: 'QA', merge: true, render: (r) => r.qa_done ? <Badge tone="success">✓</Badge> : <Badge tone="warning">Chờ</Badge> },
+    // ⚠ ĐÃ BỎ cột "QA" (20/08/2026): backend chỉ trả lệnh CHƯA QA đạt nên cột này luôn hiện "Chờ" —
+    //   một cột chỉ có duy nhất một giá trị thì chỉ tốn bề ngang.
   ];
 
   // Lệnh GOM SET → tách 1 dòng / PHẦN IN. Lệnh thường trả `null` ⇒ render y như cũ.
@@ -292,10 +298,6 @@ export default function TestRunPage() {
         {/* Lọc theo NGÀY KẾ HOẠCH SẢN XUẤT — 1 ô chọn cả từ→đến (chọn được nhiều ngày),
             giống ô "Ngày lên MES" của trang Hồ sơ kỹ thuật. */}
         <DateRangePicker value={ngayKH} onChange={setNgayKH} placeholder="Ngày SX kế hoạch" />
-        <label className="flex cursor-pointer items-center gap-1.5 text-xs font-medium text-ink-soft">
-          <input type="checkbox" checked={onlyPending} onChange={(e) => setOnlyPending(e.target.checked)} />
-          Chỉ chờ QA{doneCount ? ` (ẩn ${doneCount} đã xong)` : ''}
-        </label>
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
         <Button variant="secondary" icon="download" onClick={doExcel} disabled={!filtered.length}>
           Excel ({filtered.length})

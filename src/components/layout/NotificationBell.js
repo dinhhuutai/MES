@@ -39,6 +39,10 @@ export default function NotificationBell() {
   const [dangTai, setDangTai] = useState(false);
   const [quyen, setQuyen] = useState(quyenHienTai());
   const daTai = useRef(false);
+  // ⚠ SỐ CHƯA ĐỌC VỪA TĂNG → nháy MẠNH hơn trong ít giây rồi tự về nhịp nhẹ. Chuông vốn đã nháy nhẹ
+  //   suốt thời gian còn tin chưa đọc, nên "có tin MỚI đến" cần một nhịp khác mới phân biệt được.
+  const soTruoc = useRef(null);
+  const [nhanManh, setNhanManh] = useState(false);
 
   const taiSo = useCallback(async () => {
     try {
@@ -47,6 +51,18 @@ export default function NotificationBell() {
       setCoQuyen(!!r.data.co_quyen);
     } catch (e) { /* thông báo là phụ — không chặn, không toast */ }
   }, []);
+
+  // ⚠ BỎ QUA LẦN TẢI ĐẦU (`soTruoc.current === null`): mở app mà số nhảy 0 → N là chuyện đương nhiên,
+  //   nháy mạnh mỗi lần F5 thì thành nhiễu. Nhịp nhẹ vẫn chạy nên không mất thông tin nào.
+  // ⚠ Số GIẢM (vừa đọc bớt) thì KHÔNG nhấn mạnh — đó là việc người dùng vừa tự làm.
+  useEffect(() => {
+    const truoc = soTruoc.current;
+    soTruoc.current = soChuaDoc;
+    if (truoc === null || soChuaDoc <= truoc) return undefined;
+    setNhanManh(true);
+    const t = setTimeout(() => setNhanManh(false), 6000);
+    return () => clearTimeout(t);
+  }, [soChuaDoc]);
 
   const taiDanhSach = useCallback(async () => {
     setDangTai(true);
@@ -119,13 +135,18 @@ export default function NotificationBell() {
     <Popover className="relative">
       {({ close }) => (
         <>
-          {/* ⚠ CÒN TIN CHƯA ĐỌC → chuông đỏ + badge nháy NHẸ (keyframe `chuong-nhay`/`chuong-quang`
-              trong tailwind.config.js). Dùng `motion-safe:` để máy đặt "giảm chuyển động" thì badge
-              đứng yên — vẫn đỏ nên không mất thông tin nào. Đọc hết là mọi hiệu ứng tự tắt. */}
+          {/* ⚠⚠ CHUÔNG ĐỨNG YÊN VÀ GIỮ MÀU BÌNH THƯỜNG (chốt 21/08/2026 — người dùng chốt lại):
+              CHỈ **con số** nháy. Bản trước cho cả icon phình to–nhỏ + đổi sang màu đỏ, nhìn rối và
+              đập vào mắt quá mức cho một thứ chạy suốt thời gian còn tin chưa đọc.
+              ⚠ Vẫn KHÔNG dùng `motion-safe:` — tiền tố đó gói animation vào
+              `@media (prefers-reduced-motion: no-preference)`, máy nào tắt hiệu ứng động của Windows
+              (Cài đặt › Trợ năng › Hiệu ứng hình ảnh) sẽ **không thấy gì mà cũng không có lỗi**.
+              ⚠ `focus:outline-none` — Headless UI `Popover.Button` là `<button>` thật, bấm vào là
+              trình duyệt vẽ viền focus mặc định (người dùng: "hiện border xấu quá").
+              ⚠ `ml-1` — chừa khoảng cách với avatar bên cạnh, trước đó bị dính sát. */}
           <Popover.Button
             onClick={() => { if (!daTai.current) taiDanhSach(); }}
-            className={`relative flex h-9 w-9 items-center justify-center rounded-control transition hover:bg-surface-muted ${
-              soChuaDoc > 0 ? 'text-danger hover:text-danger' : 'text-ink-soft hover:text-ink'}`}
+            className="relative ml-1 mr-1 flex h-9 w-9 items-center justify-center rounded-control text-ink-soft outline-none transition hover:bg-surface-muted hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
             title={soChuaDoc ? `${soChuaDoc} thông báo chưa đọc` : 'Thông báo'}
             aria-label={soChuaDoc ? `Thông báo — ${soChuaDoc} chưa đọc` : 'Thông báo'}
           >
@@ -136,16 +157,38 @@ export default function NotificationBell() {
                     để không nuốt cú bấm vào chuông. */}
                 <span
                   aria-hidden
-                  className="pointer-events-none absolute -right-0.5 -top-0.5 h-[18px] w-[18px] rounded-full bg-danger motion-safe:animate-chuong-quang"
+                  className={`pointer-events-none absolute -right-0.5 -top-0.5 h-[18px] w-[18px] rounded-full bg-danger ${
+                    nhanManh ? 'animate-chuong-quang-manh' : 'animate-chuong-quang'}`}
                 />
-                <span className="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold leading-none text-white ring-2 ring-surface motion-safe:animate-chuong-nhay">
-                  {soChuaDoc > 99 ? '99+' : soChuaDoc}
+                {/* ⚠⚠ CON SỐ PHẢI NẰM GIỮA VÒNG ĐỎ TRÊN MỌI MÀN HÌNH (fix 21/08/2026 — người dùng
+                    báo "màn này ở giữa, màn kia lệch lên trên"). HAI nguyên nhân, sửa cả hai:
+                    (1) Animation cũ có `transform: scale()` ngay trên chính badge CHỨA CHỮ ⇒ trình
+                        duyệt rasterize lớp bị biến đổi rồi phóng bitmap, ở màn 125%/150% (tỉ lệ
+                        Windows hay dùng) con số nhòe + xê dịch nửa pixel, nhìn như lệch. Nay
+                        `chuong-nhay`/`chuong-manh` CHỈ đổi độ mờ; phần "phình to" giao hẳn cho quầng
+                        phía sau (nó không có chữ nên phóng bao nhiêu cũng không nhòe).
+                        ⚠ ĐỪNG nhét `scale` lại vào 2 keyframe đó.
+                    (2) Chữ căn theo LINE BOX chứ không theo thân chữ số: độ lệch = (ascent − descent
+                        − capHeight)/2 × cỡ chữ, tức PHỤ THUỘC FONT. Inter (nạp từ Google Fonts) ra
+                        đúng 0; máy nào chặn mạng/không tải được Inter thì rơi về Segoe UI và lệch
+                        ~0,6px. `text-box` cắt line box về đúng cap-height ⇒ căn theo THÂN CHỮ SỐ,
+                        font nào cũng giữa. Trình duyệt chưa hỗ trợ thì bỏ qua dòng này, không hỏng.
+                    ⚠ `h-[18px] min-w-[18px]` giữ nguyên: 1 chữ số = hình tròn thật, 2–3 chữ số nở
+                    ngang thành viên thuốc. `tabular-nums` để mọi chữ số cùng bề rộng, số đổi
+                    (8→9→10) không làm badge giật ngang. */}
+                <span className={`absolute -right-0.5 -top-0.5 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-danger px-1 text-white ring-2 ring-surface ${
+                  nhanManh ? 'animate-chuong-manh' : 'animate-chuong-nhay'}`}>
+                  <span className="block text-[10px] font-bold leading-none tabular-nums [text-box:trim-both_cap_alphabetic]">
+                    {soChuaDoc > 99 ? '99+' : soChuaDoc}
+                  </span>
                 </span>
               </>
             )}
           </Popover.Button>
 
-          <Popover.Panel className="absolute right-0 z-40 mt-2 w-[22rem] overflow-hidden rounded-control border border-line bg-surface shadow-card-hover sm:w-[26rem]">
+          {/* ⚠ `z-50` chỉ có nghĩa TRONG stacking context của Topbar; thứ quyết định panel có bị trang
+              che hay không là `z-[45]` của chính `<header>` Topbar — xem ghi chú ở `Topbar.js`. */}
+          <Popover.Panel className="absolute right-0 z-50 mt-2 w-[22rem] overflow-hidden rounded-control border border-line bg-surface shadow-card-hover sm:w-[26rem]">
             <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
               <div className="text-sm font-semibold text-ink">
                 Thông báo{soChuaDoc > 0 && <span className="ml-1.5 text-xs font-medium text-danger">{soChuaDoc} mới</span>}

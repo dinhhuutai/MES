@@ -58,7 +58,12 @@ export default function ModuleLayout() {
             </div>
             {current?.siSo && (
               <div className="shrink-0">
-                <SiSoTram maTrang={current.siSo} />
+                {/* ⚠⚠ `key={current.siSo}` — ĐỔI TRANG PHẢI DỰNG LẠI DẢI (fix 21/08/2026): `ModuleLayout`
+                    KHÔNG unmount khi đi giữa các trang cùng module, nên `SiSoTram` giữ nguyên state
+                    ⇒ chọn khoảng ngày ở màn này rồi sang màn khác vẫn **dính ngày cũ**, người dùng
+                    tưởng số liệu sai. Có `key` thì mỗi màn bắt đầu lại ở NGÀY HÔM NAY (và đóng luôn
+                    modal đang mở của màn trước). */}
+                <SiSoTram key={current.siSo} maTrang={current.siSo} />
               </div>
             )}
           </div>
