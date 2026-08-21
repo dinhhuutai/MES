@@ -3,6 +3,7 @@ import NghenListModal, { NghenButton } from '../../../components/common/NghenLis
 import useNghenMap from '../../../hooks/useNghenMap';
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import Toolbar from '../../../components/common/Toolbar';
+import KeHoachTamListModal from '../components/KeHoachTamListModal';
 import DataTable from '../../../components/common/DataTable';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
@@ -77,6 +78,7 @@ export default function KeHoachTamPage() {
   const [selected, setSelected] = useState(() => new Set());
   const [scanOpen, setScanOpen] = useState(false);
   const [histOpen, setHistOpen] = useState(false);
+  const [dsOpen, setDsOpen] = useState(false);
   const [doneOpen, setDoneOpen] = useState(false);
   const [confirm, setConfirm] = useState(null); // { ids:[], label } — xác nhận Release 1 (1 hoặc nhiều)
   const [del, setDel] = useState(null); // { id, label }
@@ -296,6 +298,7 @@ export default function KeHoachTamPage() {
         )}
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
         <NghenButton rows={rows} trangThai={(r) => statusDot(r.dot_vai_ve_id)} onClick={() => setNghenOpen(true)} />
+        <Button variant="secondary" icon="list" onClick={() => setDsOpen(true)}>Danh sách kế hoạch tạm</Button>
         <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="info">{activeCount ? `${filtered.length}/` : ''}{meta.total || rows.length} bản</Badge>
@@ -304,6 +307,8 @@ export default function KeHoachTamPage() {
       <FieldFilters fields={FILTER_FIELDS} values={filters}
         onField={(k, v) => setFilters((f) => ({ ...f, [k]: v }))}
         onClear={() => setFilters({})} open={showFilters} />
+
+      <KeHoachTamListModal open={dsOpen} onClose={() => setDsOpen(false)} />
 
       <DataTable columns={columns} rows={filtered} loading={loading} sttStart={0}
         onRowClick={(r) => openEdit(r)}

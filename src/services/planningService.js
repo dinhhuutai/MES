@@ -84,6 +84,9 @@ export const deleteKeHoachTam = (id) => client.delete(`/planning/ke-hoach-tam/${
 // Lịch sử thao tác (lập/sửa/xóa/xác nhận) + Đã hoàn thành (đã xác nhận Release 1) — theo ngày.
 export const keHoachTamHistory = (date) => client.get('/planning/ke-hoach-tam/history', { params: { date } });
 export const keHoachTamDone = (date) => client.get('/planning/ke-hoach-tam/done', { params: { date } });
+// Danh sach ke hoach tam: MOI dot vai TUNG di qua ke hoach tam + tinh trang (da release 1 that su /
+// chua release vi chua Ready). Nguon `audit_log` — xem `planning.repository.keHoachTamTheoDoi`.
+export const keHoachTamTheoDoi = (params) => client.get('/planning/ke-hoach-tam/danh-sach', { params });
 
 // Hủy lệnh / hoàn tác release
 export const listCancelableLenh = (params) => client.get('/planning/huy-lenh/candidates', { params });
