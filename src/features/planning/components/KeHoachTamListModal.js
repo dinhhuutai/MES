@@ -74,16 +74,32 @@ const COT = [
   { key: 'nguoi_lap', ten: 'Người lập' },
 ];
 
+const homNay = () => {
+  const d = new Date(); const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+};
+
 function BadgeTT({ ma }) {
   const t = TT[ma] || { nhan: ma, tone: 'default', mo_ta: '' };
   return <Badge tone={t.tone} className="whitespace-nowrap" title={t.mo_ta}>{t.nhan}</Badge>;
 }
 
+// ⚠⚠ 2 CHẾ ĐỘ NGÀY (21/08/2026, bám *Danh sách release*) — 2 mốc này LỆCH NHAU RẤT XA vì kế hoạch
+//   tạm vốn để lập SỚM: lập hôm nay nhưng ngày chạy có thể vài ngày sau. Nói rõ trong nhãn để người
+//   dùng không tưởng hệ thống lọc sai khi đổi chế độ mà số nhảy hẳn.
+const LOAI_NGAY = [
+  { v: 'NGAY_KE_HOACH', nhan: 'Ngày KH sản xuất', mo_ta: 'Ngày hàng dự kiến lên chuyền' },
+  { v: 'NGAY_LAP', nhan: 'Ngày lập KH tạm', mo_ta: 'Ngày bấm lưu kế hoạch tạm ("release tạm")' },
+];
+
 export default function KeHoachTamListModal({ open, onClose }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [loi, setLoi] = useState('');
-  const [ngay, setNgay] = useState({ from: '', to: '' });
+  const [loaiNgay, setLoaiNgay] = useState('NGAY_KE_HOACH');
+  // ⚠ Mặc định = HÔM NAY (người dùng chốt), cắt theo giờ LOCAL — `toISOString()` sẽ lùi 1 ngày ở
+  //   giờ VN (UTC+7) trước 07:00 sáng và modal mở ra trống trơn.
+  const [ngay, setNgay] = useState(() => { const d = homNay(); return { from: d, to: d }; });
   const [q, setQ] = useState('');
   const [chip, setChip] = useState('');
   const [filters, setFilters] = useState({});
@@ -93,12 +109,12 @@ export default function KeHoachTamListModal({ open, onClose }) {
   const tai = useCallback(async () => {
     setLoading(true); setLoi('');
     try {
-      const r = await keHoachTamTheoDoi({ tuNgay: ngay.from || '', denNgay: ngay.to || '' });
+      const r = await keHoachTamTheoDoi({ tuNgay: ngay.from || '', denNgay: ngay.to || '', loaiNgay });
       setRows(r.data.items || []);
     } catch (e) {
       setLoi(e.message || 'Không tải được danh sách'); setRows([]);
     } finally { setLoading(false); }
-  }, [ngay.from, ngay.to]);
+  }, [ngay.from, ngay.to, loaiNgay]);
 
   useEffect(() => { if (open) tai(); }, [open, tai]);
 
@@ -126,6 +142,7 @@ export default function KeHoachTamListModal({ open, onClose }) {
 
   const soLoc = FILTER_FIELDS.filter((f) => (filters[f.key] || '').trim()).length;
   const daRelease = counts.DA_RELEASE || 0;
+  const nhanNgay = (LOAI_NGAY.find((x) => x.v === loaiNgay) || LOAI_NGAY[0]).nhan;
 
   const doXuat = async () => {
     setXuat(true);
@@ -145,7 +162,7 @@ export default function KeHoachTamListModal({ open, onClose }) {
         rows: viewRows,
         title: 'DANH SÁCH KẾ HOẠCH TẠM',
         subtitle: `${viewRows.length} dòng · Đã Release 1: ${daRelease}`
-          + `${ngay.from || ngay.to ? ` · Ngày KH SX ${ngay.from || '…'} → ${ngay.to || '…'}` : ''}`
+          + `${ngay.from || ngay.to ? ` · ${nhanNgay} ${ngay.from || '…'} → ${ngay.to || '…'}` : ' · mọi ngày'}`
           + `${q.trim() ? ` · tìm "${q.trim()}"` : ''}`,
         fileName: 'danh-sach-ke-hoach-tam',
       });
@@ -167,7 +184,24 @@ export default function KeHoachTamListModal({ open, onClose }) {
             {/* ⚠ Để TRỐNG = mọi ngày (đo prod chỉ ~992 dòng, tải ~650ms) — mặc định lọc sẵn một ngày
                 thì người dùng mở ra thấy trống rồi tưởng mất dữ liệu. */}
             <DateRangePicker value={ngay} onChange={setNgay} />
-            <span className="text-xs text-ink-soft">Ngày KH sản xuất</span>
+            {/* Toggle 2 chế độ ngày — giống nút chuyển ở *Danh sách release*. */}
+            <div className="flex overflow-hidden rounded-full border border-line">
+              {LOAI_NGAY.map((x) => (
+                <button
+                  key={x.v}
+                  type="button"
+                  title={x.mo_ta}
+                  onClick={() => setLoaiNgay(x.v)}
+                  className={`px-3 py-1 text-xs font-medium transition ${
+                    loaiNgay === x.v ? 'bg-primary text-white' : 'bg-surface text-ink-soft hover:text-ink'}`}
+                >
+                  {x.nhan}
+                </button>
+              ))}
+            </div>
+            <Button variant="ghost" onClick={() => { const d = homNay(); setNgay({ from: d, to: d }); }}>
+              Hôm nay
+            </Button>
             <div className="ml-auto flex items-center gap-2">
               <Button variant="secondary" icon="filter" onClick={() => setMoLoc((v) => !v)}>
                 Bộ lọc{soLoc ? ` (${soLoc})` : ''}
@@ -197,7 +231,11 @@ export default function KeHoachTamListModal({ open, onClose }) {
             <b className="text-ink">{fmtNum(viewRows.length)}</b> đợt vải
             {' · '}đã Release 1 thật sự: <b className="text-emerald-600">{fmtNum(daRelease)}</b>
             {' · '}chưa release vì chưa Ready: <b className="text-amber-600">{fmtNum(counts.CHO_READY || 0)}</b>
-            <span className="ml-2">· Gồm cả đợt ĐÃ rời khỏi màn Kế hoạch tạm (dòng kế hoạch bị xóa khi xác nhận Release 1).</span>
+            <span className="ml-2">
+              · Đang lọc theo <b className="text-ink">{nhanNgay.toLowerCase()}</b>
+              {ngay.from || ngay.to ? '' : ' (mọi ngày)'}
+              {' '}· Gồm cả đợt ĐÃ rời khỏi màn Kế hoạch tạm (dòng kế hoạch bị xóa khi xác nhận Release 1).
+            </span>
           </div>
 
           <ChipTabs tabs={tabs} value={chip} counts={counts} onChange={setChip} />
