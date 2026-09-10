@@ -28,7 +28,7 @@ import { listSuaCandidates, recordSua, suaHistory, suaDone, luuNguoiSua } from '
 import { getTemLabel } from '../../../services/productionService';
 import { listUserOptions } from '../../../services/userService';
 import { printSuaOqcTem } from '../../production/utils/printTemLabel';
-import { fmtNum, baseMaTem, temCode } from '../../../utils/format';
+import { fmtNum, timTheoMaTem, temCode } from '../../../utils/format';
 
 const empty = { soLuongHuyThang: '', soLuongSua: '', soLuongSuaDat: '', soLuongSuaHuy: '' };
 
@@ -41,6 +41,12 @@ const FILTER_FIELDS = [
   { key: 'kichPhim', label: 'Kích phim' },
 ];
 const FIELD_LABEL = { ...Object.fromEntries(FILTER_FIELDS.map((f) => [f.key, f.label])) };
+
+// ⚠⚠ MÃ TEM 17 LẤY TỪ BACKEND (`ma_tem_17` = `ma_tem` của TEM CON), **KHÔNG suy bằng
+//   `temCode(ma_goc, 17)`**: từ 06/09/2026 tem 17 xin mã RIÊNG của ERP (`/barcode-tem-17`) nên nó
+//   KHÔNG còn chung 10 số đuôi với tem gốc. Liên kết về tem 15 nằm ở `tem.tem_goc_id` (mig 091).
+// ⚠ Lùi về cách suy cũ cho dữ liệu CŨ (lượt sửa trước mig 091 chưa có tem con ⇒ `ma_tem_17` NULL).
+const ma17 = (r) => r.ma_tem_17 || temCode(r.ma, 17);
 
 export default function SuaPage() {
   const { can } = usePermissions();
@@ -137,6 +143,10 @@ export default function SuaPage() {
         const slDat = Number(r.so_luong) || 0;
         return {
           ...res.data,
+          // ⚠⚠ ĐÈ `ma_tem` BẰNG MÃ CỦA TEM CON: `getTemLabel(r.tem_id)` trả nhãn của TEM GỐC (bảng
+          //   `sua` khóa theo tem gốc). Từ 06/09/2026 tem 17 có mã RIÊNG của ERP nên KHÔNG suy được
+          //   từ mã gốc — thiếu dòng này thì QR + số in trên nhãn 17 là của tem 15, quét ra sai tem.
+          ma_tem: ma17(r),
           so_luong: r.so_luong,            // dòng "IN" của nhãn = SL sửa đạt (→ OQC), giữ như cũ
           nguoi_sua: r.nguoiSua,           // NHẬP TAY lúc in
           sl_sua: slSua,
@@ -174,11 +184,13 @@ export default function SuaPage() {
   // Quét QR (ma_tem) → tra tem đang chờ sửa → mở modal nhập.
   const onScan = async (maTem) => {
     setScanOpen(false);
-    const code = baseMaTem(maTem); // QR có thể mã hóa '16-TEM...'; tách lấy mã gốc
+    // ⚠ Xem ghi chú ở `KcsPage.onScan`: tìm bằng mã NGUYÊN VĂN, đối chiếu bằng `timTheoMaTem`.
+    //   Người quét ở đây thường cầm nhãn `16…` (hàng lỗi) — nhãn đó vẫn suy về tem gốc như cũ.
+    const code = String(maTem || '').trim();
     if (!code) return;
     try {
       const res = await listSuaCandidates({ search: code });
-      const row = (res.data || []).find((r) => (r.ma_tem || '').toLowerCase() === code.toLowerCase());
+      const row = timTheoMaTem(res.data || [], code);
       if (row) openRow(row);
       else show(`Tem ${code} không có phần chờ sửa`, 'error');
     } catch (e) { show(e.message || 'Không tra được tem', 'error'); }
@@ -256,11 +268,11 @@ export default function SuaPage() {
           <div className="w-60"><DateRangePicker value={range} onChange={setRange} placeholder="Chọn khoảng ngày in tem" /></div>
           {(range.from || range.to) && <button type="button" onClick={() => setRange({ from: '', to: '' })} className="text-ink-soft hover:text-danger" aria-label="Bỏ lọc ngày"><Icon name="x" size={14} /></button>}
         </div>
-        <Button variant={showFilters || activeFilters.length ? 'secondary' : 'ghost'} icon="filter"
+        <Button chiXemOk variant={showFilters || activeFilters.length ? 'secondary' : 'ghost'} icon="filter"
           onClick={() => setShowFilters((v) => !v)}>Bộ lọc{activeFilters.length ? ` (${activeFilters.length})` : ''}</Button>
         <NghenButton rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} onClick={() => setNghenOpen(true)} />
-        <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
-        <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
+        <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
+        <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="warning">{rows.length} tem chờ sửa</Badge>
       </Toolbar>
 
@@ -268,7 +280,7 @@ export default function SuaPage() {
         <div className="mb-3 card p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-ink">Lọc nhiều trường (kết hợp AND)</h3>
-            <Button variant="ghost" className="px-2.5 py-1 text-xs" onClick={clearFilters}
+            <Button chiXemOk variant="ghost" className="px-2.5 py-1 text-xs" onClick={clearFilters}
               disabled={!activeFilters.length}>Xóa lọc</Button>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
@@ -310,7 +322,7 @@ export default function SuaPage() {
         title={`Sửa — ${editing?.ma_tem || ''}`}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setEditing(null)}>Hủy</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setEditing(null)}>Hủy</Button>
             <Button onClick={save} loading={saving}>Xác nhận sửa</Button>
           </>
         }
@@ -344,7 +356,7 @@ export default function SuaPage() {
                 ? 'Tích 1–2 dòng để in tem (1 tờ = 2 tem: dòng 1 → tem trái, dòng 2 → tem phải)'
                 : `Đã chọn ${sel.length}/2 dòng`}
             </span>
-            {sel.length > 0 && <Button variant="ghost" onClick={clear}>Bỏ chọn</Button>}
+            {sel.length > 0 && <Button chiXemOk variant="ghost" onClick={clear}>Bỏ chọn</Button>}
             <Button icon="printer" disabled={!sel.length} onClick={() => moModalIn(sel, clear)}>
               In tem{sel.length ? ` (${sel.length})` : ''}
             </Button>
@@ -378,7 +390,7 @@ export default function SuaPage() {
                 ? 'In 2 nhãn GIỐNG NHAU trên tờ decal'
                 : 'Dòng 1 → tem bên trái · dòng 2 → tem bên phải'}
             </span>
-            <Button variant="ghost" onClick={() => setInOpen(false)}>Hủy</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setInOpen(false)}>Hủy</Button>
             <Button icon="printer" loading={inBusy} onClick={doInTem}>In tem</Button>
           </>
         }>
@@ -417,8 +429,8 @@ export default function SuaPage() {
                       placeholder="Chọn hoặc gõ tên người sửa..."
                     />
                   </td>
-                  {/* Mã in ra mang tiền tố 17 (sửa đạt → giao) — đúng cái sẽ hiện trên nhãn giấy. */}
-                  <td className="px-2 py-2"><Badge tone="info">{temCode(r.ma, 17)}</Badge></td>
+                  {/* Mã tem 17 (sửa đạt → giao) — đúng cái sẽ hiện trên nhãn giấy. */}
+                  <td className="px-2 py-2"><Badge tone="info">{ma17(r)}</Badge></td>
                   <td className="px-2 py-2">{r.ten_khach_hang || '—'}</td>
                   <td className="px-2 py-2">{r.ma_hang || '—'}</td>
                   <td className="px-2 py-2">{r.ma_phan || '—'}</td>

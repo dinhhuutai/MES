@@ -176,7 +176,7 @@ export default function KeHoachTamListModal({ open, onClose }) {
       size="full"
       lapDay
       title="Danh sách kế hoạch tạm"
-      footer={<Button variant="ghost" onClick={onClose}>Đóng</Button>}
+      footer={<Button chiXemOk variant="ghost" onClick={onClose}>Đóng</Button>}
     >
       <div className="flex h-full flex-col">
         <div className="relative shrink-0 space-y-2 pb-2">
@@ -199,14 +199,14 @@ export default function KeHoachTamListModal({ open, onClose }) {
                 </button>
               ))}
             </div>
-            <Button variant="ghost" onClick={() => { const d = homNay(); setNgay({ from: d, to: d }); }}>
+            <Button chiXemOk variant="ghost" onClick={() => { const d = homNay(); setNgay({ from: d, to: d }); }}>
               Hôm nay
             </Button>
             <div className="ml-auto flex items-center gap-2">
-              <Button variant="secondary" icon="filter" onClick={() => setMoLoc((v) => !v)}>
+              <Button chiXemOk variant="secondary" icon="filter" onClick={() => setMoLoc((v) => !v)}>
                 Bộ lọc{soLoc ? ` (${soLoc})` : ''}
               </Button>
-              <Button variant="secondary" icon="download" loading={xuat} onClick={doXuat} disabled={!viewRows.length}>
+              <Button chiXemOk variant="secondary" icon="download" loading={xuat} onClick={doXuat} disabled={!viewRows.length}>
                 Excel
               </Button>
             </div>
@@ -223,7 +223,7 @@ export default function KeHoachTamListModal({ open, onClose }) {
               />
             </div>
             {(q || soLoc > 0 || chip) && (
-              <Button variant="ghost" onClick={() => { setQ(''); setFilters({}); setChip(''); }}>Xóa lọc</Button>
+              <Button chiXemOk variant="ghost" onClick={() => { setQ(''); setFilters({}); setChip(''); }}>Xóa lọc</Button>
             )}
           </div>
 
@@ -255,7 +255,7 @@ export default function KeHoachTamListModal({ open, onClose }) {
                 </Field>
               ))}
               <div className="col-span-2 flex items-end md:col-span-3">
-                <Button variant="ghost" onClick={() => setFilters({})}>Xóa lọc trong panel</Button>
+                <Button chiXemOk variant="ghost" onClick={() => setFilters({})}>Xóa lọc trong panel</Button>
               </div>
             </div>
           )}

@@ -127,7 +127,7 @@ export default function TaoDotSanXuatPage() {
   return (
     <div>
       <Toolbar title="Tạo đợt sản xuất" subtitle="Gộp nhiều đợt vải CÙNG PHẦN IN (code phần) / tách một đợt, nhập SL từng đợt rồi đưa xuống sản xuất. (Gom nhiều phần in cùng màu → Gom set ở READY.)">
-        <Button variant="secondary" icon="list" onClick={() => setReleaseOpen(true)}>Danh sách release</Button>
+        <Button chiXemOk variant="secondary" icon="list" onClick={() => setReleaseOpen(true)}>Danh sách release</Button>
         <div className="relative w-full sm:w-64">
           <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" />
           <input value={search} onChange={(e) => setSearch(e.target.value)}

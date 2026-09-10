@@ -57,7 +57,15 @@ const INFO_HEADERS = ['STT', 'Khách hàng', 'Đơn hàng', 'Mã hàng', 'Code p
 // hành chính). BE gợi ý sẵn theo **GIỜ HIỆN TẠI lúc mở sidebar** + loại ca của tuần (`goi_y_tem`),
 // người dùng sửa được.
 // GIỜ dùng `TimeSelect` (0h–23h + phút) chứ KHÔNG `<input type="time">` — ô đó hiện AM/PM theo locale máy.
-const META_MAC_DINH = () => ({ ngayCa: '', gioBd: '', gioKt: '', btpTruoc: false, btpCuoi: false, gcMauVai: '' });
+// `ngayCt` = NGÀY CHỨNG TỪ gửi lên ERP (`@pNgayct`). Mặc định = HÔM NAY, sửa được khi muốn ghi lượt in
+// vào ngày khác (in bù, chốt sổ cuối ngày). Bỏ trống ⇒ backend dùng `now()` y như trước.
+// ⚠ Tính theo giờ LOCAL, KHÔNG `toISOString().slice(0,10)` — giờ VN (UTC+7) trước 07:00 sáng sẽ ra
+//   NGÀY HÔM QUA (bẫy đã ghi ở CLAUDE.md §6).
+const homNayLocal = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+const META_MAC_DINH = () => ({ ngayCa: '', gioBd: '', gioKt: '', btpTruoc: false, btpCuoi: false, gcMauVai: '', ngayCt: homNayLocal() });
 
 // `anGcMauVai`: lệnh GOM SET nhập GC màu vải RIÊNG từng dòng trong bảng → ẩn ô chung ở đây cho khỏi lẫn.
 function TemMetaFields({ meta, setMeta, goiY, anGcMauVai = false }) {
@@ -87,6 +95,16 @@ function TemMetaFields({ meta, setMeta, goiY, anGcMauVai = false }) {
           ↺ Về mã theo giờ hiện tại ({goiY.ngay_ca})
         </button>
       )}
+      {/* NGÀY CHỨNG TỪ — con số gửi lên ERP (`Ngayct`). Mặc định hôm nay; sửa khi muốn ghi lượt in này
+          vào ngày khác. Đây là NGÀY CHỨNG TỪ, KHÔNG phải ngày ca (ô trên) — 2 thứ khác nhau. */}
+      <label className="mt-2 block">
+        <span className="mb-1 block text-xs font-medium text-ink-soft">Ngày chứng từ (gửi ERP)</span>
+        <Input type="date" value={meta.ngayCt || ''} onChange={(e) => set('ngayCt', e.target.value)} />
+        {meta.ngayCt && meta.ngayCt !== homNayLocal() && (
+          <button type="button" onClick={() => set('ngayCt', homNayLocal())}
+            className="mt-1 text-xs font-medium text-primary hover:underline">↺ Về hôm nay</button>
+        )}
+      </label>
       {!anGcMauVai && (
         <label className="mt-2 block">
           <span className="mb-1 block text-xs font-medium text-ink-soft">GC màu vải</span>
@@ -182,7 +200,7 @@ function LyDoBoSungInline({ dot, canRun, onSave }) {
           <div className="flex gap-2">
             <Button className="flex-1" onClick={luu} loading={dangLuu}
               disabled={!coSo && !form.ghiChu.trim()}>Lưu số lượng bổ sung</Button>
-            {daGhi && <Button variant="ghost" onClick={() => setSua(false)}>Hủy</Button>}
+            {daGhi && <Button chiXemOk variant="ghost" onClick={() => setSua(false)}>Hủy</Button>}
           </div>
         </div>
       ) : (
@@ -305,7 +323,7 @@ function PhanCongInline({ pc, users, toIns = [], onSave, busy, canRun }) {
         </Field>
       )}
       <div className="flex gap-2">
-        {daLuu && <Button variant="ghost" className="flex-1" onClick={() => setSua(false)} disabled={busy}>Hủy</Button>}
+        {daLuu && <Button chiXemOk variant="ghost" className="flex-1" onClick={() => setSua(false)} disabled={busy}>Hủy</Button>}
         <Button className="flex-1" icon="check" loading={busy}
           onClick={async () => {
             const ok = await onSave({
@@ -369,7 +387,7 @@ function PrintSetModal({ open, onClose, rows, onPrintRow, busy, meta, setMeta, g
 
   return (
     <Modal open={open} onClose={onClose} title={`${chiLuu ? 'Lưu' : 'In tem'} — đợt sản xuất gom set`} size="xl"
-      footer={<Button variant="ghost" onClick={onClose}>Đóng</Button>}
+      footer={<Button chiXemOk variant="ghost" onClick={onClose}>Đóng</Button>}
     >
       {/* Ngày ca / giờ SX / BTP áp cho MỌI tem in ở modal này. GC màu vải nhập RIÊNG từng dòng ⇒ ẩn ô chung. */}
       <div className="mb-3"><TemMetaFields meta={meta} setMeta={setMeta} goiY={goiY} anGcMauVai /></div>
@@ -462,7 +480,8 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
   const [lyDoNgungDs, setLyDoNgungDs] = useState([]);
   // Giờ ngừng / hoạt động lại NHẬP TAY ('HH:MM', bỏ trống = giờ hệ thống). Luồng vẫn 2 bước như cũ.
   const [stopGioBd, setStopGioBd] = useState('');
-  const [stopGioKt, setStopGioKt] = useState('');
+  const [stopGioKt, setStopGioKt] = useState('');   // giờ kết thúc khi bấm "Chuyền hoạt động lại"
+  const [stopKtLucTao, setStopKtLucTao] = useState(''); // giờ kết thúc nhập NGAY lúc tạo (ghi bù sự cố đã xong)
   const [reprint, setReprint] = useState(null); // tem đang in lại
   const [reprintReason, setReprintReason] = useState('');
   const [logsOpen, setLogsOpen] = useState(false);
@@ -692,9 +711,11 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
     }
     setBusy(true);
     try {
-      await stopLine(phieu.id, stopReason.trim(), stopGioBd || null, stopLyDoId || null);
-      show('Đã ngừng chuyền');
-      setStopReason(''); setStopGioBd(''); setStopLyDoId('');
+      // `stopKtLucTao` = giờ kết thúc nhập NGAY lúc tạo (sự cố đã xong mới ngồi ghi lại) ⇒ bản ghi
+      // vào thẳng "đã hoạt động lại". Bỏ trống thì y như cũ, phải bấm "Chuyền hoạt động lại" sau.
+      await stopLine(phieu.id, stopReason.trim(), stopGioBd || null, stopLyDoId || null, stopKtLucTao || null);
+      show(stopKtLucTao ? `Đã ghi ngừng chuyền ${stopGioBd || 'bây giờ'} → ${stopKtLucTao}` : 'Đã ngừng chuyền');
+      setStopReason(''); setStopGioBd(''); setStopLyDoId(''); setStopKtLucTao('');
       await load();
       onChanged?.();
     } catch (e) {
@@ -1145,13 +1166,22 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
                       ? 'Ghi chú thêm (tùy chọn)'
                       : 'Lý do ngừng chuyền (vd: hết mực, kẹt vải, đổi khuôn...)'} />
                   {/* Giờ BẮT ĐẦU ngừng — bỏ trống = giờ hệ thống. Nhập giờ lớn hơn bây giờ ⇒ hiểu là HÔM QUA (ca đêm). */}
-                  <label className="block">
-                    <span className="mb-1 block text-xs font-medium text-ink-soft">Giờ bắt đầu ngừng (bỏ trống = bây giờ)</span>
-                    <TimeSelect value={stopGioBd} onChange={setStopGioBd} minuteStep={1} />
-                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-medium text-ink-soft">Giờ bắt đầu (trống = bây giờ)</span>
+                      <TimeSelect value={stopGioBd} onChange={setStopGioBd} minuteStep={1} />
+                    </label>
+                    {/* GIỜ KẾT THÚC NGAY LÚC TẠO — cho ca sự cố đã xong rồi mới ngồi ghi lại: khỏi phải
+                        bấm Ngừng rồi bấm tiếp "Hoạt động lại". Bỏ trống ⇒ chuyền vào trạng thái ĐANG
+                        NGỪNG như cũ. Sớm hơn giờ bắt đầu ⇒ backend hiểu là qua đêm (+1 ngày). */}
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-medium text-ink-soft">Giờ kết thúc (trống = chưa xong)</span>
+                      <TimeSelect value={stopKtLucTao} onChange={setStopKtLucTao} minuteStep={1} />
+                    </label>
+                  </div>
                   <Button variant="danger" className="w-full" onClick={doStop} loading={busy}
                     disabled={lyDoNgungDs.length ? !stopLyDoId : !stopReason.trim()}>
-                    Ngừng chuyền
+                    {stopKtLucTao ? 'Ghi lần ngừng (đã kết thúc)' : 'Ngừng chuyền'}
                   </Button>
                 </div>
               ) : null}
@@ -1212,7 +1242,7 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
         title={`Trả về Kỹ thuật — ${data?.lenh?.ma_lenh_san_xuat || ''}`}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setTraVeOpen(false)}>Hủy</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setTraVeOpen(false)}>Hủy</Button>
             <Button variant="danger" onClick={doTraVeKyThuat} loading={busy} disabled={!traVeReason.trim()}>
               Xác nhận trả về
             </Button>
@@ -1237,7 +1267,7 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
       <Modal open={doiOpen} onClose={() => setDoiOpen(false)} title="Đổi chuyền" size="sm"
         footer={
           <>
-            <Button variant="ghost" onClick={() => setDoiOpen(false)}>Hủy</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setDoiOpen(false)}>Hủy</Button>
             <Button onClick={doDoiChuyen} loading={busy}
               disabled={!doiChuyenId || doiChuyenId === data?.lenh?.chuyen_id}>
               Xác nhận đổi
@@ -1266,7 +1296,7 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
       <Modal open={pauseOpen} onClose={() => setPauseOpen(false)} title="Ngừng lệnh chạy — in hàng gấp" size="lg"
         footer={
           <>
-            <Button variant="ghost" onClick={() => setPauseOpen(false)}>Đóng</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setPauseOpen(false)}>Đóng</Button>
             <Button variant="danger" onClick={doPauseOnly} loading={busy}>Chỉ ngừng lệnh chạy</Button>
           </>
         }
@@ -1307,7 +1337,7 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
         title={reprint ? `In lại tem ${reprint.ma_tem}` : 'In lại tem'}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setReprint(null)}>Hủy</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setReprint(null)}>Hủy</Button>
             <Button onClick={doReprint} loading={busy} disabled={!reprintReason.trim()}>In lại tem</Button>
           </>
         }
@@ -1321,7 +1351,7 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
       </Modal>
 
       <Modal open={logsOpen} onClose={() => setLogsOpen(false)} title="Lịch sử in tem" size="lg"
-        footer={<Button variant="ghost" onClick={() => setLogsOpen(false)}>Đóng</Button>}
+        footer={<Button chiXemOk variant="ghost" onClick={() => setLogsOpen(false)}>Đóng</Button>}
       >
         {temLogs.length === 0 ? (
           <p className="text-sm text-ink-soft">Chưa có lượt in nào.</p>

@@ -42,6 +42,12 @@ export default function TemToolbar({
   onChenTruong, onDoiKieuO, onChiaLaiLuoi,
   tiLe, onZoom,
   deu,                 // (dk) => mọi ô trong vùng đều thỏa dk — cho trạng thái bật/tắt của nút
+  // Kích thước vùng nội dung (mm) — CHỈ dùng cho nhãn gợi ý cỡ ô. Mặc định = 1 tem; trình Thiết kế
+  // PHIẾU truyền kích thước khối của nó vào để con số hiện ra không sai lệch.
+  rongVungMm = RONG_MM, caoVungMm = CAO_MM,
+  // Ẩn nhóm nút đổi ô sang QR / mã vạch. Phiếu CHO PHÉP ở khối đầu/cuối nhưng KHÔNG cho ở vùng lặp
+  // dòng (mỗi dòng cần ảnh mã riêng — xem `kiemBoCucPhieu`).
+  choPhepMa = true,
 }) {
   // Ô nhập "chia lại lưới" bám theo khung đang mở, nhưng để người dùng gõ số khác rồi mới Áp dụng.
   const [oHang, setOHang] = useState(String(khung?.hang?.length || ''));
@@ -201,15 +207,19 @@ export default function TemToolbar({
 
       {/* Nội dung ô neo */}
       <Nhom>
-        <select
-          value={oNeo?.kieu || 'chu'} disabled={!co}
-          onChange={(e) => onDoiKieuO(e.target.value)}
-          title="Kiểu ô" className={`${O_NHAP} w-28`}
-        >
-          <option value="chu">Chữ / dữ liệu</option>
-          <option value="qr">Mã QR</option>
-          <option value="barcode">Mã vạch</option>
-        </select>
+        {/* Ô mã QR/vạch — ẩn hẳn ở nơi không hỗ trợ (vùng lặp dòng của phiếu): hiện ra rồi chọn vào
+            thì bản in không vẽ được mã mà cũng chẳng báo gì. */}
+        {choPhepMa && (
+          <select
+            value={oNeo?.kieu || 'chu'} disabled={!co}
+            onChange={(e) => onDoiKieuO(e.target.value)}
+            title="Kiểu ô" className={`${O_NHAP} w-28`}
+          >
+            <option value="chu">Chữ / dữ liệu</option>
+            <option value="qr">Mã QR</option>
+            <option value="barcode">Mã vạch</option>
+          </select>
+        )}
         <select
           value="" disabled={!co || laMa}
           onChange={(e) => { if (e.target.value) { onChenTruong(e.target.value); e.target.value = ''; } }}
@@ -247,7 +257,7 @@ export default function TemToolbar({
         <span className="text-[10px] text-ink-soft">×</span>
         <input type="number" min="1" max={SO_COT_MAX} value={oCot} title="Số cột"
           onChange={(e) => setOCot(e.target.value)} className={`${O_NHAP} w-14`} />
-        <Nut title={`Chia lại lưới thành ${oHang} hàng × ${oCot} cột (ô ${(RONG_MM / (Number(oCot) || 1)).toFixed(1)}×${(CAO_MM / (Number(oHang) || 1)).toFixed(1)}mm)`}
+        <Nut title={`Chia lại lưới thành ${oHang} hàng × ${oCot} cột (ô ${(rongVungMm / (Number(oCot) || 1)).toFixed(1)}×${(caoVungMm / (Number(oHang) || 1)).toFixed(1)}mm)`}
           disabled={!khung || (Number(oHang) === khung.hang.length && Number(oCot) === khung.so_cot)}
           onClick={() => onChiaLaiLuoi(Number(oHang), Number(oCot))}>Chia lại</Nut>
       </Nhom>
@@ -261,7 +271,7 @@ export default function TemToolbar({
 
       {khung && (
         <span className="ml-auto text-[11px] text-ink-soft">
-          ô ~{(RONG_MM / khung.so_cot).toFixed(1)}×{(CAO_MM / khung.hang.length).toFixed(1)}mm
+          ô ~{(rongVungMm / khung.so_cot).toFixed(1)}×{(caoVungMm / khung.hang.length).toFixed(1)}mm
         </span>
       )}
     </div>

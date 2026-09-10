@@ -279,7 +279,7 @@ export default function TheoDoiChuyenPage() {
       <Modal open={!!stopFor} onClose={() => setStopFor(null)} title="Ngừng chuyền"
         footer={
           <>
-            <Button variant="ghost" onClick={() => setStopFor(null)}>Hủy</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setStopFor(null)}>Hủy</Button>
             <Button variant="danger" onClick={doStop} loading={busy} disabled={!stopReason.trim()}>Ngừng chuyền</Button>
           </>
         }

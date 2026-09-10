@@ -100,7 +100,7 @@ export default function ChuyenPage() {
 
       <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Sửa chuyền' : 'Thêm chuyền'}
         footer={<>
-          <Button variant="ghost" onClick={() => setOpen(false)}>Hủy</Button>
+          <Button chiXemOk variant="ghost" onClick={() => setOpen(false)}>Hủy</Button>
           <Button onClick={save} loading={saving} disabled={!form.maChuyen || !form.tenChuyen}>Lưu</Button>
         </>}>
         <div className="grid grid-cols-2 gap-x-4">
@@ -129,7 +129,7 @@ export default function ChuyenPage() {
 
       <Modal open={loaiModal} onClose={() => setLoaiModal(false)} title="Thêm loại chuyền" size="sm"
         footer={<>
-          <Button variant="ghost" onClick={() => setLoaiModal(false)}>Hủy</Button>
+          <Button chiXemOk variant="ghost" onClick={() => setLoaiModal(false)}>Hủy</Button>
           <Button onClick={saveLoai}>Thêm</Button>
         </>}>
         <Field label="Mã loại" required>

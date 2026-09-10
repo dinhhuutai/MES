@@ -207,7 +207,7 @@ export default function ManualEntryPage() {
   return (
     <div>
       <Toolbar title="Nhập tay đơn hàng → đợt vải" subtitle="Tạo thủ công chuỗi Khách hàng → Đơn hàng → Mã hàng → Phần in → Đợt vải (thay ERP). Mỗi cấp chọn có sẵn hoặc tạo mới; để trống mã = tự sinh.">
-        <Button variant="ghost" onClick={reset}>Làm mới</Button>
+        <Button chiXemOk variant="ghost" onClick={reset}>Làm mới</Button>
         <Button icon="plus" loading={saving} onClick={submit}>{phanInExisting ? 'Thêm đợt vải vào phần in' : 'Tạo phần in + đợt vải'}</Button>
       </Toolbar>
 

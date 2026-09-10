@@ -39,6 +39,8 @@ export const MODULES = [
       { ten: 'Release 1', route: '/ke-hoach/release-1', perm: 'RELEASE1', siSo: 'KH_RELEASE1' },
       { ten: 'Release 2', route: '/ke-hoach/release-2', perm: 'RELEASE2', siSo: 'KH_RELEASE2' },
       { ten: 'Gia công', route: '/ke-hoach/gia-cong', perm: ['RELEASE1', 'RELEASE2'], siSo: 'KH_GIA_CONG' },
+      // Tra cứu tem 13 "TH VỀ" của hàng gia công — xem thông tin tem mà không phải in lại.
+      { ten: 'Danh sách tem gia công', route: '/ke-hoach/danh-sach-tem', perm: ['RELEASE1', 'RELEASE2'] },
       { ten: 'Kế hoạch tạm', route: '/ke-hoach/ke-hoach-tam', perm: ['RELEASE1', 'RELEASE2'], siSo: 'KH_TAM' },
       { ten: 'Lập kế hoạch lại', route: '/ke-hoach/lap-lai', perm: 'RELEASE2' },
       { ten: 'Cài đặt', route: '/ke-hoach/cai-dat', perm: ['RELEASE1', 'RELEASE2'] },
@@ -55,6 +57,8 @@ export const MODULES = [
       { ten: 'Xác nhận chạy', route: '/san-xuat/xac-nhan-chay', perm: 'PROD_RUN', siSo: 'SX_CHO_CHAY' },
       { ten: 'Theo dõi chuyền', route: '/san-xuat/theo-doi-chuyen', perm: 'PROD_MONITOR' },
       { ten: 'Tình trạng xe phơi', route: '/san-xuat/xe-phoi', perm: 'XEPHOI' },
+      // Tra cứu tem đã in — xem thông tin tem mà không phải in ra giấy (tem sản xuất 15/16).
+      { ten: 'Danh sách tem in', route: '/san-xuat/danh-sach-tem', perm: ['PROD_RUN', 'PROD_MONITOR'] },
       { ten: 'KCS', route: '/san-xuat/kcs', perm: 'KCS', siSo: 'SX_KCS' },
       { ten: 'Phân loại lỗi', route: '/san-xuat/phan-loai-loi', perm: ['PHAN_LOAI_LOI', 'KCS'] },
       { ten: 'Sửa', route: '/san-xuat/sua', perm: 'SUA', siSo: 'SX_SUA' },
@@ -90,7 +94,9 @@ export const MODULES = [
     base: '/giao-hang',
     perm: 'DELIVERY_VIEW',
     mau: 'bg-orange-50 text-orange-600',
-    children: [{ ten: 'Phiếu giao', route: '/giao-hang', perm: 'DELIVERY_VIEW', siSo: 'GH_TEM' }],
+    // Màn chính của tổ giao: tem đã được bán hàng tích (ở *Hệ thống → Chờ GN tích*) → chọn → IN PHIẾU
+    // (in = xác nhận giao). Tab thứ 2 trong trang là danh sách phiếu đã lập, để in lại / xem chi tiết.
+    children: [{ ten: 'Danh sách tem giao', route: '/giao-hang', perm: 'DELIVERY_VIEW', siSo: 'GH_TEM' }],
   },
   {
     ma: 'DASHBOARD',
@@ -100,6 +106,9 @@ export const MODULES = [
     mau: 'bg-sky-50 text-sky-600',
     children: [
       { ten: 'Tổng quan', route: '/dashboard' },
+      // ⚠ Trang DUY NHẤT của module Dashboard có gác quyền (mig 093) — 3 trang kia mở cho mọi
+      //   người đăng nhập. Người chọn đơn hàng cũng phải xem được kết quả ⇒ nhận cả 2 quyền.
+      { ten: 'KPI READY', route: '/dashboard/kpi-ready', perm: ['KPI_READY_VIEW', 'KPI_DON_HANG_MANAGE'] },
       { ten: 'Lịch sử nghẽn', route: '/dashboard/lich-su-nghen' },
       { ten: 'Sơ đồ phần in', route: '/dashboard/tinh-trang-tram' },
     ],
@@ -152,14 +161,23 @@ export const MODULES = [
       { ten: 'Checkpoint & Checklist', route: '/he-thong/tram-checkpoint', perm: 'WORKFLOW_VIEW' },
       { ten: 'Điều kiện chuyển checkpoint', route: '/he-thong/dieu-kien', perm: 'WORKFLOW_VIEW' },
       { ten: 'Owner checkpoint/checklist', route: '/he-thong/owner', perm: 'WORKFLOW_VIEW' },
+      // Phạm vi đơn hàng cho *Dashboard → KPI READY* (mig 093). Owner từng cột của trang đó lấy
+      // luôn từ trang "Owner checkpoint/checklist" ngay trên — KHÔNG có bảng owner riêng.
+      { ten: 'Chọn đơn hàng (KPI)', route: '/he-thong/kpi-don-hang', perm: 'KPI_DON_HANG_MANAGE' },
       { ten: 'Trạng thái', route: '/he-thong/trang-thai', perm: 'STATUS_VIEW' },
-      { ten: 'Hủy lệnh xác nhận', route: '/he-thong/lich-su-trang-thai', perm: ['READY_CANCEL', 'RELEASE1', 'RELEASE2', 'PROD_RUN', 'KCS', 'SUA', 'OQC', 'LENH_CANCEL_ANY'] },
+      { ten: 'Hủy lệnh xác nhận', route: '/he-thong/lich-su-trang-thai', perm: ['READY_CANCEL', 'RELEASE1', 'RELEASE2', 'PROD_RUN', 'KCS', 'SUA', 'OQC', 'LENH_CANCEL_ANY', 'DELIVERY_MANAGE'] },
+      // Chốt chặn "bán hàng tích tem" (mig 092) — đặt ở Hệ thống theo yêu cầu người dùng: người tích
+      // là BÁN HÀNG, không thuộc tổ giao hàng. Tem chưa tích thì màn Giao hàng KHÔNG hiện.
+      { ten: 'Chờ GN tích', route: '/he-thong/tich-giao', perm: ['TICH_GIAO', 'DELIVERY_MANAGE'] },
       { ten: 'Đồng bộ ERP', route: '/he-thong/erp-sync', perm: 'ERP_SYNC' },
       { ten: 'Nhập tay đơn → đợt vải', route: '/he-thong/nhap-tay', perm: 'ERP_SYNC' },
       { ten: 'Cập nhật SL nhận vải / release', route: '/he-thong/cap-nhat-vai', perm: 'ERP_SYNC' },
       { ten: 'Mẫu form (tem/phiếu)', route: '/he-thong/mau-form', perm: 'WORKFLOW_VIEW' },
       // Thiết kế tem (mig 073) — quyền riêng TEM_DESIGN, lúc đầu chỉ admin (role ADMIN có '*').
       { ten: 'Thiết kế tem', route: '/he-thong/thiet-ke-tem', perm: 'TEM_DESIGN' },
+      // Thiết kế phiếu giao (mig 094) — quyền riêng PHIEU_DESIGN. Khác thiết kế tem ở chỗ bố cục có
+      // VÙNG LẶP DÒNG (bảng chi tiết lặp theo số tem) + chọn được khổ A4/A5.
+      { ten: 'Thiết kế phiếu', route: '/he-thong/thiet-ke-phieu', perm: 'PHIEU_DESIGN' },
       // Quản trị phần in (mig 078) — trang GỠ RỐI: sửa dữ liệu gốc + đặt lại giai đoạn theo đợt vải.
       // Quyền riêng PHAN_IN_ADMIN, cấp hẹp (role ADMIN có '*' nên dùng được ngay).
       { ten: 'Quản trị phần in', route: '/he-thong/quan-tri-phan-in', perm: 'PHAN_IN_ADMIN' },

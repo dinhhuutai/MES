@@ -12,9 +12,14 @@ import usePermissions from '../../../hooks/usePermissions';
 import { listCaiDatApi, saveCaiDatApi, thuKetNoiApi } from '../../../services/caiDatApiService';
 import LichSuApiPanel from '../components/LichSuApiPanel';
 
-// 2 API có ghi vết từng lượt gọi ⇒ hiện nút "Lịch sử". API đồng bộ đợt vải KHÔNG nằm đây vì nó đã
+// Các API có ghi vết từng lượt gọi ⇒ hiện nút "Lịch sử". API đồng bộ đợt vải KHÔNG nằm đây vì nó đã
 // có màn *Đồng bộ ERP* riêng (bảng `erp_sync_log`), đưa vào đây sẽ thành 2 chỗ xem cùng một thứ.
-const CO_LICH_SU = new Set(['ERP_BARCODE_TEM', 'ERP_GHI_IN_TEM']);
+// ⚠ Thêm API mới có ghi vết thì nhớ khai vào đây, nếu không nút Lịch sử sẽ không hiện dù backend
+//   vẫn ghi đủ (`utils/erpApiLog.ghiLog` + `caidatapi.repository.lichSu` lọc theo `hanh_dong`).
+const CO_LICH_SU = new Set([
+  'ERP_BARCODE_TEM', 'ERP_GHI_IN_TEM',
+  'ERP_LAY_ID_PHIEU_GIAO', 'ERP_GUI_PHIEU_GIAO', 'ERP_GUI_PHAN_LOAI_LOI',
+]);
 
 // Công tắc gạt — dựng lại y hệt `HienThiPainPage` để 2 trang cấu hình nhìn như một.
 function Toggle({ on, onChange, disabled, title }) {
@@ -137,7 +142,7 @@ export default function CaiDatApiPage() {
                   </div>
                   <div className="flex shrink-0 items-center gap-2">
                     {CO_LICH_SU.has(r.ma) && (
-                      <Button variant="secondary" icon="history"
+                      <Button chiXemOk variant="secondary" icon="history"
                         onClick={() => setLichSu({ ma: r.ma, ten: r.ten })}>
                         Lịch sử
                       </Button>

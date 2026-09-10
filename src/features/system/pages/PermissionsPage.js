@@ -107,7 +107,7 @@ export default function PermissionsPage() {
         title={editing ? 'Sửa permission' : 'Thêm permission'}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setModalOpen(false)}>Hủy</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setModalOpen(false)}>Hủy</Button>
             <Button onClick={save} loading={saving} disabled={!form.maPermission || !form.tenPermission}>Lưu</Button>
           </>
         }

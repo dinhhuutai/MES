@@ -41,6 +41,15 @@ const FILTER_FIELDS = [
   { key: 'nhaGiaCong', label: 'Nhà gia công', col: 'nha_gia_cong' },
 ];
 
+// Màu badge theo TRẠM ĐANG Ở (mã stage của backend — `utils/stage.js STAGE_ORDER`).
+// Thiếu mã ⇒ tone 'info', không mất dòng nào; nhãn chữ luôn lấy từ `giai_doan_ten` do backend gửi.
+const TONE_GIAI_DOAN = {
+  READY_KT: 'default', READY_QA: 'default',
+  TESTRUN_CNSP: 'warning', TESTRUN_QA: 'warning',
+  RELEASE_2: 'success', CHO_SAN_XUAT: 'success',
+  GIA_CONG: 'info',
+};
+
 // Ngày (Date/ISO) → 'YYYY-MM-DD' theo giờ địa phương cho input[type=date] (tránh lệch ngày do slice ISO/UTC).
 const dateStr = (d) => {
   if (!d) return '';
@@ -238,10 +247,15 @@ export default function ReplanPage() {
         )}
       </div>
     ) },
+    // ⚠⚠ GIAI ĐOẠN = TRẠM ĐANG Ở, do BACKEND tính (`lenhStageCase`, cùng nguồn luật với dashboard).
+    //   Bản cũ suy từ mỗi `trang_thai` nên hiện **trạm đã đi qua gần nhất**: lệnh `RELEASE_1` luôn ghi
+    //   "Test Run" kể cả khi đã test xong (thực tế đang chờ duyệt Release 2) hoặc khi bị QA trả về
+    //   Kỹ thuật (thực tế đang ở READY). Nhãn lấy nguyên `giai_doan_ten` — đừng map lại ở FE.
     { key: 'giai_doan', header: 'Giai đoạn', merge: true, render: (r) => (
-      r.trang_thai === 'RELEASE_1'
-        ? <Badge tone="warning">Test Run</Badge>
-        : <Badge tone="success">Release 2</Badge>
+      <Badge tone={TONE_GIAI_DOAN[r.giai_doan_hien_tai] || 'info'}
+        className="max-w-[8.5rem] whitespace-normal break-words">
+        {r.giai_doan_ten || '—'}
+      </Badge>
     ) },
     // ↓ Các cột THEO PHẦN IN — dòng con ghi đè giá trị nên mỗi phần in hiện đúng dữ liệu của nó.
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
@@ -280,8 +294,8 @@ export default function ReplanPage() {
           <Button onClick={openBatch}>Lập lại kế hoạch ({selected.size})</Button>
         )}
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
-        <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
-        <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
+        <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
+        <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="info">{activeCount ? `${filtered.length}/` : ''}{meta.total} lệnh</Badge>
       </Toolbar>
 
@@ -303,7 +317,7 @@ export default function ReplanPage() {
         subtitle={detail ? `${detail.ten_khach_hang || ''} · ${detail.mau_vai || ''}` : ''}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setDetail(null)}>Đóng</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setDetail(null)}>Đóng</Button>
             <Button onClick={submit} loading={saving} disabled={!canReplan}>Lập lại kế hoạch</Button>
           </>
         }
@@ -393,7 +407,7 @@ export default function ReplanPage() {
         title="Lập lại kế hoạch hàng loạt"
         footer={
           <>
-            <Button variant="ghost" onClick={() => setBatchOpen(false)}>Hủy</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setBatchOpen(false)}>Hủy</Button>
             <Button onClick={submitBatch} loading={saving}>Lập lại {selected.size} lệnh</Button>
           </>
         }

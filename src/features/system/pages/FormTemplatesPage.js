@@ -53,7 +53,7 @@ export default function FormTemplatesPage() {
             </div>
 
             <div className="mt-auto flex justify-end">
-              <Button icon="download" onClick={() => doExport(form)} loading={busy === form.id}>
+              <Button chiXemOk icon="download" onClick={() => doExport(form)} loading={busy === form.id}>
                 Xuất Excel
               </Button>
             </div>

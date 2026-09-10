@@ -25,7 +25,19 @@ import { evalSla, slaRowClass } from '../../../utils/sla';
 import usePermissions from '../../../hooks/usePermissions';
 import { listOqcCandidates, recordOqc, oqcHistory, oqcDone, returnOqcToKcs } from '../../../services/qualityService';
 import { listUserOptions } from '../../../services/userService';
-import { fmtNum, baseMaTem } from '../../../utils/format';
+import { fmtNum, timTheoMaTem, maTemNhan } from '../../../utils/format';
+
+// ⚠⚠ MÃ TEM HIỆN ĐÚNG NHÃN GIẤY (mig 091 — tem 17 nay là DÒNG TEM THẬT):
+//   · TEM CON (`la_tem_sua`) mang sẵn `ma_tem` `17…` ⇒ hiện THẲNG, không ghép gì.
+//   · TEM 13 GIA CÔNG cũng mang sẵn mã riêng `13…` (từ 06/09/2026) và đi vào OQC ở nguồn **KCS**
+//     ⇒ nếu cứ ghép `15` thì `13…` biến thành `15…` — mã KHÔNG có thật. `maTemNhan` chặn ca này.
+//   · Tem gốc / dữ liệu CŨ chưa tách (parent còn `con_oqc_sua`) ⇒ vẫn ghép tiền tố theo nguồn.
+// ⚠ Dùng `maTemNhan()`/`temCode()` chứ KHÔNG nối chuỗi `'15-' + ma_tem` như bản cũ: mã ERP 12 số
+//   phải THAY 2 số đầu, nối chuỗi cho ra `15-152608057689` — sai hẳn so với mã in trên tem.
+const maHien = (r, nguon) => maTemNhan(r.ma_tem, nguon === 'SUA' ? 17 : 15, null, r.la_tem_sua);
+// Bảng Lịch sử / Đã hoàn thành: hàng lấy từ bảng `oqc` nên mã nằm ở `r.ma`, nguồn ở `r.nguon`.
+const laSuaDone = (r) => !!r.la_tem_sua || r.nguon === 'SUA';
+const maHienDone = (r) => maTemNhan(r.ma || '', r.nguon === 'SUA' ? 17 : 15, null, r.la_tem_sua);
 
 const FILTER_FIELDS = [
   { key: 'khach', label: 'Khách hàng' }, { key: 'don', label: 'Đơn hàng' }, { key: 'maHang', label: 'Mã hàng' },
@@ -110,11 +122,11 @@ export default function OqcPage() {
     const out = [];
     const kcs = Number(r.con_oqc_kcs) || 0;
     const sua = Number(r.con_oqc_sua) || 0;
-    if (kcs > 0) out.push({ ...r, _key: `${r.tem_id}-KCS`, nguon: 'KCS', con_src: kcs, ma_tem_display: `15-${r.ma_tem}` });
-    if (sua > 0) out.push({ ...r, _key: `${r.tem_id}-SUA`, nguon: 'SUA', con_src: sua, ma_tem_display: `17-${r.ma_tem}` });
+    if (kcs > 0) out.push({ ...r, _key: `${r.tem_id}-KCS`, nguon: 'KCS', con_src: kcs, ma_tem_display: maHien(r, 'KCS'), la_sua: !!r.la_tem_sua });
+    if (sua > 0) out.push({ ...r, _key: `${r.tem_id}-SUA`, nguon: 'SUA', con_src: sua, ma_tem_display: maHien(r, 'SUA'), la_sua: true });
     // Dữ liệu cũ (chưa chạy mig 047 → 2 cột null): fallback 1 dòng gộp coi như nguồn KCS.
     if (out.length === 0 && (Number(r.con_oqc) || 0) > 0) {
-      out.push({ ...r, _key: `${r.tem_id}-KCS`, nguon: 'KCS', con_src: Number(r.con_oqc), ma_tem_display: `15-${r.ma_tem}` });
+      out.push({ ...r, _key: `${r.tem_id}-KCS`, nguon: 'KCS', con_src: Number(r.con_oqc), ma_tem_display: maHien(r, 'KCS'), la_sua: !!r.la_tem_sua });
     }
     return out;
   });
@@ -122,17 +134,20 @@ export default function OqcPage() {
   // Quét QR (ma_tem) → tra tem đang chờ OQC → mở modal nhập (ưu tiên nguồn KCS nếu còn).
   const onScan = async (maTem) => {
     setScanOpen(false);
-    const code = baseMaTem(maTem); // QR có thể mã hóa '15-/17-TEM...'; tách lấy mã gốc
+    // ⚠⚠ QUAN TRỌNG NHẤT Ở MÀN NÀY: tem 17 (sửa đạt) là DÒNG TEM RIÊNG với mã RIÊNG của ERP từ
+    //   06/09/2026 ⇒ quét nhãn 17 phải ra ĐÚNG tem con đó. `baseMaTem` một mình sẽ đổi `17…` thành
+    //   `15…` và mở nhầm tem gốc (hoặc không thấy gì) — `timTheoMaTem` ưu tiên mã nguyên văn.
+    const code = String(maTem || '').trim();
     if (!code) return;
     try {
       const res = await listOqcCandidates({ search: code });
-      const r = (res.data || []).find((x) => (x.ma_tem || '').toLowerCase() === code.toLowerCase());
+      const r = timTheoMaTem(res.data || [], code);
       if (!r) { show(`Tem ${code} không có phần chờ OQC`, 'error'); return; }
       const kcs = Number(r.con_oqc_kcs) || 0;
       const sua = Number(r.con_oqc_sua) || 0;
-      if (kcs > 0) open({ ...r, nguon: 'KCS', con_src: kcs, ma_tem_display: `15-${r.ma_tem}` });
-      else if (sua > 0) open({ ...r, nguon: 'SUA', con_src: sua, ma_tem_display: `17-${r.ma_tem}` });
-      else open({ ...r, nguon: 'KCS', con_src: Number(r.con_oqc) || 0, ma_tem_display: `15-${r.ma_tem}` });
+      if (kcs > 0) open({ ...r, nguon: 'KCS', con_src: kcs, ma_tem_display: maHien(r, 'KCS'), la_sua: !!r.la_tem_sua });
+      else if (sua > 0) open({ ...r, nguon: 'SUA', con_src: sua, ma_tem_display: maHien(r, 'SUA'), la_sua: true });
+      else open({ ...r, nguon: 'KCS', con_src: Number(r.con_oqc) || 0, ma_tem_display: maHien(r, 'KCS'), la_sua: !!r.la_tem_sua });
     } catch (e) { show(e.message || 'Không tra được tem', 'error'); }
   };
 
@@ -177,8 +192,11 @@ export default function OqcPage() {
   const columns = [
     { key: 'ma_tem', header: 'Tem', render: (r) => (
       <div className="flex items-center gap-1.5">
-        <Badge tone={r.la_gia_cong ? 'success' : r.nguon === 'SUA' ? 'warning' : 'info'}>{r.ma_tem_display || r.ma_tem}</Badge>
-        <span className="text-[11px] text-ink-soft">{r.la_gia_cong ? 'gia công' : r.nguon === 'SUA' ? 'đã sửa' : 'từ KCS'}</span>
+        {/* ⚠ `la_sua` = tem 17 THẬT (tem con, mig 091) HOẶC dòng nguồn SỬA của dữ liệu cũ. Tem con
+            mang số lượng ở `sl_kcs_dat` nên `nguon` gửi lên backend vẫn là 'KCS' (đúng sổ cái) —
+            chỉ NHÃN hiển thị mới theo `la_sua`. Đừng gộp 2 khái niệm này làm một. */}
+        <Badge tone={r.la_gia_cong ? 'success' : r.la_sua ? 'warning' : 'info'}>{r.ma_tem_display || r.ma_tem}</Badge>
+        <span className="text-[11px] text-ink-soft">{r.la_gia_cong ? 'gia công' : r.la_sua ? 'đã sửa' : 'từ KCS'}</span>
       </div>
     ) },
     { key: 'khach_don', header: 'Khách hàng · Đơn hàng', render: (r) => (
@@ -215,8 +233,8 @@ export default function OqcPage() {
         </div>
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
         <NghenButton rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} onClick={() => setNghenOpen(true)} />
-        <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
-        <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
+        <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
+        <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="warning">{displayRows.length} dòng chờ OQC</Badge>
       </Toolbar>
 
@@ -234,7 +252,7 @@ export default function OqcPage() {
         title={`OQC — ${editing?.ma_tem_display || editing?.ma_tem || ''}`}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setEditing(null)}>Hủy</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setEditing(null)}>Hủy</Button>
             <Button onClick={save} loading={saving} variant={form.ketQua === 'DAT' ? 'primary' : 'danger'}>
               {form.ketQua === 'DAT'
                 ? 'Xác nhận đạt'
@@ -246,8 +264,8 @@ export default function OqcPage() {
         <div className="mb-3 rounded-control bg-surface-muted px-3 py-2 text-sm text-ink-soft">
           {editing?.ma_lenh_san_xuat} · {editing?.phan_list} · SL in {fmtNum(editing?.so_luong)}
           <span className="ml-1 font-semibold text-primary">· cả lô chờ OQC {fmtNum(editing?.con_src ?? editing?.con_oqc)}</span>
-          <span className={`ml-1 rounded px-1.5 py-0.5 text-[11px] font-semibold ${editing?.nguon === 'SUA' ? 'bg-amber-100 text-amber-700' : 'bg-sky-100 text-sky-700'}`}>
-            {editing?.nguon === 'SUA' ? 'Nguồn đã sửa (17-)' : 'Nguồn từ KCS (15-)'}
+          <span className={`ml-1 rounded px-1.5 py-0.5 text-[11px] font-semibold ${editing?.la_sua ? 'bg-amber-100 text-amber-700' : 'bg-sky-100 text-sky-700'}`}>
+            {editing?.la_sua ? 'Nguồn đã sửa (tem 17)' : 'Nguồn từ KCS (tem 15)'}
           </span>
         </div>
         <div className="mb-1 rounded-control border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/40 dark:text-sky-300">
@@ -317,7 +335,7 @@ export default function OqcPage() {
                   placeholder={`Vì sao trả về ${returnTram}...`} />
               </Field>
               <div className="flex justify-end gap-2">
-                <Button variant="ghost" className="px-3 py-1.5" onClick={() => { setReturnMode(false); setReturnReason(''); }}>Hủy</Button>
+                <Button chiXemOk variant="ghost" className="px-3 py-1.5" onClick={() => { setReturnMode(false); setReturnReason(''); }}>Hủy</Button>
                 <Button variant="danger" className="px-3 py-1.5" onClick={doReturn} loading={saving} disabled={!returnReason.trim()}>Trả về {returnTram}</Button>
               </div>
             </div>
@@ -330,7 +348,7 @@ export default function OqcPage() {
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
         title="Tem đã OQC" maHeader="Tem" fetcher={oqcDone}
         columns={[
-          { key: 'ma', header: 'Tem', className: 'whitespace-nowrap', render: (r) => <Badge tone={r.nguon === 'SUA' ? 'warning' : 'info'}>{(r.nguon === 'SUA' ? '17-' : '15-') + (r.ma || '')}</Badge> },
+          { key: 'ma', header: 'Tem', className: 'whitespace-nowrap', render: (r) => <Badge tone={laSuaDone(r) ? 'warning' : 'info'}>{maHienDone(r)}</Badge> },
           { key: 'nguon', header: 'Nguồn', render: (r) => (r.nguon === 'SUA' ? 'Sửa' : 'KCS') },
           { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
           { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
@@ -346,7 +364,7 @@ export default function OqcPage() {
           { key: 'nguoi', header: 'Người', render: (r) => r.nguoi || '—' },
         ]}
         excelColumns={[
-          { header: 'Tem', value: (r) => (r.nguon === 'SUA' ? '17-' : '15-') + (r.ma || '') },
+          { header: 'Tem', value: (r) => maHienDone(r) },
           { header: 'Nguồn', value: (r) => (r.nguon === 'SUA' ? 'Sửa' : 'KCS') },
           { header: 'Khách hàng', value: (r) => r.ten_khach_hang || '' },
           { header: 'Đơn hàng', value: (r) => r.ma_don_hang || '' },

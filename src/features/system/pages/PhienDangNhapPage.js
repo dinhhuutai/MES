@@ -186,7 +186,7 @@ export default function PhienDangNhapPage() {
           <input type="checkbox" checked={tatCa} onChange={(e) => setTatCa(e.target.checked)} />
           Hiện cả phiên đã đăng xuất
         </label>
-        <Button variant="ghost" icon="history" onClick={() => load()}>Tải lại</Button>
+        <Button chiXemOk variant="ghost" icon="history" onClick={() => load()}>Tải lại</Button>
         <Badge tone="success">{soHoatDong} phiên đang đăng nhập</Badge>
         {soNhieuMay > 0 && <Badge tone="warning">{soNhieuMay} tài khoản &gt; 1 máy</Badge>}
       </Toolbar>

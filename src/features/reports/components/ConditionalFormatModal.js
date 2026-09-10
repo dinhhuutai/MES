@@ -86,7 +86,7 @@ export default function ConditionalFormatModal({ open, onClose, rules = [], onSa
       open={open} onClose={onClose} size="lg" title="Định dạng có điều kiện"
       footer={(
         <>
-          <Button variant="ghost" onClick={onClose}>Hủy</Button>
+          <Button chiXemOk variant="ghost" onClick={onClose}>Hủy</Button>
           <Button onClick={() => { onSave(items.filter((x) => x.vung && x.vung.trim())); onClose(); }}>Xong</Button>
         </>
       )}

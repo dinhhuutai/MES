@@ -13,7 +13,7 @@ export default function FieldFilters({ fields, values, onField, onClear, open, l
         <div className="mb-3 card p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-ink">Lọc nhiều trường (kết hợp AND)</h3>
-            <Button variant="ghost" className="px-2.5 py-1 text-xs" onClick={onClear} disabled={!active.length}>Xóa lọc</Button>
+            <Button variant="ghost" chiXemOk className="px-2.5 py-1 text-xs" onClick={onClear} disabled={!active.length}>Xóa lọc</Button>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
             {fields.map((f) => (
@@ -68,7 +68,7 @@ export function filterRows(rows, filters, fields) {
 // Nút bật/tắt panel lọc (kèm số lọc đang bật).
 export function FilterToggle({ open, count, onClick }) {
   return (
-    <Button variant={open || count ? 'secondary' : 'ghost'} icon="filter" onClick={onClick}>
+    <Button variant={open || count ? 'secondary' : 'ghost'} icon="filter" chiXemOk onClick={onClick}>
       Bộ lọc{count ? ` (${count})` : ''}
     </Button>
   );

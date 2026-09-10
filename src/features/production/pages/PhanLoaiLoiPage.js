@@ -142,7 +142,7 @@ export default function PhanLoaiLoiPage() {
       {/* ── Modal THÊM: quét mã vạch hoặc gõ mã ─────────────────────────── */}
       <Modal open={moThem} onClose={() => setMoThem(false)} title="Thêm phân loại lỗi — quét hoặc nhập mã tem"
         footer={<>
-          <Button variant="ghost" onClick={() => setMoThem(false)}>Hủy</Button>
+          <Button chiXemOk variant="ghost" onClick={() => setMoThem(false)}>Hủy</Button>
           <Button icon="search" loading={dangTra} disabled={!maNhap.trim()} onClick={() => traTem(maNhap)}>Tìm tem</Button>
         </>}>
         <div className="space-y-3">

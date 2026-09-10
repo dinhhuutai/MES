@@ -105,8 +105,8 @@ export default function ReportByDeptPage() {
     { key: 'hh_ngay', header: 'Ngày duyệt', render: (r) => r.hh_ngay ? fmtDate(r.hh_ngay) : '—' },
     { key: 'actions', header: '', className: 'text-right', render: (r) => (
       <div className="flex justify-end gap-1.5">
-        {r.hh_bao_cao_id && <Button variant="ghost" className="px-3 py-1.5" onClick={(e) => { e.stopPropagation(); doView(r); }}>Xem</Button>}
-        {r.hh_bao_cao_id && <Button variant="ghost" icon="download" className="px-3 py-1.5" disabled={exporting} onClick={(e) => { e.stopPropagation(); doExcel(r); }}>Excel</Button>}
+        {r.hh_bao_cao_id && <Button chiXemOk variant="ghost" className="px-3 py-1.5" onClick={(e) => { e.stopPropagation(); doView(r); }}>Xem</Button>}
+        {r.hh_bao_cao_id && <Button chiXemOk variant="ghost" icon="download" className="px-3 py-1.5" disabled={exporting} onClick={(e) => { e.stopPropagation(); doExcel(r); }}>Excel</Button>}
         {r.hh_bao_cao_id && canApprove && <Button variant="ghost" className="px-3 py-1.5 !text-danger" onClick={(e) => { e.stopPropagation(); setHuy(r); }}>Hủy</Button>}
         {canAssign && <Button className="px-3 py-1.5" onClick={(e) => { e.stopPropagation(); setPropose({ phongBanId: r.phong_ban_id, ten: r.ten_phong_ban, baoCaoId: '', ghiChu: '' }); }}>Đề xuất</Button>}
       </div>
@@ -146,7 +146,7 @@ export default function ReportByDeptPage() {
       {/* Đề xuất áp dụng */}
       <Modal open={!!propose} onClose={() => setPropose(null)} title={`Đề xuất báo cáo cho ${propose?.ten || ''}`}
         footer={<>
-          <Button variant="ghost" onClick={() => setPropose(null)}>Hủy</Button>
+          <Button chiXemOk variant="ghost" onClick={() => setPropose(null)}>Hủy</Button>
           <Button onClick={doPropose} loading={saving} disabled={!propose?.baoCaoId}>Gửi đề xuất</Button>
         </>}>
         <Field label="Chọn báo cáo áp dụng" required hint="Có thể chọn báo cáo của bất kỳ người dùng">
@@ -167,7 +167,7 @@ export default function ReportByDeptPage() {
       {/* Từ chối */}
       <Modal open={!!reject} onClose={() => setReject(null)} title="Từ chối đề xuất" size="sm"
         footer={<>
-          <Button variant="ghost" onClick={() => setReject(null)}>Hủy</Button>
+          <Button chiXemOk variant="ghost" onClick={() => setReject(null)}>Hủy</Button>
           <Button variant="danger" onClick={doTuChoi}>Từ chối</Button>
         </>}>
         <Field label="Lý do từ chối">

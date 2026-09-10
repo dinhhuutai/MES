@@ -5,9 +5,15 @@
 // Khớp theo `ma_chuyen` (mã chuyền trong `chuyen_san_xuat`), KHÔNG khớp theo tên hiển thị vì tên
 // có thể đổi. Chuyền Bàn không nằm trong khu nào (vd dữ liệu cũ M1A/M1B/C03 đã ngừng hoạt động)
 // vẫn thuộc chip "Bàn" tổng nhưng không lọt khu nào — cố ý, để không bịa nhóm.
+// ⚠⚠ KHU CÓ CẢ CHUYỀN ROBOT (chốt 2026-09-04, theo bố trí thật của xưởng): **Robot 1 (`MRB1`) nằm
+// trong khu A**, **Robot 2 + 3 (`MRB2`/`MRB3`) nằm trong khu B**. ⇒ `KHU_BAN` KHÔNG còn là "chia nhỏ
+// loại BAN" nữa mà là **CHIA THEO VỊ TRÍ MẶT BẰNG**, có thể chứa chuyền thuộc loại khác.
+// ⚠ 3 chuyền robot vẫn giữ `loai_chuyen='ROBOT'` nên chip "Robot" tổng KHÔNG đổi (vẫn xem riêng được);
+//   chúng chỉ được ĐẾM THÊM ở chip khu tương ứng. Hệ quả đã biết: `demChip` cho ra Σ các chip lớn hơn
+//   chip "Tất cả" — đúng bản chất, xem ghi chú ở `demChip` bên dưới, đừng "sửa cho tổng khớp".
 export const KHU_BAN = [
-  { key: 'BAN_A', label: 'Bàn khu A', ma: ['M4A-4B', 'M5A-5B', 'M6A-6B', 'M7A-7B', 'M8A-8B', 'M9A-9B'] },
-  { key: 'BAN_B', label: 'Bàn khu B', ma: ['M10A', 'M11A', 'M12A', 'M13A', 'M14A', 'M10B', 'M11B', 'M12B', 'M13B', 'M14B'] },
+  { key: 'BAN_A', label: 'Bàn khu A', ma: ['M4A-4B', 'M5A-5B', 'M6A-6B', 'M7A-7B', 'M8A-8B', 'M9A-9B', 'MRB1'] },
+  { key: 'BAN_B', label: 'Bàn khu B', ma: ['M10A', 'M11A', 'M12A', 'M13A', 'M14A', 'M10B', 'M11B', 'M12B', 'M13B', 'M14B', 'MRB2', 'MRB3'] },
   { key: 'MAU', label: 'Mẫu', ma: ['M3A-3B'] },
   { key: 'CANH_HANG', label: 'Canh hàng', ma: ['M1A-1B'] },
   { key: 'BO_SUNG_MTD', label: 'Bổ sung MTĐ', ma: ['M2A-2B'] },

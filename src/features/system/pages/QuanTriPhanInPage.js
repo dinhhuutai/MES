@@ -9,6 +9,7 @@ import Spinner from '../../../components/common/Spinner';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import { Field, Input, Select, Textarea } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
+import useChiXem, { NHAC_CHI_XEM } from '../../../hooks/useChiXem';
 import { fmtNum, fmtDate } from '../../../utils/format';
 import {
   traCuuPhanIn, getQuanTriPhanIn, suaPhanIn, suaDotVai,
@@ -75,6 +76,7 @@ function KhoiSua({ tieuDe, truong, ban_dau, onLuu, dangLuu }) {
 
 export default function QuanTriPhanInPage() {
   const { toast, show } = useToast();
+  const chiXem = useChiXem();                  // tài khoản chỉ xem (mig 096)
   const [q, setQ] = useState('');
   const [ds, setDs] = useState([]);
   const [dangTim, setDangTim] = useState(false);
@@ -241,9 +243,11 @@ export default function QuanTriPhanInPage() {
                       <div className="mt-1 text-xs text-ink-soft">
                         {m.trang_thai === 'DAT' ? `${m.nguoi || '—'} · ${fmtDate(m.tg_xac_nhan)}` : '—'}
                       </div>
+                      {/* ⚠ `<button>` thuần ⇒ `Button` không khóa hộ được, phải tự xét chỉ-xem. */}
                       {m.trang_thai === 'DAT' && (
-                        <button type="button" disabled={dangLuu} onClick={() => doHuyMuc(m.ma_checkpoint)}
-                          className="mt-1 text-xs text-danger hover:underline">Hủy xác nhận</button>
+                        <button type="button" disabled={dangLuu || chiXem} onClick={() => doHuyMuc(m.ma_checkpoint)}
+                          title={chiXem ? NHAC_CHI_XEM : undefined}
+                          className="mt-1 text-xs text-danger hover:underline disabled:opacity-50 disabled:no-underline">Hủy xác nhận</button>
                       )}
                     </div>
                   ))}
@@ -346,7 +350,7 @@ export default function QuanTriPhanInPage() {
         title={`Đặt lại giai đoạn — ${giaiDoanModal?.dot?.ma_dot_vai || ''}`}
         footer={(
           <>
-            <Button variant="secondary" onClick={() => setGiaiDoanModal(null)}>Đóng</Button>
+            <Button chiXemOk variant="secondary" onClick={() => setGiaiDoanModal(null)}>Đóng</Button>
             <Button variant="danger" loading={dangLuu} onClick={doDatGiaiDoan}>Xác nhận đặt lại</Button>
           </>
         )}
@@ -387,7 +391,7 @@ export default function QuanTriPhanInPage() {
         title={`Hủy đợt vải — ${huyModal?.dot?.ma_dot_vai || ''}`}
         footer={(
           <>
-            <Button variant="secondary" onClick={() => setHuyModal(null)}>Đóng</Button>
+            <Button chiXemOk variant="secondary" onClick={() => setHuyModal(null)}>Đóng</Button>
             <Button variant="danger" loading={dangLuu} onClick={doHuyDot}>Hủy đợt vải</Button>
           </>
         )}

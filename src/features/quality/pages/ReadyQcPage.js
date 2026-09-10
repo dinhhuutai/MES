@@ -344,10 +344,10 @@ export default function ReadyQcPage() {
           <Button loading={batching} onClick={doBatch}>QC xác nhận ({selected.size})</Button>
         )}
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
-        <Button variant="secondary" icon="file-spreadsheet" loading={exporting} onClick={doExport}>Excel ({filtered.length})</Button>
+        <Button chiXemOk variant="secondary" icon="file-spreadsheet" loading={exporting} onClick={doExport}>Excel ({filtered.length})</Button>
         <NghenButton rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} onClick={() => setNghenOpen(true)} />
-        <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
-        <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
+        <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
+        <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="warning">{readyRows.length} đủ mục · {meta.total} ở READY</Badge>
       </Toolbar>
 
@@ -364,7 +364,7 @@ export default function ReadyQcPage() {
         subtitle={editing ? [editing.ten_khach_hang, editing.ma_don_hang, editing.ma_hang, editing.mau_vai].filter(Boolean).join(' · ') : ''}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setEditing(null)}>Đóng</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setEditing(null)}>Đóng</Button>
             {returnMode ? (
               <Button variant="danger" onClick={doReturn} loading={saving}
                 disabled={!canQC || loadingDetail || returnChecklists.size === 0 || !returnReason.trim()}>

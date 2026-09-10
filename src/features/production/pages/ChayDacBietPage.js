@@ -105,7 +105,7 @@ export default function ChayDacBietPage() {
         title={target ? `Chạy đặc biệt — ${target.ma_lenh_san_xuat || ''}` : 'Chạy đặc biệt'}
         footer={(
           <>
-            <Button variant="ghost" onClick={() => setTarget(null)}>Hủy</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setTarget(null)}>Hủy</Button>
             <Button onClick={doRun} loading={busy}>Xác nhận chạy (bỏ Test Run)</Button>
           </>
         )}>

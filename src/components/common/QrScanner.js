@@ -64,7 +64,7 @@ export default function QrScanner({ open, onClose, onResult, title = 'Quét QR /
 
   return (
     <Modal open={open} onClose={handleClose} title={title}
-      footer={<Button variant="ghost" onClick={handleClose}>Đóng</Button>}>
+      footer={<Button variant="ghost" chiXemOk onClick={handleClose}>Đóng</Button>}>
       {error ? (
         <div className="rounded-control border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300">
           {error}

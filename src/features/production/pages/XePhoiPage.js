@@ -171,7 +171,7 @@ export default function XePhoiPage() {
         title="Đưa tem vào xe phơi"
         footer={
           <>
-            <Button variant="ghost" onClick={() => setModalOpen(false)}>Hủy</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setModalOpen(false)}>Hủy</Button>
             <Button onClick={doAdd} loading={saving} disabled={!form.temId || !form.xeId}>Xác nhận</Button>
           </>
         }
@@ -214,7 +214,7 @@ export default function XePhoiPage() {
         title={adjust ? `Chỉnh giờ phơi — ${adjust.ma_tem}` : 'Chỉnh giờ phơi'}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setAdjust(null)}>Hủy</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setAdjust(null)}>Hủy</Button>
             <Button onClick={doAdjust} loading={saving}>Cập nhật</Button>
           </>
         }

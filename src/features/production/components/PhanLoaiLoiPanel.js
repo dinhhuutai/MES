@@ -95,7 +95,7 @@ export default function PhanLoaiLoiPanel({ open, onClose, data, loaiLoi, bienPha
             )}
             {thieuLoai && <span className="ml-2 text-danger">· còn dòng chưa chọn loại lỗi</span>}
           </div>
-          <Button variant="ghost" onClick={onClose}>Đóng</Button>
+          <Button chiXemOk variant="ghost" onClick={onClose}>Đóng</Button>
           <Button icon="save" loading={dangLuu} disabled={!hopLe}
             onClick={() => onLuu({ dong, ghiChu })}>Lưu phân loại</Button>
         </>

@@ -125,7 +125,7 @@ export default function NghenListModal({
                     className="h-9 w-72 rounded-control border border-line bg-surface pl-8 pr-2 text-base outline-none focus:border-primary md:text-sm"
                   />
                 </div>
-                <Button variant="secondary" icon="file-spreadsheet" loading={xuat}
+                <Button variant="secondary" icon="file-spreadsheet" chiXemOk loading={xuat}
                   onClick={doXuat} disabled={!ds.length}>Excel ({ds.length})</Button>
               </div>
             </div>
@@ -205,7 +205,7 @@ export function NghenButton({ rows = [], trangThai, onClick }) {
     [rows, trangThai]
   );
   return (
-    <Button variant={n ? 'secondary' : 'ghost'} icon="alert-triangle" onClick={onClick}
+    <Button variant={n ? 'secondary' : 'ghost'} icon="alert-triangle" chiXemOk onClick={onClick}
       className={n ? 'text-danger' : undefined}>
       Nghẽn{n ? ` (${n})` : ''}
     </Button>

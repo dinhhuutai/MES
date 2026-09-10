@@ -81,7 +81,7 @@ export default function TrangThaiPage() {
 
       <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Sửa trạng thái' : 'Thêm trạng thái'}
         footer={<>
-          <Button variant="ghost" onClick={() => setOpen(false)}>Hủy</Button>
+          <Button chiXemOk variant="ghost" onClick={() => setOpen(false)}>Hủy</Button>
           <Button onClick={save} loading={saving} disabled={!form.maTrangThai || !form.tenTrangThai}>Lưu</Button>
         </>}>
         <div className="grid grid-cols-2 gap-x-4">

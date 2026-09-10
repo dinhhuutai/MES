@@ -1,4 +1,8 @@
 // In phiếu giao (mock "in tem giao") — mở cửa sổ mới + window.print.
+// ⚠⚠ KHÔNG CÒN NƠI DÙNG (06/09/2026) — thay bằng `features/delivery/utils/printPhieuGiao.js`
+//   (khổ A4, 2 kiểu chi tiết/gộp, có ô ký, mã tem ghép tiền tố bằng `temCode`). Giữ lại làm tham
+//   chiếu; **đừng nối lại vào màn nào**: bản này in mã tem THÔ nên phiếu ra `152608057689` trong khi
+//   nhãn dán trên hàng là `17…`, và không có kiểu in gộp theo code phần.
 export function printGiaoHang(gh) {
   const w = window.open('', '_blank', 'width=820,height=640');
   if (!w) return;

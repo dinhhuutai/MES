@@ -50,7 +50,7 @@ export default function BaoCaoPage() {
   return (
     <div>
       <Toolbar title="Báo cáo" subtitle="Báo cáo workflow — xuất CSV">
-        <Button icon="file-bar-chart" variant="secondary" disabled={!report || report.rows.length === 0}
+        <Button chiXemOk icon="file-bar-chart" variant="secondary" disabled={!report || report.rows.length === 0}
           onClick={() => exportCsv(report)}>Xuất CSV</Button>
       </Toolbar>
 

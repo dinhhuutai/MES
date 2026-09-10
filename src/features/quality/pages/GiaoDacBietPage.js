@@ -107,7 +107,7 @@ export default function GiaoDacBietPage() {
         title={editing?.id ? 'Sửa trường hợp' : 'Thêm trường hợp'}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setEditing(null)}>Hủy</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setEditing(null)}>Hủy</Button>
             <Button onClick={save} loading={saving}
               disabled={!form.ten || (!editing?.id && !form.ma)}>Lưu</Button>
           </>

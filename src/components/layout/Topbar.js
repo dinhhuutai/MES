@@ -5,11 +5,13 @@ import Icon from '../common/Icon';
 import NotificationBell from './NotificationBell';
 import { logout, selectAuth } from '../../store/authSlice';
 import { LOGO_SRC, avatarFor } from '../../utils/brand';
+import useChiXem from '../../hooks/useChiXem';
 
 export default function Topbar() {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const { user } = useSelector(selectAuth);
+  const chiXem = useChiXem();
 
   const handleLogout = () => {
     dispatch(logout());
@@ -35,6 +37,19 @@ export default function Topbar() {
       </Link>
 
       <div className="flex items-center gap-1">
+      {/* ⚠ TÀI KHOẢN CHỈ XEM (mig 096) — phải NÓI RÕ ngay trên đầu màn hình.
+          Không có dấu hiệu này thì khách thấy hàng loạt nút xám và tưởng hệ thống hỏng
+          (đúng họ sự cố "hàng bị ẩn/khóa mà không để lại dấu vết nào trên giao diện"). */}
+      {chiXem && (
+        <span
+          title="Tài khoản chỉ xem — xem được mọi màn hình nhưng không lưu/xác nhận/in được gì"
+          className="mr-1 hidden items-center gap-1.5 rounded-badge bg-amber-50 px-2.5 py-1 text-xs font-semibold
+            text-amber-700 ring-1 ring-amber-200 sm:inline-flex dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900/60"
+        >
+          <Icon name="eye" size={14} /> Chế độ chỉ xem
+        </span>
+      )}
+
       {/* Chuông thông báo — tự ẩn nếu người dùng không thuộc diện nhận (mig 085). */}
       <NotificationBell />
 

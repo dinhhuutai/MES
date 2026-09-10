@@ -74,7 +74,7 @@ export default function ConditionPanel({ rule, onClose }) {
 
       <Modal open={open} onClose={() => setOpen(false)} title="Thêm điều kiện"
         footer={<>
-          <Button variant="ghost" onClick={() => setOpen(false)}>Hủy</Button>
+          <Button chiXemOk variant="ghost" onClick={() => setOpen(false)}>Hủy</Button>
           <Button onClick={save} loading={saving} disabled={!form.tenDieuKien}>Lưu</Button>
         </>}>
         <Field label="Tên điều kiện" required>

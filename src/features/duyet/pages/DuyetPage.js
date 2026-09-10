@@ -283,7 +283,7 @@ export default function DuyetPage() {
               placeholder="Vì sao không đồng ý đổi phương án in..." />
           </Field>
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => setTuChoi(null)}>Đóng</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setTuChoi(null)}>Đóng</Button>
             <Button variant="danger" onClick={doTuChoi} loading={saving}>Từ chối</Button>
           </div>
         </div>

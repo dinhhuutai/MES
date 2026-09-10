@@ -398,15 +398,15 @@ export default function ReportDesignerPage({ idProp = null, onClose = null }) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {mode === 'design' ? (
-            <Button variant="secondary" icon="eye" loading={rendering} onClick={doPreview}>Xem trước</Button>
+            <Button chiXemOk variant="secondary" icon="eye" loading={rendering} onClick={doPreview}>Xem trước</Button>
           ) : (
             <Button variant="secondary" onClick={() => setMode('design')}>Về thiết kế</Button>
           )}
           {canDesign && <Button icon="history" variant="ghost" onClick={doUndo} disabled={!coTheHoanTac}>Hoàn tác</Button>}
           {canDesign && <Button loading={saving} onClick={doSave}>Lưu</Button>}
-          <Button variant="ghost" onClick={doExport}>Xuất CSV</Button>
+          <Button chiXemOk variant="ghost" onClick={doExport}>Xuất CSV</Button>
           <Button variant="ghost" onClick={() => window.print()}>In</Button>
-          <Button variant="ghost" onClick={() => setHistOpen(true)}>Lịch sử</Button>
+          <Button chiXemOk variant="ghost" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         </div>
       </div>
 
@@ -459,7 +459,7 @@ export default function ReportDesignerPage({ idProp = null, onClose = null }) {
                 px
               </span>
             )}
-            <Button variant="ghost" className="px-2.5 py-1 text-xs" onClick={() => setCatalogOpen(true)}>Giải thích chỉ số</Button>
+            <Button chiXemOk variant="ghost" className="px-2.5 py-1 text-xs" onClick={() => setCatalogOpen(true)}>Giải thích chỉ số</Button>
           </div>
         )}
         {mode === 'view' && <Badge tone="info">Chế độ xem — hiển thị giá trị đã tính</Badge>}

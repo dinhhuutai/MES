@@ -168,7 +168,7 @@ export default function ThongBaoSettings({ onThongBao }) {
         {quyen !== 'khong-ho-tro' && (
           <div className="mt-3 flex flex-wrap gap-2">
             {(quyen !== 'granted' || (data.push_nen_he_thong && !pushBat)) && (
-              <Button variant="secondary" loading={pushBusy} onClick={batThietBi}>
+              <Button chiXemOk variant="secondary" loading={pushBusy} onClick={batThietBi}>
                 Bật trên thiết bị này
               </Button>
             )}

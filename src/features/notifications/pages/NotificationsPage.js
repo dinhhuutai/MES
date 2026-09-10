@@ -172,7 +172,7 @@ export default function NotificationsPage() {
           Chỉ chưa đọc
         </label>
         {chuaDoc > 0 && (
-          <Button variant="secondary" icon="check-circle" onClick={docHet}>
+          <Button chiXemOk variant="secondary" icon="check-circle" onClick={docHet}>
             Đánh dấu đã đọc hết ({chuaDoc})
           </Button>
         )}

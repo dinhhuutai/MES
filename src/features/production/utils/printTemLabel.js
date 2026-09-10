@@ -1,8 +1,8 @@
 import QRCode from 'qrcode';
-// IN THEO MẪU người dùng thiết kế (mig 073) — xem `thuInTheoMau` ở cuối file.
+// IN THEO MẪU người dùng thiết kế (mig 073) — xem `toTheoMau`/`dungToTem` ở cuối file.
 import { renderKhung, dungAnhMa, khungPhai, SHEET_CSS_MAU, JS_TU_CO } from './renderMauTem';
 import { mauChoViTri } from '../../../services/mauTemService';
-import { temCode } from '../../../utils/format';
+import { temCode, maTemNhan } from '../../../utils/format';
 
 const esc = (v) => String(v ?? '')
   .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -167,30 +167,49 @@ const SHEET_CSS = `
   .code { font-size: 1.8mm; text-align: right; padding: 0.5mm 0.6mm 0; }
   @page { size: 110mm 80mm; margin: 0; }`;
 
-// Mở cửa sổ in với 2 nhãn (inner = HTML 2 label) trên tờ 100x80mm.
-function openSheet(inner, title) {
-  const html = `<!doctype html>
-<html lang="vi"><head><meta charset="utf-8"><title>${title}</title>
-<style>${SHEET_CSS}</style></head>
-<body onafterprint="window.close()">
-  <div class="sheet">${inner}</div>
-  <script>
-    function go(){ window.focus(); window.print(); }
+// ─────────────────────────────────────────────────────────────────────────────
+// MỘT TỜ IN = { css, inner, tuCo } — dựng RA CHUỖI, chưa mở cửa sổ nào.
+//
+// ⚠⚠ TÁCH "DỰNG" KHỎI "MỞ CỬA SỔ IN" là CỐ Ý (08/09/2026): khung **XEM TRƯỚC ở màn Danh sách tem in**
+//   phải hiện ĐÚNG tờ giấy sẽ in ra. Cho 2 nơi cùng đi qua `dungToTem()` thì "xem sao in vậy" là đúng
+//   THEO CẤU TẠO — viết bộ dựng thứ hai cho màn xem là sớm muộn 2 bên lệch nhau (đúng bài học đã ghi
+//   cho `TemXemTruoc` của trình thiết kế).
+// ⚠ `tuCo` = có chạy vòng thu chữ `JS_TU_CO` không. Chỉ tờ dựng TỪ MẪU mới cần (bố cục CỨNG đã canh
+//   sẵn cỡ chữ trong `SHEET_CSS`).
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Tài liệu HTML hoàn chỉnh của 1 tờ. `deIn = true` → thêm đoạn tự gọi `print()` + đóng cửa sổ.
+export function htmlToTem(to, title, deIn) {
+  const js = `
+    ${to.tuCo ? JS_TU_CO : 'function thuChu(){}'}
+    function go(){ try { thuChu(); } catch(e){} ${deIn ? 'window.focus(); window.print();' : ''} }
     /* ⚠ Chờ TẤT CẢ ảnh QR, không chỉ ảnh đầu: tờ có thể mang 2 tem KHÁC NHAU (in 2 tem cùng lúc ở
        trang Sửa) ⇒ chỉ chờ ảnh thứ nhất thì tem thứ hai có khi in ra thiếu QR. */
     var chua = Array.prototype.slice.call(document.images).filter(function(i){ return !i.complete; });
     if (chua.length) {
       var con = chua.length;
       chua.forEach(function(i){ i.onload = i.onerror = function(){ if (--con === 0) setTimeout(go, 30); }; });
-    } else { setTimeout(go, 100); }
-  </script>
+    } else { setTimeout(go, ${deIn ? 100 : 30}); }`;
+  return `<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><title>${title || 'Tem'}</title>
+<style>${to.css}</style></head>
+<body${deIn ? ' onafterprint="window.close()"' : ''}>
+  <div class="sheet">${to.inner}</div>
+  <script>${js}</script>
 </body></html>`;
+}
+
+// Mở cửa sổ in cho một tờ đã dựng.
+function moCuaSoIn(to, title) {
   // KHÔNG dùng alert() — ném lỗi để trang gọi hiện Toast theo design system.
-  const w = window.open('', '_blank', 'width=500,height=460');
+  const w = window.open('', '_blank', 'width=520,height=480');
   if (!w) throw new Error('Trình duyệt đang chặn cửa sổ in. Hãy cho phép popup cho trang này rồi in lại.');
-  w.document.write(html);
+  w.document.write(htmlToTem(to, title, true));
   w.document.close();
 }
+
+// Tờ dựng từ BỐ CỤC CỨNG (2 nhãn HTML đã ghép sẵn).
+const toCung = (inner) => ({ css: SHEET_CSS, inner, tuCo: false, theoMau: false });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // IN THEO MẪU NGƯỜI DÙNG THIẾT KẾ (mig 073)
@@ -203,32 +222,7 @@ function openSheet(inner, title) {
 // ⚠ `SHEET_CSS_MAU` + `JS_TU_CO` nay ở `renderMauTem.js` (import ở đầu file) — DÙNG CHUNG với khung
 //   XEM TRƯỚC của màn thiết kế, để "xem sao in vậy". Đừng khai lại bản riêng ở đây.
 
-// Mở cửa sổ in cho tem dựng từ MẪU (2 khung đã render sẵn thành HTML).
-function openSheetMau(innerTrai, innerPhai, title) {
-  const html = `<!doctype html>
-<html lang="vi"><head><meta charset="utf-8"><title>${title}</title>
-<style>${SHEET_CSS_MAU}</style></head>
-<body onafterprint="window.close()">
-  <div class="sheet"><div class="label">${innerTrai}</div><div class="label">${innerPhai}</div></div>
-  <script>
-    ${JS_TU_CO}
-    function go(){ try { thuChu(); } catch(e){} window.focus(); window.print(); }
-    var imgs = Array.prototype.slice.call(document.images);
-    var chua = imgs.filter(function(i){ return !i.complete; });
-    if (chua.length) {
-      var con = chua.length;
-      chua.forEach(function(i){ i.onload = i.onerror = function(){ if (--con === 0) setTimeout(go, 30); }; });
-    } else { setTimeout(go, 100); }
-  </script>
-</body></html>`;
-  const w = window.open('', '_blank', 'width=520,height=480');
-  if (!w) throw new Error('Trình duyệt đang chặn cửa sổ in. Hãy cho phép popup cho trang này rồi in lại.');
-  w.document.write(html);
-  w.document.close();
-}
-
-// IN THỬ từ màn THIẾT KẾ — dựng bằng ĐÚNG đường in thật (`renderKhung` + `openSheetMau`) nên tờ giấy
-// ra sao thì bản in thật y như vậy.
+// IN THỬ từ màn THIẾT KẾ — dựng bằng ĐÚNG đường in thật nên tờ giấy ra sao thì bản in thật y như vậy.
 // ⚠ Dữ liệu truyền vào là DỮ LIỆU GIẢ của màn thiết kế ⇒ **KHÔNG gọi ERP, KHÔNG tiêu một mã tem nào**
 //   (mã tem chỉ tiêu khi TẠO tem ở màn Sản xuất — xem CLAUDE.md §6 Chất lượng).
 export async function inThuMauTem(boCuc, data, tienTo) {
@@ -238,61 +232,91 @@ export async function inThuMauTem(boCuc, data, tienTo) {
   const dTrai = { ...data, ma_tem: temCode(data.ma_tem, tienTo && tienTo.trai) };
   const dPhai = { ...data, ma_tem: temCode(data.ma_tem, tienTo && tienTo.phai) };
   const [aTrai, aPhai] = await Promise.all([dungAnhMa(kTrai, dTrai), dungAnhMa(kPhai, dPhai)]);
-  openSheetMau(renderKhung(kTrai, dTrai, aTrai), renderKhung(kPhai, dPhai, aPhai), 'In thử mẫu tem');
+  moCuaSoIn(toMau(renderKhung(kTrai, dTrai, aTrai), renderKhung(kPhai, dPhai, aPhai)), 'In thử mẫu tem');
 }
 
-// Thử in bằng mẫu đã gắn cho `maViTri`. Trả `true` nếu đã in; `false` = chưa gắn mẫu / lỗi → caller lùi.
+// Tờ dựng từ MẪU (2 khung đã render sẵn thành HTML).
+const toMau = (innerTrai, innerPhai) => ({
+  css: SHEET_CSS_MAU, tuCo: true, theoMau: true,
+  inner: `<div class="label">${innerTrai}</div><div class="label">${innerPhai}</div>`,
+});
+
+// Dựng tờ theo MẪU đã gắn cho `maViTri`. Trả `null` = chưa gắn mẫu / lỗi → bên gọi lùi về bố cục cứng.
 // `tienTo` = { trai, phai } số công đoạn ghép vào mã tem của từng khung.
+// ⚠⚠ GHÉP QUA `maTemNhan`, KHÔNG `temCode` trực tiếp: từ 06/09/2026 tem 17 (sửa đạt) và tem 13
+//   (gia công về) đã mang sẵn mã RIÊNG của ERP ⇒ ghép thêm lần nữa là ĐỔI mã trên nhãn giấy + QR
+//   (vd mã cũ `17-TEM00030` hóa `17-17-TEM00030`), quét ra không đúng tem. Mã tem 15 không đổi gì.
 // `labelPhai` (tùy chọn) = dữ liệu RIÊNG cho khung PHẢI ⇒ 1 tờ in được 2 TEM KHÁC NHAU (trang Sửa
 //   chọn 2 dòng in 1 lượt). Bỏ trống = khung phải dùng chính `label` như trước.
-async function thuInTheoMau(maViTri, label, tienTo, suffix, labelPhai) {
+async function toTheoMau(maViTri, label, tienTo, suffix, labelPhai) {
   let boCuc;
   try {
     const res = await mauChoViTri(maViTri);
     boCuc = res?.data?.mau?.bo_cuc_json;
-    if (!boCuc || !boCuc.trai) return false;      // chưa gắn mẫu → dùng bố cục cứng
-  } catch { return false; }                        // chưa chạy migration / mất mạng → dùng bố cục cứng
+    if (!boCuc || !boCuc.trai) return null;       // chưa gắn mẫu → dùng bố cục cứng
+  } catch { return null; }                         // chưa chạy migration / mất mạng → dùng bố cục cứng
 
   try {
     const kTrai = boCuc.trai;
     const kPhai = khungPhai(boCuc);
     // Mã tem của TỪNG khung khác nhau (vd tem sản xuất: trái 15 · phải 16) ⇒ dữ liệu tách riêng.
     const goc = labelPhai || label;
-    const dTrai = { ...label, ma_tem: temCode(label.ma_tem, tienTo.trai, suffix) };
-    const dPhai = { ...goc, ma_tem: temCode(goc.ma_tem, tienTo.phai, goc === label ? suffix : goc.suffix) };
+    const dTrai = { ...label, ma_tem: maTemNhan(label.ma_tem, tienTo.trai, suffix) };
+    const dPhai = { ...goc, ma_tem: maTemNhan(goc.ma_tem, tienTo.phai, goc === label ? suffix : goc.suffix) };
     const [aTrai, aPhai] = await Promise.all([dungAnhMa(kTrai, dTrai), dungAnhMa(kPhai, dPhai)]);
-    openSheetMau(
-      renderKhung(kTrai, dTrai, aTrai),
-      renderKhung(kPhai, dPhai, aPhai),
-      `Tem ${label.ma_tem}`
-    );
-    return true;
+    return toMau(renderKhung(kTrai, dTrai, aTrai), renderKhung(kPhai, dPhai, aPhai));
   } catch (e) {
-    // Popup bị chặn thì PHẢI báo cho người dùng (đừng lùi rồi mở thêm cửa sổ thứ 2 cũng bị chặn).
-    if (/popup/i.test(e.message || '')) throw e;
     console.error('[tem] Dựng tem theo mẫu lỗi, dùng bố cục mặc định:', e);
-    return false;
+    return null;
   }
 }
 
-// In tem sản xuất theo mẫu THLA: nhãn TRÁI = tem 15 (KCS đạt / PHIẾU GIAO HÀNG),
-// nhãn PHẢI = tem 16 (sửa / IN-K, lưới kiểm). Số công đoạn ghép vào đầu mã tem + QR.
-export default async function printTemLabel(label) {
-  if (!label || !label.ma_tem) return;
-  if (await thuInTheoMau('SX_IN_TEM', label, { trai: 15, phai: 16 })) return;
-  const dL = await buildData(label, temCode(label.ma_tem, 15));
-  const dR = await buildData(label, temCode(label.ma_tem, 16));
-  openSheet(leftLabel(dL) + rightLabel(dR), `Tem ${label.ma_tem}`);
+// ─────────────────────────────────────────────────────────────────────────────
+// DỰNG TỜ IN CHO 1 TEM — nguồn DUY NHẤT của cả nút IN lẫn khung XEM TRƯỚC.
+//   `duPhong()` : dựng inner HTML bằng BỐ CỤC CỨNG khi chưa gắn mẫu (mỗi vị trí in một kiểu).
+// ⚠ Hàm này KHÔNG mở cửa sổ nào ⇒ cũng không bao giờ ném lỗi "popup bị chặn"; việc đó do `moCuaSoIn`.
+// ─────────────────────────────────────────────────────────────────────────────
+async function dungToTem({ maViTri, label, tienTo, suffix, labelPhai, duPhong }) {
+  const mau = await toTheoMau(maViTri, label, tienTo, suffix, labelPhai);
+  if (mau) return mau;
+  return toCung(await duPhong());
 }
 
-// In tem GIAO cho KCS (đã hoàn thành) = tem 15 (KCS đạt): cấu trúc PHIẾU GIAO HÀNG (nhãn trái),
+// ─── 4 VỊ TRÍ IN — mỗi cái tách làm 2: dựng tờ (`to…`, dùng được cho XEM TRƯỚC) + nút in ─────────
+
+// Tem sản xuất theo mẫu THLA: nhãn TRÁI = tem 15 (KCS đạt / PHIẾU GIAO HÀNG),
+// nhãn PHẢI = tem 16 (sửa / IN-K, lưới kiểm). Số công đoạn ghép vào đầu mã tem + QR.
+export function toTemSanXuat(label) {
+  return dungToTem({
+    maViTri: 'SX_IN_TEM', label, tienTo: { trai: 15, phai: 16 },
+    duPhong: async () => {
+      const dL = await buildData(label, temCode(label.ma_tem, 15));
+      const dR = await buildData(label, temCode(label.ma_tem, 16));
+      return leftLabel(dL) + rightLabel(dR);
+    },
+  });
+}
+
+export default async function printTemLabel(label) {
+  if (!label || !label.ma_tem) return;
+  moCuaSoIn(await toTemSanXuat(label), `Tem ${label.ma_tem}`);
+}
+
+// Tem GIAO cho KCS (đã hoàn thành) = tem 15 (KCS đạt): cấu trúc PHIẾU GIAO HÀNG (nhãn trái),
 // "IN" = số lượng đã kiểm (caller truyền qua label.so_luong). In 2 nhãn giống nhau cho vừa tờ 2-up.
+export function toTemKcsGiao(label) {
+  return dungToTem({
+    maViTri: 'KCS_IN_TEM_GIAO', label, tienTo: { trai: 15, phai: 15 },
+    duPhong: async () => {
+      const l = leftLabel(await buildData(label, temCode(label.ma_tem, 15)));
+      return l + l;
+    },
+  });
+}
+
 export async function printKcsGiaoTem(label) {
   if (!label || !label.ma_tem) return;
-  if (await thuInTheoMau('KCS_IN_TEM_GIAO', label, { trai: 15, phai: 15 })) return;
-  const d = await buildData(label, temCode(label.ma_tem, 15));
-  const l = leftLabel(d);
-  openSheet(l + l, `Tem 15 ${label.ma_tem}`);
+  moCuaSoIn(await toTemKcsGiao(label), `Tem 15 ${label.ma_tem}`);
 }
 
 // In tem OQC (sau khi SỬA xong → OQC) = tem 17: bố cục Y HỆT tem 15 (nhãn trái PHIẾU GIAO HÀNG).
@@ -309,18 +333,28 @@ export async function printOqcTem(label, suffix) {
 // ⚠ MỖI LẦN BẤM = 1 CỬA SỔ IN: đừng gọi hàm này nhiều lần liên tiếp trong 1 lần bấm — trình duyệt
 //   CHẶN POPUP từ cửa sổ thứ 2 trở đi (bài học ở modal in tem gom set, §6 Sản xuất).
 // `label.nguoi_sua` (nhập ở modal In tem) in ra dòng "N Sửa" của nhãn; `label.suffix` = lần giao.
+export function toTemSuaOqc(labels) {
+  const ds = (Array.isArray(labels) ? labels : [labels]).filter((x) => x && x.ma_tem).slice(0, 2);
+  if (!ds.length) return Promise.resolve(null);
+  const l1 = ds[0];
+  const l2 = ds[1] || l1;
+  return dungToTem({
+    maViTri: 'SUA_IN_TEM_OQC', label: l1, tienTo: { trai: 17, phai: 17 }, suffix: l1.suffix, labelPhai: l2,
+    duPhong: async () => {
+      const [d1, d2] = await Promise.all([
+        buildData(l1, maTemNhan(l1.ma_tem, 17, l1.suffix)),
+        buildData(l2, maTemNhan(l2.ma_tem, 17, l2.suffix)),
+      ]);
+      return leftLabel(d1) + leftLabel(d2);
+    },
+  });
+}
+
 export async function printSuaOqcTem(labels) {
   const ds = (Array.isArray(labels) ? labels : [labels]).filter((x) => x && x.ma_tem).slice(0, 2);
   if (!ds.length) return;
-  const l1 = ds[0];
-  const l2 = ds[1] || l1;
-  if (await thuInTheoMau('SUA_IN_TEM_OQC', l1, { trai: 17, phai: 17 }, l1.suffix, l2)) return;
-  const [d1, d2] = await Promise.all([
-    buildData(l1, temCode(l1.ma_tem, 17, l1.suffix)),
-    buildData(l2, temCode(l2.ma_tem, 17, l2.suffix)),
-  ]);
-  openSheet(leftLabel(d1) + leftLabel(d2),
-    `Tem 17 ${l1.ma_tem}${ds[1] ? ` + ${ds[1].ma_tem}` : ''}`);
+  const to = await toTemSuaOqc(ds);
+  moCuaSoIn(to, `Tem 17 ${ds[0].ma_tem}${ds[1] ? ` + ${ds[1].ma_tem}` : ''}`);
 }
 
 // Nhãn "hàng về" gia công = tem 13: bố cục PHIẾU GIAO HÀNG nhưng có BĂNG "TH VỀ" phía trên tiêu đề.
@@ -351,11 +385,34 @@ function veLabel(d) {
 
 // In tem "hàng về" gia công = tem 13 ("TH VỀ"). Dựng từ dữ liệu LỆNH gia công (không cần bản ghi tem thật):
 // caller truyền label = { ma_tem (mã lệnh/tem), so_luong, ten_khach_hang, ma_don_hang, ma_hang, mau_vai, kich_vai,
-// kich_phim, ten_chuyen/ma_chuyen, so_luong_don_hang, created_date }. In 2 nhãn giống nhau cho vừa tờ 2-up.
-export async function printGiaCongVeTem(label) {
-  if (!label || !label.ma_tem) return;
-  if (await thuInTheoMau('GIA_CONG_IN_TEM_VE', label, { trai: 13, phai: 13 })) return;
-  const d = await buildData(label, temCode(label.ma_tem, 13));
-  const l = veLabel(d);
-  openSheet(l + l, `Tem TH VỀ ${label.ma_tem}`);
+// kich_phim, ten_chuyen/ma_chuyen, so_luong_don_hang, created_date }.
+//
+// ⚠⚠ NHẬN 1–2 NHÃN (09/09/2026, cùng khuôn `toTemSuaOqc`): hàng gia công nay nhận về theo TỪNG CODE
+//   PHẦN, mỗi lượt tối đa 2 code phần ⇒ **nhãn TRÁI và PHẢI là 2 code phần KHÁC NHAU**. Truyền 1 nhãn
+//   thì in 2 bản giống nhau y như trước (mọi call-site cũ không phải sửa).
+// ⚠ TỐI ĐA 2 (`slice(0, 2)`) — tờ decal chỉ có 2 khung, nhãn thứ 3 sẽ mất IM LẶNG nếu không chặn.
+// ⚠ MỖI LẦN BẤM = 1 CỬA SỔ IN: đừng gọi hàm này nhiều lần liên tiếp trong 1 lần bấm — trình duyệt
+//   CHẶN POPUP từ cửa sổ thứ 2 trở đi (bài học ở modal in tem gom set, §6 Sản xuất).
+export function toTemGiaCongVe(labels) {
+  const ds = (Array.isArray(labels) ? labels : [labels]).filter((x) => x && x.ma_tem).slice(0, 2);
+  if (!ds.length) return Promise.resolve(null);
+  const l1 = ds[0];
+  const l2 = ds[1] || l1;
+  return dungToTem({
+    maViTri: 'GIA_CONG_IN_TEM_VE', label: l1, tienTo: { trai: 13, phai: 13 }, labelPhai: l2,
+    duPhong: async () => {
+      const [d1, d2] = await Promise.all([
+        buildData(l1, maTemNhan(l1.ma_tem, 13)),
+        buildData(l2, maTemNhan(l2.ma_tem, 13)),
+      ]);
+      return veLabel(d1) + veLabel(d2);
+    },
+  });
+}
+
+export async function printGiaCongVeTem(labels) {
+  const ds = (Array.isArray(labels) ? labels : [labels]).filter((x) => x && x.ma_tem).slice(0, 2);
+  if (!ds.length) return;
+  const to = await toTemGiaCongVe(ds);
+  moCuaSoIn(to, `Tem TH VỀ ${ds[0].ma_tem}${ds[1] ? ` + ${ds[1].ma_tem}` : ''}`);
 }

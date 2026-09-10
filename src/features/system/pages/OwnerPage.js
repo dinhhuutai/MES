@@ -17,6 +17,7 @@ import {
 import { listPhongBan, listRoleOptions } from '../../../services/systemService';
 import { listUsers } from '../../../services/userService';
 import { getFlowOwners } from '../../../services/dashboardService';
+import { getKpiCot } from '../../../services/kpiReadyService';
 
 const LOAI_LABEL = { CHIU_TRACH_NHIEM: 'Chịu trách nhiệm', XU_LY: 'Xử lý' };
 
@@ -75,15 +76,25 @@ export default function OwnerPage() {
   const [cpOwners, setCpOwners] = useState([]);
 
   const [overview, setOverview] = useState({ tram: {}, checkpoint: {} }); // tổng quan owner theo trạm (workflow hiện hành)
+  const [cotKpi, setCotKpi] = useState([]);       // 23 cột của trang Dashboard → KPI READY
   const [phongBan, setPhongBan] = useState([]);
   const [roles, setRoles] = useState([]);
   const [users, setUsers] = useState([]);
-  const [modal, setModal] = useState(null); // { type: 'tram'|'checkpoint' }
+  // modal: { type: 'tram'|'checkpoint', tramId?, checkpointId?, tenDich? }
+  // ⚠ Đích gán mang THEO MODAL (không đọc state `tramId`/`checkpointId` lúc lưu): khối "Owner cột KPI
+  //   READY" gán thẳng vào trạm/checklist của CỘT được bấm, không phải cái đang chọn ở 2 ô Select.
+  const [modal, setModal] = useState(null);
   const [form, setForm] = useState({ loai: 'XU_LY', userId: '', roleId: '', phongBanId: '', batBuoc: false });
   const [saving, setSaving] = useState(false);
 
   const loadOverview = useCallback(() => {
     getFlowOwners().then((r) => setOverview(r.data || { tram: {}, checkpoint: {} })).catch(() => {});
+  }, []);
+
+  // Danh mục cột KPI + owner hiện tại. Lỗi thì NUỐT: đây là khối phụ, hỏng nó không được chặn việc
+  // gán owner theo trạm/checklist ở phần dưới trang (và tài khoản thiếu quyền KPI vẫn dùng trang này).
+  const loadCotKpi = useCallback(() => {
+    getKpiCot().then((r) => setCotKpi((r.data && r.data.cot) || [])).catch(() => setCotKpi([]));
   }, []);
 
   useEffect(() => {
@@ -103,7 +114,8 @@ export default function OwnerPage() {
       setUsers(all);
     })().catch(() => {});
     loadOverview();
-  }, [loadOverview]);
+    loadCotKpi();
+  }, [loadOverview, loadCotKpi]);
 
   useEffect(() => {
     if (!versionId) return;
@@ -128,7 +140,11 @@ export default function OwnerPage() {
 
   useEffect(() => { loadCpOwners(); }, [loadCpOwners]);
 
-  const openAdd = (type) => { setForm({ loai: 'XU_LY', userId: '', roleId: '', phongBanId: '', batBuoc: false }); setModal({ type }); };
+  // `dich` (tùy chọn) = { tramId } hoặc { checkpointId } + `tenDich` — dùng khi gán từ khối cột KPI.
+  const openAdd = (type, dich = {}) => {
+    setForm({ loai: 'XU_LY', userId: '', roleId: '', phongBanId: '', batBuoc: false });
+    setModal({ type, tramId, checkpointId, ...dich });
+  };
 
   const save = async () => {
     if (!form.userId && !form.roleId && !form.phongBanId) { show('Chọn người / vai trò / phòng ban', 'error'); return; }
@@ -136,25 +152,40 @@ export default function OwnerPage() {
     try {
       const base = { loai: form.loai, userId: form.userId || null, roleId: form.roleId || null, phongBanId: form.phongBanId || null };
       if (modal.type === 'tram') {
-        await addTramOwner({ tramId, ...base });
-        loadTramOwners();
+        await addTramOwner({ tramId: modal.tramId, ...base });
+        if (modal.tramId === tramId) loadTramOwners();
       } else {
-        await addCheckpointOwner({ checkpointId, ...base, batBuoc: form.batBuoc });
-        loadCpOwners();
+        await addCheckpointOwner({ checkpointId: modal.checkpointId, ...base, batBuoc: form.batBuoc });
+        if (modal.checkpointId === checkpointId) loadCpOwners();
       }
       loadOverview();
+      loadCotKpi();
       show('Đã thêm owner'); setModal(null);
     } catch (e) { show(e.message || 'Thất bại', 'error'); }
     finally { setSaving(false); }
   };
 
   const removeTO = async (o) => {
-    try { await removeTramOwner(o.id); show('Đã xóa'); loadTramOwners(); loadOverview(); }
+    try { await removeTramOwner(o.id); show('Đã xóa'); loadTramOwners(); loadOverview(); loadCotKpi(); }
     catch (e) { show(e.message || 'Xóa thất bại (cần grant DELETE — migration 011)', 'error'); }
   };
   const removeCO = async (o) => {
-    try { await removeCheckpointOwner(o.id); show('Đã xóa'); loadCpOwners(); loadOverview(); }
+    try { await removeCheckpointOwner(o.id); show('Đã xóa'); loadCpOwners(); loadOverview(); loadCotKpi(); }
     catch (e) { show(e.message || 'Xóa thất bại (cần grant DELETE — migration 011)', 'error'); }
+  };
+
+  // Bấm "+ Gán" ở khối cột KPI → mở modal với ĐÍCH LÀ trạm/checklist của CHÍNH cột đó.
+  // ⚠ CỐ Ý KHÔNG đụng 2 ô Select bên dưới: đổi `tramId` sẽ kéo theo effect nạp lại checklist rồi
+  //   ghi đè `checkpointId` về cái đầu tiên ⇒ đích gán nhảy lung tung. Đích đã nằm trong `modal`,
+  //   và khối cột KPI tự làm mới sau khi lưu nên người dùng thấy ngay kết quả.
+  const ganChoCot = (c) => {
+    if (!c.dich_id) {
+      show(`Cột "${c.ten}" trỏ tới ${c.owner_checkpoint ? 'checklist' : 'checkpoint'} `
+        + `"${c.owner_checkpoint || c.owner_tram}" — không có trong workflow hiện hành`, 'error');
+      return;
+    }
+    if (c.owner_checkpoint) openAdd('checkpoint', { checkpointId: c.dich_id, tenDich: `Checklist ${c.dich_ten}` });
+    else openAdd('tram', { tramId: c.dich_id, tenDich: `Checkpoint ${c.dich_ten}` });
   };
 
   return (
@@ -193,6 +224,81 @@ export default function OwnerPage() {
         </div>
       </div>
 
+      {/* ═══ Owner theo TỪNG CỘT của trang Dashboard → KPI READY ═══════════════════════════════
+          Bảng KPI có 23 cột nhưng chỉ trỏ tới 15 khóa owner (10 trạm + 5 checklist) ⇒ nhìn ở khối
+          "Tổng quan owner theo checkpoint" phía trên KHÔNG biết cột nào ăn theo trạm nào. Khối này
+          bày đủ 23 cột + chỉ rõ đích, bấm là gán thẳng.
+          ⚠ Nhiều cột dùng CHUNG một trạm (4 cột nhóm KCS đều trỏ KIEM) ⇒ hiện CÙNG một owner —
+            đúng nghiệp vụ đã chốt, không phải lỗi hiển thị. */}
+      {cotKpi.length > 0 && (
+        <div className="card mb-4 overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-2.5">
+            <div className="text-sm font-semibold text-ink">
+              Owner từng cột của bảng KPI READY <span className="text-ink-soft">({cotKpi.length} cột)</span>
+            </div>
+            <div className="text-xs text-ink-soft">
+              Owner gán vào <b>checkpoint / checklist</b> mà cột đó ăn theo — cột dùng chung một
+              checkpoint thì dùng chung owner.
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-line bg-surface-muted/60 text-left text-xs uppercase tracking-wide text-ink-soft">
+                  <th className="px-3 py-2 font-semibold">#</th>
+                  <th className="px-3 py-2 font-semibold">Cột KPI</th>
+                  <th className="px-3 py-2 font-semibold">Gán vào</th>
+                  <th className="px-3 py-2 font-semibold">Chịu trách nhiệm chính</th>
+                  <th className="px-3 py-2 font-semibold">Người xử lý tiếp</th>
+                  <th className="px-3 py-2" />
+                </tr>
+              </thead>
+              <tbody>
+                {cotKpi.map((c, i) => (
+                  <tr key={c.ma} className="border-b border-line/60 hover:bg-surface-muted">
+                    <td className="px-3 py-2 text-xs text-ink-soft">{i + 1}</td>
+                    <td className="px-3 py-2">
+                      <div className="font-medium text-ink">{c.ten}</div>
+                      {c.ghi_chu && <div className="text-xs text-ink-soft">{c.ghi_chu}</div>}
+                    </td>
+                    <td className="px-3 py-2">
+                      {c.dich_id ? (
+                        <div className="leading-tight">
+                          <Badge tone={c.owner_checkpoint ? 'info' : 'default'}>
+                            {c.owner_checkpoint ? 'Checklist' : 'Checkpoint'} {c.dich_ten}
+                          </Badge>
+                          <div className="mt-0.5 text-xs text-ink-soft">
+                            {c.owner_checkpoint || c.owner_tram}
+                            {c.dich_tram_ten ? ` · thuộc ${c.dich_tram_ten}` : ''}
+                          </div>
+                        </div>
+                      ) : (
+                        <Badge tone="warning">
+                          Không có trong workflow: {c.owner_checkpoint || c.owner_tram || '—'}
+                        </Badge>
+                      )}
+                    </td>
+                    <td className="px-3 py-2">
+                      {c.owner_chinh ? <span className="text-ink">{c.owner_chinh}</span> : <Badge tone="danger">Chưa gán</Badge>}
+                    </td>
+                    <td className="px-3 py-2">
+                      {c.owner_xu_ly ? <span className="text-ink">{c.owner_xu_ly}</span> : <span className="text-ink-soft">—</span>}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      {canManage && (
+                        <Button variant="ghost" className="px-2.5 py-1 text-xs" onClick={() => ganChoCot(c)}>
+                          + Gán
+                        </Button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       <div className="mb-4 grid max-w-2xl grid-cols-2 gap-4">
         <div>
           <label className="mb-1 block text-xs font-medium text-ink-soft">Phiên bản</label>
@@ -225,9 +331,10 @@ export default function OwnerPage() {
         </div>
       </div>
 
-      <Modal open={!!modal} onClose={() => setModal(null)} title="Thêm owner" size="sm"
+      <Modal open={!!modal} onClose={() => setModal(null)}
+        title={modal?.tenDich ? `Thêm owner — ${modal.tenDich}` : 'Thêm owner'} size="sm"
         footer={<>
-          <Button variant="ghost" onClick={() => setModal(null)}>Hủy</Button>
+          <Button chiXemOk variant="ghost" onClick={() => setModal(null)}>Hủy</Button>
           <Button onClick={save} loading={saving}>Thêm</Button>
         </>}>
         <Field label="Phân loại">

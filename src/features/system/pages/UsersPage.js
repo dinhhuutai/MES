@@ -184,7 +184,7 @@ export default function UsersPage() {
         title={editing ? 'Sửa người dùng' : 'Thêm người dùng'}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setModalOpen(false)}>Hủy</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setModalOpen(false)}>Hủy</Button>
             <Button onClick={save} loading={saving}
               disabled={!form.hoTen || !form.tenDangNhap || (!editing && form.matKhau.length < 6)}>
               Lưu
@@ -262,7 +262,7 @@ export default function UsersPage() {
         size="sm"
         footer={
           <>
-            <Button variant="ghost" onClick={() => setResetUser(null)}>Hủy</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setResetUser(null)}>Hủy</Button>
             <Button onClick={doReset} disabled={newPass.length < 6}>Đặt lại</Button>
           </>
         }

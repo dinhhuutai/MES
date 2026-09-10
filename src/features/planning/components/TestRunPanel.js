@@ -279,7 +279,7 @@ export default function TestRunPanel({ lenhId, onClose, onChanged }) {
                       placeholder={returnLoai === 'DOI_PA_IN' ? 'Vì sao phải đổi phương án in...' : 'Vì sao test không đạt...'} />
                   </Field>
                   <div className="flex justify-end gap-2">
-                    <Button variant="ghost" className="px-3 py-1.5"
+                    <Button chiXemOk variant="ghost" className="px-3 py-1.5"
                       onClick={() => { setReturnMode(false); setReturnReason(''); setReturnItems(new Set()); setReturnLoai('TEST_LOI'); }}>Hủy</Button>
                     <Button variant="danger" className="px-3 py-1.5" onClick={doReturn} loading={busy === 'return'}
                       disabled={(returnLoai === 'TEST_LOI' && returnItems.size === 0) || !returnReason.trim()}>

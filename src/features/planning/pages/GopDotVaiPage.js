@@ -116,7 +116,7 @@ export default function GopDotVaiPage() {
     <div>
       <Toolbar title="Gộp số lượng đợt vải" subtitle="GỘP ĐỢT = gộp nhiều đợt vải của CÙNG một phần in (khác đợt) để release 1 lần. ≠ Gom set (nhiều phần in khác nhau, cùng màu)."
         search={search} onSearch={setSearch} searchPlaceholder="Tìm code phần, khách, mã hàng, màu/kích...">
-        <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử gộp</Button>
+        <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử gộp</Button>
         <Badge tone="info">{groups.length} phần in gộp được</Badge>
       </Toolbar>
 
@@ -184,7 +184,7 @@ export default function GopDotVaiPage() {
             Gộp <b>{selCount}</b> đợt nguồn vào đợt đích đã chọn
           </span>
           <div className="flex gap-2">
-            <Button variant="ghost" onClick={() => setSel(null)}>Bỏ chọn</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setSel(null)}>Bỏ chọn</Button>
             <Button onClick={openMerge}>Gộp số lượng ({selCount})</Button>
           </div>
         </div>
@@ -193,7 +193,7 @@ export default function GopDotVaiPage() {
       <Modal open={!!merge} onClose={() => setMerge(null)} title="Gộp số lượng vào đợt đích"
         footer={
           <>
-            <Button variant="ghost" onClick={() => setMerge(null)}>Hủy</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setMerge(null)}>Hủy</Button>
             <Button onClick={doMerge} loading={saving} disabled={invalid || totalMove <= 0}>Xác nhận gộp</Button>
           </>
         }

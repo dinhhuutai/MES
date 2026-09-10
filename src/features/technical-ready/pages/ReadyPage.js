@@ -298,10 +298,10 @@ export default function ReadyPage() {
         <TraVeFilter checked={onlyReturned} onChecked={setOnlyReturned}
           range={traVeRange} onRange={setTraVeRange} label="Chỉ hiện phần bị trả về" />
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
-        <Button variant="secondary" icon="file-spreadsheet" loading={exporting} onClick={doExport}>Excel ({viewRows.length})</Button>
+        <Button chiXemOk variant="secondary" icon="file-spreadsheet" loading={exporting} onClick={doExport}>Excel ({viewRows.length})</Button>
         <NghenButton rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} onClick={() => setNghenOpen(true)} />
-        <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
-        <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
+        <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
+        <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         {/* Đang lọc ngày trả về → nói rõ đang thấy bao nhiêu trên tổng số phần bị trả về. */}
         {onlyReturned
           ? <Badge tone="danger">{viewRows.length}/{tongTraVe} bị trả về</Badge>
@@ -325,7 +325,7 @@ export default function ReadyPage() {
         size="sm"
         footer={
           <>
-            <Button variant="ghost" onClick={() => setBulk(null)}>Hủy</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setBulk(null)}>Hủy</Button>
             <Button onClick={doBulk} loading={bulkSaving} disabled={!bulk?.ma}>
               Xác nhận
             </Button>

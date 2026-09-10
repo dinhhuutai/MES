@@ -299,12 +299,12 @@ export default function TestRunPage() {
             giống ô "Ngày lên MES" của trang Hồ sơ kỹ thuật. */}
         <DateRangePicker value={ngayKH} onChange={setNgayKH} placeholder="Ngày SX kế hoạch" />
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
-        <Button variant="secondary" icon="download" onClick={doExcel} disabled={!filtered.length}>
+        <Button chiXemOk variant="secondary" icon="download" onClick={doExcel} disabled={!filtered.length}>
           Excel ({filtered.length})
         </Button>
         <NghenButton rows={rows} trangThai={(r) => statusLenh(r.id)} onClick={() => setNghenOpen(true)} />
-        <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
-        <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
+        <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
+        <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         {/* ⚠ PHẦN IN đứng TRƯỚC vì đó là đơn vị của màn này (và của dải "Theo dõi"); số lệnh để trong
             ngoặc cho ai cần đối chiếu. Hai số lệch nhau là ĐÚNG khi có lệnh gom set. */}
         <Badge tone="info">{tongPhanIn} phần in{tongPhanIn !== filtered.length ? ` · ${filtered.length} lệnh` : ''}</Badge>

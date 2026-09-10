@@ -76,7 +76,7 @@ export default function LoginPage() {
             </button>
           </div>
 
-          <Button
+          <Button chiXemOk
             type="submit"
             className="w-full"
             loading={status === 'loading'}

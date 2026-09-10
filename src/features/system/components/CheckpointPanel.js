@@ -106,7 +106,7 @@ export default function CheckpointPanel({ tram, onClose }) {
 
       <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Sửa checklist' : 'Thêm checklist'}
         footer={<>
-          <Button variant="ghost" onClick={() => setOpen(false)}>Hủy</Button>
+          <Button chiXemOk variant="ghost" onClick={() => setOpen(false)}>Hủy</Button>
           <Button onClick={save} loading={saving} disabled={!form.maCheckpoint || !form.tenCheckpoint}>Lưu</Button>
         </>}>
         <div className="grid grid-cols-2 gap-x-4">

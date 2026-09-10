@@ -233,12 +233,12 @@ export default function Release2Page() {
         )}
         <DateRangePicker value={ngayKH} onChange={setNgayKH} placeholder="Ngày SX kế hoạch" />
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
-        <Button variant="secondary" icon="download" onClick={doExcel} disabled={!filtered.length}>
+        <Button chiXemOk variant="secondary" icon="download" onClick={doExcel} disabled={!filtered.length}>
           Excel ({filtered.length})
         </Button>
         <NghenButton rows={rows} trangThai={(r) => statusLenh(r.id)} onClick={() => setNghenOpen(true)} />
-        <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
-        <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
+        <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
+        <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="info">{filtered.length} chờ duyệt</Badge>
       </Toolbar>
 
@@ -264,7 +264,7 @@ export default function Release2Page() {
         subtitle={detail ? [detail.ten_khach_hang, detail.ma_don_hang, detail.ma_phan].filter(Boolean).join(' · ') : ''}
         footer={(
           <>
-            <Button variant="ghost" onClick={() => setDetail(null)}>Đóng</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setDetail(null)}>Đóng</Button>
             {canApprove && detail && (
               <Button onClick={() => { const r = detail; setDetail(null); setConfirm(r); }}>Duyệt Release 2</Button>
             )}

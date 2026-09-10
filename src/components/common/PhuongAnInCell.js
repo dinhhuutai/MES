@@ -11,6 +11,7 @@ import { getHskt } from '../../services/hsktService';
 import { guiYeuCauDoiPain } from '../../services/duyetService';
 // Công tắc *Hệ thống > Cài đặt tính năng* (mig 087) — TẮT duyệt ⇒ bấm là đổi, không hỏi lý do.
 import { layTrangThaiTinhNang } from '../../services/caiDatTinhNangService';
+import useChiXem, { NHAC_CHI_XEM } from '../../hooks/useChiXem';
 
 // Ô ĐỔI PHƯƠNG ÁN IN ngay tại chỗ (màn READY + bảng trong modal Quét/tích).
 //
@@ -62,6 +63,7 @@ export default function PhuongAnInCell({ value, hsktId, barcode, disabled = fals
   const [saving, setSaving] = useState(false);
   const [confirm, setConfirm] = useState(null); // { pa, maCu, maMoi, dsPhanIn[] }
   const [lyDo, setLyDo] = useState('');         // LÝ DO — bắt buộc khi tính năng duyệt đang BẬT
+  const chiXem = useChiXem();                   // tài khoản chỉ xem (mig 096) → khóa 2 nút ⟳ / ✓
   // ⚠⚠ Tính năng duyệt có đang BẬT không (mig 087). MẶC ĐỊNH `true` — fail-open theo hướng AN TOÀN:
   //   chưa tải xong / lỗi mạng thì cứ coi như đang bắt buộc duyệt (hiện đúng chữ + vẫn đòi lý do),
   //   backend sẽ là chốt cuối. Ngược lại (mặc định false) sẽ hiện "bấm là đổi" rồi ăn 422 NO_LY_DO.
@@ -154,9 +156,11 @@ export default function PhuongAnInCell({ value, hsktId, barcode, disabled = fals
           className={`${dangXemTruoc ? 'ring-1 ring-primary' : ''} ${saving ? 'opacity-60' : ''}`.trim() || undefined} />
         {coTheDoi && (
           <>
+            {/* ⚠ Tài khoản chỉ xem (mig 096): 2 nút này là `<button>` thuần nên KHÔNG được
+                `Button` khóa hộ — phải tự khóa. Vẫn HIỆN (xám) để bố cục cột không đổi. */}
             <button
-              type="button" disabled={saving} onClick={() => setChon(keTiep(hienThi))} className={`${NUT} text-ink-soft hover:bg-surface-muted hover:text-primary`}
-              title={`Đổi sang ${PHUONG_AN_IN[keTiep(hienThi)]} (Bàn → Robot → Máy)`} aria-label="Đổi phương án in"
+              type="button" disabled={saving || chiXem} onClick={() => setChon(keTiep(hienThi))} className={`${NUT} text-ink-soft hover:bg-surface-muted hover:text-primary`}
+              title={chiXem ? NHAC_CHI_XEM : `Đổi sang ${PHUONG_AN_IN[keTiep(hienThi)]} (Bàn → Robot → Máy)`} aria-label="Đổi phương án in"
             >
               <Icon name="rotate-cw" size={14} />
             </button>
@@ -166,9 +170,9 @@ export default function PhuongAnInCell({ value, hsktId, barcode, disabled = fals
                 mất khoảng 1 nhịp — không có phản hồi thì người dùng tưởng bấm hụt và bấm lại. */}
             {dangXemTruoc && (
               <button
-                type="button" disabled={saving} onClick={bamCheck}
+                type="button" disabled={saving || chiXem} onClick={bamCheck}
                 className={`${NUT} ${saving ? 'text-primary' : 'text-success hover:bg-success/10'}`}
-                title={saving ? 'Đang đổi phương án in...'
+                title={chiXem ? NHAC_CHI_XEM : saving ? 'Đang đổi phương án in...'
                   : `Xác nhận đổi sang ${PHUONG_AN_IN[chon]}${maVachTheoPa(barcode, chon) ? ` · mã vạch ${barcode} → ${maVachTheoPa(barcode, chon)}` : ''}`}
                 aria-label={saving ? 'Đang đổi phương án in' : 'Xác nhận đổi phương án in'} aria-busy={saving}
               >
@@ -230,7 +234,7 @@ export default function PhuongAnInCell({ value, hsktId, barcode, disabled = fals
             </div>
 
             <div className="flex justify-end gap-2">
-              <Button variant="ghost" onClick={() => setConfirm(null)}>Đóng</Button>
+              <Button variant="ghost" chiXemOk onClick={() => setConfirm(null)}>Đóng</Button>
               <Button onClick={() => luu(confirm.pa, lyDo.trim())} loading={saving}
                 disabled={duyetBat && !lyDo.trim()}>{duyetBat ? 'Gửi' : 'Đổi ngay'}</Button>
             </div>

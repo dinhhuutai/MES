@@ -83,11 +83,11 @@ export default function MyReportsPage() {
     { key: 'actions', header: '', className: 'text-right', render: (r) => (
       <div className="flex justify-end gap-1.5">
         {/* Xem nhanh + Excel: đứng TRƯỚC Mở/Xóa — số liệu lấy realtime, khỏi vào trình thiết kế. */}
-        <Button variant="secondary" icon="eye" className="px-3 py-1.5" disabled={busyId === r.id}
+        <Button chiXemOk variant="secondary" icon="eye" className="px-3 py-1.5" disabled={busyId === r.id}
           onClick={(e) => { e.stopPropagation(); doPreview(r); }}>Xem trước</Button>
-        <Button variant="ghost" icon="download" className="px-3 py-1.5" disabled={busyId === r.id}
+        <Button chiXemOk variant="ghost" icon="download" className="px-3 py-1.5" disabled={busyId === r.id}
           onClick={(e) => { e.stopPropagation(); doExcel(r); }}>Excel</Button>
-        <Button className="px-3 py-1.5" onClick={(e) => { e.stopPropagation(); setThietKe(r.id); }}>Mở</Button>
+        <Button chiXemOk className="px-3 py-1.5" onClick={(e) => { e.stopPropagation(); setThietKe(r.id); }}>Mở</Button>
         {canDesign && (
           <Button variant="danger" className="px-3 py-1.5" onClick={(e) => { e.stopPropagation(); setConfirm(r); }}>Xóa</Button>
         )}
@@ -107,7 +107,7 @@ export default function MyReportsPage() {
 
       <Modal open={!!creating} onClose={() => setCreating(null)} title="Tạo báo cáo mới"
         footer={<>
-          <Button variant="ghost" onClick={() => setCreating(null)}>Hủy</Button>
+          <Button chiXemOk variant="ghost" onClick={() => setCreating(null)}>Hủy</Button>
           <Button onClick={doCreate} loading={saving} disabled={!creating?.tenBaoCao}>Tạo & thiết kế</Button>
         </>}>
         <Field label="Tên báo cáo" required>
@@ -150,7 +150,7 @@ export default function MyReportsPage() {
             )}
 
             <div className="mt-4 flex justify-end gap-2 border-t border-line pt-3">
-              <Button variant="ghost" icon="download"
+              <Button chiXemOk variant="ghost" icon="download"
                 onClick={() => exportReportExcel(viewing.content, viewing.content.ma_bao_cao)}>Xuất Excel</Button>
               <Button icon="pencil" onClick={() => { const rid = viewing.content.id; setViewing(null); setThietKe(rid); }}>Mở để sửa</Button>
             </div>

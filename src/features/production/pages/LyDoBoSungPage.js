@@ -100,7 +100,7 @@ export default function LyDoBoSungPage() {
       <Modal open={!!form} onClose={() => setForm(null)}
         title={form?.id ? 'Sửa lý do bổ sung' : 'Thêm lý do bổ sung'}
         footer={<>
-          <Button variant="ghost" onClick={() => setForm(null)}>Hủy</Button>
+          <Button chiXemOk variant="ghost" onClick={() => setForm(null)}>Hủy</Button>
           <Button loading={saving} onClick={doSave}
             disabled={!form?.tenLyDo?.trim() || (!form?.id && !form?.maLyDo?.trim())}>Lưu</Button>
         </>}>

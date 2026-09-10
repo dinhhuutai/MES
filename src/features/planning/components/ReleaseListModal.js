@@ -246,7 +246,7 @@ export default function ReleaseListModal({ open, onClose }) {
         </div>
         {/* `ml-auto` đẩy 2 nút sang mép PHẢI của CHÍNH hàng này */}
         <div className="ml-auto flex items-center gap-2">
-          <Button variant="secondary" icon="download" disabled={!viewItems.length}
+          <Button chiXemOk variant="secondary" icon="download" disabled={!viewItems.length}
             onClick={() => exportReleaseListExcel(viewItems, metaXem)}>Xuất Excel</Button>
           <Button icon="printer" disabled={!viewItems.length}
             onClick={() => printReleaseList(viewItems, metaXem)}>In</Button>

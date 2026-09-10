@@ -106,7 +106,7 @@ export default function ToInPage() {
       <Modal open={!!form} onClose={() => setForm(null)}
         title={form?.id ? 'Sửa tổ in' : 'Thêm tổ in'}
         footer={<>
-          <Button variant="ghost" onClick={() => setForm(null)}>Hủy</Button>
+          <Button chiXemOk variant="ghost" onClick={() => setForm(null)}>Hủy</Button>
           <Button loading={saving} onClick={doSave}
             disabled={!form?.tenTo?.trim() || (!form?.id && !form?.maTo?.trim())}>Lưu</Button>
         </>}>

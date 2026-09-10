@@ -28,6 +28,7 @@ import ActivityLogPage from './features/system/pages/ActivityLogPage';
 import PhienDangNhapPage from './features/system/pages/PhienDangNhapPage';
 import FormTemplatesPage from './features/system/pages/FormTemplatesPage';
 import ThietKeTemPage from './features/system/pages/ThietKeTemPage';
+import ThietKePhieuPage from './features/system/pages/ThietKePhieuPage';
 import QuanTriPhanInPage from './features/system/pages/QuanTriPhanInPage';
 import HienThiPainPage from './features/system/pages/HienThiPainPage';
 import CaiDatApiPage from './features/system/pages/CaiDatApiPage';
@@ -36,6 +37,7 @@ import DuyetPage from './features/duyet/pages/DuyetPage';
 import CaiDatThongBaoPage from './features/system/pages/CaiDatThongBaoPage';
 import NotificationsPage from './features/notifications/pages/NotificationsPage';
 import ToInPage from './features/system/pages/ToInPage';
+import TichGiaoPage from './features/system/pages/TichGiaoPage';
 import ManualEntryPage from './features/system/pages/ManualEntryPage';
 import VaiVeUpdatePage from './features/system/pages/VaiVeUpdatePage';
 import PhanInListPage from './features/orders/pages/PhanInListPage';
@@ -48,11 +50,13 @@ import Release1Page from './features/planning/pages/Release1Page';
 import Release2Page from './features/planning/pages/Release2Page';
 import ReplanPage from './features/planning/pages/ReplanPage';
 import GiaCongPage from './features/planning/pages/GiaCongPage';
+import DanhSachTemGiaCongPage from './features/planning/pages/DanhSachTemGiaCongPage';
 import KeHoachTamPage from './features/planning/pages/KeHoachTamPage';
 import TestRunPage from './features/planning/pages/TestRunPage';
 import XacNhanChayPage from './features/production/pages/XacNhanChayPage';
 import TheoDoiChuyenPage from './features/production/pages/TheoDoiChuyenPage';
 import XePhoiPage from './features/production/pages/XePhoiPage';
+import DanhSachTemPage from './features/production/pages/DanhSachTemPage';
 import ReadyQcPage from './features/quality/pages/ReadyQcPage';
 import KcsPage from './features/quality/pages/KcsPage';
 import SuaPage from './features/quality/pages/SuaPage';
@@ -69,6 +73,8 @@ import GiaoHangPage from './features/delivery/pages/GiaoHangPage';
 import DashboardPage from './features/dashboard/pages/DashboardPage';
 import LichSuNghenPage from './features/dashboard/pages/LichSuNghenPage';
 import TinhTrangTramPage from './features/dashboard/pages/TinhTrangTramPage';
+import KpiReadyPage from './features/dashboard/pages/KpiReadyPage';
+import KpiDonHangPage from './features/system/pages/KpiDonHangPage';
 import MyReportsPage from './features/reports/pages/MyReportsPage';
 import ReportDesignerPage from './features/reports/pages/ReportDesignerPage';
 import ReportByDeptPage from './features/reports/pages/ReportByDeptPage';
@@ -86,11 +92,13 @@ const PAGES = {
   '/ke-hoach/release-2': <Release2Page />,
   '/ke-hoach/lap-lai': <ReplanPage />,
   '/ke-hoach/gia-cong': <GiaCongPage />,
+  '/ke-hoach/danh-sach-tem': <DanhSachTemGiaCongPage />,
   '/ke-hoach/ke-hoach-tam': <KeHoachTamPage />,
   '/chat-luong/test-run': <TestRunPage />,
   '/san-xuat/xac-nhan-chay': <XacNhanChayPage />,
   '/san-xuat/theo-doi-chuyen': <TheoDoiChuyenPage />,
   '/san-xuat/xe-phoi': <XePhoiPage />,
+  '/san-xuat/danh-sach-tem': <DanhSachTemPage />,
   '/san-xuat/kcs': <KcsPage />,
   '/san-xuat/sua': <SuaPage />,
   '/san-xuat/phan-loai-loi': <PhanLoaiLoiPage />,
@@ -109,6 +117,7 @@ const PAGES = {
   '/dashboard': <DashboardPage />,
   '/dashboard/lich-su-nghen': <LichSuNghenPage />,
   '/dashboard/tinh-trang-tram': <TinhTrangTramPage />,
+  '/dashboard/kpi-ready': <KpiReadyPage />,
   '/bao-cao': <MyReportsPage />,
   '/bao-cao/phong-ban': <ReportByDeptPage />,
   '/he-thong/nguoi-dung': <UsersPage />,
@@ -120,6 +129,7 @@ const PAGES = {
   '/he-thong/chuyen': <ChuyenPage />,
   '/he-thong/dieu-kien': <DieuKienPage />,
   '/he-thong/owner': <OwnerPage />,
+  '/he-thong/kpi-don-hang': <KpiDonHangPage />,
   '/he-thong/trang-thai': <TrangThaiPage />,
   '/he-thong/lich-su-trang-thai': <LichSuTrangThaiPage />,
   '/he-thong/erp-sync': <ErpSyncPage />,
@@ -130,6 +140,7 @@ const PAGES = {
   '/he-thong/nhat-ky': <ActivityLogPage />,
   '/he-thong/mau-form': <FormTemplatesPage />,
   '/he-thong/thiet-ke-tem': <ThietKeTemPage />,
+  '/he-thong/thiet-ke-phieu': <ThietKePhieuPage />,
   '/he-thong/quan-tri-phan-in': <QuanTriPhanInPage />,
   '/he-thong/hien-thi-pain': <HienThiPainPage />,
   '/he-thong/cai-dat-api': <CaiDatApiPage />,
@@ -137,6 +148,7 @@ const PAGES = {
   '/duyet': <DuyetPage />,
   '/he-thong/cai-dat-thong-bao': <CaiDatThongBaoPage />,
   '/he-thong/to-in': <ToInPage />,
+  '/he-thong/tich-giao': <TichGiaoPage />,
 };
 
 const moduleRoutes = MODULES.flatMap((m) =>

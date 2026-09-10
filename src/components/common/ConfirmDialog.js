@@ -19,7 +19,10 @@ export default function ConfirmDialog({
       size="sm"
       footer={
         <>
-          <Button variant="ghost" onClick={onClose}>
+          {/* Nút ĐÓNG hộp thoại — luôn bấm được, kể cả tài khoản chỉ xem (nếu khóa
+              luôn thì hộp thoại lỡ mở ra sẽ không có đường thoát). Nút xác nhận bên
+              phải KHÔNG khai `chiXemOk` ⇒ tự khóa. */}
+          <Button variant="ghost" chiXemOk onClick={onClose}>
             Hủy
           </Button>
           <Button variant={variant} onClick={onConfirm} loading={loading}>

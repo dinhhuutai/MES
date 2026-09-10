@@ -75,7 +75,7 @@ export default function TramCheckpointPage() {
     { key: 'dang_hoat_dong', header: 'Trạng thái', render: (r) => r.dang_hoat_dong ? <Badge tone="success">Bật</Badge> : <Badge tone="danger">Tắt</Badge> },
     { key: 'actions', header: '', className: 'text-right', render: (r) => (
       <div className="flex justify-end gap-1.5">
-        <Button variant="secondary" className="px-3 py-1.5" onClick={() => setCpTram(r)}>Checklist</Button>
+        <Button chiXemOk variant="secondary" className="px-3 py-1.5" onClick={() => setCpTram(r)}>Checklist</Button>
         {canManage && <Button variant="ghost" className="px-3 py-1.5" onClick={() => openEdit(r)}>Sửa</Button>}
         {canManage && <Button variant="ghost" className="px-3 py-1.5" onClick={() => toggle(r)}>{r.dang_hoat_dong ? 'Tắt' : 'Bật'}</Button>}
       </div>
@@ -98,7 +98,7 @@ export default function TramCheckpointPage() {
 
       <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Sửa checkpoint' : 'Thêm checkpoint'}
         footer={<>
-          <Button variant="ghost" onClick={() => setOpen(false)}>Hủy</Button>
+          <Button chiXemOk variant="ghost" onClick={() => setOpen(false)}>Hủy</Button>
           <Button onClick={save} loading={saving} disabled={!form.maTram || !form.tenTram}>Lưu</Button>
         </>}>
         <div className="grid grid-cols-2 gap-x-4">

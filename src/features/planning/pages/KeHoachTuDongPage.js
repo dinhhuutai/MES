@@ -245,7 +245,7 @@ export default function KeHoachTuDongPage() {
                   <div className="text-[11px] text-ink-soft">{backlog.length} dòng</div>
                 </div>
                 {selectedChuyen && (
-                  <Button variant="ghost" className="!px-2 !py-1 !text-xs" onClick={() => setSelected(null)}>Bỏ lọc</Button>
+                  <Button chiXemOk variant="ghost" className="!px-2 !py-1 !text-xs" onClick={() => setSelected(null)}>Bỏ lọc</Button>
                 )}
               </div>
 

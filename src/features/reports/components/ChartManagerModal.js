@@ -102,7 +102,7 @@ export default function ChartManagerModal({ open, onClose, value = [], dsBlocks 
         <div className="flex justify-between border-t border-line pt-3">
           <Button variant="secondary" icon="plus" onClick={() => setList((l) => [...l, moi()])}>Thêm biểu đồ</Button>
           <div className="flex gap-2">
-            <Button variant="ghost" onClick={onClose}>Hủy</Button>
+            <Button chiXemOk variant="ghost" onClick={onClose}>Hủy</Button>
             <Button onClick={() => { onSave(list); onClose(); }}>Lưu biểu đồ</Button>
           </div>
         </div>

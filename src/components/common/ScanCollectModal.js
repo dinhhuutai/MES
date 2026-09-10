@@ -15,6 +15,13 @@ const KIND_LABEL = { qr: 'QR', barcode: 'mã vạch' };
 const IS_TOUCH = typeof window !== 'undefined' && window.matchMedia
   ? window.matchMedia('(pointer: coarse)').matches : false;
 
+// ⚠⚠ NGƯỠNG NHẬN DIỆN MÁY QUÉT (ms / ký tự). Đầu đọc keyboard-wedge "gõ" ~5–20ms/ký tự; người gõ
+// nhanh nhất (~120 wpm) cũng còn ~100ms/ký tự ⇒ 60ms nằm giữa, an toàn cả 2 chiều. Dùng để TỰ CHỐT
+// mã khi đầu đọc KHÔNG gửi Enter, mà không cướp mất phím của người đang gõ tay trong cùng ô.
+const NGUONG_MAY_QUET = 60;
+// Im lặng bao lâu thì coi là hết một mã (khớp 120ms của bộ bắt phím toàn cục bên dưới).
+const CHOT_SAU_MS = 120;
+
 // Bộ vạch cố định cho hình ảnh động "đang quét" (barcode + thanh dọc chạy qua lại).
 const BARS = [3, 1, 2, 4, 1, 3, 1, 1, 2, 5, 1, 2, 3, 1, 4, 1, 2, 1, 3, 2, 1, 5, 1, 3, 1, 2, 4, 1, 2, 1, 3, 1, 2, 5, 1, 3, 1, 2, 1, 4];
 
@@ -107,19 +114,42 @@ export default function ScanCollectModal({
   // Neo modal cách mép trên bao nhiêu px (null = canh giữa như cũ). Chỉ READY dùng — modal đó cao
   // và dài dần ra theo số mã đã quét, canh giữa thì mỗi lần quét cả hộp lại nhích lên.
   canhTren = null,
+  // ⚠ 2 prop dưới MẶC ĐỊNH TẮT ⇒ 9 màn đang dùng KHÔNG đổi hành vi. Chỉ bật ở màn *Tích tem giao hàng*
+  //   (người dùng chốt: quét được thì có hiệu ứng, quét trượt thì chữ đỏ ~5 giây rồi TỰ MẤT).
+  // `logTuTatMs`: mỗi dòng feedback tự biến mất sau N ms. Vì sao không bật cho mọi màn: ở READY dòng
+  //   log là bằng chứng "đã xác nhận mã nào" trong cả phiên quét, tự xóa đi là mất dấu.
+  logTuTatMs = 0,
+  // `nhayKhiQuet`: nháy viền vùng quét XANH khi trúng / ĐỎ khi trượt — người đứng quét liên tục nhìn
+  //   máy chứ không đọc chữ, cần tín hiệu thấy được từ xa.
+  nhayKhiQuet = false,
+  // ⚠ Ép CHẾ ĐỘ MẶC ĐỊNH khi mở modal ('qr' | 'barcode'). Không truyền ⇒ suy theo thiết bị như cũ
+  //   (điện thoại → QR · máy tính có `usbBarcode` → mã vạch). Người dùng vẫn bấm đổi được.
+  cheDoMacDinh = null,
+  // ⚠ TỰ ĐẶT CON TRỎ vào ô nhập/đầu đọc khi mở modal, và ĐẶT LẠI sau mỗi lần quét — chỉ có nghĩa ở
+  //   chế độ đầu đọc USB (máy tính). Kèm theo: mã gõ ở TỐC ĐỘ MÁY QUÉT thì TỰ CHỐT sau 120ms im
+  //   lặng, khỏi cần đầu đọc gửi Enter (xem `NGUONG_MAY_QUET`).
+  tuFocusONhap = false,
+  // ⚠ Xếp danh sách "Đã chọn" theo THỨ TỰ QUÉT, mới nhất LÊN ĐẦU + đánh dấu dòng vừa quét.
+  //   Mặc định TẮT ⇒ 9 màn kia giữ nguyên thứ tự theo bảng. Bật ở 2 modal tích tem: người quét cần
+  //   THẤY tem vừa quét "lên"; xếp theo bảng thì nó chìm giữa danh sách dài, tưởng quét trượt.
+  thuTuQuet = false,
 }) {
-  const hasBarcode = typeof getBarcodes === 'function';
   // ⚠⚠ 2 CHẾ ĐỘ TÁCH RIÊNG (chốt 2026-07-30) — 'qr' | 'barcode'. Trước đây camera quét CHUNG QR + 1D
   // trong cùng một vòng nên **QR rất khó "qua"** (thực tế iPhone quét mãi không ra QR, còn reader 1D
   // đọc bừa ra rác từ đường kẻ bảng của phiếu). Mỗi chế độ chỉ 1 nhóm reader ⇒ nhanh & chắc hơn nhiều.
   //   · 'qr'      → CAMERA chỉ đọc QR (code phần / mã tem)
   //   · 'barcode' → đầu đọc USB (READY trên máy tính) HOẶC camera chỉ đọc mã vạch 1D (HSKT / đợt vải)
   const [modeSel, setModeSel] = useState(null); // null = theo mặc định của thiết bị/màn hình
-  // Mặc định: điện thoại/pad → QR (hay dùng nhất). Máy tính ở READY có đầu đọc USB → mã vạch.
-  const autoMode = !IS_TOUCH && usbBarcode && hasBarcode ? 'barcode' : 'qr';
+  // Mặc định: `cheDoMacDinh` (nếu màn ép) → không thì điện thoại/pad → QR, máy tính có đầu đọc → mã vạch.
+  const autoMode = cheDoMacDinh || (!IS_TOUCH && usbBarcode ? 'barcode' : 'qr');
   const mode = modeSel || autoMode;
-  // Đầu đọc mã vạch USB (keyboard-wedge) chỉ dùng ở READY trên MÁY TÍNH; còn lại 'barcode' = camera 1D.
-  const usbMode = mode === 'barcode' && usbBarcode && hasBarcode && !IS_TOUCH;
+  // Đầu đọc mã vạch USB (keyboard-wedge) chỉ dùng trên MÁY TÍNH ở màn có `usbBarcode`; còn lại
+  // 'barcode' = camera 1D (điện thoại/pad luôn rơi vào nhánh camera vì IS_TOUCH).
+  // ⚠ KHÔNG đòi `hasBarcode` nữa (bỏ 09/09/2026): `usbBarcode` đã là lời khai TƯỜNG MINH của màn
+  //   "máy tính ở đây dùng đầu đọc". Màn *Tích tem giao hàng* khớp bằng chính MÃ TEM (`getCodes`) nên
+  //   không có `getBarcodes` — đòi thêm điều kiện đó thì nó không bao giờ vào được chế độ đầu đọc.
+  //   ⚠ READY vốn truyền CẢ HAI prop nên bỏ điều kiện này KHÔNG đổi hành vi màn đó.
+  const usbMode = mode === 'barcode' && usbBarcode && !IS_TOUCH;
   const camMode = !usbMode; // luôn có camera, trừ khi đang dùng đầu đọc USB
   const [log, setLog] = useState([]);       // feedback tạm (không tìm thấy / lỗi)
   const [session, setSession] = useState([]); // immediate: đã xác nhận phiên này (có nút Hủy)
@@ -142,22 +172,48 @@ export default function ScanCollectModal({
   const idRef = useRef(0);
   // Giữ props mới nhất cho vòng lặp camera (effect chỉ chạy lại theo open/mode).
   const stateRef = useRef({});
-  stateRef.current = { rows, getCodes, getBarcodes, getPhanInBarcodes, khongGomSet, getHsktBarcodes, getGomSetKey, matchMultiple, canSelect, onNotFound, isSelected, onToggle, immediate, onScanAction, actionLabel, primaryLabel, disabledScan };
+  stateRef.current = { rows, getCodes, getBarcodes, getPhanInBarcodes, khongGomSet, getHsktBarcodes, getGomSetKey, matchMultiple, canSelect, onNotFound, isSelected, onToggle, immediate, onScanAction, actionLabel, primaryLabel, disabledScan, getId };
+  // Thứ tự quét: id dòng → số đếm tăng dần (càng lớn càng mới). Chỉ dùng khi `thuTuQuet`.
+  // ⚠ Là REF nên đổi giá trị KHÔNG tự vẽ lại — an toàn vì mỗi lần quét đều kéo theo `setLog`/`onToggle`
+  //   nên component vẽ lại ngay sau đó, lúc đó đọc ref là ra số mới nhất.
+  const thuTuRef = useRef(new Map());
+  const demQuetRef = useRef(0);
 
   useEffect(() => {
     if (open) {
       setLog([]); setSession([]); setManual('');
       recentRef.current = new Map();
       notFoundRef.current = new Map(); // mở lại modal = tra lại (danh sách đã tải mới)
+      thuTuRef.current = new Map(); demQuetRef.current = 0; // phiên quét mới → xếp lại từ đầu
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // Nháy vùng quét (opt-in) — 'ok' | 'loi' | ''. Tự tắt sau 700ms.
+  const [nhay, setNhay] = useState('');
+  const nhayTimer = useRef(null);
+  const logTimers = useRef([]);
+  useEffect(() => () => { // dọn mọi hẹn giờ khi gỡ component (đóng modal giữa chừng)
+    if (nhayTimer.current) clearTimeout(nhayTimer.current);
+    logTimers.current.forEach(clearTimeout);
+    logTimers.current = [];
+  }, []);
 
   const pushLog = useCallback((text, okFlag) => {
     idRef.current += 1;
     const id = idRef.current;
     setLog((l) => [{ id, text, ok: okFlag }, ...l].slice(0, 6));
-  }, []);
+    // ⚠ Hẹn giờ phải GOM LẠI để dọn khi đóng modal — bỏ mặc thì setState chạy trên component đã gỡ.
+    if (logTuTatMs > 0) {
+      const t = setTimeout(() => setLog((l) => l.filter((x) => x.id !== id)), logTuTatMs);
+      logTimers.current.push(t);
+    }
+    if (nhayKhiQuet) {
+      setNhay(okFlag ? 'ok' : 'loi');
+      if (nhayTimer.current) clearTimeout(nhayTimer.current);
+      nhayTimer.current = setTimeout(() => setNhay(''), 700);
+    }
+  }, [logTuTatMs, nhayKhiQuet]);
 
   // Mở rộng kết quả quét sang CẢ NHÓM GOM SET: quét 1 code phần (hoặc barcode HSKT/đợt vải) của phần in
   // có gom set ⇒ mọi phần in cùng nhóm cũng hiện lên / được xác nhận theo.
@@ -303,7 +359,13 @@ export default function ScanCollectModal({
       return;
     }
     if (s.immediate) { matched.forEach((row) => doImmediate(row)); return; }
-    matched.forEach((row) => { if (!s.isSelected(row)) s.onToggle(row); });
+    // ⚠ CHỈ thêm, KHÔNG bỏ chọn: quét lại tem đã có trong danh sách thì để yên (nếu gọi `onToggle`
+    //   vô điều kiện thì lần quét thứ hai sẽ GỠ tem ra — người quét tưởng máy nuốt mất tem).
+    matched.forEach((row) => {
+      if (!s.isSelected(row)) s.onToggle(row);
+      demQuetRef.current += 1;
+      thuTuRef.current.set(String(s.getId(row)), demQuetRef.current); // quét lại ⇒ đẩy lên đầu
+    });
     pushLog(`＋ ${s.primaryLabel(matched[0])}${matched.length > 1 ? ` (${matched.length} dòng)` : ''}`, true);
   }, [matchRows, doImmediate, pushLog]);
 
@@ -371,6 +433,50 @@ export default function ScanCollectModal({
     return () => { document.removeEventListener('keydown', onKey); if (b.timer) clearTimeout(b.timer); };
   }, [open, usbMode, processScan]);
 
+  // ─── TỰ ĐẶT CON TRỎ VÀO Ô NHẬP (opt-in `tuFocusONhap`, chỉ ở chế độ đầu đọc USB) ───────────────
+  // ⚠ CALLBACK REF chứ không `useRef`: Modal chạy trên Headless UI Portal nên lần render đầu sau khi
+  //   mở, children CHƯA vào DOM ⇒ ref còn null lúc effect chạy (cùng cái bẫy đã ghi ở thẻ <video>).
+  const [nhapEl, setNhapEl] = useState(null);
+  const tuFocus = tuFocusONhap && usbMode;
+  const datConTro = useCallback(() => {
+    if (!tuFocus || !nhapEl) return;
+    try { nhapEl.focus({ preventScroll: true }); } catch (_) { nhapEl.focus(); }
+  }, [tuFocus, nhapEl]);
+  useEffect(() => { if (open) datConTro(); }, [open, datConTro]);
+
+  // TỰ CHỐT mã khi đầu đọc KHÔNG gửi Enter: gõ ở tốc độ máy quét rồi im lặng `CHOT_SAU_MS` ⇒ xử lý.
+  // ⚠ Đọc `el.value` (DOM) chứ không đọc state `manual`: hàm trong setTimeout giữ closure CŨ, lấy
+  //   state sẽ ra chuỗi thiếu ký tự cuối.
+  const goRef = useRef({ t0: 0, last: 0, n: 0, timer: null });
+  useEffect(() => () => { if (goRef.current.timer) clearTimeout(goRef.current.timer); }, []);
+  const huyChotTuDong = () => {
+    const g = goRef.current;
+    if (g.timer) { clearTimeout(g.timer); g.timer = null; }
+    g.n = 0;
+  };
+  const onPhimNhap = (e) => {
+    if (!tuFocus) return;
+    const g = goRef.current;
+    if (e.key === 'Enter') { huyChotTuDong(); return; } // form submit lo nốt
+    if (!e.key || e.key.length !== 1) return;
+    const now = Date.now();
+    if (now - g.last > 500) { g.t0 = now; g.n = 0; } // ngắt quãng dài → coi là mã mới
+    g.last = now; g.n += 1;
+    if (g.timer) clearTimeout(g.timer);
+    g.timer = setTimeout(() => {
+      g.timer = null;
+      const val = String((nhapEl && nhapEl.value) || '').trim();
+      // Chỉ tự chốt khi CHUỖI ĐƯỢC GÕ Ở TỐC ĐỘ MÁY QUÉT — người gõ tay vẫn phải bấm Enter.
+      const msMoiKyTu = g.n > 1 ? (g.last - g.t0) / (g.n - 1) : Infinity;
+      g.n = 0;
+      if (val.length >= 2 && msMoiKyTu < NGUONG_MAY_QUET) {
+        processScan(val, 'barcode');
+        setManual('');
+        datConTro();
+      }
+    }, CHOT_SAU_MS);
+  };
+
   const undoEntry = async (entry) => {
     try {
       if (onUndo) await onUndo(entry.row);
@@ -381,12 +487,19 @@ export default function ScanCollectModal({
   const handleClose = () => { stopCam(); onClose(); };
 
   const selectedRows = immediate ? [] : rows.filter((r) => isSelected(r));
+  // Thứ tự HIỂN THỊ: mới quét lên đầu (chỉ khi `thuTuQuet`). Dòng chọn bằng tay (chưa có số thứ tự)
+  // giữ nguyên thứ tự cũ và nằm dưới — `Array.sort` của JS ổn định nên không xáo trộn.
+  // ⚠ Đếm/`onConfirm`/"Bỏ hết" vẫn dùng `selectedRows` — đây THUẦN là thứ tự vẽ.
+  const dsHienThi = thuTuQuet
+    ? [...selectedRows].sort((a, b) => (thuTuRef.current.get(String(getId(b))) || 0)
+      - (thuTuRef.current.get(String(getId(a))) || 0))
+    : selectedRows;
 
   return (
     <Modal open={open} onClose={handleClose} title={title} size={size} canhTren={canhTren}
       footer={(
         <>
-          <Button variant="ghost" onClick={handleClose}>Đóng</Button>
+          <Button variant="ghost" chiXemOk onClick={handleClose}>Đóng</Button>
           {!immediate && onConfirm && (
             <Button onClick={onConfirm} disabled={selectedRows.length === 0} icon="check">
               {confirmLabel} ({selectedRows.length})
@@ -415,6 +528,12 @@ export default function ScanCollectModal({
           ))}
         </div>
 
+        {/* Vùng quét — bọc thêm 1 lớp để NHÁY xanh/đỏ báo trúng-trượt (opt-in `nhayKhiQuet`).
+            ⚠ `nhayKhiQuet=false` ⇒ class rỗng, DOM y hệt trước ⇒ 9 màn kia không đổi gì. */}
+        <div className={`rounded-card transition-all duration-200 ${
+          nhay === 'ok' ? 'ring-4 ring-success/60 bg-success/5'
+            : nhay === 'loi' ? 'ring-4 ring-danger/60 bg-danger/5' : ''
+        }`}>
         {/* ĐẦU ĐỌC USB (chỉ READY trên máy tính): không có camera, bắt phím tự động → tự xác nhận. */}
         {usbMode && <ScanViz />}
 
@@ -445,13 +564,22 @@ export default function ScanCollectModal({
             </div>
           )
         )}
+        </div>
 
         {/* Ô NHẬP TAY / ĐẦU ĐỌC USB — LUÔN có ở mọi màn, mọi chế độ.
             Lý do: chỉ màn READY (usbBarcode) mới bắt phím đầu đọc toàn cục, còn các màn khác dùng camera —
             máy tính không có camera thì trước đây KHÔNG quét được mã vạch HSKT. Ô này nhận cả đầu đọc USB
             (gõ xong tự Enter) lẫn gõ tay, cho mọi loại mã: code phần · barcode phần in · barcode đợt vải · barcode HSKT. */}
         <form
-          onSubmit={(e) => { e.preventDefault(); processScan(manual, 'camera'); setManual(''); }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            huyChotTuDong(); // Enter tới trước → bỏ hẹn giờ tự chốt để không xử lý mã 2 lần
+            // ⚠ Ở chế độ đầu đọc thì đây CHẮC CHẮN là mã vạch ⇒ báo đúng loại để `matchRows` tra
+            //   cột theo thứ tự của mã vạch. Ngoài chế độ đó giữ 'camera' = thử lần lượt mọi cột.
+            processScan(manual, usbMode ? 'barcode' : 'camera');
+            setManual('');
+            datConTro(); // quét xong đặt lại con trỏ để quét tem kế tiếp, khỏi bấm chuột
+          }}
           className="flex items-center gap-2"
         >
           <Icon name="scan" size={16} className="shrink-0 text-ink-soft" />
@@ -460,10 +588,14 @@ export default function ScanCollectModal({
               KHÔNG tự thu lại ⇒ đang mở camera quét mà bấm vào ô này là giao diện phóng to kẹt luôn
               (lỗi đã gặp thật trên PWA iPhone). Cách chuẩn là để font ≥ 16px, không phải chặn zoom. */}
           <input
+            ref={setNhapEl}
             value={manual}
             onChange={(e) => setManual(e.target.value)}
+            onKeyDown={onPhimNhap}
             placeholder="Quét đầu đọc / nhập mã: code phần · barcode phần in · barcode HSKT · barcode đợt vải"
-            className="min-w-0 flex-1 rounded-control border border-line bg-surface px-3 py-2 text-base md:text-sm text-ink outline-none focus:border-primary"
+            className={`min-w-0 flex-1 rounded-control border bg-surface px-3 py-2 text-base md:text-sm text-ink outline-none focus:border-primary ${
+              tuFocus ? 'border-primary ring-2 ring-primary/25' : 'border-line'
+            }`}
           />
           <Button type="submit" variant="secondary" disabled={!manual.trim()}>Thêm</Button>
         </form>
@@ -549,10 +681,19 @@ export default function ScanCollectModal({
               <p className="px-3 py-4 text-center text-xs text-ink-soft">Chưa có mã nào — quét/tích để thêm.</p>
             ) : (
               <ul className="max-h-56 divide-y divide-line overflow-auto">
-                {selectedRows.map((r) => (
-                  <li key={getId(r)} className="flex items-center justify-between gap-2 px-3 py-2">
+                {dsHienThi.map((r) => {
+                  // Dòng VỪA QUÉT (số thứ tự lớn nhất) — tô nhẹ + gắn nhãn để người quét thấy ngay
+                  // "tem đã lên", khỏi phải dò trong danh sách dài.
+                  const moiQuet = thuTuQuet && demQuetRef.current > 0
+                    && thuTuRef.current.get(String(getId(r))) === demQuetRef.current;
+                  return (
+                  <li key={getId(r)} className={`flex items-center justify-between gap-2 px-3 py-2 ${
+                    moiQuet ? 'bg-success/10' : ''}`}>
                     <div className="min-w-0 leading-tight">
-                      <div className="truncate text-sm font-medium text-ink">{primaryLabel(r)}</div>
+                      <div className="truncate text-sm font-medium text-ink">
+                        {primaryLabel(r)}
+                        {moiQuet && <span className="ml-2 rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-semibold text-success">vừa quét</span>}
+                      </div>
                       {secondaryLabel && <div className="truncate text-xs text-ink-soft">{secondaryLabel(r)}</div>}
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
@@ -568,7 +709,8 @@ export default function ScanCollectModal({
                       </button>
                     </div>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             )}
           </div>

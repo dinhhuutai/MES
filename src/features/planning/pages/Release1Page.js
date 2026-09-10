@@ -358,12 +358,12 @@ export default function Release1Page() {
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
         {/* Cùng modal với màn "Tạo đợt sản xuất" — người lập kế hoạch ở Release 1 cũng cần in/xuất
             danh sách release cho chuyền mà không phải nhảy sang màn khác. */}
-        <Button variant="secondary" icon="list" onClick={() => setReleaseListOpen(true)}>Danh sách release</Button>
-        <Button variant="secondary" icon="download" onClick={doExcel}
+        <Button chiXemOk variant="secondary" icon="list" onClick={() => setReleaseListOpen(true)}>Danh sách release</Button>
+        <Button chiXemOk variant="secondary" icon="download" onClick={doExcel}
           disabled={!viewRowsGom.length}>Excel</Button>
         <NghenButton rows={rows} trangThai={(r) => statusDot(r.dot_vai_id)} onClick={() => setNghenOpen(true)} />
-        <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
-        <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
+        <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
+        <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="info">{activeCount || loaiPain ? `${viewRowsGom.length}/` : ''}{meta.total} đợt vải</Badge>
       </Toolbar>
 
@@ -456,7 +456,7 @@ export default function Release1Page() {
               Đã chọn <b>{looseList.length}</b> đợt vải (SL {fmtNum(tongVai)})
             </span>
             <div className="flex gap-2">
-              <Button variant="ghost" onClick={() => setSelected({})}>Bỏ chọn</Button>
+              <Button chiXemOk variant="ghost" onClick={() => setSelected({})}>Bỏ chọn</Button>
               <Button onClick={openReleaseAll}>Release ({totalSel})</Button>
             </div>
           </div>
@@ -470,7 +470,7 @@ export default function Release1Page() {
         title="Release 1"
         footer={
           <>
-            <Button variant="ghost" onClick={() => setReleaseOpen(false)}>Hủy</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setReleaseOpen(false)}>Hủy</Button>
             <Button onClick={doReleaseAll} loading={saving} disabled={!relForm.chuyenId}>Xác nhận Release</Button>
           </>
         }
@@ -514,7 +514,7 @@ export default function Release1Page() {
         subtitle={detail ? `${detail.ten_khach_hang || ''} · ${detail.mau_vai || ''}` : ''}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setDetail(null)}>Đóng</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setDetail(null)}>Đóng</Button>
             {/* Chỉ phần in ĐÃ READY (QC xác nhận) mới trả về Kỹ thuật được — phần "Chờ Ready" vẫn đang ở READY.
                 ⚠ Từ 15/08/2026 trả về LẺ đúng 1 phần in, kể cả đợt thuộc gom set. */}
             {detail?.qc_done && (
@@ -582,7 +582,7 @@ export default function Release1Page() {
         size="sm"
         footer={
           <>
-            <Button variant="ghost" onClick={() => setTraVeOpen(false)}>Hủy</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setTraVeOpen(false)}>Hủy</Button>
             <Button variant="danger" onClick={doTraVeKyThuat} loading={saving} disabled={!traVeReason.trim()}>
               Xác nhận trả về
             </Button>

@@ -176,7 +176,7 @@ export default function RolesPage() {
         size="lg"
         footer={
           <>
-            <Button variant="ghost" onClick={() => setModalOpen(false)}>Hủy</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setModalOpen(false)}>Hủy</Button>
             <Button onClick={save} loading={saving} disabled={!form.maRole || !form.tenRole}>Lưu</Button>
           </>
         }

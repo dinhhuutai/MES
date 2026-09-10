@@ -107,7 +107,7 @@ export default function LoaiLoiPage() {
         title={editing?.id ? 'Sửa loại lỗi' : 'Thêm loại lỗi'}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setEditing(null)}>Hủy</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setEditing(null)}>Hủy</Button>
             <Button onClick={save} loading={saving}
               disabled={!form.tenLoi || (!editing?.id && !form.maLoi)}>Lưu</Button>
           </>

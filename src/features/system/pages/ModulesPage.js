@@ -98,7 +98,7 @@ export default function ModulesPage() {
         title={`Sửa module: ${editing?.ten_module || ''}`}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setEditing(null)}>Hủy</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setEditing(null)}>Hủy</Button>
             <Button onClick={save} loading={saving} disabled={!form.tenModule}>Lưu</Button>
           </>
         }

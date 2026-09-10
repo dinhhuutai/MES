@@ -139,7 +139,7 @@ export default function DatasetBlockModal({ open, onClose, oKey, value, datasets
         <div className="flex justify-between border-t border-line pt-3">
           <Button variant="ghost" className="text-danger" onClick={() => { onRemove(); onClose(); }}>Gỡ khối danh sách</Button>
           <div className="flex gap-2">
-            <Button variant="ghost" onClick={onClose}>Hủy</Button>
+            <Button chiXemOk variant="ghost" onClick={onClose}>Hủy</Button>
             <Button onClick={luu} disabled={!ds.nguon}>Lưu khối danh sách</Button>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Modal from './Modal';
 import Button from './Button';
 import Badge from './Badge';
@@ -11,7 +11,7 @@ import { Field, Input, Select } from './controls';
 import useToast from '../../hooks/useToast';
 import useSocketReload from '../../hooks/useSocketReload';
 import { fmtNum, fmtDate, ngayLocalISO } from '../../utils/format';
-import { laySiSo, laySiSoChiTiet } from '../../services/siSoService';
+import { laySiSo, laySiSoChiTiet, laySiSoNgayGiao } from '../../services/siSoService';
 import { useSiSoLocHienTai } from '../../hooks/useSiSoLoc';
 import PhuongAnInBadge from './PhuongAnInBadge';
 
@@ -80,6 +80,136 @@ const O_LIST = [
   { ma: 'ton_cuoi', ten: 'Tồn cuối kỳ', ngan: 'Cuối', mau: 'text-ink' },
 ];
 
+// ─── Ô SỐ + POPOVER "THEO NGÀY GIAO" (04/09/2026) ────────────────────────────
+// Hover vào ô ⇒ hiện con số đó tách theo NGÀY GIAO (hạn giao hàng); bấm 1 dòng ⇒ mở danh sách chi
+// tiết đã lọc sẵn đúng ngày đó. Nguồn: `GET /si-so/:maTrang/:o/ngay-giao` — CÙNG bộ lọc, CÙNG điều
+// kiện ô với 4 con số nên Σ các dòng LUÔN bằng con số trên ô (backend đã kiểm 27/27).
+//
+// ⚠⚠ POPOVER PHẢI `position: fixed` + đo `getBoundingClientRect`, KHÔNG `absolute`: dải "Theo dõi"
+//   nằm trong hàng breadcrumb của `ModuleLayout`, dùng `absolute` là bị cắt cụt ngay mép hàng đó
+//   (đúng bẫy đã ghi ở `ThDangO` của *Danh sách release*).
+// ⚠ CHỈ tải khi người dùng thật sự hover (không tải sẵn cho cả 4 ô) — mỗi lượt là 1 query gom nhóm.
+// ⚠ Danh sách có thể DÀI (đo prod: 27 ngày giao ở Release 1) ⇒ hộp cuộn, không giới hạn số dòng.
+//
+// ⚠⚠ DÙNG Ở **2 CHỖ** (09/09/2026): dải "Theo dõi" ở hàng breadcrumb (`kieu='dai'`) và **4 chip bên
+//   trong modal danh sách** (`kieu='chip'`). Phải có ở CẢ HAI vì khi modal mở thì overlay của
+//   `Dialog` phủ kín màn ⇒ **không hover tới được ô ngoài breadcrumb nữa** (người dùng báo 09/09:
+//   *"hover vào Xong thì đang bị che cái modal"*). Nâng z-index KHÔNG chữa được — vấn đề là
+//   pointer-events của overlay, không phải thứ tự vẽ.
+// ⚠ Đừng chép logic popover ra chỗ thứ hai: 2 bản sẽ lệch nhau (tham số tải, luật xóa cache…).
+function ONut({ o, so, nhanKy, maTrang, ky, donVi, goiLoc, onMo, onMoNgayGiao, kieu = 'dai', dangChon = false }) {
+  const [hienNG, setHienNG] = useState(false);
+  const [viTri, setViTri] = useState(null);
+  const [ds, setDs] = useState(null);
+  const [dangTaiNG, setDangTaiNG] = useState(false);
+  const nutRef = useRef(null);
+  const timerRef = useRef(null);
+
+  const moPopover = () => {
+    const el = nutRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    setViTri({ top: r.bottom + 6, left: r.left });
+    setHienNG(true);
+    if (ds || dangTaiNG) return;
+    setDangTaiNG(true);
+    laySiSoNgayGiao(maTrang, o.ma, { tu: ky.tu, den: ky.den, donVi, ...thamSoTrang(goiLoc) })
+      .then((r2) => setDs(r2.data))
+      // Lỗi ⇒ để `ds` là mảng rỗng, popover hiện "không có dữ liệu". KHÔNG bắn toast: người dùng chỉ
+      // đang rê chuột, không phải thao tác có chủ đích.
+      .catch(() => setDs({ items: [] }))
+      .finally(() => setDangTaiNG(false));
+  };
+  // Trễ 350ms mới mở: rê chuột lướt qua 4 ô không được bắn 4 request.
+  const vaoNut = () => { clearTimeout(timerRef.current); timerRef.current = setTimeout(moPopover, 350); };
+  const roiNut = () => { clearTimeout(timerRef.current); timerRef.current = setTimeout(() => setHienNG(false), 200); };
+  useEffect(() => () => clearTimeout(timerRef.current), []);
+
+  // Kỳ / bộ lọc / đơn vị đổi ⇒ số cũ không còn đúng, xóa để lần hover sau tải lại.
+  useEffect(() => { setDs(null); }, [ky.tu, ky.den, donVi, goiLoc]);
+
+  const laSl = !!so?.la_so_luong;
+  const cot = laSl ? (so.don_vi === 'sl_dh' ? 'sl_dh' : 'sl_vai') : 'so_doi_tuong';
+  const items = ds?.items || [];
+
+  return (
+    <>
+      <button
+        ref={nutRef}
+        type="button"
+        onClick={onMo}
+        onMouseEnter={vaoNut}
+        onMouseLeave={roiNut}
+        className={kieu === 'chip'
+          ? `flex items-baseline gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition
+             ${dangChon ? 'bg-primary text-white' : 'bg-surface-muted text-ink-soft hover:text-ink'}`
+          : 'flex items-baseline gap-1 whitespace-nowrap rounded-md px-1.5 py-0.5 transition hover:bg-surface-muted'}
+        title={kieu === 'chip'
+          ? `${o.ten} — bấm để xem danh sách của ô này · rê chuột để xem theo ngày giao`
+          : `${o.ten} (${nhanKy}) — bấm để xem danh sách · rê chuột để xem theo ngày giao`}
+      >
+        {kieu === 'chip' ? (
+          <>
+            <span>{o.ten}</span>
+            <span className={`text-sm font-bold leading-none ${dangChon ? 'text-white' : o.mau}`}>
+              {so ? fmtNum(so[o.ma]) : '—'}
+            </span>
+          </>
+        ) : (
+          <>
+            <span className={`text-sm font-bold leading-none ${o.mau}`}>
+              {so ? fmtNum(so[o.ma]) : '—'}
+            </span>
+            <span className="text-[10px] leading-none text-ink-soft">{o.ngan}</span>
+          </>
+        )}
+      </button>
+
+      {hienNG && viTri && (
+        <div
+          className="fixed z-[60] max-h-[60vh] w-72 overflow-auto rounded-control border border-line bg-surface p-2 shadow-lg"
+          style={{ top: viTri.top, left: viTri.left }}
+          onMouseEnter={() => clearTimeout(timerRef.current)}
+          onMouseLeave={roiNut}
+        >
+          <div className="mb-1.5 flex items-center justify-between gap-2 border-b border-line pb-1">
+            <span className="text-xs font-semibold text-ink">{o.ten} theo ngày giao</span>
+            {dangTaiNG && <Spinner size={12} />}
+          </div>
+          {!dangTaiNG && items.length === 0 && (
+            <div className="py-2 text-center text-xs text-ink-soft">Không có dữ liệu</div>
+          )}
+          {items.map((r) => (
+            <button
+              key={r.han_giao_hang || 'chua-co'}
+              type="button"
+              onClick={() => { setHienNG(false); onMoNgayGiao(r.han_giao_hang); }}
+              disabled={!r.han_giao_hang}
+              className="flex w-full items-center justify-between gap-2 rounded-md px-1.5 py-1 text-left text-xs transition hover:bg-primary/10 disabled:cursor-default disabled:hover:bg-transparent"
+              title={r.han_giao_hang ? 'Bấm để xem danh sách của ngày giao này' : 'Chưa có hạn giao'}
+            >
+              <span className="text-ink-soft">
+                {r.han_giao_hang ? fmtDate(r.han_giao_hang) : '(chưa có hạn giao)'}
+              </span>
+              <span className="whitespace-nowrap font-semibold text-ink">
+                {fmtNum(r[cot])}
+                <span className="ml-0.5 text-[10px] font-normal text-ink-soft">
+                  {laSl ? so.don_vi_so : ''}
+                </span>
+              </span>
+            </button>
+          ))}
+          {items.length > 0 && (
+            <div className="mt-1 border-t border-line pt-1 text-[10px] text-ink-soft">
+              Bấm 1 dòng để mở danh sách của ngày giao đó
+            </div>
+          )}
+        </div>
+      )}
+    </>
+  );
+}
+
 const LOAI_NGAY = [
   { ma: '', ten: '— Không lọc theo ngày khác —' },
   { ma: 'NGAY_VAI_VE', ten: 'Ngày nhận vải' },
@@ -137,6 +267,9 @@ export default function SiSoTram({ maTrang, tuDong = true }) {
   const [so, setSo] = useState(null);
   const [dangTai, setDangTai] = useState(false);
   const [oDangMo, setODangMo] = useState(null);
+  // Ngày giao người dùng vừa bấm trong popover ⇒ modal mở ra đã lọc sẵn đúng ngày đó.
+  // ⚠ Phải XÓA khi đóng modal, nếu không lần mở sau vẫn dính bộ lọc ngày cũ mà không rõ vì sao.
+  const [ngayGiaoLoc, setNgayGiaoLoc] = useState(null);
   // ⚠ `''` = chưa chọn ⇒ backend dùng mặc định của màn. `ModuleLayout` đặt `key={current.siSo}` nên
   //   đổi màn là component dựng lại, initializer chạy lại và đọc đúng lựa chọn của màn mới.
   const [donVi, setDonVi] = useState(() => docDonVi(maTrang));
@@ -228,18 +361,18 @@ export default function SiSoTram({ maTrang, tuDong = true }) {
         {dangTai && <Spinner size={12} />}
         <span className="mx-0.5 h-4 w-px shrink-0 bg-line" />
         {O_LIST.map((o) => (
-          <button
+          <ONut
             key={o.ma}
-            type="button"
-            onClick={() => setODangMo(o.ma)}
-            className="flex items-baseline gap-1 whitespace-nowrap rounded-md px-1.5 py-0.5 transition hover:bg-surface-muted"
-            title={`${o.ten} (${nhanKy}) — bấm để xem danh sách`}
-          >
-            <span className={`text-sm font-bold leading-none ${o.mau}`}>
-              {so ? fmtNum(so[o.ma]) : '—'}
-            </span>
-            <span className="text-[10px] leading-none text-ink-soft">{o.ngan}</span>
-          </button>
+            o={o}
+            so={so}
+            nhanKy={nhanKy}
+            maTrang={maTrang}
+            ky={ky}
+            donVi={so?.don_vi}
+            goiLoc={goiLoc}
+            onMo={() => setODangMo(o.ma)}
+            onMoNgayGiao={(ngay) => { setNgayGiaoLoc(ngay); setODangMo(o.ma); }}
+          />
         ))}
       </div>
 
@@ -252,10 +385,11 @@ export default function SiSoTram({ maTrang, tuDong = true }) {
           so={so}
           tenMan={so?.ten_man}
           donViNhan={so?.don_vi_nhan}
-          onClose={() => setODangMo(null)}
+          onClose={() => { setODangMo(null); setNgayGiaoLoc(null); }}
           onShow={show}
           goiLoc={goiLoc}
           donVi={so?.don_vi}
+          ngayGiaoLoc={ngayGiaoLoc}
         />
       )}
       <Toast toast={toast} />
@@ -264,13 +398,17 @@ export default function SiSoTram({ maTrang, tuDong = true }) {
 }
 
 // ─── Modal danh sách chi tiết ────────────────────────────────────────────────
-function SiSoModal({ maTrang, o, ky, onDoiKy, so, tenMan, donViNhan, onClose, onShow, goiLoc, donVi }) {
+function SiSoModal({ maTrang, o, ky, onDoiKy, so, tenMan, donViNhan, onClose, onShow, goiLoc, donVi, ngayGiaoLoc }) {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [oHienTai, setOHienTai] = useState(o);
-  const [f, setF] = useState(F_TRONG);
+  // Mở từ popover "theo ngày giao" ⇒ đổ sẵn bộ lọc HẠN GIAO = đúng ngày đó (người dùng vẫn xóa được
+  // trong panel Bộ lọc như mọi bộ lọc khác).
+  const [f, setF] = useState(() => (ngayGiaoLoc
+    ? { ...F_TRONG, loaiNgay: 'HAN_GIAO', ngayTu: ngayLocalISO(new Date(ngayGiaoLoc)), ngayDen: ngayLocalISO(new Date(ngayGiaoLoc)) }
+    : F_TRONG));
   const [moLoc, setMoLoc] = useState(false);
   const [xuat, setXuat] = useState(false);
   const LIMIT = 20;
@@ -334,7 +472,7 @@ function SiSoModal({ maTrang, o, ky, onDoiKy, so, tenMan, donViNhan, onClose, on
       size="full"
       lapDay
       title={`${tenMan || 'Checkpoint'} — ${tenO}`}
-      footer={<Button variant="ghost" onClick={onClose}>Đóng</Button>}
+      footer={<Button variant="ghost" chiXemOk onClick={onClose}>Đóng</Button>}
     >
       <div className="flex h-full flex-col">
         {/* ⚠⚠ `relative` để panel "Bộ lọc" neo NỔI vào đây — xem ghi chú ở chỗ render panel. */}
@@ -351,27 +489,37 @@ function SiSoModal({ maTrang, o, ky, onDoiKy, so, tenMan, donViNhan, onClose, on
                 modal mới thấy. Nay số đi kèm tên ô, khỏi phải thoát ra vào. `so` do component cha
                 truyền xuống và tự tải lại mỗi khi `ky` đổi (cùng một nguồn với dải ngoài, không có
                 truy vấn thêm nào). */}
+            {/* ⚠⚠ 4 chip này dùng CHUNG `ONut` với dải ngoài breadcrumb (09/09/2026) ⇒ rê chuột vào
+                chip cũng ra popover "theo ngày giao". Bắt buộc phải có ở đây: modal mở là overlay
+                của `Dialog` phủ kín màn, **không hover tới ô ngoài breadcrumb được nữa**. */}
             <div className="flex flex-wrap gap-1">
               {O_LIST.map((x) => (
-                <button
+                <ONut
                   key={x.ma}
-                  type="button"
-                  onClick={() => setOHienTai(x.ma)}
-                  className={`flex items-baseline gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition
-                    ${oHienTai === x.ma ? 'bg-primary text-white' : 'bg-surface-muted text-ink-soft hover:text-ink'}`}
-                >
-                  <span>{x.ten}</span>
-                  <span className={`text-sm font-bold leading-none ${oHienTai === x.ma ? 'text-white' : x.mau}`}>
-                    {so ? fmtNum(so[x.ma]) : '—'}
-                  </span>
-                </button>
+                  kieu="chip"
+                  dangChon={oHienTai === x.ma}
+                  o={x}
+                  so={so}
+                  maTrang={maTrang}
+                  ky={ky}
+                  donVi={donVi}
+                  goiLoc={goiLoc}
+                  onMo={() => { setOHienTai(x.ma); setPage(1); }}
+                  onMoNgayGiao={(ngay) => {
+                    if (!ngay) return;
+                    const d = ngayLocalISO(new Date(ngay));
+                    setOHienTai(x.ma);
+                    setPage(1);
+                    setF((cu) => ({ ...cu, loaiNgay: 'HAN_GIAO', ngayTu: d, ngayDen: d }));
+                  }}
+                />
               ))}
             </div>
             <div className="ml-auto flex items-center gap-2">
-              <Button variant="secondary" icon="filter" onClick={() => setMoLoc((v) => !v)}>
+              <Button variant="secondary" icon="filter" chiXemOk onClick={() => setMoLoc((v) => !v)}>
                 Bộ lọc{soLoc ? ` (${soLoc})` : ''}
               </Button>
-              <Button variant="secondary" icon="download" loading={xuat} onClick={doXuat} disabled={!total}>
+              <Button variant="secondary" icon="download" chiXemOk loading={xuat} onClick={doXuat} disabled={!total}>
                 Excel
               </Button>
             </div>
@@ -402,7 +550,7 @@ function SiSoModal({ maTrang, o, ky, onDoiKy, so, tenMan, donViNhan, onClose, on
               />
             )}
             {(f.timKiem || f.loaiNgay || soLoc > 0) && (
-              <Button variant="ghost" onClick={() => setF(F_TRONG)}>Xóa lọc</Button>
+              <Button variant="ghost" chiXemOk onClick={() => setF(F_TRONG)}>Xóa lọc</Button>
             )}
           </div>
 
@@ -430,7 +578,7 @@ function SiSoModal({ maTrang, o, ky, onDoiKy, so, tenMan, donViNhan, onClose, on
               <Field label="Chuyền"><Input value={f.chuyen} onChange={(e) => setF({ ...f, chuyen: e.target.value })} /></Field>
               <Field label="Nhà gia công"><Input value={f.nhaGiaCong} onChange={(e) => setF({ ...f, nhaGiaCong: e.target.value })} /></Field>
               <div className="col-span-2 flex items-end md:col-span-4">
-                <Button variant="ghost" onClick={() => setF({ ...F_TRONG, timKiem: f.timKiem, loaiNgay: f.loaiNgay, ngayTu: f.ngayTu, ngayDen: f.ngayDen })}>
+                <Button variant="ghost" chiXemOk onClick={() => setF({ ...F_TRONG, timKiem: f.timKiem, loaiNgay: f.loaiNgay, ngayTu: f.ngayTu, ngayDen: f.ngayDen })}>
                   Xóa lọc trong panel
                 </Button>
               </div>

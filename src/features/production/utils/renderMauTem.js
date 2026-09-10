@@ -22,7 +22,7 @@ export const VIEN_DOC_MM = 0.05;
 
 // CSS cho tem dựng từ mẫu — chỉ khung + lưới, còn kiểu chữ/viền do TỪNG Ô tự mang theo (inline style
 // do `renderKhung` sinh) nên không cần class .lbl/.v… như bố cục cứng.
-// ⚠⚠ DÙNG CHUNG cho cửa sổ IN THẬT (`printTemLabel.openSheetMau`) và khung XEM TRƯỚC ở màn thiết kế
+// ⚠⚠ DÙNG CHUNG cho cửa sổ IN THẬT (`printTemLabel.moCuaSoIn`) và khung XEM TRƯỚC ở màn thiết kế
 //   (`TemXemTruoc`) — để 2 chỗ ra **y hệt nhau**. Sửa ở đây là sửa cho cả hai; đừng chép ra bản thứ 2.
 export const SHEET_CSS_MAU = `
   * { box-sizing: border-box; }
@@ -272,12 +272,14 @@ function hopChu(chu, o, caoOmm, cssDoc) {
 //
 // Đúng ý nghĩa đã chốt: `cao_mm: null` = "tự giãn CHIA ĐỀU phần trống còn lại" (DATABASE.md §4).
 // Dùng CHUNG cho bản in (`renderKhung`) và lưới thiết kế (`TemGrid`) ⇒ 2 bên khớp từng mm.
-export function caoHangMm(khung) {
+// `caoVung` = chiều cao VÙNG NỘI DUNG (mm). Mặc định = vùng nội dung của 1 tem; trình Thiết kế PHIẾU
+// (mig 094) truyền chiều cao khối của nó vào — cùng một luật chia, 2 module không lệch nhau.
+export function caoHangMm(khung, caoVung = KHO.noiDungCao) {
   const hang = Array.isArray(khung && khung.hang) ? khung.hang : [];
   let cung = 0; let tuDo = 0;
   hang.forEach((h) => { const v = Number(h && h.cao_mm) || 0; if (v > 0) cung += v; else tuDo += 1; });
   // Đặt cứng đã vượt khổ → hàng tự do vẫn được 0.5mm (giống cách chia cột), thanh trạng thái đã cảnh báo.
-  const moi = tuDo ? Math.max(0.5, (KHO.noiDungCao - cung) / tuDo) : 0;
+  const moi = tuDo ? Math.max(0.5, (caoVung - cung) / tuDo) : 0;
   return hang.map((h) => (Number(h && h.cao_mm) > 0 ? Number(h.cao_mm) : moi));
 }
 
@@ -352,7 +354,11 @@ function htmlOMa(o, khoa, anhMa, maText, caoOmm) {
 //   khung   : { so_cot, hang[], cot[], o{} }
 //   data    : object dữ liệu nhãn (BE getTemLabelData + phần FE bù)
 //   anhMa   : { "<r>,<c>": dataURL } ảnh QR/barcode đã dựng sẵn
-//   opts    : { truongMap, chonO, tuCoClass } — chonO dùng cho màn thiết kế (viền chọn)
+//   opts    : { truongMap, chonO, choThietKe, caoVungMm, lapDayCao }
+//             · `caoVungMm` — chiều cao vùng nội dung để chia hàng "tự giãn" (mặc định = 1 tem).
+//               Trình Thiết kế PHIẾU truyền chiều cao khối của nó vào.
+//             · `lapDayCao` — `false` thì bảng KHÔNG `height:100%` (dùng cho khối của phiếu: chiều
+//               cao trang thay đổi theo số dòng nên ép 100% sẽ kéo giãn ô một cách vô nghĩa).
 // ─────────────────────────────────────────────────────────────────────────────
 export function renderKhung(khung, data, anhMa, opts = {}) {
   if (!khung || !khung.so_cot) return '';
@@ -360,7 +366,7 @@ export function renderKhung(khung, data, anhMa, opts = {}) {
   const hang = Array.isArray(khung.hang) ? khung.hang : [];
   const cot = Array.isArray(khung.cot) ? khung.cot : [];
   const o = khung.o || {};
-  const { truongMap, chonO, choThietKe } = opts;
+  const { truongMap, chonO, choThietKe, caoVungMm, lapDayCao = true } = opts;
 
   // Ô nào bị GỘP che → bỏ qua khi render (bản đồ dựng từ cs/rs của ô gốc).
   const biChe = new Set();
@@ -378,7 +384,7 @@ export function renderKhung(khung, data, anhMa, opts = {}) {
     return `<col${w ? ` style="width:${w}mm"` : ''}>`;
   }).join('')}</colgroup>`;
 
-  const caoHang = caoHangMm(khung);
+  const caoHang = caoHangMm(khung, caoVungMm);
 
   const rows = hang.map((h, r) => {
     const tds = [];
@@ -413,7 +419,10 @@ export function renderKhung(khung, data, anhMa, opts = {}) {
   }).join('');
 
   // `table-layout:fixed` + `height:100%` để hàng `cao_mm: null` tự giãn lấp phần trống (như `.bot`/`.grid` cũ).
-  return `<table class="mt-luoi" style="width:100%;height:100%;border-collapse:collapse;table-layout:fixed">${colgroup}${rows}</table>`;
+  // ⚠ Khối của PHIẾU truyền `lapDayCao: false`: trang phiếu cao theo số dòng chứ không cố định như tem,
+  //   ép `height:100%` sẽ kéo giãn hàng ra vô nghĩa.
+  return `<table class="mt-luoi" style="width:100%;${lapDayCao ? 'height:100%;' : ''}`
+    + `border-collapse:collapse;table-layout:fixed">${colgroup}${rows}</table>`;
 }
 
 // Danh sách ô cần dựng ảnh QR/barcode của 1 khung → [{ khoa, kieu, gia_tri }].

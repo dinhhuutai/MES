@@ -20,7 +20,9 @@ export const getTemLogs = (phieuId) => client.get(`/production/phieu/${phieuId}/
 export const finishRun = (phieuId) => client.post(`/production/phieu/${phieuId}/finish`);
 // `gioBd`/`gioKt` dạng 'HH:MM' (tùy chọn) — giờ ngừng / hoạt động lại nhập tay; bỏ trống = giờ hệ thống.
 // `lyDoId` = lý do chọn từ danh mục (mig 076); `lyDo` = ghi chú thêm / lý do gõ tay.
-export const stopLine = (phieuId, lyDo, gioBd, lyDoId) => client.post(`/production/phieu/${phieuId}/ngung`, { lyDo, gioBd, lyDoId });
+// `gioKt` (tùy chọn): ghi LUÔN giờ kết thúc ngay lúc tạo — bản ghi vào thẳng "đã hoạt động lại".
+// Bỏ trống ⇒ y như cũ: chuyền ở trạng thái đang ngừng, chờ bấm "Chuyền hoạt động lại".
+export const stopLine = (phieuId, lyDo, gioBd, lyDoId, gioKt) => client.post(`/production/phieu/${phieuId}/ngung`, { lyDo, gioBd, lyDoId, gioKt });
 
 // Danh mục LÝ DO NGỪNG CHUYỀN (mig 076)
 export const listLyDoNgung = (params) => client.get('/production/ly-do-ngung', { params });
@@ -54,6 +56,12 @@ export const getXePhoi = () => client.get('/production/xe-phoi');
 export const listTemChoPhoi = (params) => client.get('/production/tem-cho-phoi', { params });
 export const addTemToXe = (body) => client.post('/production/xe-phoi/them-tem', body);
 export const adjustPhoi = (temXeId, phut) => client.patch(`/production/tem-xe-phoi/${temXeId}`, { phut });
+
+// DANH SÁCH TEM ĐÃ IN (04/09/2026) — trang *Sản xuất › Danh sách tem in*: xem thông tin tem mà
+// KHÔNG phải in ra giấy. Backend nhận: search · ngayTu · ngayDen · khach · don · maHang · codePhan ·
+// maTem · chuyen (+ page/limit). Chỉ trả tem SẢN XUẤT (lệnh KHÔNG trên chuyền loại `GIA_CONG`) —
+// `laGiaCong` do ROUTE quyết, client không tự chọn được.
+export const listTemDaIn = (params) => client.get('/production/tem/danh-sach', { params });
 
 // Hủy lệnh in tem (tem chưa kiểm) — trang Hủy lệnh xác nhận
 export const listCancelableTem = (params) => client.get('/production/huy-tem/candidates', { params });

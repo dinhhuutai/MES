@@ -165,7 +165,7 @@ export default function LichSuApiPanel({ open, onClose, ma, ten, laGhiInTem }) {
           <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             placeholder="Tìm theo IDMES hoặc mã tem…" className={`${inputClass} max-w-xs`} />
           <Badge tone="info">{meta.total} lượt gọi</Badge>
-          <Button variant="secondary" icon="loader" loading={loading} onClick={load} className="ml-auto px-3 py-1.5">
+          <Button chiXemOk variant="secondary" icon="loader" loading={loading} onClick={load} className="ml-auto px-3 py-1.5">
             Tải lại
           </Button>
         </div>

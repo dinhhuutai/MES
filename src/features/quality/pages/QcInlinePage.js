@@ -127,9 +127,9 @@ export default function QcInlinePage() {
     <div>
       <Toolbar title="QC in line" subtitle="Kiểm chất lượng tại chuyền — phần in đang sản xuất"
         search={search} onSearch={setSearch} searchPlaceholder="Tìm code phần, mã hàng, màu/kích, mã lệnh/phiếu...">
-        <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
+        <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
-        <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
+        <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="info">{filtered.length} đang chạy</Badge>
       </Toolbar>
 
@@ -147,7 +147,7 @@ export default function QcInlinePage() {
         width="max-w-xl"
         footer={
           <>
-            <Button variant="ghost" onClick={() => setDetail(null)}>Đóng</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setDetail(null)}>Đóng</Button>
             <Button onClick={submit} loading={saving} disabled={!canQc}>Ghi nhận kiểm</Button>
           </>
         }

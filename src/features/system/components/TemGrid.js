@@ -111,6 +111,9 @@ function ONoiDung({ txt, cssDocStr, tuCo, caoPx, rongPx, coChuPx, canhNgang, can
 export default function TemGrid({
   khung, data, tiLe = 8, nhan,
   vung, neo, dangSua = true,
+  // Kích thước VÙNG NỘI DUNG (mm). Mặc định = 1 tem; trình Thiết kế PHIẾU (mig 094) truyền kích
+  // thước khối của nó vào để dùng CHUNG lưới này, khỏi chép ra bản thứ hai.
+  rongVungMm = RONG_MM, caoVungMm = CAO_MM,
   onChon,           // (ben, tu{r,c}, den{r,c}, opts{giuNeo}) — cha tự chuẩn hóa + nới theo ô gộp
   onChonHet,        // (ben)
   onDoiRongCot,     // (c, mm)
@@ -170,14 +173,14 @@ export default function TemGrid({
   };
   let rongCung = 0; let nTuDo = 0;
   for (let i = 0; i < soCot; i += 1) { const w = rongMm(i); if (w) rongCung += w; else nTuDo += 1; }
-  const rongTuDo = Math.max(0.5, (RONG_MM - rongCung) / (nTuDo || 1));
+  const rongTuDo = Math.max(0.5, (rongVungMm - rongCung) / (nTuDo || 1));
   const pxCot = (i) => (rongMm(i) || rongTuDo) * tiLe;
 
   // ⚠ Chiều cao hàng tính bằng CHÍNH hàm của bản in (`caoHangMm`) — hàng "tự giãn" chia đều phần
   //   trống còn lại. Trước đây chỉ đặt `height` cho hàng có `cao_mm` rồi để trình duyệt tự chia phần
   //   còn lại THEO NỘI DUNG ⇒ lưới thiết kế và bản in ra hai kiểu khác nhau (hàng trống bị bóp).
   //   Truyền `caoMm(i)` để lúc KÉO MÉP vẫn xem trước được tại chỗ.
-  const caoHang = caoHangMm({ hang: hang.map((_, i) => ({ cao_mm: caoMm(i) })) });
+  const caoHang = caoHangMm({ hang: hang.map((_, i) => ({ cao_mm: caoMm(i) })) }, caoVungMm);
   const pxHang = (i) => caoHang[i] * tiLe;
 
   const trongVung = (r, c) => !!vung && dangSua && r >= vung.r1 && r <= vung.r2 && c >= vung.c1 && c <= vung.c2;
@@ -243,13 +246,13 @@ export default function TemGrid({
           {nhan}
         </div>
       )}
-      <div ref={boc} className="relative inline-block bg-white" style={{ width: HDR_W + RONG_MM * tiLe }}>
+      <div ref={boc} className="relative inline-block bg-white" style={{ width: HDR_W + rongVungMm * tiLe }}>
         <table
           style={{
             borderCollapse: 'collapse',
             tableLayout: 'fixed',
-            width: HDR_W + RONG_MM * tiLe,
-            height: HDR_H + CAO_MM * tiLe,
+            width: HDR_W + rongVungMm * tiLe,
+            height: HDR_H + caoVungMm * tiLe,
           }}
         >
           <colgroup>
@@ -390,7 +393,7 @@ export default function TemGrid({
         <div
           className="pointer-events-none absolute"
           style={{
-            left: HDR_W, top: HDR_H, width: RONG_MM * tiLe, height: CAO_MM * tiLe,
+            left: HDR_W, top: HDR_H, width: rongVungMm * tiLe, height: caoVungMm * tiLe,
             border: `2px solid ${dangSua ? 'rgba(0,88,190,.55)' : 'rgba(148,163,184,.6)'}`,
           }}
         />

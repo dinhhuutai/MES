@@ -93,7 +93,7 @@ export default function BienPhapXuLyPage() {
       <Modal open={!!form} onClose={() => setForm(null)}
         title={form?.id ? 'Sửa biện pháp xử lý' : 'Thêm biện pháp xử lý'}
         footer={<>
-          <Button variant="ghost" onClick={() => setForm(null)}>Hủy</Button>
+          <Button chiXemOk variant="ghost" onClick={() => setForm(null)}>Hủy</Button>
           <Button loading={saving} onClick={doSave}
             disabled={!form?.tenBienPhap?.trim() || (!form?.id && !form?.maBienPhap?.trim())}>Lưu</Button>
         </>}>

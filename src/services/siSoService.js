@@ -9,3 +9,8 @@ export const laySiSo = (maTrang, params) => client.get(`/si-so/${maTrang}`, { pa
 
 // `o`: ton_dau | nhan | lam_duoc | ton_cuoi. `limit: 0` = lấy HẾT (dùng cho xuất Excel).
 export const laySiSoChiTiet = (maTrang, o, params) => client.get(`/si-so/${maTrang}/${o}`, { params });
+
+// Tách con số của 1 ô theo NGÀY GIAO (popover khi rê chuột vào ô). Cùng bộ lọc với `laySiSo` nên
+// Σ các dòng trả về LUÔN bằng đúng con số đang hiện trên ô.
+export const laySiSoNgayGiao = (maTrang, o, params) =>
+  client.get(`/si-so/${maTrang}/${o}/ngay-giao`, { params });

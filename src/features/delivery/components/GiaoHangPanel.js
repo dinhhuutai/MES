@@ -8,8 +8,15 @@ import usePermissions from '../../../hooks/usePermissions';
 import TemJourneyPanel from '../../../components/common/TemJourneyPanel';
 import { getGiaoHang, confirmGiao } from '../../../services/deliveryService';
 import { getTemHanhTrinh } from '../../../services/qualityService';
-import { fmtNum, fmtDate } from '../../../utils/format';
-import { printGiaoHang } from '../../../utils/print';
+import { fmtNum, fmtDate, maTemNhan } from '../../../utils/format';
+import { printPhieuGiao } from '../utils/printPhieuGiao';
+
+// ⚠⚠ Mã tem hiện trên phiếu = mã NGƯỜI CẦM NHÃN nhìn thấy. Tem con (mig 091) đã mang sẵn `17…` ⇒ in
+//   thẳng; tem gốc / dữ liệu cũ mới ghép tiền tố theo nguồn. Dùng `temCode()` — bản cũ nối chuỗi
+//   `'17-' + ma_tem` cho ra `17-152608057689` (sai với mã ERP 12 số), đúng lỗi đã sửa ở OQC/Giao.
+// ⚠⚠ TEM 13 GIA CÔNG cũng mang mã riêng `13…` (06/09/2026) và đi ở nguồn KCS ⇒ ghép `15` sẽ
+//   biến nó thành mã KHÔNG có thật. `maTemNhan` chặn ca đó.
+const maHien = (t) => maTemNhan(t.ma_tem, t.nguon === 'SUA' ? 17 : 15, null, t.la_tem_sua);
 
 export default function GiaoHangPanel({ giaoHangId, onClose, onChanged }) {
   const { can } = usePermissions();
@@ -49,6 +56,14 @@ export default function GiaoHangPanel({ giaoHangId, onClose, onChanged }) {
     }
   };
 
+  // In phiếu — popup bị chặn thì `printPhieuGiao` NÉM lỗi, phải bắt lại để hiện Toast.
+  // ⚠ Hàm ASYNC từ 08/09/2026 (hỏi mẫu đã gắn trước khi dựng) ⇒ phải `await`, nếu không lỗi rơi vào
+  //   promise và try/catch đồng bộ không bắt được.
+  const doPrint = async (gop) => {
+    try { await printPhieuGiao(gh, { gop }); }
+    catch (e) { show(e.message || 'Không mở được cửa sổ in', 'error'); }
+  };
+
   const daGiao = gh?.trang_thai === 'DA_GIAO';
 
   return (
@@ -60,7 +75,9 @@ export default function GiaoHangPanel({ giaoHangId, onClose, onChanged }) {
       footer={
         gh && (
           <>
-            <Button variant="ghost" icon="file-bar-chart" onClick={() => printGiaoHang(gh)}>In phiếu giao</Button>
+            {/* 2 KIỂU IN (người dùng chốt): chi tiết từng tem · gộp theo code phần. */}
+            <Button variant="ghost" icon="printer" onClick={() => doPrint(false)}>In chi tiết</Button>
+            <Button variant="ghost" icon="printer" onClick={() => doPrint(true)}>In gộp</Button>
             {!daGiao && canManage && <Button onClick={doConfirm} loading={busy}>Xác nhận giao</Button>}
           </>
         )
@@ -82,9 +99,9 @@ export default function GiaoHangPanel({ giaoHangId, onClose, onChanged }) {
             <div className="space-y-1.5">
               {gh.tems.map((t) => (
                 <div key={t.id} className="flex items-center justify-between gap-2 rounded-control border border-line px-3 py-2 text-sm">
-                  <span className="font-medium text-ink">{(t.nguon === 'SUA' ? '17-' : t.nguon === 'KCS' ? '15-' : '') + t.ma_tem}</span>
-                  {t.nguon && <Badge tone={t.nguon === 'SUA' ? 'warning' : 'info'}>{t.nguon === 'SUA' ? 'Sửa' : 'KCS'}</Badge>}
-                  <span className="text-ink-soft">{t.ma_lenh_san_xuat}</span>
+                  <span className="font-medium text-ink">{maHien(t)}</span>
+                  {t.nguon && <Badge tone={t.nguon === 'SUA' || t.la_tem_sua ? 'warning' : 'info'}>{t.nguon === 'SUA' || t.la_tem_sua ? 'Sửa' : 'KCS'}</Badge>}
+                  <span className="text-ink-soft">{t.phan_list || t.ma_lenh_san_xuat}</span>
                   <span className="ml-auto tabular-nums">{fmtNum(t.so_luong_giao)}</span>
                   <button type="button" onClick={() => setJourney({ temId: t.tem_id, maTem: t.ma_tem })}
                     className="rounded-control border border-line px-2 py-0.5 text-xs text-ink-soft hover:bg-surface-muted">Hành trình</button>

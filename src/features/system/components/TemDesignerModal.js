@@ -376,7 +376,7 @@ export default function TemDesignerModal({ open, mau, dm, dataXemTruoc, onLuu, o
 
               <div className="ml-auto flex items-center gap-2">
                 <Button onClick={doLuu} loading={luu} icon="save" disabled={!chuaLuu}>Lưu mẫu</Button>
-                <Button variant="ghost" icon="x" onClick={dong}>Đóng</Button>
+                <Button chiXemOk variant="ghost" icon="x" onClick={dong}>Đóng</Button>
               </div>
             </div>
 
@@ -415,7 +415,7 @@ export default function TemDesignerModal({ open, mau, dm, dataXemTruoc, onLuu, o
                     <button type="button" title="Phóng to" disabled={tiLe >= ZOOM_MAX}
                       className="rounded-control border border-line p-1.5 text-ink-soft hover:text-ink disabled:opacity-30"
                       onClick={() => setTiLe((z) => Math.min(ZOOM_MAX, z + 1))}><Icon name="zoom-in" size={14} /></button>
-                    <Button variant="secondary" icon="printer" onClick={doInThu} className="ml-1 px-3 py-1.5">In thử</Button>
+                    <Button chiXemOk variant="secondary" icon="printer" onClick={doInThu} className="ml-1 px-3 py-1.5">In thử</Button>
                   </div>
                 </div>
                 {loiInThu && (

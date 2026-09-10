@@ -303,14 +303,14 @@ export default function XacNhanChayPage() {
     { key: 'tt', header: 'Trạng thái', merge: true, render: (r) =>
       r.dang_ngung ? <Badge tone="danger">Đang ngừng</Badge> : <Badge tone="success">Đang chạy</Badge> },
     { key: 'actions', header: '', className: 'text-right whitespace-nowrap', merge: true, render: (r) =>
-      <Button variant="secondary" className="px-2.5 py-1 text-xs" onClick={() => setSel(r.lenh_id)}>Mở</Button> },
+      <Button chiXemOk variant="secondary" className="px-2.5 py-1 text-xs" onClick={() => setSel(r.lenh_id)}>Mở</Button> },
   ];
 
   return (
     <div>
       <Toolbar title="Xác nhận chạy" subtitle="Lệnh đã Release 2 — chọn chuyền thực tế & bắt đầu in"
         search={search} onSearch={setSearch} searchPlaceholder="Tìm code phần, mã hàng, màu/kích, đơn hàng...">
-        <Button variant={showFilter || hasFilter ? 'secondary' : 'ghost'} icon="filter" onClick={() => setShowFilter((v) => !v)}>
+        <Button chiXemOk variant={showFilter || hasFilter ? 'secondary' : 'ghost'} icon="filter" onClick={() => setShowFilter((v) => !v)}>
           Bộ lọc{hasFilter ? ' ●' : ''}
         </Button>
         {/* ⚠ Gộp CẢ 2 bảng "Đang chạy" + "Chờ chạy" — màn này điều hành cả hai, tách ra thì người
@@ -357,7 +357,7 @@ export default function XacNhanChayPage() {
           <h3 className="text-sm font-semibold text-ink">Đang chạy ({runFiltered.length}{runFiltered.length !== running.length ? `/${running.length}` : ''})</h3>
           <DateRangePicker value={ngayRun} onChange={setNgayRun} placeholder="Ngày SX kế hoạch" />
         </div>
-        <Button variant="secondary" icon="download" onClick={doExcelRunning} disabled={!runFiltered.length}>
+        <Button chiXemOk variant="secondary" icon="download" onClick={doExcelRunning} disabled={!runFiltered.length}>
           Excel ({runFiltered.length})
         </Button>
       </div>
@@ -370,7 +370,7 @@ export default function XacNhanChayPage() {
           <h3 className="text-sm font-semibold text-ink">Chờ chạy ({candFiltered.length}{candFiltered.length !== candidates.length ? `/${candidates.length}` : ''})</h3>
           <DateRangePicker value={ngayCand} onChange={setNgayCand} placeholder="Ngày SX kế hoạch" />
         </div>
-        <Button variant="secondary" icon="download" onClick={doExcelCand} disabled={!candFiltered.length}>
+        <Button chiXemOk variant="secondary" icon="download" onClick={doExcelCand} disabled={!candFiltered.length}>
           Excel ({candFiltered.length})
         </Button>
       </div>
@@ -381,7 +381,7 @@ export default function XacNhanChayPage() {
       {/* Xác nhận thông tin chạy + chọn chuyền thực tế */}
       <Modal open={!!confirmRun} onClose={() => setConfirmRun(null)} title="Xác nhận thông tin chạy"
         footer={<>
-          <Button variant="ghost" onClick={() => setConfirmRun(null)}>Hủy</Button>
+          <Button chiXemOk variant="ghost" onClick={() => setConfirmRun(null)}>Hủy</Button>
           <Button onClick={doStart} loading={busy} disabled={!runChuyenId}>Bắt đầu chạy</Button>
         </>}>
         {confirmRun && (
@@ -402,7 +402,7 @@ export default function XacNhanChayPage() {
       <Modal open={!!traVe} onClose={() => setTraVe(null)} size="sm"
         title={`Trả về Kỹ thuật — ${traVe?.ma_lenh_san_xuat || ''}`}
         footer={<>
-          <Button variant="ghost" onClick={() => setTraVe(null)}>Hủy</Button>
+          <Button chiXemOk variant="ghost" onClick={() => setTraVe(null)}>Hủy</Button>
           <Button variant="danger" onClick={doTraVeKyThuat} loading={busy} disabled={!traVeReason.trim()}>
             Xác nhận trả về
           </Button>

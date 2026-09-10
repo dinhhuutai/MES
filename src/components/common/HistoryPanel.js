@@ -10,7 +10,10 @@ const todayStr = () => new Date().toISOString().slice(0, 10);
 const fmtTime = (t) => (t ? new Date(t).toLocaleTimeString('vi-VN') : '');
 
 // Panel lịch sử theo ngày dùng chung. fetcher(dateStr) -> [{ tg, nguoi, hanh_dong, doi_tuong, chi_tiet }].
-export default function HistoryPanel({ open, onClose, title = 'Lịch sử', fetcher }) {
+// `extraColumns`: cột PHỤ nối vào CUỐI bảng (vd nút "In lại phiếu" ở màn Giao hàng). Nhận mảng HOẶC
+// hàm (rows)=>mảng. Mặc định KHÔNG có ⇒ mọi màn đang dùng panel này giữ nguyên như cũ.
+// ⚠ Cột phụ CỐ Ý không vào Excel: nó thường là NÚT, xuất ra file chỉ được một ô trống.
+export default function HistoryPanel({ open, onClose, title = 'Lịch sử', fetcher, extraColumns }) {
   const { toast, show } = useToast();
   const [date, setDate] = useState(todayStr);
   const [rows, setRows] = useState([]);
@@ -39,12 +42,14 @@ export default function HistoryPanel({ open, onClose, title = 'Lịch sử', fet
 
   useEffect(() => { load(); }, [load]);
 
+  const them = typeof extraColumns === 'function' ? (extraColumns(rows) || []) : (extraColumns || []);
   const columns = [
     { key: 'tg', header: 'Giờ', className: 'whitespace-nowrap tabular-nums', render: (r) => fmtTime(r.tg) },
     { key: 'nguoi', header: 'Người', className: 'font-medium text-ink' },
     { key: 'hanh_dong', header: 'Hành động' },
     { key: 'doi_tuong', header: 'Đối tượng' },
     { key: 'chi_tiet', header: 'Chi tiết', render: (r) => r.chi_tiet || '—' },
+    ...them,
   ];
 
   const doExport = async () => {
@@ -80,7 +85,7 @@ export default function HistoryPanel({ open, onClose, title = 'Lịch sử', fet
           onChange={(e) => setDate(e.target.value)}
           className="h-10 rounded-input border border-line px-3 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
         />
-        <Button variant="secondary" icon="file-spreadsheet" className="ml-auto" loading={exporting}
+        <Button variant="secondary" icon="file-spreadsheet" chiXemOk className="ml-auto" loading={exporting}
           disabled={!rows.length} onClick={doExport}>Xuất Excel</Button>
       </div>
       <DataTable columns={columns} rows={rows} loading={loading} rowKey="_k" sttStart={0}

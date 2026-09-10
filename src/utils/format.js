@@ -51,6 +51,44 @@ export const baseMaTem = (code) => {
   return MA_TEM_ERP_RE.test(c) ? `15${c.slice(2)}` : c.replace(/^\d+-/, '');
 };
 
+// ⚠⚠⚠ DANH SÁCH `ma_tem` ỨNG VIÊN CHO 1 MÃ QUÉT — **DÙNG CÁI NÀY KHI TRA TEM THEO MÃ QUÉT**,
+//   `baseMaTem` một mình KHÔNG CÒN ĐỦ (chốt 06/09/2026).
+// Từ 06/09/2026 tem 17 (sửa đạt) và tem 13 (gia công về) **xin mã RIÊNG của ERP** thay vì suy từ mã
+// tem 15 ⇒ `baseMaTem('172608099999')` cho ra `152608099999` là mã KHÁC HẲN (không có, hoặc tệ hơn
+// là trúng tem của lô khác). Nhưng dữ liệu CŨ + nhãn `16…` (hàng lỗi chuyển sửa — không phải dòng
+// tem riêng) thì vẫn phải suy về tem gốc ⇒ trả CẢ HAI, **NGUYÊN VĂN ĐỨNG TRƯỚC**.
+// ⚠ Bản backend gương y hệt ở `backend/src/utils/temPrefix.js` — sửa luật thì sửa CẢ HAI.
+export const maTemUngVien = (code) => {
+  const nguyen = String(code || '').trim().replace(/-\d+$/, ''); // bỏ hậu tố lần giao
+  const goc = baseMaTem(code);
+  const out = [];
+  for (const x of [nguyen, goc]) if (x && !out.includes(x)) out.push(x);
+  return out;
+};
+
+// `ma_tem` trong DB có khớp mã vừa quét không (thử mọi ứng viên, không phân biệt hoa/thường).
+// ⚠ Hàm này KHÔNG biết ưu tiên — dùng khi chỉ cần trả lời có/không cho MỘT dòng. Muốn tìm trong
+//   danh sách thì dùng `timTheoMaTem` (giữ đúng thứ tự ứng viên).
+export const khopMaTem = (maTem, code) => {
+  const m = String(maTem || '').trim().toLowerCase();
+  return !!m && maTemUngVien(code).some((x) => x.toLowerCase() === m);
+};
+
+// ⚠⚠ TÌM DÒNG KHỚP MÃ QUÉT TRONG DANH SÁCH — **ƯU TIÊN THEO THỨ TỰ ỨNG VIÊN** (mã NGUYÊN VĂN trước,
+//   mã gốc suy ra sau). Gương đúng `array_position($1::text[], t.ma_tem)` mà backend đang dùng.
+// ⚠ Vì sao không dùng `rows.find(r => khopMaTem(...))`: 3 dãy mã (15/17/13) của ERP ĐỘC LẬP nên 10 số
+//   đuôi CÓ THỂ trùng nhau. Quét nhãn `172609000052` mà trong danh sách có cả tem `152609000052`
+//   (tem khác, tình cờ trùng đuôi) thì `find` trả về dòng nào đứng trước — tức có thể MỞ NHẦM TEM.
+//   Duyệt theo thứ tự ứng viên thì mã nguyên văn luôn thắng.
+export const timTheoMaTem = (rows, code, layMa = (r) => r.ma_tem) => {
+  for (const ma of maTemUngVien(code)) {
+    const m = ma.toLowerCase();
+    const hit = (rows || []).find((r) => String(layMa(r) || '').trim().toLowerCase() === m);
+    if (hit) return hit;
+  }
+  return null;
+};
+
 // Chiều NGƯỢC của `baseMaTem`: mã gốc + TIỀN TỐ CÔNG ĐOẠN (+ hậu tố lần giao).
 // Tiền tố: 13 = hàng gia công về · 15 = KCS đạt · 16 = sửa · 17 = OQC/giao.
 //   · mã ERP 12 số → THAY 2 số đầu   : temCode('152608057689', 16) → '162608057689'
@@ -65,6 +103,25 @@ export function temCode(maTem, prefix, suffix) {
   if (MA_TEM_ERP_RE.test(ma)) return `${String(prefix)}${ma.slice(2)}${s}`;
   return `${prefix}-${ma}${s}`;
 }
+
+// ⚠⚠⚠ `ma_tem` NÀY ĐÃ MANG SẴN TIỀN TỐ CÔNG ĐOẠN CỦA CHÍNH NÓ CHƯA?
+// Từ 06/09/2026 tem 17 (sửa đạt) và tem 13 (gia công về) xin mã RIÊNG của ERP và lưu THẲNG vào
+// `tem.ma_tem` ⇒ **KHÔNG được ghép tiền tố lần nữa**. Ghép thêm là hỏng thật:
+//   · tem 13 gia công đi tiếp sang OQC/Giao ở nguồn KCS ⇒ `temCode(ma13, 15)` biến `13…` thành
+//     `15…` — một mã KHÔNG có thật, in lên phiếu giao là quét không ra.
+//   · tem con dạng mã CŨ (`17-TEM00030`, ca API tắt) ⇒ ghép nữa ra `17-17-TEM00030`.
+// Nhận diện: mã ERP 12 số KHÔNG bắt đầu bằng `15`, hoặc mã cũ đã có sẵn tiền tố `NN-`.
+export const laMaTemRieng = (maTem) => {
+  const m = String(maTem || '').trim();
+  if (/^\d{2}-/.test(m)) return true;
+  return MA_TEM_ERP_RE.test(m) && !m.startsWith('15');
+};
+
+// Mã hiện lên màn hình / nhãn giấy cho 1 tem: mã RIÊNG thì giữ nguyên, còn lại mới ghép tiền tố
+// công đoạn. `laRieng` để bên gọi ép thêm bằng cờ từ backend (`la_tem_sua` — bắt được cả mã cũ).
+export const maTemNhan = (maTem, prefix, suffix, laRieng = false) => (
+  laRieng || laMaTemRieng(maTem) ? temCode(maTem, null, suffix) : temCode(maTem, prefix, suffix)
+);
 
 export const fmtDateTime = (d) => {
   if (!d) return '—';

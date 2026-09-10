@@ -7,6 +7,7 @@ import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import Spinner from '../../../components/common/Spinner';
 import { Field, Input, Select, Textarea } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
+import useChiXem, { NHAC_CHI_XEM } from '../../../hooks/useChiXem';
 import Toast from '../../../components/common/Toast';
 import TemDesignerModal from '../components/TemDesignerModal';
 import {
@@ -32,10 +33,16 @@ const DATA_XEM_TRUOC = {
   // Để dữ liệu mẫu ở đây cho người thiết kế xem trước thấy ngay, khỏi phải in thử mới biết.
   nguoi_sua: 'Nguyễn Văn Sửa', sl_sua: 42, sl_sua_dat: 38, sl_sua_huy: 4,
   ty_le_sua_dat: '90%', nguoi_xn_sua: 'Từ Thị Bích Quyền', tg_sua: new Date().toISOString(),
+  // Nhóm "Gia công" — CHỈ có giá trị thật ở vị trí in GIA_CONG_IN_TEM_VE (tem 13 "TH VỀ").
+  // Hàng gia công về nhiều lần: `so_luong` ở trên = SL của ĐÚNG lần nhận, 3 số này cho biết
+  // lần đó nằm ở đâu trong tổng đơn (release 1200 · đã nhận 504 · còn 696).
+  so_luong_release: 1200, da_chuyen: 504, con_lai: 696,
+  so_luong_vai_ve: 860, tg_nhan: new Date().toISOString(), nguoi_nhan: 'Đỗ Thị Kế Hoạch',
 };
 
 export default function ThietKeTemPage() {
   const { toast, show } = useToast();
+  const chiXem = useChiXem();                  // tài khoản chỉ xem (mig 096)
   const [dm, setDm] = useState(null);            // danh mục: khổ tem · vị trí in · trường · định dạng ngày
   const [ds, setDs] = useState([]);              // danh sách mẫu
   const [dangTai, setDangTai] = useState(true);
@@ -201,11 +208,11 @@ export default function ThietKeTemPage() {
                 {m.la_mac_dinh && <Badge tone="default">Mẫu gốc</Badge>}
                 {m.vi_tri_list && <Badge tone="success">Đang dùng</Badge>}
                 <div className="ml-auto flex items-center gap-1.5">
-                  <Button variant="secondary" icon="pencil" onClick={() => moThietKe(m.id)}>Thiết kế</Button>
-                  <button type="button" title="Nhân bản" className="text-ink-soft hover:text-primary"
+                  <Button chiXemOk variant="secondary" icon="pencil" onClick={() => moThietKe(m.id)}>Thiết kế</Button>
+                  <button type="button" disabled={chiXem} title={chiXem ? NHAC_CHI_XEM : 'Nhân bản'} className="text-ink-soft hover:text-primary disabled:opacity-40"
                     onClick={() => doNhanBan(m)}><Icon name="copy" size={16} /></button>
                   {!m.la_mac_dinh && (
-                    <button type="button" title="Xóa" className="text-ink-soft hover:text-danger"
+                    <button type="button" disabled={chiXem} title={chiXem ? NHAC_CHI_XEM : 'Xóa'} className="text-ink-soft hover:text-danger disabled:opacity-40"
                       onClick={() => setXacNhanXoa(m)}><Icon name="trash" size={16} /></button>
                   )}
                 </div>
@@ -223,7 +230,7 @@ export default function ThietKeTemPage() {
 
       {/* Tạo mẫu mới */}
       <Modal open={moTao} onClose={() => setMoTao(false)} title="Tạo mẫu tem mới"
-        footer={<><Button variant="ghost" onClick={() => setMoTao(false)}>Hủy</Button>
+        footer={<><Button chiXemOk variant="ghost" onClick={() => setMoTao(false)}>Hủy</Button>
           <Button onClick={doTao} disabled={!form.ma_mau.trim() || !form.ten_mau.trim()}>Tạo</Button></>}>
         <Field label="Mã mẫu" required hint="Chữ HOA, số và gạch dưới — vd TEM_SX_MOI">
           <Input value={form.ma_mau} onChange={(e) => setForm({ ...form, ma_mau: e.target.value })} />

@@ -88,7 +88,7 @@ export default function WorkflowVersionPage() {
 
       <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Sửa phiên bản' : 'Thêm phiên bản'}
         footer={<>
-          <Button variant="ghost" onClick={() => setOpen(false)}>Hủy</Button>
+          <Button chiXemOk variant="ghost" onClick={() => setOpen(false)}>Hủy</Button>
           <Button onClick={save} loading={saving} disabled={!form.maVersion || !form.tenVersion}>Lưu</Button>
         </>}>
         <div className="grid grid-cols-2 gap-x-4">

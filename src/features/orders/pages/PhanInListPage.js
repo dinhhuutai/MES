@@ -372,16 +372,16 @@ export default function PhanInListPage() {
       <Toolbar title="Danh sách phần in vải về" subtitle="Từ khách hàng → đơn hàng → mã hàng → phần in → đợt vải về"
         search={search} onSearch={(v) => { setSearch(v); setPage(1); }}
         searchPlaceholder="Tìm nhanh: code phần, mã hàng, màu/kích vải, kích phim, mã đợt vải...">
-        <Button variant={showFilters || activeFilters.length ? 'secondary' : 'ghost'} icon="filter"
+        <Button chiXemOk variant={showFilters || activeFilters.length ? 'secondary' : 'ghost'} icon="filter"
           onClick={() => setShowFilters((s) => !s)}>
           Bộ lọc{activeFilters.length ? ` (${activeFilters.length})` : ''}
         </Button>
         {stage === 'ALL' && (
           <>
-            <Button variant="ghost" icon="file-spreadsheet" loading={exporting} onClick={() => doExport('tong')}>
+            <Button chiXemOk variant="ghost" icon="file-spreadsheet" loading={exporting} onClick={() => doExport('tong')}>
               Excel (tổng)
             </Button>
-            <Button variant="ghost" icon="file-spreadsheet" loading={exporting} onClick={() => doExport('chi_tiet')}>
+            <Button chiXemOk variant="ghost" icon="file-spreadsheet" loading={exporting} onClick={() => doExport('chi_tiet')}>
               Excel (chi tiết)
             </Button>
           </>
@@ -419,7 +419,7 @@ export default function PhanInListPage() {
         <div className="mb-3 card p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-ink">Lọc nhiều trường (kết hợp AND)</h3>
-            <Button variant="ghost" className="px-2.5 py-1 text-xs" onClick={clearFilters}
+            <Button chiXemOk variant="ghost" className="px-2.5 py-1 text-xs" onClick={clearFilters}
               disabled={!activeFilters.length}>Xóa lọc</Button>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
@@ -626,7 +626,7 @@ export default function PhanInListPage() {
                         <td className={TD}>{a.soDotSx ? <span className="text-xs text-ink-soft">{a.oqcDat}/{a.soDotSx} đạt</span> : '—'}</td>
                         <td className={`${TD} text-right tabular-nums`}>{fmtNum(a.slGiao)}</td>
                         <td className={`${TD} text-center`}>
-                          <Button variant="ghost" className="!px-2.5 !py-1 !text-xs"
+                          <Button chiXemOk variant="ghost" className="!px-2.5 !py-1 !text-xs"
                             onClick={(e) => { e.stopPropagation(); setDetailModal(g); }}>Chi tiết</Button>
                         </td>
                         <td className={`${TD} whitespace-nowrap border-l border-line/60 text-xs text-ink-soft`}>{fmtDateTime(g.tg_len_mes)}</td>

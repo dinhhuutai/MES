@@ -27,11 +27,14 @@ import usePermissions from '../../../hooks/usePermissions';
 import { listKcsCandidates, recordKcs, gopTem, kcsHistory, kcsDone, getTemHanhTrinh } from '../../../services/qualityService';
 import { redryTem, getTemLabel } from '../../../services/productionService';
 import { printKcsGiaoTem } from '../../production/utils/printTemLabel';
-import { fmtNum, fmtDateTime, baseMaTem } from '../../../utils/format';
+import { fmtNum, fmtDateTime, timTheoMaTem } from '../../../utils/format';
 import useNow from '../../../hooks/useNow';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 
-const empty = { soLuongDat: '', soLuongHu: '', soLuongSua: '', soLuongHuy: '', soLuongThieu: '', soLuongDu: '', soLuongMau: '' };
+// ⚠ ĐÃ BỎ 2 Ô `soLuongSua` (Quyết định sửa) + `soLuongHuy` (Số lượng hủy) — chốt 04/09/2026:
+//   KCS chỉ chốt ĐẠT/HƯ, việc chia HƯ thành sửa–hủy làm ở trang *Sản xuất › Phân loại lỗi* (mig 075,
+//   "con số ở đó là CHÍNH THỨC"). Backend vẫn nhận 2 khóa này để tương thích ngược — xem `recordKcs`.
+const empty = { soLuongDat: '', soLuongHu: '', soLuongThieu: '', soLuongDu: '', soLuongMau: '' };
 
 const FILTER_FIELDS = [
   { key: 'khach', label: 'Khách hàng' },
@@ -176,14 +179,33 @@ export default function KcsPage() {
   // Prefill SL đạt = SL còn cần kiểm (con_kcs). Kiểm từng phần nhiều lần.
   const open = (row) => { setEditing(row); setForm({ ...empty, soLuongDat: String(row.con_kcs ?? row.so_luong ?? '') }); };
 
+  // ⚠⚠ CÂN ĐỐI BẮT BUỘC (chốt 04/09/2026): **SL cần kiểm + dư − thiếu = đạt + hư**.
+  //   Trước đây KCS cho nhập lệch rồi lặng lẽ coi phần chưa kiểm là "kiểm lần sau", nên số đạt/hư sai
+  //   mà không ai biết. Nay lệch dù chỉ 1 pcs là KHÔNG lưu được (backend chặn 422 `LECH_CAN_DOI`).
+  // ⚠ Quy ước dấu GIỮ NGUYÊN như sổ cái đang chạy (`sl_chenh_lech` = dư − thiếu): **dư làm TĂNG** tổng
+  //   cần kiểm, **thiếu làm GIẢM**. Đổi dấu ở đây là lệch với `addKcsLedger` ⇒ sai tổng cần kiểm về sau.
+  // ⚠ `mẫu` CỐ Ý không vào công thức — nó là hàng lấy ra làm mẫu, không thuộc số kiểm (luật cũ, giữ).
+  const canDoi = useMemo(() => {
+    const n = (v) => Math.max(0, Math.trunc(Number(v) || 0));
+    const canKiem = Number(editing?.con_kcs ?? editing?.so_luong ?? 0) || 0;
+    const dat = n(form.soLuongDat); const hu = n(form.soLuongHu);
+    const thieu = n(form.soLuongThieu); const du = n(form.soLuongDu);
+    const tong = canKiem + du - thieu;
+    const daNhap = dat + hu;
+    return { canKiem, dat, hu, thieu, du, tong, daNhap, lech: daNhap - tong, can: daNhap === tong && daNhap > 0 };
+  }, [editing, form]);
+
   // Quét QR (ma_tem) → tra tem đang chờ KCS → mở modal nhập.
   const onScan = async (maTem) => {
     setScanOpen(false);
-    const code = baseMaTem(maTem); // QR có thể mã hóa '15-TEM...'; tách lấy mã gốc
+    // ⚠ Tìm bằng CHÍNH mã vừa quét (backend `timTem()` bỏ 2 số đầu rồi khớp 10 số đuôi nên nhãn
+    //   công đoạn nào cũng ra), rồi đối chiếu qua `timTheoMaTem` — ưu tiên mã NGUYÊN VĂN, mã gốc sau.
+    //   Từ 06/09/2026 tem 17/13 có mã riêng của ERP nên `baseMaTem` một mình sẽ khớp hụt.
+    const code = String(maTem || '').trim();
     if (!code) return;
     try {
       const res = await listKcsCandidates({ search: code });
-      const row = (res.data || []).find((r) => (r.ma_tem || '').toLowerCase() === code.toLowerCase());
+      const row = timTheoMaTem(res.data || [], code);
       if (row) open(row);
       else show(`Tem ${code} không có phần chờ KCS`, 'error');
     } catch (e) { show(e.message || 'Không tra được tem', 'error'); }
@@ -205,12 +227,14 @@ export default function KcsPage() {
   };
 
   const save = async () => {
+    // Chốt chặn thật ở backend (422 LECH_CAN_DOI); đây chỉ để khỏi bắn request chắc chắn hỏng.
+    if (!canDoi.can) { show('Chênh lệch phải bằng 0 mới lưu được', 'error'); return; }
     setSaving(true);
     try {
       const r = await recordKcs(editing.tem_id, form);
       const d = r.data;
       const conLai = Number(d.con_kcs) || 0;
-      show(`KCS ${editing.ma_tem}: Đạt ${fmtNum(d.so_luong_dat)}→OQC · Sửa ${fmtNum(d.so_luong_sua)} · Hủy ${fmtNum(d.so_luong_huy)}`
+      show(`KCS ${editing.ma_tem}: Đạt ${fmtNum(d.so_luong_dat)}→OQC · Hư ${fmtNum(d.so_luong_sua)}→chờ sửa`
         + (conLai > 0 ? ` · còn ${fmtNum(conLai)} chờ kiểm` : ' · đã kiểm hết'));
       setEditing(null);
       load();
@@ -271,12 +295,6 @@ export default function KcsPage() {
     </Field>
   );
 
-  // Nhập "SL hư" → kế thừa sang "Quyết định sửa" (vẫn sửa lại được; không đổi ngược lại SL hư).
-  const onChangeHu = (e) => {
-    const v = e.target.value;
-    setForm((prev) => ({ ...prev, soLuongHu: v, soLuongSua: v }));
-  };
-
   return (
     <div>
       <Toolbar title="KCS — Kiểm tra chất lượng" subtitle="Kiểm theo tem (tem đã khô)"
@@ -290,13 +308,13 @@ export default function KcsPage() {
           <div className="w-60"><DateRangePicker value={range} onChange={setRange} placeholder="Chọn khoảng ngày in tem" /></div>
           {(range.from || range.to) && <button type="button" onClick={() => setRange({ from: '', to: '' })} className="text-ink-soft hover:text-danger" aria-label="Bỏ lọc ngày"><Icon name="x" size={14} /></button>}
         </div>
-        <Button variant={showFilters || activeFilters.length ? 'secondary' : 'ghost'} icon="filter"
+        <Button chiXemOk variant={showFilters || activeFilters.length ? 'secondary' : 'ghost'} icon="filter"
           onClick={() => setShowFilters((v) => !v)}>Bộ lọc{activeFilters.length ? ` (${activeFilters.length})` : ''}</Button>
         <TraVeFilter checked={onlyReturned} onChecked={setOnlyReturned}
           range={traVeRange} onRange={setTraVeRange} label="Chỉ hiện tem bị trả về" />
         <NghenButton rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} onClick={() => setNghenOpen(true)} />
-        <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
-        <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
+        <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
+        <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="warning">{rows.length} tem chờ kiểm</Badge>
       </Toolbar>
 
@@ -304,7 +322,7 @@ export default function KcsPage() {
         <div className="mb-3 card p-4">
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-ink">Lọc nhiều trường (kết hợp AND)</h3>
-            <Button variant="ghost" className="px-2.5 py-1 text-xs" onClick={clearFilters}
+            <Button chiXemOk variant="ghost" className="px-2.5 py-1 text-xs" onClick={clearFilters}
               disabled={!activeFilters.length}>Xóa lọc</Button>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
@@ -347,7 +365,7 @@ export default function KcsPage() {
         title={`KCS — ${editing?.ma_tem || ''}`}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setEditing(null)}>Hủy</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setEditing(null)}>Hủy</Button>
             <Button onClick={save} loading={saving}>Xác nhận KCS</Button>
           </>
         }
@@ -358,16 +376,40 @@ export default function KcsPage() {
         </div>
         <div className="grid grid-cols-2 gap-x-4">
           {N({ f: 'soLuongDat', label: 'Số lượng đạt' })}
-          {N({ f: 'soLuongHu', label: 'Số lượng hư', onChange: onChangeHu })}
-          {N({ f: 'soLuongSua', label: 'Quyết định sửa (≤ hư)' })}
-          {N({ f: 'soLuongHuy', label: 'Số lượng hủy' })}
+          {N({ f: 'soLuongHu', label: 'Số lượng hư' })}
           {N({ f: 'soLuongThieu', label: 'Số lượng thiếu' })}
           {N({ f: 'soLuongDu', label: 'Số lượng dư' })}
           {N({ f: 'soLuongMau', label: 'Số lượng mẫu (không tính)' })}
         </div>
-        <p className="text-xs text-ink-soft">
-          SL kiểm lần này = <b>đạt + hư + hủy</b> ≤ còn cần kiểm. <b>Quyết định sửa</b> (≤ hư, mặc định = hư) → phần hư không sửa sẽ <b>hủy</b>.
-          <b>Dư (+) / thiếu (−)</b> điều chỉnh tổng cần kiểm; <b>mẫu không tính</b>. Đạt → chờ <b>OQC</b> · Sửa → <b>Sửa</b> (xong lại qua OQC) · (hư không sửa + hủy) → loại. Phần chưa kiểm giữ lại kiểm lần sau.
+
+        {/* KHUNG CÂN ĐỐI — phải về 0 mới lưu được. Hiện đủ 2 vế để người nhập tự thấy sai ở đâu,
+            thay vì bấm Lưu rồi mới ăn thông báo lỗi. */}
+        <div className={`mt-1 rounded-control border px-3 py-2 text-sm ${
+          canDoi.can ? 'border-success/40 bg-success/5' : 'border-danger/40 bg-danger/5'}`}>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-ink-soft">
+              Cần kiểm <b className="text-ink">{fmtNum(canDoi.canKiem)}</b>
+              {canDoi.du ? <> + dư <b className="text-ink">{fmtNum(canDoi.du)}</b></> : null}
+              {canDoi.thieu ? <> − thiếu <b className="text-ink">{fmtNum(canDoi.thieu)}</b></> : null}
+              {' = '}<b className="text-ink">{fmtNum(canDoi.tong)}</b>
+            </span>
+            <span className="text-ink-soft">
+              Đã nhập: đạt <b className="text-ink">{fmtNum(canDoi.dat)}</b> + hư <b className="text-ink">{fmtNum(canDoi.hu)}</b>
+              {' = '}<b className="text-ink">{fmtNum(canDoi.daNhap)}</b>
+            </span>
+          </div>
+          <div className={`mt-1 font-semibold ${canDoi.can ? 'text-success' : 'text-danger'}`}>
+            {canDoi.can
+              ? '✓ Chênh lệch 0 — cân đối, lưu được'
+              : `Chênh lệch ${canDoi.lech > 0 ? '+' : ''}${fmtNum(canDoi.lech)} — chưa lưu được`}
+          </div>
+        </div>
+
+        <p className="mt-2 text-xs text-ink-soft">
+          <b>Số lượng kiểm + thiếu + dư = đạt + hư</b> — phải khớp tuyệt đối mới lưu được.
+          Toàn bộ <b>SL hư</b> vào <b>chờ sửa</b>; chia sửa/hủy theo từng loại lỗi làm ở trang{' '}
+          <b>Sản xuất › Phân loại lỗi</b> (số ở đó là chính thức). <b>Mẫu</b> không tính vào SL kiểm.
+          Đạt → chờ <b>OQC</b>. Phần chưa kiểm giữ lại kiểm lần sau.
         </p>
       </SidePanel>
 
@@ -377,7 +419,7 @@ export default function KcsPage() {
         title={`Phơi lại — ${redry?.ma_tem || ''}`}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setRedry(null)}>Hủy</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setRedry(null)}>Hủy</Button>
             <Button onClick={doRedry} loading={redrying} disabled={!redryMin || Number(redryMin) <= 0}>Phơi lại</Button>
           </>
         }
@@ -396,7 +438,7 @@ export default function KcsPage() {
         title="Gộp tem"
         footer={
           <>
-            <Button variant="ghost" onClick={() => setGopOpen(false)}>Hủy</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setGopOpen(false)}>Hủy</Button>
             <Button onClick={doGop} loading={gopping} disabled={!targetId || selectedRows.length < 2 || gopMixedPhanIn}>Gộp về tem đã chọn</Button>
           </>
         }

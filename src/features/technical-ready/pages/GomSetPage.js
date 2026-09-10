@@ -199,8 +199,8 @@ export default function GomSetPage() {
         {view === 'create' && (
           <Button variant="ghost" icon="qr-code" onClick={() => setScanOpen(true)}>Quét QR code phần</Button>
         )}
-        <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
-        <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
+        <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
+        <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
       </Toolbar>
 
       {view === 'create' ? (

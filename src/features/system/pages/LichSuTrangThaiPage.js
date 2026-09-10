@@ -19,6 +19,7 @@ import { listCancelableLenh, cancelLenh, giaCongTemCancelable, huyGiaCongTem } f
 import { listCancelableTem, cancelPrintTem, listCloseCandidates, closeProduction, listReopenCandidates, reopenProduction, listUndoStartCandidates, undoStartProduction } from '../../../services/productionService';
 import { listCancelKcs, cancelKcs, listCancelSua, cancelSua, listCancelOqc, cancelOqc,
   listTemSuaCancelable, listTemSuaDeleted, huyTemSua, moTemSua } from '../../../services/qualityService';
+import { listPhieuGiaoCancelable, huyPhieuGiao } from '../../../services/deliveryService';
 import { fmtNum } from '../../../utils/format';
 import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import { khopNhieu, chuanTuKhoa } from '../../../utils/timKiem';
@@ -123,12 +124,21 @@ const TT = {
 };
 
 // Các checkpoint đích có thể đưa về, tùy trạng thái hiện tại của lệnh.
-function targetsFor(trangThai) {
+// ⚠⚠ Nhận CẢ HÀNG (không chỉ `trang_thai`) để biết lệnh đã có kết quả Test Run chưa (`co_test`):
+//   bấm nhầm "Test Run đạt" thì lệnh VẪN `RELEASE_1` nhưng đã rời màn Test Run (có `TEST_QA` DAT) ⇒
+//   vẫn phải cho chọn "Về Test Run" để gỡ kết quả và test lại. Trước 04/09/2026 chỉ `RELEASE_2` mới
+//   có lựa chọn này nên ca bấm nhầm không có đường sửa.
+function targetsFor(row) {
+  const trangThai = typeof row === 'string' ? row : row?.trang_thai;
+  const coTest = typeof row === 'object' && !!row?.co_test;
   const READY = { v: 'READY', label: 'Về READY kỹ thuật', desc: 'Hủy lệnh + hủy QC → phần in làm lại từ kỹ thuật/QC' };
   const REL1 = { v: 'RELEASE_1', label: 'Về "chờ release" (Release 1)', desc: 'Hủy lệnh, giữ QC → sẵn sàng release lại' };
-  const TEST = { v: 'TEST_RUN', label: 'Về Test Run', desc: 'Bỏ duyệt Release 2, giữ lệnh → quay lại Test Run' };
+  const TEST = { v: 'TEST_RUN', label: 'Về Test Run (test lại)',
+    desc: 'GIỮ lệnh · bỏ duyệt Release 2 · GỠ kết quả Test Run đã xác nhận → lệnh hiện lại ở màn Test Run - QA' };
   if (trangThai === 'RELEASE_2') return [TEST, REL1, READY];
-  // GIA_CONG (lỡ chọn chuyền gia công ở Release 1) & RELEASE_1: không có bước Test Run để quay về.
+  // RELEASE_1 mà ĐÃ có kết quả test (bấm nhầm "đạt") ⇒ cũng cho gỡ về Test Run.
+  if (trangThai === 'RELEASE_1' && coTest) return [TEST, REL1, READY];
+  // GIA_CONG (lỡ chọn chuyền gia công ở Release 1) & RELEASE_1 chưa test: không có gì để gỡ.
   return [REL1, READY];
 }
 
@@ -165,7 +175,7 @@ function LenhCancelSection({ show }) {
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
 
   const openRow = (r) => {
-    const opts = targetsFor(r.trang_thai);
+    const opts = targetsFor(r);
     setTargetRow(r);
     setChon(opts[0].v);
     setLyDo('');
@@ -229,7 +239,7 @@ function LenhCancelSection({ show }) {
     ) },
   ];
 
-  const options = target ? targetsFor(target.trang_thai) : [];
+  const options = target ? targetsFor(target) : [];
 
   return (
     <div>
@@ -271,7 +281,7 @@ function LenhCancelSection({ show }) {
         title={`Hủy lệnh ${target?.ma_lenh_san_xuat || ''}`}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setTargetRow(null)}>Đóng</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setTargetRow(null)}>Đóng</Button>
             <Button variant="danger" onClick={doRollback} loading={busy}>Xác nhận hủy lệnh</Button>
           </>
         }
@@ -291,7 +301,7 @@ function LenhCancelSection({ show }) {
         </Field>
         <div className="mb-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
           {chon === 'TEST_RUN'
-            ? 'Chỉ bỏ duyệt Release 2 — lệnh quay lại Test Run, vẫn giữ đợt vải & xác nhận test.'
+            ? 'Giữ lệnh + giữ đợt vải; bỏ duyệt Release 2 và GỠ kết quả Test Run đã xác nhận ⇒ lệnh hiện lại ở màn Test Run - QA để test lại từ đầu.'
             : chon === 'READY'
               ? 'Hủy lệnh + hủy xác nhận QC → phần in về màn READY (làm lại kỹ thuật/QC). Xác nhận test (nếu có) bị hủy.'
               : 'Hủy lệnh → đợt vải về "chờ release" (giữ QC), có thể release lại.'}
@@ -404,7 +414,7 @@ function TemCancelSection({ show }) {
         title={`Hủy lệnh in tem ${target?.ma_tem || ''}`}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setTargetRow(null)}>Đóng</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setTargetRow(null)}>Đóng</Button>
             <Button variant="danger" onClick={doCancel} loading={busy}>Xác nhận hủy in tem</Button>
           </>
         }
@@ -510,7 +520,7 @@ function GiaCongTemCancelSection({ show }) {
         title={`Hủy tem gia công ${target?.ma_tem || ''}`}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setTargetRow(null)}>Đóng</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setTargetRow(null)}>Đóng</Button>
             <Button variant="danger" onClick={doCancel} loading={busy}>Xác nhận hủy tem</Button>
           </>
         }
@@ -673,7 +683,7 @@ function CloseProductionSection({ show }) {
         title={`Đóng lệnh sản xuất ${target?.ma_lenh_san_xuat || ''}`}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setTargetRow(null)}>Đóng</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setTargetRow(null)}>Đóng</Button>
             <Button variant="danger" onClick={doClose} loading={busy}>Xác nhận đóng lệnh</Button>
           </>
         }
@@ -885,7 +895,7 @@ function QcCancelSection({ show, kind }) {
         title={`Hủy xác nhận ${cfg.short} — ${target?.ma_tem || ''}`}
         footer={
           <>
-            <Button variant="ghost" onClick={() => setTargetRow(null)}>Đóng</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setTargetRow(null)}>Đóng</Button>
             <Button variant="danger" onClick={doCancel} loading={busy}>Xác nhận hủy</Button>
           </>
         }
@@ -1403,8 +1413,11 @@ function DotVaiReopenSection({ show }) {
   useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t); }, [load]);
 
   // Phần in đang bị hủy thì đợt vải không mở lại được (sẽ thành dữ liệu mồ côi) — khóa chọn.
+  // ⚠⚠ NGOẠI LỆ `pin_huy_theo_dot`: phần in bị xóa mềm CHÍNH DO lần hủy đợt này (đợt cuối cùng của nó
+  //   — chốt 04/09/2026) ⇒ mở đợt là backend bật lại phần in luôn, không bắt chạy sang tab "Mở phần in".
+  const moDuoc = (r) => !!(r.phan_in_con_hoat_dong || r.pin_huy_theo_dot);
   const toggle = (row) => {
-    if (!row.phan_in_con_hoat_dong) return;
+    if (!moDuoc(row)) return;
     setSelected((m) => {
       const next = new Map(m);
       if (next.has(row.dot_vai_id)) next.delete(row.dot_vai_id); else next.set(row.dot_vai_id, row);
@@ -1432,8 +1445,8 @@ function DotVaiReopenSection({ show }) {
 
   const columns = [
     { key: 'sel', className: 'w-10', selection: true, render: (r) => (
-      <input type="checkbox" checked={selected.has(r.dot_vai_id)} disabled={!r.phan_in_con_hoat_dong}
-        title={r.phan_in_con_hoat_dong ? '' : 'Phần in đang bị hủy — mở phần in trước'}
+      <input type="checkbox" checked={selected.has(r.dot_vai_id)} disabled={!moDuoc(r)}
+        title={moDuoc(r) ? '' : 'Phần in đang bị hủy — mở phần in trước'}
         onClick={(e) => e.stopPropagation()} onChange={() => toggle(r)} aria-label="Chọn đợt vải" />
     ) },
     { key: 'ma_dot_vai', header: 'Mã đợt vải', className: 'font-medium text-ink', render: (r) => r.ma_dot_vai },
@@ -1449,9 +1462,13 @@ function DotVaiReopenSection({ show }) {
         <div className="text-xs text-ink-soft">{r.nguoi_huy || '—'}{r.ly_do ? ` · ${r.ly_do}` : ''}</div>
       </div>
     ) },
-    { key: 'phan_in_con_hoat_dong', header: 'Phần in', render: (r) => (r.phan_in_con_hoat_dong
-      ? <Badge tone="success">Còn hoạt động</Badge>
-      : <Badge tone="warning" title="Mở phần in trước rồi mới mở được đợt vải">Đang bị hủy</Badge>) },
+    { key: 'phan_in_con_hoat_dong', header: 'Phần in', render: (r) => {
+      if (r.phan_in_con_hoat_dong) return <Badge tone="success">Còn hoạt động</Badge>;
+      // Hủy THEO đợt vải này (hết vải) — mở đợt ra là phần in sống lại, khác hẳn ca người dùng cố ý
+      // hủy phần in ở tab riêng (ca đó vẫn phải "Mở phần in" trước).
+      if (r.pin_huy_theo_dot) return <Badge tone="info" title="Phần in bị hủy theo đợt vải này — mở đợt là phần in tự hoạt động lại">Hủy theo đợt</Badge>;
+      return <Badge tone="warning" title="Mở phần in trước rồi mới mở được đợt vải">Đang bị hủy</Badge>;
+    } },
   ];
 
   return (
@@ -1720,6 +1737,110 @@ function TemSuaReopenSection({ show }) {
   );
 }
 
+// ─── Tab: Hủy phiếu giao ─────────────────────────────────────────────────────
+// Đảo sổ cái đã giao ⇒ tem quay lại *Giao hàng › Danh sách tem giao* (vẫn giữ cờ đã tích, bán hàng
+// KHÔNG phải tích lại). Phiếu chuyển `HUY` nhưng GIỮ dòng tem làm dấu vết.
+// ⚠ Hủy được cả phiếu ĐÃ GIAO lẫn phiếu mới lập chưa xác nhận — phiếu chưa xác nhận thì sổ cái chưa
+//   cộng nên backend KHÔNG trừ (trừ là làm âm số của tem).
+function PhieuGiaoCancelSection({ show }) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [target, setTargetRow] = useState(null);
+  const [lyDo, setLyDo] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listPhieuGiaoCancelable({ search });
+      setRows(res.data);
+    } catch (e) {
+      show(e.message || 'Lỗi tải', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [search, show]);
+
+  useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
+
+  const doCancel = async () => {
+    if (!lyDo.trim()) { show('Nhập lý do hủy phiếu giao', 'error'); return; }
+    setBusy(true);
+    try {
+      const res = await huyPhieuGiao(target.id, lyDo.trim());
+      const d = res.data || {};
+      show(`Đã hủy phiếu ${d.ma_phieu_giao || target.ma_phieu_giao} — ${fmtNum(target.so_tem)} tem quay lại Danh sách tem giao`);
+      setTargetRow(null); setLyDo('');
+      load();
+    } catch (e) {
+      show(e.message || 'Hủy phiếu giao thất bại', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const columns = [
+    { key: 'ma_phieu_giao', header: 'Mã phiếu', render: (r) => <Badge tone="info">{r.ma_phieu_giao}</Badge> },
+    { key: 'trang_thai', header: 'Trạng thái', render: (r) => (r.trang_thai === 'DA_GIAO'
+      ? <Badge tone="success">Đã giao</Badge> : <Badge tone="warning">Chờ giao</Badge>) },
+    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
+    { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
+    { key: 'so_tem', header: 'Số tem', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_tem) },
+    { key: 'tong_sl', header: 'Tổng SL giao', className: 'text-right tabular-nums', render: (r) => fmtNum(r.tong_sl) },
+    { key: 'created_date', header: 'Giờ lập', render: (r) => fmtTime(r.created_date) },
+    { key: 'nguoi_tao', header: 'Người lập', render: (r) => r.nguoi_tao || '—' },
+    { key: 'actions', header: '', className: 'text-right whitespace-nowrap', render: (r) =>
+      <Button variant="danger" className="px-2.5 py-1 text-xs"
+        onClick={() => { setTargetRow(r); setLyDo(''); }}>Hủy phiếu giao</Button> },
+  ];
+
+  return (
+    <div>
+      <Toolbar title="Hủy phiếu giao"
+        subtitle="Lập/in nhầm phiếu — hủy để trả tem về Giao hàng › Danh sách tem giao"
+        search={search} onSearch={setSearch}
+        searchPlaceholder="Tìm mã phiếu, khách, đơn, mã tem, code phần...">
+        <Badge tone="info">{rows.length} phiếu hủy được</Badge>
+      </Toolbar>
+
+      <div className="mb-3 rounded-control border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700">
+        Hủy phiếu = <b>đảo sổ cái đã giao</b>: số lượng của từng tem trong phiếu được trả lại phần
+        <b> chờ giao</b>, tem hiện lại ở <b>Giao hàng › Danh sách tem giao</b> (vẫn giữ cờ đã tích nên
+        bán hàng không phải tích lại). Phiếu vẫn còn trong hệ thống với trạng thái <b>Đã hủy</b>.
+        ⚠ Chưa có API báo hủy phiếu sang ERP — phiếu đã đẩy sang ERP thì báo bên đó bằng tay.
+      </div>
+
+      <DataTable columns={columns} rows={rows} loading={loading} rowKey="id"
+        emptyText="Không có phiếu giao nào hủy được" />
+
+      <Modal
+        open={!!target}
+        onClose={() => setTargetRow(null)}
+        title={`Hủy phiếu giao ${target?.ma_phieu_giao || ''}`}
+        footer={
+          <>
+            <Button chiXemOk variant="ghost" onClick={() => setTargetRow(null)}>Đóng</Button>
+            <Button variant="danger" onClick={doCancel} loading={busy}>Xác nhận hủy phiếu</Button>
+          </>
+        }
+      >
+        <div className="mb-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          Phiếu <b>{target?.ma_phieu_giao}</b> ({fmtNum(target?.so_tem)} tem · tổng
+          <b> {fmtNum(target?.tong_sl)}</b>) sẽ chuyển sang <b>Đã hủy</b>.
+          {target?.trang_thai === 'DA_GIAO'
+            ? ' Sổ cái đã giao được TRỪ LẠI và tem quay về danh sách tem giao.'
+            : ' Phiếu chưa xác nhận giao nên sổ cái chưa cộng — chỉ gỡ phiếu, số lượng không đổi.'}
+        </div>
+        <Field label="Lý do (bắt buộc)">
+          <Textarea rows={2} value={lyDo} onChange={(e) => setLyDo(e.target.value)}
+            placeholder="Vd: lập nhầm phiếu, khách đổi chuyến, in sai số lượng..." />
+        </Field>
+      </Modal>
+    </div>
+  );
+}
+
 export default function LichSuTrangThaiPage() {
   const { can } = usePermissions();
   const { toast, show } = useToast();
@@ -1743,6 +1864,8 @@ export default function LichSuTrangThaiPage() {
     can('SUA') && { key: 'huytemsua', label: 'Hủy tem sửa' },
     can('SUA') && { key: 'motemsua', label: 'Mở lại tem sửa' },
     can('OQC') && { key: 'huyoqc', label: 'Hủy xác nhận OQC' },
+    // Hủy phiếu giao — đảo sổ cái đã giao, tem quay lại *Giao hàng › Danh sách tem giao*.
+    can('DELIVERY_MANAGE') && { key: 'huyphieugiao', label: 'Hủy phiếu giao' },
   ].filter(Boolean);
 
   const [tab, setTab] = useState(tabs[0]?.key);
@@ -1781,6 +1904,7 @@ export default function LichSuTrangThaiPage() {
       {tab === 'huytemsua' && <TemSuaCancelSection show={show} />}
       {tab === 'motemsua' && <TemSuaReopenSection show={show} />}
       {tab === 'huyoqc' && <QcCancelSection show={show} kind="oqc" />}
+      {tab === 'huyphieugiao' && <PhieuGiaoCancelSection show={show} />}
 
       <Toast toast={toast} />
     </div>

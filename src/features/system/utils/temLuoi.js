@@ -202,20 +202,22 @@ export const soHangTuDo = (khung, boHang = -1) => (khung.hang || [])
 
 // Đặt bề rộng cột (mm; null = chia đều). Tự KẸP để tổng không tràn 49mm — cột tự do còn lại phải
 // chừa tối thiểu 0.5mm mỗi cột, nếu không bản in sẽ đùn chữ ra ngoài tem mà màn hình vẫn trông ổn.
-export function datRongCot(khung, i, mm) {
+// `rongVung`/`caoVung` (mm) — mặc định là vùng nội dung của 1 TEM. Trình Thiết kế PHIẾU (mig 094)
+// truyền kích thước khối của nó vào để dùng CHUNG toàn bộ thao tác lưới, khỏi chép ra bản thứ hai.
+export function datRongCot(khung, i, mm, rongVung = RONG_MM) {
   const k = sao(khung);
   k.cot = Array.isArray(k.cot) ? k.cot : [];
   while (k.cot.length < k.so_cot) k.cot.push({ rong_mm: null });
   if (mm == null) { k.cot[i] = { ...(k.cot[i] || {}), rong_mm: null }; return k; }
-  const conLai = RONG_MM - tongRongCung(k, i) - 0.5 * soCotTuDo(k, i);
+  const conLai = rongVung - tongRongCung(k, i) - 0.5 * soCotTuDo(k, i);
   k.cot[i] = { ...(k.cot[i] || {}), rong_mm: Math.max(1, Math.min(Number(mm), Math.max(1, conLai))) };
   return k;
 }
 
-export function datCaoHang(khung, i, mm) {
+export function datCaoHang(khung, i, mm, caoVung = CAO_MM) {
   const k = sao(khung);
   if (mm == null) { k.hang[i] = { ...(k.hang[i] || {}), cao_mm: null }; return k; }
-  const conLai = CAO_MM - tongCaoCung(k, i) - 1 * soHangTuDo(k, i);
+  const conLai = caoVung - tongCaoCung(k, i) - 1 * soHangTuDo(k, i);
   k.hang[i] = { ...(k.hang[i] || {}), cao_mm: Math.max(1, Math.min(Number(mm), Math.max(1, conLai))) };
   return k;
 }

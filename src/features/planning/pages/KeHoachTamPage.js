@@ -298,9 +298,9 @@ export default function KeHoachTamPage() {
         )}
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
         <NghenButton rows={rows} trangThai={(r) => statusDot(r.dot_vai_ve_id)} onClick={() => setNghenOpen(true)} />
-        <Button variant="secondary" icon="list" onClick={() => setDsOpen(true)}>Danh sách kế hoạch tạm</Button>
-        <Button variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
-        <Button variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
+        <Button chiXemOk variant="secondary" icon="list" onClick={() => setDsOpen(true)}>Danh sách kế hoạch tạm</Button>
+        <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
+        <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="info">{activeCount ? `${filtered.length}/` : ''}{meta.total || rows.length} bản</Badge>
       </Toolbar>
 
@@ -363,7 +363,7 @@ export default function KeHoachTamPage() {
         subtitle={edit ? `${edit.ten_khach_hang || ''} · ${edit.mau_vai || ''}` : ''}
         footer={(
           <>
-            <Button variant="ghost" onClick={() => setEdit(null)}>Đóng</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setEdit(null)}>Đóng</Button>
             {choPhepTraVe && (
               <Button variant="danger" icon="log-out" onClick={() => { setTraVeReason(''); setTraVeOpen(true); }}>
                 Trả về Kỹ thuật
@@ -412,7 +412,7 @@ export default function KeHoachTamPage() {
         size="sm"
         footer={(
           <>
-            <Button variant="ghost" onClick={() => setTraVeOpen(false)}>Hủy</Button>
+            <Button chiXemOk variant="ghost" onClick={() => setTraVeOpen(false)}>Hủy</Button>
             <Button variant="danger" onClick={doTraVeKyThuat} loading={saving} disabled={!traVeReason.trim()}>
               Xác nhận trả về
             </Button>

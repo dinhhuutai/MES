@@ -261,9 +261,9 @@ export default function DonePanel({
             </button>
           )}
         </div>
-        <Button variant={showFilters || soLoc ? 'secondary' : 'ghost'} icon="filter"
+        <Button variant={showFilters || soLoc ? 'secondary' : 'ghost'} icon="filter" chiXemOk
           onClick={() => setShowFilters((v) => !v)}>Bộ lọc{soLoc ? ` (${soLoc})` : ''}</Button>
-        <Button variant="secondary" icon="file-spreadsheet" loading={exporting}
+        <Button variant="secondary" icon="file-spreadsheet" chiXemOk loading={exporting}
           disabled={!viewRows.length} onClick={doExport}>Xuất Excel</Button>
       </div>
 
@@ -272,7 +272,7 @@ export default function DonePanel({
         <div className="mb-3 rounded-card border border-line p-3">
           <div className="mb-2 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-ink">Lọc nhiều trường (kết hợp AND)</h3>
-            <Button variant="ghost" className="px-2.5 py-1 text-xs" onClick={xoaLoc} disabled={!soLoc}>Xóa lọc</Button>
+            <Button variant="ghost" chiXemOk className="px-2.5 py-1 text-xs" onClick={xoaLoc} disabled={!soLoc}>Xóa lọc</Button>
           </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {FILTER_FIELDS.map((f) => (

@@ -66,6 +66,10 @@ export const listGiaCong = (params) => client.get('/planning/gia-cong', { params
 // Hàng gia công có thể về NHIỀU LẦN: `soLuong` = SL của lần nhận này; bỏ trống = nhận nốt phần còn lại.
 export const giaCongToOqc = (lenhId, soLuong) =>
   client.post(`/planning/gia-cong/${lenhId}/chuyen-oqc`, soLuong == null ? {} : { so_luong: soLuong });
+// Nhận hàng gia công theo TỪNG CODE PHẦN (tối đa 2/lượt — tờ tem 2 khung). Mỗi phần tử:
+// `{ dot_vai_ve_id, so_luong }`. Trả về `data.tems = [{ tem_id, ma_tem, ma_phan, so_luong }]` để IN.
+export const giaCongNhanTheoPhan = (lenhId, items) =>
+  client.post(`/planning/gia-cong/${lenhId}/chuyen-oqc`, { items });
 export const giaCongHistory = (date) => client.get('/planning/gia-cong/history', { params: { date } });
 // Hàng bị OQC trả về → Kế hoạch mang trả lại nhà gia công (tắt badge, ghi người + giờ).
 export const giaCongTraLai = (lenhId, ghiChu) =>
@@ -73,6 +77,10 @@ export const giaCongTraLai = (lenhId, ghiChu) =>
 // Hủy tem gia công (tab ở trang "Hủy lệnh xác nhận") — SL quay lại phần chờ nhận của lệnh.
 export const giaCongTemCancelable = (params) => client.get('/planning/gia-cong/tem/cancelable', { params });
 export const huyGiaCongTem = (temId, lyDo) => client.post(`/planning/gia-cong/tem/${temId}/huy`, { lyDo });
+// DANH SÁCH TEM GIA CÔNG ĐÃ IN (04/09/2026) — trang *Kế hoạch › Danh sách tem gia công*: xem thông
+// tin tem 13 ("TH VỀ") mà không phải in. ⚠ Route nằm ở module planning (quyền RELEASE1/RELEASE2)
+// nhưng dùng CHUNG truy vấn `listTemDaIn` với trang tem của Sản xuất — chỉ khác `laGiaCong=true`.
+export const listTemGiaCongDaIn = (params) => client.get('/planning/gia-cong/tem/danh-sach', { params });
 
 // Kế hoạch tạm (lập kế hoạch sớm cho phần in chưa Ready)
 export const listKeHoachTam = (params) => client.get('/planning/ke-hoach-tam', { params });
