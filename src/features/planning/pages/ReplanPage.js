@@ -160,6 +160,9 @@ export default function ReplanPage() {
       const r = await getReplanDetail(row.id);
       const ds = r.data.dot_vai || [];
       setDsDot(ds);
+      // Gắn thêm SL đã nhận về (lệnh gia công nhận hàng nhiều lần) để panel cảnh báo đúng con số.
+      setDetail((d) => (d && d.id === row.id
+        ? { ...d, da_nhan: r.data.da_nhan, so_luong_release: r.data.so_luong_release ?? d.so_luong_release } : d));
       setForm((f) => ({ ...f, slRelease: Object.fromEntries(ds.map((d) => [d.dot_vai_id, String(d.so_luong)])) }));
     } catch (e) { /* im lặng — vẫn dời được ngày/chuyền/giờ */ }
   };
@@ -252,10 +255,19 @@ export default function ReplanPage() {
     //   "Test Run" kể cả khi đã test xong (thực tế đang chờ duyệt Release 2) hoặc khi bị QA trả về
     //   Kỹ thuật (thực tế đang ở READY). Nhãn lấy nguyên `giai_doan_ten` — đừng map lại ở FE.
     { key: 'giai_doan', header: 'Giai đoạn', merge: true, render: (r) => (
-      <Badge tone={TONE_GIAI_DOAN[r.giai_doan_hien_tai] || 'info'}
-        className="max-w-[8.5rem] whitespace-normal break-words">
-        {r.giai_doan_ten || '—'}
-      </Badge>
+      <div className="space-y-1">
+        <Badge tone={TONE_GIAI_DOAN[r.giai_doan_hien_tai] || 'info'}
+          className="max-w-[8.5rem] whitespace-normal break-words">
+          {r.giai_doan_ten || '—'}
+        </Badge>
+        {/* Lệnh gia công ĐÃ nhận về một phần: vẫn lập lại kế hoạch được (dời ngày / đổi nhà gia công)
+            nhưng KHÔNG đưa về chuyền in trong xưởng được nữa — backend chặn 409 `DA_NHAN_HANG`. */}
+        {r.co_phieu && (
+          <Badge tone="warning" title="Đã nhận một phần hàng về — chỉ đổi được sang chuyền gia công khác">
+            Đã nhận hàng
+          </Badge>
+        )}
+      </div>
     ) },
     // ↓ Các cột THEO PHẦN IN — dòng con ghi đè giá trị nên mỗi phần in hiện đúng dữ liệu của nó.
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
@@ -324,6 +336,13 @@ export default function ReplanPage() {
       >
         {detail && (
           <div className="space-y-4">
+            {detail.co_phieu && (
+              <div className="rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
+                Lệnh gia công đã nhận về <b>{fmtNum(detail.da_nhan)}/{fmtNum(detail.so_luong_release)}</b>.
+                Vẫn dời được ngày/giờ và đổi sang <b>chuyền gia công khác</b>; muốn đưa về chuyền in
+                trong xưởng thì phải hủy tem gia công đã nhận trước.
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
               <Info label="Code phần" value={detail.ma_phan} />
               <Info label="Đơn hàng" value={detail.ma_don_hang} />

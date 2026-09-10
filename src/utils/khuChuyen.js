@@ -8,9 +8,11 @@
 // ⚠⚠ KHU CÓ CẢ CHUYỀN ROBOT (chốt 2026-09-04, theo bố trí thật của xưởng): **Robot 1 (`MRB1`) nằm
 // trong khu A**, **Robot 2 + 3 (`MRB2`/`MRB3`) nằm trong khu B**. ⇒ `KHU_BAN` KHÔNG còn là "chia nhỏ
 // loại BAN" nữa mà là **CHIA THEO VỊ TRÍ MẶT BẰNG**, có thể chứa chuyền thuộc loại khác.
-// ⚠ 3 chuyền robot vẫn giữ `loai_chuyen='ROBOT'` nên chip "Robot" tổng KHÔNG đổi (vẫn xem riêng được);
-//   chúng chỉ được ĐẾM THÊM ở chip khu tương ứng. Hệ quả đã biết: `demChip` cho ra Σ các chip lớn hơn
-//   chip "Tất cả" — đúng bản chất, xem ghi chú ở `demChip` bên dưới, đừng "sửa cho tổng khớp".
+// ⚠ 3 chuyền robot vẫn giữ `loai_chuyen='ROBOT'` trong DB — chỉ có CHIP "Robot" bị bỏ khỏi dải lọc
+//   (xem `LOAI_TABS`), còn dữ liệu/loại chuyền KHÔNG đụng tới.
+// ⚠⚠ THÊM CHUYỀN ROBOT MỚI THÌ PHẢI THÊM VÀO ĐÂY: từ 2026-09-10 dải chip không còn chip "Robot" nên
+//   chuyền robot nào không nằm trong khu nào sẽ **chỉ còn lọc được ở chip "Tất cả"** — không mất dòng,
+//   nhưng không soi riêng được. (Đo prod 10/09: đúng 3 chuyền loại ROBOT, cả 3 đều đã có khu.)
 export const KHU_BAN = [
   { key: 'BAN_A', label: 'Bàn khu A', ma: ['M4A-4B', 'M5A-5B', 'M6A-6B', 'M7A-7B', 'M8A-8B', 'M9A-9B', 'MRB1'] },
   { key: 'BAN_B', label: 'Bàn khu B', ma: ['M10A', 'M11A', 'M12A', 'M13A', 'M14A', 'M10B', 'M11B', 'M12B', 'M13B', 'M14B', 'MRB2', 'MRB3'] },
@@ -32,12 +34,18 @@ export const thuocKhu = (maChuyen, khuKey) => !!khuKey && khuCuaChuyen(maChuyen)
 // Dùng chung 3 màn: "Theo dõi chuyền" · "Test Run - QA" · "Xác nhận chạy" (2 bảng Đang/Chờ chạy).
 // ⚠ Trước đây mỗi màn tự khai 1 bản giống hệt nhau; khi thêm màn thứ 3 thì gom về đây — sửa 1 chỗ,
 // mọi màn cùng đổi. Giữ chip "Bàn" TỔNG để vẫn xem được toàn bộ Bàn; 5 chip khu nằm ngay sau nó.
+//
+// ⚠⚠ ĐÃ BỎ CHIP "ROBOT" (chốt 2026-09-10, người dùng yêu cầu): từ 04/09 cả 3 chuyền robot đã được
+//   xếp vào khu (`MRB1` → khu A · `MRB2`/`MRB3` → khu B) nên chip Robot chỉ còn là **bản trùng lặp
+//   của phần robot trong 2 chip khu** — bấm vào ra đúng những dòng vốn đã đếm ở khu A + khu B.
+//   Bỏ đi cũng làm Σ các chip bớt vênh so với chip "Tất cả" (xem ghi chú ở `demChip`).
+// ⚠ KHÔNG đụng `loai_chuyen='ROBOT'` trong DB và KHÔNG đụng `hopChipChuyen`/`locSiSoTheoChip` — chúng
+//   vẫn hiểu giá trị `'ROBOT'`, chỉ là không còn chip nào phát ra giá trị đó nữa.
 export const LOAI_TABS = [
   { v: '', label: 'Tất cả' },
   { v: 'BAN', label: 'Bàn' },
   ...KHU_BAN.map((k) => ({ v: `KHU:${k.key}`, label: k.label, khu: k.key })),
   { v: 'MAY', label: 'Máy' },
-  { v: 'ROBOT', label: 'Robot' },
   { v: 'EP', label: 'Ép' },
   { v: 'LOGO', label: 'Logo' },
   { v: 'GIA_CONG', label: 'Gia công' },

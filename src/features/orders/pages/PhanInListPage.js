@@ -815,10 +815,23 @@ export default function PhanInListPage() {
                 const renderNode = (t, i, arr, withPcs, journey) => (
                   <li key={t.ma_tram}>
                     <div className="rounded-control border border-line p-3">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-wash text-[11px] font-bold text-primary">{i + 1}</span>
                         <span className="text-sm font-semibold text-ink">{t.ten_tram}</span>
+                        {/* KHÔNG QUA KỸ THUẬT: đợt vải ERP `KTCankiemtra=0` đi thẳng sang Kế hoạch, hệ thống
+                            đặt hộ Khuôn/Film/Mực + QC. Phải nói rõ ở đây — nhìn mốc giờ thì trông y hệt
+                            như tổ kỹ thuật đã làm, dễ hiểu nhầm là có người xác nhận. */}
+                        {t.khong_qua_ky_thuat && (
+                          <Badge tone="warning" title="Đợt vải không cần kỹ thuật kiểm tra (ERP KTCankiemtra=0) — hệ thống tự xác nhận, tổ kỹ thuật không thao tác">
+                            Không qua kỹ thuật
+                          </Badge>
+                        )}
                       </div>
+                      {t.khong_qua_ky_thuat && (
+                        <p className="mt-1 pl-8 text-[11px] text-ink-soft">
+                          Hàng đi thẳng sang Kế hoạch — hệ thống tự xác nhận, không qua tổ kỹ thuật.
+                        </p>
+                      )}
                       {t.ma_tram === 'RELEASE_1' && journey?.dot_vai?.length > 0 && (
                         <div className="mt-2 pl-8">
                           {(() => { const ci = composeInfo(journey.dot_vai); return ci ? <Badge tone={ci.tone}>{ci.label}</Badge> : null; })()}
@@ -840,7 +853,11 @@ export default function PhanInListPage() {
                                 <span className="font-medium text-ink">{c.ten_checkpoint}</span>
                                 {c.gia_tri_text && <span className="text-ink-soft">· {c.gia_tri_text}</span>}
                               </div>
-                              <div className="text-ink-soft">{fmtDateTime(c.tg)} · {c.nguoi || '—'}</div>
+                              {/* `tu_dong` = hệ thống đặt hộ (không ai bấm) ⇒ ghi rõ thay vì để trống,
+                                  người đọc mới phân biệt được với mục người thật xác nhận. */}
+                              <div className="text-ink-soft">
+                                {fmtDateTime(c.tg)} · {c.nguoi || (c.tu_dong ? 'Hệ thống (tự động)' : '—')}
+                              </div>
                             </div>
                           ))}
                         </div>

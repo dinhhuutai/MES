@@ -135,7 +135,9 @@ export function dongPhanTram(rows, cot, tong) {
 export const COT_THEO_DOT = new Set(['vai', 'release_1', 'test_run', 'release_2']);
 
 // Mảng khóa cột trái tách theo đợt (phần còn lại hợp nhất).
-export const COT_TRAI_THEO_DOT = new Set(['dot_vai', 'slnv']);
+// ⚠ `ngay_kh` (ngày SX kế hoạch) + `han_giao` thêm 10/09/2026: cả hai là thuộc tính của TỪNG ĐỢT VẢI
+//   (hạn giao nằm trên `dot_vai_ve`, ngày KH lấy từ lệnh gắn đợt đó) ⇒ phải tách, hợp nhất là sai số.
+export const COT_TRAI_THEO_DOT = new Set(['dot_vai', 'slnv', 'ngay_kh', 'han_giao']);
 
 // Bung `rows` (1 dòng/phần in) thành dòng hiển thị (1 dòng/đợt vải).
 //   `_dau`  = dòng ĐẦU của phần in → nơi vẽ các ô hợp nhất
@@ -158,14 +160,53 @@ export function tachTheoDotVai(rows) {
 
 // Giá trị của MỘT cột tách-theo-đợt trên dòng hiển thị.
 // ⚠ Không có đợt (dòng lùi) → lấy giá trị mức phần in để ô không trống trơn một cách vô cớ.
+// ⚠⚠ Cột "Đợt vải" hiện **NGÀY VẢI VỀ**, KHÔNG phải `ma_dot_vai` (người dùng chốt 10/09/2026): mã đợt
+//   là chuỗi `ERP-<md5>` dài, không nói được gì cho người đọc; ngày vải về mới là thứ dùng để đối
+//   chiếu tiến độ. Mã đợt vẫn còn ở tooltip (xem `KpiReadyPage`).
 export function giaTriTheoDot(row, ma) {
   const d = row._dot;
   if (!d) {
-    return { dot_vai: null, slnv: row.so_luong_vai_ve, vai: row.moc_vai,
+    return { dot_vai: null, slnv: row.so_luong_vai_ve, ngay_kh: null, han_giao: row.han_giao_hang,
+      vai: row.moc_vai,
       release_1: row.moc_release_1, test_run: row.moc_test_run, release_2: row.moc_release_2 }[ma];
   }
-  return { dot_vai: d.ma_dot_vai, slnv: d.so_luong_vai_ve, vai: d.moc_vai,
+  return { dot_vai: d.ngay_vai_ve, slnv: d.so_luong_vai_ve, ngay_kh: d.ngay_ke_hoach,
+    han_giao: d.han_giao_hang, vai: d.moc_vai,
     release_1: d.moc_release_1, test_run: d.moc_test_run, release_2: d.moc_release_2 }[ma];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TÊN OWNER VIẾT TẮT cho dòng 2 của header (người dùng chốt 10/09/2026).
+//   "Thạch Công Tuấn" → "C.Tuấn"   ·   "Nguyễn Thị Bích Quyền" → "B.Quyền"
+// Bảng có 23 cột owner nằm cạnh nhau, tên đầy đủ làm cột phình rất rộng và phải kéo ngang liên tục.
+//
+// LUẬT: giữ TỪ CUỐI (tên) nguyên vẹn, từ ÁP CHÓT viết tắt 1 chữ cái + dấu chấm, bỏ phần còn lại.
+// ⚠ Tên 1 từ ⇒ GIỮ NGUYÊN (không có gì để tắt). Tên 2 từ ⇒ từ áp chót là HỌ, vẫn viết tắt cho nhất
+//   quán ("Lê Tuấn" → "L.Tuấn") — người đọc vẫn nhận ra, mà cột không rộng thêm.
+// ⚠⚠ CHỈ dùng để HIỂN THỊ trên bảng. Tooltip, file Excel và trang *Owner checkpoint/checklist* phải
+//   giữ TÊN ĐẦY ĐỦ — đó là nơi đối chiếu/gán người, viết tắt ở đó là làm mất thông tin.
+//
+// ⚠⚠⚠ MỘT TRẠM CÓ THỂ GÁN NHIỀU NGƯỜI: service nối bằng `", "` (`dungCot` → `g.chinh.join(', ')`).
+//   Đo prod 10/09: `PIPELINE` 2 người · `DONE_DELIVERY`/`SAN_XUAT`/`FINISH` 3 người ⇒ **phải viết tắt
+//   TỪNG TÊN rồi nối lại**. Bản đầu tôi cho "chuỗi có dấu phẩy thì giữ nguyên" — hỏng đúng những ô
+//   DÀI NHẤT, tức đúng thứ người dùng phàn nàn.
+// ⚠ Owner cũng có thể là tên VAI TRÒ / PHÒNG BAN (`dsOwner` COALESCE 3 nguồn): mỗi phần >4 từ hoặc
+//   có dấu gạch/gạch chéo thì GIỮ NGUYÊN, tránh bóp méo "Kế hoạch - Vật tư" thành thứ vô nghĩa.
+export function viTatTen(ten) {
+  return String(ten || '')
+    .split(',')
+    .map(motTen)
+    .filter(Boolean)
+    .join(', ');
+}
+
+function motTen(ten) {
+  const s = String(ten || '').trim().replace(/\s+/g, ' ');
+  if (!s) return '';
+  const tu = s.split(' ');
+  if (tu.length < 2) return s;
+  if (tu.length > 4 || /[-/]/.test(s)) return s;
+  return `${tu[tu.length - 2].charAt(0).toUpperCase()}.${tu[tu.length - 1]}`;
 }
 
 // Số phút → "2n 3g 15p" cho dễ đọc (lead time hay lên tới hàng nghìn phút).

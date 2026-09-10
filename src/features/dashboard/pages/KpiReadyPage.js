@@ -11,12 +11,12 @@ import { Select } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import useSocketReload from '../../../hooks/useSocketReload';
 import { getKpiReady } from '../../../services/kpiReadyService';
-import { fmtNum, fmtDateTime } from '../../../utils/format';
+import { fmtNum, fmtDate, fmtDateTime } from '../../../utils/format';
 import { khopNhieu, chuanTuKhoa } from '../../../utils/timKiem';
 import { KpiCard } from '../components/charts';
 import {
   gopTheoDon, dongTong, dongPhanTram, fmtPt, fmtPhut,
-  tachTheoDotVai, giaTriTheoDot, COT_THEO_DOT, COT_TRAI_THEO_DOT,
+  tachTheoDotVai, giaTriTheoDot, COT_THEO_DOT, COT_TRAI_THEO_DOT, viTatTen,
 } from '../utils/kpiReadyTable';
 
 // ⚠ Cột bên TRÁI (thông tin phần in) khai ở đây; 23 cột checklist do BACKEND trả về (`data.cot`)
@@ -35,12 +35,25 @@ const COT_TRAI = [
   { ma: 'sldh', ten: 'SLĐH', so: true },
   { ma: 'slnv', ten: 'SLNV', so: true },
 ];
+// ⚠ Chế độ THEO ĐƠN bỏ 5 cột từ "Mã hàng" đến "Code phần" (người dùng chốt 10/09/2026): ở mức ĐƠN
+//   chúng chỉ còn là "N loại" — không đọc ra thông tin gì mà chiếm mất bề ngang của 23 cột checklist.
+//   Cần xem chi tiết thì bấm sang chế độ *Chi tiết*. ⚠ Ô tìm kiếm VẪN soi 5 trường này (nó lọc trên
+//   dữ liệu gốc, không phụ thuộc cột đang hiện) — gõ mã hàng ở chế độ theo đơn vẫn ra đúng đơn.
+const BO_O_CHE_DO_DON = new Set(['ma_hang', 'mau_vai', 'kich_vai', 'kich_phim', 'code_phan']);
 // Cột "Đợt vải" CHỈ có ở chế độ Chi tiết — chèn ngay TRƯỚC SLNV để người đọc biết dòng nào là đợt nào
 // (không có nó thì mấy dòng con chỉ khác nhau ở con số, nhìn như dữ liệu lặp).
-const COT_DOT_VAI = { ma: 'dot_vai', ten: 'Đợt vải', w: 'min-w-[150px]' };
+// ⚠⚠ Dữ liệu là **NGÀY VẢI VỀ** chứ không phải `ma_dot_vai` (mã ERP dài, không nói được gì) — xem
+//   `giaTriTheoDot`. `ownerTu: 'vai'` = mượn owner của cột checklist "Vải" (cùng trạm `PIPELINE`),
+//   KHÔNG khai owner riêng: nhà máy chỉ gán một chỗ ở *Hệ thống → Owner checkpoint/checklist*.
+const COT_DOT_VAI = { ma: 'dot_vai', ten: 'Đợt vải', w: 'min-w-[110px]', ngay: true, ownerTu: 'vai' };
+// 2 cột theo ĐỢT VẢI, đặt ngay SAU SLNV (người dùng chốt 10/09/2026).
+const COT_NGAY_CHI_TIET = [
+  { ma: 'ngay_kh', ten: 'Ngày SX KH', w: 'min-w-[110px]', ngay: true },
+  { ma: 'han_giao', ten: 'Hạn giao', w: 'min-w-[110px]', ngay: true },
+];
 const COT_TRAI_CHI_TIET = (() => {
   const i = COT_TRAI.findIndex((c) => c.ma === 'slnv');
-  return [...COT_TRAI.slice(0, i), COT_DOT_VAI, ...COT_TRAI.slice(i)];
+  return [...COT_TRAI.slice(0, i), COT_DOT_VAI, COT_TRAI[i], ...COT_NGAY_CHI_TIET, ...COT_TRAI.slice(i + 1)];
 })();
 // 2 cột CHỈ hiện ở chế độ "Theo đơn" (người dùng yêu cầu).
 const COT_DON = [
@@ -64,6 +77,7 @@ const giaTriTrai = (r, ma, tachDot) => {
     khach: r.ten_khach_hang, don: r.ma_don_hang, ma_hang: r.ma_hang, mau_vai: r.mau_vai,
     kich_vai: r.kich_vai, kich_phim: r.kich_phim, code_phan: r.ma_phan,
     sldh: r.so_luong_don_hang, slnv: r.so_luong_vai_ve, dot_vai: null,
+    ngay_kh: null, han_giao: r.han_giao_hang,
     tong_phan_in: r.tong_phan_in, tong_tg_ready: r.tong_tg_ready_phut,
   }[ma];
 };
@@ -161,7 +175,11 @@ export default function KpiReadyPage() {
   );
 
   const gop = cheDo === 'DON';
-  const cotTrai = gop ? [...COT_TRAI, ...COT_DON] : COT_TRAI_CHI_TIET;
+  const cotTrai = gop
+    ? [...COT_TRAI.filter((c) => !BO_O_CHE_DO_DON.has(c.ma)), ...COT_DON]
+    : COT_TRAI_CHI_TIET;
+  // Owner của cột TRÁI: mượn từ cột checklist cùng trạm (`ownerTu`) — không có bảng owner riêng.
+  const ownerCot = (c) => (c.ownerTu ? (cot.find((x) => x.ma === c.ownerTu) || {}).owner : null);
 
   // Dòng THẬT SỰ vẽ ra. Chế độ Chi tiết: 1 phần in → N dòng theo đợt vải (`_dau`/`_span`/`_dot`).
   // `_stt` đánh theo PHẦN IN nên khối nhiều đợt vẫn mang đúng một số thứ tự.
@@ -188,14 +206,21 @@ export default function KpiReadyPage() {
       // Ô mức phần in ở dòng CON (không phải dòng đầu khối) → để TRỐNG.
       const boQua = (r, tach) => !tach && r._dau === false;
       const cols = [
-        ...cotTrai.map((c) => ({
-          header: c.ten, width: c.so ? 12 : 18, num: !!c.so,
-          value: (r) => {
-            const tach = !gop && COT_TRAI_THEO_DOT.has(c.ma);
-            if (boQua(r, tach)) return '';
-            return giaTriTrai(r, c.ma, !gop) ?? (c.so ? 0 : '');
-          },
-        })),
+        // ⚠ Owner của cột trái (hiện chỉ "Đợt vải") cũng nhét vào header như 23 cột checklist.
+        //   ⚠⚠ Excel giữ TÊN ĐẦY ĐỦ, KHÔNG viết tắt — file này dùng để đối chiếu/gán người.
+        ...cotTrai.map((c) => {
+          const own = ownerCot(c);
+          return {
+            header: own ? `${c.ten}\n${own}` : c.ten, width: c.so ? 12 : 18, num: !!c.so,
+            value: (r) => {
+              const tach = !gop && COT_TRAI_THEO_DOT.has(c.ma);
+              if (boQua(r, tach)) return '';
+              const v = giaTriTrai(r, c.ma, !gop);
+              if (c.ngay) return v ? fmtDate(v) : '';
+              return v ?? (c.so ? 0 : '');
+            },
+          };
+        }),
         // ⚠ Owner nhét vào CHÍNH ô header (xuống dòng) — `exportPanelExcel` chỉ có 1 hàng header;
         //   bỏ owner đi thì file Excel mất đúng thứ trang này sinh ra để trả lời ("ai phụ trách").
         ...cot.map((c) => ({
@@ -349,14 +374,26 @@ export default function KpiReadyPage() {
                 <th className={`${TH} sticky left-0 z-30 bg-surface-muted text-center font-normal text-ink-soft/60`}>
                   Owner
                 </th>
-                {cotTrai.map((c) => (
-                  <th key={c.ma} className={`${TH} border-l border-line`} aria-hidden="true" />
-                ))}
+                {/* Cột trái phần lớn không có owner ⇒ ô trống; riêng "Đợt vải" mượn owner của cột
+                    checklist cùng trạm (`ownerTu`) — người dùng yêu cầu 10/09/2026. */}
+                {cotTrai.map((c) => {
+                  const own = ownerCot(c);
+                  if (!c.ownerTu) return <th key={c.ma} className={`${TH} border-l border-line`} aria-hidden="true" />;
+                  return (
+                    <th key={c.ma}
+                      title={own ? `Chịu trách nhiệm: ${own}` : 'Chưa gán owner — vào Hệ thống → Owner checkpoint/checklist'}
+                      className={`${TH} border-l border-line text-center font-normal ${own ? 'text-primary' : 'text-ink-soft/60'}`}>
+                      {viTatTen(own) || '— chưa gán —'}
+                    </th>
+                  );
+                })}
+                {/* ⚠ Hiện tên VIẾT TẮT ("Thạch Công Tuấn" → "C.Tuấn") — 23 cột owner cạnh nhau, tên
+                    đầy đủ làm bảng phải kéo ngang liên tục. TÊN ĐẦY ĐỦ vẫn ở tooltip và file Excel. */}
                 {cot.map((c) => (
                   <th key={c.ma}
                     title={c.owner ? `Chịu trách nhiệm: ${c.owner}` : 'Chưa gán owner — vào Hệ thống → Owner checkpoint/checklist'}
                     className={`${TH} border-l border-line text-center font-normal ${c.owner ? 'text-primary' : 'text-ink-soft/60'}`}>
-                    {c.owner || '— chưa gán —'}
+                    {viTatTen(c.owner) || '— chưa gán —'}
                   </th>
                 ))}
               </tr>
@@ -381,10 +418,15 @@ export default function KpiReadyPage() {
                       const tach = !gop && COT_TRAI_THEO_DOT.has(c.ma);
                       if (!tach && !r._dau) return null;
                       const v = giaTriTrai(r, c.ma, !gop);
+                      // Cột NGÀY: hiện dd/mm/yyyy; ô "Đợt vải" giữ MÃ ĐỢT ở tooltip để vẫn tra được.
+                      const noiDung = c.ngay
+                        ? (v ? fmtDate(v) : <span className="text-ink-soft">—</span>)
+                        : (c.so ? fmtNum(v || 0) : (v || <span className="text-ink-soft">—</span>));
                       return (
                         <td key={c.ma} rowSpan={oGop(tach)}
-                          className={`${TD} border-l border-line align-top ${c.so ? 'text-right tabular-nums' : ''}`}>
-                          {c.so ? fmtNum(v || 0) : (v || <span className="text-ink-soft">—</span>)}
+                          title={c.ma === 'dot_vai' && r._dot ? r._dot.ma_dot_vai : undefined}
+                          className={`${TD} border-l border-line align-top ${c.so ? 'text-right tabular-nums' : ''} ${c.ngay ? 'tabular-nums' : ''}`}>
+                          {noiDung}
                         </td>
                       );
                     })}
