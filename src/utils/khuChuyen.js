@@ -51,10 +51,24 @@ export const LOAI_TABS = [
   { v: 'GIA_CONG', label: 'Gia công' },
 ];
 
+// ─── CHẾ ĐỘ "TÁCH ROBOT RIÊNG" (chốt 2026-09-14, CHỈ màn Test Run - QA) ─────────────
+// Có chip "Robot" riêng và 3 chuyền robot KHÔNG còn nằm trong chip Bàn khu A/B. Các màn khác giữ
+// nguyên `LOAI_TABS` (robot nằm trong khu). Bật bằng `{ tachRobot: true }` ở 3 helper bên dưới.
+// ⚠ Nhận diện robot bằng loại chuyền `ROBOT` HOẶC mã trong `MA_CHUYEN_ROBOT` (sĩ số chỉ biết mã chuyền).
+export const MA_CHUYEN_ROBOT = ['MRB1', 'MRB2', 'MRB3'];
+const laChuyenRobot = (row) => row?.ma_loai_chuyen === 'ROBOT'
+  || MA_CHUYEN_ROBOT.includes(String(row?.ma_chuyen || '').trim().toUpperCase());
+
+export const LOAI_TABS_TACH_ROBOT = [
+  ...LOAI_TABS.slice(0, LOAI_TABS.findIndex((t) => t.v === 'MAY') + 1),
+  { v: 'ROBOT', label: 'Robot' },
+  ...LOAI_TABS.slice(LOAI_TABS.findIndex((t) => t.v === 'MAY') + 1),
+];
+
 // 1 hàng có khớp chip đang chọn không: chip khu lọc theo `ma_chuyen`, còn lại theo `ma_loai_chuyen`.
-export const hopChipChuyen = (row, v) => {
+export const hopChipChuyen = (row, v, { tachRobot = false } = {}) => {
   if (!v) return true;
-  if (v.startsWith('KHU:')) return thuocKhu(row.ma_chuyen, v.slice(4));
+  if (v.startsWith('KHU:')) return thuocKhu(row.ma_chuyen, v.slice(4)) && !(tachRobot && laChuyenRobot(row));
   return row.ma_loai_chuyen === v;
 };
 
@@ -64,17 +78,19 @@ export const hopChipChuyen = (row, v) => {
 //   chip loại → `loaiChuyen` = mã loại (`MAY` · `BAN` · `ROBOT` …)
 // ⚠ TUYỆT ĐỐI KHÔNG gửi chip khu dưới dạng `loaiChuyen='KHU:BAN_A'` — backend không hiểu tiền tố
 //   đó, sẽ khớp rỗng và dải số ra 0 trong khi bảng vẫn đầy hàng.
-export const locSiSoTheoChip = (v) => {
+export const locSiSoTheoChip = (v, { tachRobot = false } = {}) => {
   if (!v) return {};
   if (v.startsWith('KHU:')) {
     const khu = KHU_BAN.find((k) => k.key === v.slice(4));
-    return khu ? { maChuyen: khu.ma.join(',') } : {};
+    if (!khu) return {};
+    const ma = tachRobot ? khu.ma.filter((m) => !MA_CHUYEN_ROBOT.includes(m)) : khu.ma;
+    return { maChuyen: ma.join(',') };
   }
   return { loaiChuyen: v };
 };
 
 // Nhãn chip (cho phụ đề Excel / câu "không có hàng nào thuộc loại …").
-export const nhanChip = (v) => (LOAI_TABS.find((t) => t.v === v) || {}).label || '';
+export const nhanChip = (v) => (LOAI_TABS_TACH_ROBOT.find((t) => t.v === v) || {}).label || '';
 
 // Đếm cho từng chip (kể cả chip khu) → hiện số nhỏ trên mỗi chip.
 //
@@ -90,7 +106,7 @@ export const nhanChip = (v) => (LOAI_TABS.find((t) => t.v === v) || {}).label ||
 // ⚠ HỆ QUẢ ĐÃ BIẾT: một phần in trải 2 loại chuyền sẽ được đếm ở CẢ HAI chip ⇒ **Σ các chip có thể
 //   lớn hơn chip "Tất cả"**. Đây là bản chất (giống ghi chú ở modal *Danh sách release*), đừng "sửa
 //   cho tổng khớp" bằng cách bỏ khử trùng — làm vậy là quay lại đúng lỗi trên.
-export const demChip = (rows, layKhoa = null) => {
+export const demChip = (rows, layKhoa = null, { tachRobot = false } = {}) => {
   const set = {};
   const them = (chip, khoa) => {
     if (!set[chip]) set[chip] = new Set();
@@ -102,7 +118,7 @@ export const demChip = (rows, layKhoa = null) => {
     them('', khoa);
     if (x.ma_loai_chuyen) them(x.ma_loai_chuyen, khoa);
     const k = khuCuaChuyen(x.ma_chuyen);
-    if (k) them(`KHU:${k}`, khoa);
+    if (k && !(tachRobot && laChuyenRobot(x))) them(`KHU:${k}`, khoa);
   });
   return Object.fromEntries(Object.entries(set).map(([k, v]) => [k, v.size]));
 };

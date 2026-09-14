@@ -41,6 +41,7 @@ export const cancelQA = (id) => client.post(`/planning/test-run/${id}/cancel-qa`
 // Test không đạt → trả về KỸ THUẬT (READY) theo mục rớt: body {checklists:['KHUON'|'FILM'|'MUC'], lyDo}.
 // Lệnh GIỮ NGUYÊN → QC xác nhận READY xong là tự quay lại Test Run (không qua Release 1).
 export const returnTestRunToReady = (id, body) => client.post(`/planning/test-run/${id}/tra-ve-ky-thuat`, body);
+export const listOwnerChoIn = () => client.get('/planning/test-run/owner-cho-in');
 export const skipTestRun = (id) => client.post(`/planning/test-run/${id}/skip`);
 export const confirmCNSPBatch = (lenhIds) => client.post('/planning/test-run/cnsp-confirm-batch', { lenhIds });
 export const confirmQABatch = (lenhIds, payload = {}) => client.post('/planning/test-run/qa-confirm-batch', { lenhIds, ...payload });

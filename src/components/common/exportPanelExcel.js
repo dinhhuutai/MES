@@ -69,7 +69,9 @@ export default async function exportPanelExcel({ cols = [], rows = [], title = '
         if (d != null && d < 0) cell.font = { bold: true, color: { argb: 'FFDC2626' } };
         else if (d != null && d <= 1) cell.font = { bold: true, color: { argb: 'FFB45309' } };
       }
-      if (typeof c.red === 'function' && c.red(r, i)) cell.font = { bold: true, color: { argb: 'FFDC2626' } };
+      const mau = typeof c.color === 'function' ? c.color(r, i) : null; // màu chữ tùy chọn (ARGB)
+      if (mau) cell.font = { bold: true, color: { argb: mau } };
+      else if (typeof c.red === 'function' && c.red(r, i)) cell.font = { bold: true, color: { argb: 'FFDC2626' } };
       else if (typeof c.ok === 'function' && c.ok(r, i)) cell.font = { color: { argb: 'FF16A34A' } };
     });
   });

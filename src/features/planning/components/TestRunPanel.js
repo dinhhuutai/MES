@@ -6,17 +6,22 @@ import Toast from '../../../components/common/Toast';
 import { Input, Textarea, Field, Select } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import { getLenhDetail, recordTestRun, confirmQA, cancelQA, returnTestRunToReady, skipTestRun } from '../../../services/planningService';
+import Modal from '../../../components/common/Modal';
+import { getLenhDetail, recordTestRun, confirmQA, cancelQA, returnTestRunToReady, skipTestRun, listOwnerChoIn } from '../../../services/planningService';
 import { fmtNum } from '../../../utils/format';
 
 const fmt = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '');
+// Lần test "Xác nhận In Không Đạt": test không đạt nhưng owner cho IN (xem planning.repository KET_QUA_IN_KHONG_DAT).
+export const KQ_IN_KHONG_DAT = 'KHONG_DAT_CHO_IN';
 // Mục kỹ thuật QA có thể trả về. LUẬT: chọn FILM ⇒ kéo theo KHUÔN (film làm lại thì khuôn phải chụp lại).
 const TECH_ITEMS = [{ ma: 'KHUON', label: 'Khuôn' }, { ma: 'FILM', label: 'Film' }, { ma: 'MUC', label: 'Mực' }];
 const TECH_LABEL = { KHUON: 'Khuôn', FILM: 'Film', MUC: 'Mực' };
-const ketQuaBadge = (kq) =>
-  kq === 'CO_LOI' || kq === 'LOI'
+const ketQuaBadge = (kq) => {
+  if (kq === KQ_IN_KHONG_DAT) return <Badge tone="info">Không đạt · cho IN</Badge>;
+  return kq === 'CO_LOI' || kq === 'LOI'
     ? <Badge tone="danger">Lỗi</Badge>
     : <Badge tone="success">Đạt</Badge>;
+};
 
 // Panel QA xác nhận Test Run cho 1 lệnh: nhập số lượng test, ghi nhận test lỗi (kèm lý do), xác nhận đạt.
 export default function TestRunPanel({ lenhId, onClose, onChanged }) {
@@ -36,6 +41,11 @@ export default function TestRunPanel({ lenhId, onClose, onChanged }) {
   const [returnReason, setReturnReason] = useState('');
   const [returnItems, setReturnItems] = useState(() => new Set()); // mục kỹ thuật rớt
   const [returnLoai, setReturnLoai] = useState('TEST_LOI');        // 'TEST_LOI' | 'DOI_PA_IN'
+  // "Xác nhận In Không Đạt": modal chọn owner cho IN (≥1) + lý do (tùy chọn).
+  const [ikdOpen, setIkdOpen] = useState(false);
+  const [ownerOpts, setOwnerOpts] = useState([]);
+  const [ikdOwners, setIkdOwners] = useState(() => new Set());
+  const [ikdLyDo, setIkdLyDo] = useState('');
 
   const state = data?.state || {};
   const done = state.qa_done;
@@ -118,6 +128,47 @@ export default function TestRunPanel({ lenhId, onClose, onChanged }) {
     }
   };
 
+  const moInKhongDat = async () => {
+    if (!nguoiTest.trim()) { show('Bắt buộc nhập người test', 'error'); return; }
+    setIkdOwners(new Set()); setIkdLyDo(''); setIkdOpen(true);
+    try {
+      const res = await listOwnerChoIn();
+      setOwnerOpts(res.data || []);
+    } catch (e) {
+      show(e.message || 'Không tải được danh sách owner', 'error');
+    }
+  };
+
+  const toggleOwner = (id) => setIkdOwners((s) => {
+    const n = new Set(s);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  });
+
+  // Xác nhận In Không Đạt → đi y như xác nhận đạt (qua bước tiếp theo), lần test ghi "Không đạt (owner cho IN)".
+  const doInKhongDat = async () => {
+    if (ikdOwners.size === 0) { show('Chọn ít nhất 1 owner cho IN', 'error'); return; }
+    setBusy('ikd');
+    try {
+      await confirmQA(lenhId, {
+        soLuong: soLuong ? Number(soLuong) : null,
+        nguoiTest: nguoiTest.trim() || null,
+        loaiTest,
+        ghiChu: ghiChuQA.trim() || null,
+        inKhongDat: { ownerIds: [...ikdOwners], lyDo: ikdLyDo.trim() || null },
+      });
+      show('Đã xác nhận in không đạt — chuyển bước tiếp theo');
+      setIkdOpen(false);
+      setSoLuong(''); setLyDo(''); setNguoiTest(''); setGhiChuQA(''); setLoaiTest('TEST_RUN');
+      await load();
+      onChanged?.();
+    } catch (e) {
+      show(e.message || 'Thất bại', 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+
   // Không test run → bỏ Test Run, duyệt thẳng Release 2 (đợt SX vào chờ sản xuất).
   const doSkip = async () => {
     setBusy('skip');
@@ -177,6 +228,11 @@ export default function TestRunPanel({ lenhId, onClose, onChanged }) {
             </Button>
             <Button variant="danger" onClick={doFail} loading={busy === 'fail'} disabled={choKyThuat || busy === 'pass'}>
               Xác nhận test lỗi
+            </Button>
+            <Button variant="secondary" onClick={moInKhongDat} loading={busy === 'ikd'}
+              disabled={choKyThuat || busy === 'fail' || busy === 'pass' || !nguoiTest.trim()}
+              className="!text-blue-900 dark:!text-blue-300">
+              Xác nhận In Không Đạt
             </Button>
             <Button onClick={doPass} loading={busy === 'pass'} disabled={choKyThuat || busy === 'fail' || !nguoiTest.trim()}>
               QA xác nhận đạt
@@ -306,7 +362,11 @@ export default function TestRunPanel({ lenhId, onClose, onChanged }) {
                         <span className="text-xs text-ink-soft">{fmt(t.tg_bd_test)}</span>
                       </div>
                     </div>
-                    {t.ghi_chu ? <div className="mt-1 text-xs text-danger">Lý do: {t.ghi_chu}</div> : null}
+                    {t.ket_qua === KQ_IN_KHONG_DAT ? (
+                      <div className="mt-1 text-xs font-medium text-blue-900 dark:text-blue-300">
+                        Không đạt ({t.owner_cho_in || '—'} cho IN){t.ghi_chu ? ` · Lý do: ${t.ghi_chu}` : ''}
+                      </div>
+                    ) : t.ghi_chu ? <div className="mt-1 text-xs text-danger">Lý do: {t.ghi_chu}</div> : null}
                   </div>
                 ))}
               </div>
@@ -341,6 +401,39 @@ export default function TestRunPanel({ lenhId, onClose, onChanged }) {
           )}
         </div>
       )}
+      <Modal open={ikdOpen} onClose={() => (busy === 'ikd' ? null : setIkdOpen(false))} title="Xác nhận In Không Đạt"
+        footer={(
+          <>
+            <Button chiXemOk variant="ghost" onClick={() => setIkdOpen(false)} disabled={busy === 'ikd'}>Hủy</Button>
+            <Button onClick={doInKhongDat} loading={busy === 'ikd'} disabled={ikdOwners.size === 0}>
+              Xác nhận In Không Đạt
+            </Button>
+          </>
+        )}>
+        <div className="space-y-4">
+          <p className="text-sm text-ink-soft">
+            Test không đạt nhưng vẫn <b>cho IN</b> — lệnh qua bước tiếp theo như xác nhận đạt; lần test được ghi
+            <b className="text-blue-900 dark:text-blue-300"> Không đạt (owner cho IN)</b>.
+          </p>
+          <Field label="Owner cho IN (chọn 1 hoặc cả 2)" required>
+            <div className="space-y-2">
+              {ownerOpts.length === 0 ? (
+                <p className="text-sm text-ink-soft">Đang tải...</p>
+              ) : ownerOpts.map((u) => (
+                <label key={u.id} className="flex cursor-pointer items-center gap-2 text-sm text-ink">
+                  <input type="checkbox" checked={ikdOwners.has(u.id)} onChange={() => toggleOwner(u.id)}
+                    className="h-4 w-4 rounded border-line text-primary focus:ring-primary" />
+                  <b>{u.ho_ten}</b> <span className="text-ink-soft">@{u.ten_dang_nhap}</span>
+                </label>
+              ))}
+            </div>
+          </Field>
+          <Field label="Lý do">
+            <Textarea rows={3} value={ikdLyDo} onChange={(e) => setIkdLyDo(e.target.value)}
+              placeholder="vd: Khuôn sai (tùy chọn)" />
+          </Field>
+        </div>
+      </Modal>
       <Toast toast={toast} />
     </SidePanel>
   );

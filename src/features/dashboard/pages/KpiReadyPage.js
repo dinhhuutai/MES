@@ -43,9 +43,11 @@ const BO_O_CHE_DO_DON = new Set(['ma_hang', 'mau_vai', 'kich_vai', 'kich_phim', 
 // Cột "Đợt vải" CHỈ có ở chế độ Chi tiết — chèn ngay TRƯỚC SLNV để người đọc biết dòng nào là đợt nào
 // (không có nó thì mấy dòng con chỉ khác nhau ở con số, nhìn như dữ liệu lặp).
 // ⚠⚠ Dữ liệu là **NGÀY VẢI VỀ** chứ không phải `ma_dot_vai` (mã ERP dài, không nói được gì) — xem
-//   `giaTriTheoDot`. `ownerTu: 'vai'` = mượn owner của cột checklist "Vải" (cùng trạm `PIPELINE`),
-//   KHÔNG khai owner riêng: nhà máy chỉ gán một chỗ ở *Hệ thống → Owner checkpoint/checklist*.
-const COT_DOT_VAI = { ma: 'dot_vai', ten: 'Đợt vải', w: 'min-w-[110px]', ngay: true, ownerTu: 'vai' };
+//   `giaTriTheoDot`.
+// ⚠⚠⚠ CỘT NÀY CÓ OWNER **RIÊNG**, KHÔNG mượn của cột "Vải" (người dùng chốt 10/09/2026 — *"cái này
+//   khác với vải nha"*): owner do backend trả trong `data.cot_trai`, neo vào checklist `DOT_VAI`
+//   (mig 097). Gán ở *Hệ thống → Owner checkpoint/checklist* như mọi checklist khác.
+const COT_DOT_VAI = { ma: 'dot_vai', ten: 'Đợt vải', w: 'min-w-[110px]', ngay: true, coOwner: true };
 // 2 cột theo ĐỢT VẢI, đặt ngay SAU SLNV (người dùng chốt 10/09/2026).
 const COT_NGAY_CHI_TIET = [
   { ma: 'ngay_kh', ten: 'Ngày SX KH', w: 'min-w-[110px]', ngay: true },
@@ -146,6 +148,7 @@ export default function KpiReadyPage() {
     () => load(true));
 
   const cot = useMemo(() => data?.cot || [], [data]);
+  const cotTrai0 = useMemo(() => data?.cot_trai || [], [data]);
 
   // Ô tìm lọc Ở FE (dữ liệu đã tải trọn phạm vi) ⇒ gõ tới đâu thấy tới đó, không bắn request.
   const rows = useMemo(() => {
@@ -178,8 +181,8 @@ export default function KpiReadyPage() {
   const cotTrai = gop
     ? [...COT_TRAI.filter((c) => !BO_O_CHE_DO_DON.has(c.ma)), ...COT_DON]
     : COT_TRAI_CHI_TIET;
-  // Owner của cột TRÁI: mượn từ cột checklist cùng trạm (`ownerTu`) — không có bảng owner riêng.
-  const ownerCot = (c) => (c.ownerTu ? (cot.find((x) => x.ma === c.ownerTu) || {}).owner : null);
+  // Owner của cột TRÁI — backend trả riêng ở `data.cot_trai` (neo vào checklist của chính cột đó).
+  const ownerCot = (c) => (c.coOwner ? (cotTrai0.find((x) => x.ma === c.ma) || {}).owner : null);
 
   // Dòng THẬT SỰ vẽ ra. Chế độ Chi tiết: 1 phần in → N dòng theo đợt vải (`_dau`/`_span`/`_dot`).
   // `_stt` đánh theo PHẦN IN nên khối nhiều đợt vẫn mang đúng một số thứ tự.
@@ -374,11 +377,11 @@ export default function KpiReadyPage() {
                 <th className={`${TH} sticky left-0 z-30 bg-surface-muted text-center font-normal text-ink-soft/60`}>
                   Owner
                 </th>
-                {/* Cột trái phần lớn không có owner ⇒ ô trống; riêng "Đợt vải" mượn owner của cột
-                    checklist cùng trạm (`ownerTu`) — người dùng yêu cầu 10/09/2026. */}
+                {/* Cột trái phần lớn không có owner ⇒ ô trống; riêng "Đợt vải" có owner RIÊNG
+                    (checklist DOT_VAI, mig 097 — KHÁC owner cột "Vải"), backend trả ở `cot_trai`. */}
                 {cotTrai.map((c) => {
                   const own = ownerCot(c);
-                  if (!c.ownerTu) return <th key={c.ma} className={`${TH} border-l border-line`} aria-hidden="true" />;
+                  if (!c.coOwner) return <th key={c.ma} className={`${TH} border-l border-line`} aria-hidden="true" />;
                   return (
                     <th key={c.ma}
                       title={own ? `Chịu trách nhiệm: ${own}` : 'Chưa gán owner — vào Hệ thống → Owner checkpoint/checklist'}

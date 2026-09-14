@@ -19,7 +19,7 @@ import usePermissions from '../../../hooks/usePermissions';
 import useNghenMap from '../../../hooks/useNghenMap';
 import { slaRowClass } from '../../../utils/sla';
 import { listTestRunCandidates, testRunHistory, confirmQABatch, testQaDone } from '../../../services/planningService';
-import TestRunPanel from '../components/TestRunPanel';
+import TestRunPanel, { KQ_IN_KHONG_DAT } from '../components/TestRunPanel';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
@@ -28,12 +28,14 @@ import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import TraVeBadge from '../../../components/common/TraVeBadge';
 import DateRangePicker from '../../../components/common/DateRangePicker';
 import { fmtDate, trongKhoangNgay } from '../../../utils/format';
-import { LOAI_TABS, hopChipChuyen as hopChip, nhanChip, demChip, locSiSoTheoChip } from '../../../utils/khuChuyen';
-import ChipTabs from '../../../components/common/ChipTabs';
+import { LOAI_TABS_TACH_ROBOT, hopChipChuyen as hopChip, nhanChip, demChip, locSiSoTheoChip } from '../../../utils/khuChuyen';import ChipTabs from '../../../components/common/ChipTabs';
 import exportCheckpointExcel, { COT_LENH, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
 
 // Chip lọc theo LOẠI CHUYỀN + KHU của chuyền Bàn — nguồn chung `utils/khuChuyen.js`
 // (dùng chung với "Theo dõi chuyền" và "Xác nhận chạy"; sửa 1 chỗ, 3 màn cùng đổi).
+
+// Màn này TÁCH ROBOT RIÊNG (chip Robot, robot không nằm trong Bàn khu A/B) — chốt 2026-09-14.
+const TACH_ROBOT = { tachRobot: true };
 
 const FILTER_FIELDS = [
   { key: 'codePhan', label: 'Code phần', col: 'ma_phan' }, { key: 'khach', label: 'Khách hàng', col: 'ten_khach_hang' },
@@ -47,7 +49,13 @@ const FILTER_FIELDS = [
 // component) để không remount mỗi lần cha render.
 const maxTests = (rows) => rows.reduce((m, r) => Math.max(m, (r.tests || []).length), 0);
 const testAt = (r, i) => (r.tests || [])[i];
-const testText = (t) => (t.ket_qua === 'DAT' ? 'Đạt' : (t.ghi_chu || '').trim() || 'Không đạt');
+// "Xác nhận In Không Đạt" → "Không đạt (<owner> cho IN)", chữ XANH NƯỚC BIỂN ĐẬM (web lẫn Excel).
+const laInKhongDat = (t) => !!t && t.ket_qua === KQ_IN_KHONG_DAT;
+const testText = (t) => {
+  if (t.ket_qua === 'DAT') return 'Đạt';
+  if (laInKhongDat(t)) return `Không đạt (${t.owner_cho_in || '—'} cho IN)`;
+  return (t.ghi_chu || '').trim() || 'Không đạt';
+};
 
 const testRunColumns = (rows) => Array.from({ length: maxTests(rows) }, (_, i) => ({
   key: `test_${i + 1}`,
@@ -55,6 +63,13 @@ const testRunColumns = (rows) => Array.from({ length: maxTests(rows) }, (_, i) =
   render: (r) => {
     const t = testAt(r, i);
     if (!t) return <span className="text-ink-soft">—</span>;
+    if (laInKhongDat(t)) {
+      return (
+        <span className="font-semibold text-blue-900 dark:text-blue-300" title={t.ghi_chu ? `Lý do: ${t.ghi_chu}` : undefined}>
+          {testText(t)}
+        </span>
+      );
+    }
     return t.ket_qua === 'DAT'
       ? <span className="font-medium text-success">Đạt</span>
       : <span className="font-medium text-danger">{testText(t)}</span>;
@@ -63,9 +78,10 @@ const testRunColumns = (rows) => Array.from({ length: maxTests(rows) }, (_, i) =
 
 const testRunExcelColumns = (rows) => Array.from({ length: maxTests(rows) }, (_, i) => ({
   header: `Lần test ${i + 1}`,
-  width: 26,
+  width: 30,
   value: (r) => { const t = testAt(r, i); return t ? testText(t) : ''; },
-  red: (r) => { const t = testAt(r, i); return !!t && t.ket_qua !== 'DAT'; },
+  color: (r) => (laInKhongDat(testAt(r, i)) ? 'FF1E3A8A' : null),
+  red: (r) => { const t = testAt(r, i); return !!t && t.ket_qua !== 'DAT' && !laInKhongDat(t); },
   ok: (r) => { const t = testAt(r, i); return !!t && t.ket_qua === 'DAT'; },
 }));
 
@@ -111,7 +127,7 @@ export default function TestRunPage() {
   useSiSoLoc({
     timKiem: search,
     ...filters,
-    ...locSiSoTheoChip(loai),
+    ...locSiSoTheoChip(loai, TACH_ROBOT),
     ...(ngayKH.from || ngayKH.to
       ? { loaiNgay: 'NGAY_KE_HOACH', ngayTu: ngayKH.from, ngayDen: ngayKH.to } : {}),
   });
@@ -120,7 +136,7 @@ export default function TestRunPage() {
   // ⚠ KHÔNG lọc `qa_done` ở đây nữa — backend đã chỉ trả lệnh chưa QA đạt.
   const filtered = useMemo(() => {
     let base = locNgay(rows);
-    if (loai) base = base.filter((r) => hopChip(r, loai));
+    if (loai) base = base.filter((r) => hopChip(r, loai, TACH_ROBOT));
     return filterRows(base, filters, FILTER_FIELDS);
   }, [rows, filters, loai, locNgay]);
   // ⚠⚠ ĐẾM THEO PHẦN IN **KHÔNG TRÙNG**, KHÔNG theo lệnh và cũng KHÔNG theo dòng (người dùng chốt
@@ -129,7 +145,7 @@ export default function TestRunPage() {
   //   khác nhau**: 68 phần in được release nhiều lần nên xuất hiện ở nhiều lệnh và bị đếm lặp.
   //   885 là số DÒNG bảng vẽ ra — không phải số phần in.
   const countChip = useMemo(
-    () => demChip(locNgay(rows), codesCuaLenh),
+    () => demChip(locNgay(rows), codesCuaLenh, TACH_ROBOT),
     [rows, locNgay]
   );
   // Badge: số phần in KHÁC NHAU đang hiện + số lệnh, để đối chiếu được cả hai.
@@ -312,7 +328,7 @@ export default function TestRunPage() {
 
       {/* Chip LOẠI CHUYỀN + KHU BÀN — cùng bộ với màn "Theo dõi chuyền".
           ⚠ Số trên chip đếm PHẦN IN (`soPhanIn`), không đếm lệnh — khớp badge + bảng + dải Theo dõi. */}
-      <ChipTabs tabs={LOAI_TABS} value={loai} counts={countChip} onChange={setLoai} />
+      <ChipTabs tabs={LOAI_TABS_TACH_ROBOT} value={loai} counts={countChip} onChange={setLoai} />
 
       <FieldFilters fields={FILTER_FIELDS} values={filters} onField={(k, v) => setFilters((f) => ({ ...f, [k]: v }))} onClear={() => setFilters({})} open={showFilters} />
 

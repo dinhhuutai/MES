@@ -94,7 +94,11 @@ export default function OwnerPage() {
   // Danh mục cột KPI + owner hiện tại. Lỗi thì NUỐT: đây là khối phụ, hỏng nó không được chặn việc
   // gán owner theo trạm/checklist ở phần dưới trang (và tài khoản thiếu quyền KPI vẫn dùng trang này).
   const loadCotKpi = useCallback(() => {
-    getKpiCot().then((r) => setCotKpi((r.data && r.data.cot) || [])).catch(() => setCotKpi([]));
+    // `cot_trai` (cột "Đợt vải" — owner riêng neo checklist DOT_VAI) đứng TRƯỚC 23 cột checklist,
+    // đúng thứ tự cột trên bảng KPI.
+    getKpiCot()
+      .then((r) => setCotKpi([...((r.data && r.data.cot_trai) || []), ...((r.data && r.data.cot) || [])]))
+      .catch(() => setCotKpi([]));
   }, []);
 
   useEffect(() => {
