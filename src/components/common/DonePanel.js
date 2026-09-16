@@ -7,6 +7,7 @@ import Icon from './Icon';
 import Toast from './Toast';
 import TinhChatInCell from './TinhChatInCell';
 import HanGiaoCell from './HanGiaoCell';
+import PhuongAnInBadge, { PHUONG_AN_IN } from './PhuongAnInBadge';
 import exportPanelExcel from './exportPanelExcel';
 import useToast from '../../hooks/useToast';
 import { fmtNum } from '../../utils/format';
@@ -64,7 +65,7 @@ const FILTER_FIELDS = [
 //   · `footerChon` : ({ rows, clear }) => JSX — thanh hành động ở CHÂN panel (vd nút "In tem (N)")
 export default function DonePanel({
   open, onClose, title = 'Đã hoàn thành', maHeader = 'Mã', fetcher, columns, excelColumns, showChuyen = false,
-  extraColumns, extraExcelColumns,
+  extraColumns, extraExcelColumns, showPhuongAnIn = false,
   chonNhieu = false, toiDaChon = 0, chonDuoc, footerChon,
 }) {
   const { toast, show } = useToast();
@@ -137,6 +138,8 @@ export default function DonePanel({
     { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
     { key: 'tinh_chat_in', header: 'Tính chất in', render: (r) => <TinhChatInCell value={r.tinh_chat_in} /> },
+    // Phương án in (HSKT đang hoạt động) — bật ở panel READY Kỹ thuật (15/09/2026). Cần fetcher trả `phuong_an_in`.
+    ...(showPhuongAnIn ? [{ key: 'phuong_an_in', header: 'Phương án in', render: (r) => <PhuongAnInBadge value={r.phuong_an_in} /> }] : []),
     ...(showChuyen ? [{ key: 'ten_chuyen', header: 'Chuyền', merge: true, render: (r) => r.ten_chuyen || '—' }] : []),
     { key: 'so_luong', header: 'SL', className: 'text-right tabular-nums', merge: true, render: (r) => (r.so_luong != null ? fmtNum(r.so_luong) : '—') },
     { key: 'han_giao_hang', header: 'Hạn giao', merge: true, render: (r) => <HanGiaoCell value={r.han_giao_hang} /> },
@@ -158,6 +161,7 @@ export default function DonePanel({
     { header: 'Kích vải', value: (r) => r.kich_vai || '' },
     { header: 'Kích phim', value: (r) => r.kich_phim || '' },
     { header: 'Tính chất in', value: (r) => r.tinh_chat_in || '' },
+    ...(showPhuongAnIn ? [{ header: 'Phương án in', value: (r) => (r.phuong_an_in != null ? (PHUONG_AN_IN[Number(r.phuong_an_in)] || String(r.phuong_an_in)) : '') }] : []),
     ...(showChuyen ? [{ header: 'Chuyền', value: (r) => r.ten_chuyen || '' }] : []),
     { header: 'SL', value: (r) => (r.so_luong != null ? Number(r.so_luong) : ''), num: true },
     { header: 'Hạn giao', value: (r) => r.han_giao_hang || '', type: 'date' },

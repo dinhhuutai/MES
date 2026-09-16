@@ -99,7 +99,9 @@ export default function PhuongAnInCell({ value, hsktId, barcode, disabled = fals
         const maMoi = h.barcode_moi;
         setThuc(pa); // dòng trong modal quét là ẢNH CHỤP lúc quét — cha không làm mới nó
         show?.(`Đã đổi phương án in → ${PHUONG_AN_IN[pa]}`
-          + (maMoi && maMoi !== maCu ? ` · mã vạch ${maCu} → ${maMoi}` : ''));
+          + (maMoi && maMoi !== maCu ? ` · mã vạch ${maCu} → ${maMoi}` : '')
+          // Mã mới đã có hồ sơ khác dùng ⇒ backend GỘP phần in vào hồ sơ đó (15/09/2026) — nói rõ.
+          + (h.gop_vao ? ` · đã liên kết vào hồ sơ đang dùng mã ${maMoi}` : ''));
       } else {
         show?.(`Đã gửi yêu cầu đổi sang ${PHUONG_AN_IN[pa]} — chờ người duyệt thông qua`);
       }

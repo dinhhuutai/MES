@@ -72,6 +72,7 @@ import QcTraVePage from './features/quality/pages/QcTraVePage';
 import GiaoHangPage from './features/delivery/pages/GiaoHangPage';
 import DashboardPage from './features/dashboard/pages/DashboardPage';
 import LichSuNghenPage from './features/dashboard/pages/LichSuNghenPage';
+import ThoiGianTramPage from './features/dashboard/pages/ThoiGianTramPage';
 import TinhTrangTramPage from './features/dashboard/pages/TinhTrangTramPage';
 import KpiReadyPage from './features/dashboard/pages/KpiReadyPage';
 import KpiDonHangPage from './features/system/pages/KpiDonHangPage';
@@ -116,6 +117,7 @@ const PAGES = {
   '/giao-hang': <GiaoHangPage />,
   '/dashboard': <DashboardPage />,
   '/dashboard/lich-su-nghen': <LichSuNghenPage />,
+  '/dashboard/thoi-gian-tram': <ThoiGianTramPage />,
   '/dashboard/tinh-trang-tram': <TinhTrangTramPage />,
   '/dashboard/kpi-ready': <KpiReadyPage />,
   '/bao-cao': <MyReportsPage />,

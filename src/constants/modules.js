@@ -109,6 +109,7 @@ export const MODULES = [
       // ⚠ Trang DUY NHẤT của module Dashboard có gác quyền (mig 093) — 3 trang kia mở cho mọi
       //   người đăng nhập. Người chọn đơn hàng cũng phải xem được kết quả ⇒ nhận cả 2 quyền.
       { ten: 'KPI READY', route: '/dashboard/kpi-ready', perm: ['KPI_READY_VIEW', 'KPI_DON_HANG_MANAGE'] },
+      { ten: 'Thời gian trạm', route: '/dashboard/thoi-gian-tram' },
       { ten: 'Lịch sử nghẽn', route: '/dashboard/lich-su-nghen' },
       { ten: 'Sơ đồ phần in', route: '/dashboard/tinh-trang-tram' },
     ],

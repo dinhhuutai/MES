@@ -197,13 +197,20 @@ export default function ReadyPage() {
     } catch (e) { return null; }
   }, []);
 
-  const toggleOne = (id) => setSelected((s) => {
+  // ⚠⚠ CHỌN THEO `_key`, KHÔNG theo `id` (mig 098): phần in chờ ≥2 loại đợt vải ra 2 DÒNG cùng `id`
+  //   phần in — chọn theo `id` thì tick 1 dòng sáng cả 2 và xác nhận hàng loạt ăn nhầm dòng kia.
+  const toggleOne = (k) => setSelected((s) => {
     const next = new Set(s);
-    if (next.has(id)) next.delete(id); else next.add(id);
+    if (next.has(k)) next.delete(k); else next.add(k);
     return next;
   });
-  const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.id));
-  const toggleAll = () => setSelected(() => (allChecked ? new Set() : new Set(rows.map((r) => r.id))));
+  const allChecked = rows.length > 0 && rows.every((r) => selected.has(r._key));
+  const toggleAll = () => setSelected(() => (allChecked ? new Set() : new Set(rows.map((r) => r._key))));
+
+  // Danh sách cho modal Quét/tích: 1 dòng / PHẦN IN (dòng đầu). Quét code phần mà đưa cả 2 dòng loại
+  // đợt vải vào thì `khongGomSet` coi là "mã trỏ nhiều phần in" và từ chối — vòng thử từng nhóm nằm ở
+  // `onScanAction` bên dưới.
+  const scanRows = rows.filter((r, i) => rows.findIndex((x) => x.id === r.id) === i);
 
   const openBulk = () => setBulk({ ma: permItems[0]?.ma || '' });
 
@@ -220,9 +227,21 @@ export default function ReadyPage() {
   const doBulk = async () => {
     setBulkSaving(true);
     try {
-      const res = await confirmReadyBulk({ phanInIds: [...selected], ma: bulk.ma, value: bulk.value || undefined });
-      const { okCount, skippedCount } = res.data;
-      show(`Đã xác nhận ${okCount} phần in${skippedCount ? `, bỏ qua ${skippedCount}` : ''}`);
+      const chon = rows.filter((r) => selected.has(r._key));
+      // Dòng THƯỜNG → endpoint hàng loạt (mức phần in) như cũ; dòng LOẠI ĐỢT VẢI → xác nhận riêng nhóm đó.
+      const thuong = [...new Set(chon.filter((r) => !r.tach_theo_loai).map((r) => r.id))];
+      const tach = chon.filter((r) => r.tach_theo_loai);
+      let okCount = 0;
+      let skippedCount = 0;
+      if (thuong.length) {
+        const res = await confirmReadyBulk({ phanInIds: thuong, ma: bulk.ma, value: bulk.value || undefined });
+        okCount += res.data.okCount; skippedCount += res.data.skippedCount;
+      }
+      for (const r of tach) {
+        try { await confirmReadyItemsBatch(r.id, [{ ma: bulk.ma }], r.dot_vai_ids); okCount += 1; }
+        catch (e) { skippedCount += 1; }
+      }
+      show(`Đã xác nhận ${okCount} dòng${skippedCount ? `, bỏ qua ${skippedCount}` : ''}`);
       setBulk(null);
       load();
     } catch (e) {
@@ -237,8 +256,8 @@ export default function ReadyPage() {
       key: 'sel', className: 'w-10', selection: true,
       header: <input type="checkbox" checked={allChecked} onChange={toggleAll} aria-label="Chọn tất cả" />,
       render: (r) => (
-        <input type="checkbox" checked={selected.has(r.id)}
-          onClick={(e) => e.stopPropagation()} onChange={() => toggleOne(r.id)} aria-label="Chọn" />
+        <input type="checkbox" checked={selected.has(r._key)}
+          onClick={(e) => e.stopPropagation()} onChange={() => toggleOne(r._key)} aria-label="Chọn" />
       ),
     }] : []),
     { key: 'ma_phan', header: 'Code phần', className: 'font-medium text-ink', render: (r) => (
@@ -257,7 +276,17 @@ export default function ReadyPage() {
     { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
     { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
-    { key: 'loai_dot_vai', header: 'Loại đợt vải', render: (r) => <LoaiDotVaiBadge value={r.loai_dot_vai} /> },
+    // ⚠ Loại của các đợt ĐANG CHỜ ở READY. Phần in chờ ≥2 loại ⇒ TÁCH DÒNG, mỗi dòng 1 loại + xác nhận riêng.
+    { key: 'loai_dot_vai', header: 'Loại đợt vải', render: (r) => (
+      <div>
+        <LoaiDotVaiBadge value={r.loai_dot_vai} />
+        {r.tach_theo_loai && (
+          <div className="mt-0.5 text-[11px] text-violet-700" title={r.ma_dot_vai_list}>
+            1/{r.so_nhom_loai} loại · xác nhận riêng
+          </div>
+        )}
+      </div>
+    ) },
     // Phương án in (ERP `Pain`, lấy từ HSKT đang hoạt động): 1 Bàn · 2 Máy · 3 Robot.
     // Đổi được ngay tại chỗ: ⟳ xoay Bàn → Robot → Máy, ✓ mới ghi (kèm đổi số cuối mã vạch HSKT).
     { key: 'phuong_an_in', header: 'Phương án in', render: (r) => (
@@ -310,12 +339,14 @@ export default function ReadyPage() {
 
       <FieldFilters fields={FILTER_FIELDS} values={filters} onField={(k, v) => setFilters((f) => ({ ...f, [k]: v }))} onClear={() => setFilters({})} open={showFilters} />
 
-      <DataTable columns={columns} rows={viewRows} loading={loading} onRowClick={(r) => setSel(r.id)} sttStart={0}
+      <DataTable columns={columns} rows={viewRows} rowKey="_key" loading={loading} sttStart={0}
+        onRowClick={(r) => setSel({ id: r.id, dotVaiIds: r.tach_theo_loai ? r.dot_vai_ids : null, loai: r.loai_dot_vai })}
         rowClassName={(r) => slaRowClass(evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status)}
         emptyText="Tất cả phần in đã READY 🎉" />
 
       {sel && (
-        <ReadyPanel phanInId={sel} onClose={() => setSel(null)} onChanged={load} />
+        <ReadyPanel phanInId={sel.id} dotVaiIds={sel.dotVaiIds} loaiDotVai={sel.loai}
+          onClose={() => setSel(null)} onChanged={load} />
       )}
 
       <Modal
@@ -346,7 +377,7 @@ export default function ReadyPage() {
         open={scanOpen}
         onClose={() => { setScanOpen(false); load(); }}
         title="Quét / tích phần in — READY"
-        rows={rows}
+        rows={scanRows}
         immediate
         usbBarcode
         // Rộng ra để phiên quét hiện được dạng BẢNG (8 cột). Các màn khác giữ 'md' mặc định.
@@ -385,7 +416,11 @@ export default function ReadyPage() {
             )}
           </div>
         )}
-        actionLabel={(r) => `${r.ma_phan || r.barcode} — ${[...scanSel].map(labelOf).join(' + ')}`}
+        actionLabel={(r) => {
+          const st = scanItemsRef.current[r.id] || [];
+          const cuoi = st[st.length - 1];
+          return `${r.ma_phan || r.barcode}${cuoi && cuoi.loai ? ` [${cuoi.loai}]` : ''} — ${[...scanSel].map(labelOf).join(' + ')}`;
+        }}
         // Phiên quét hiện dạng BẢNG. Cố ý BỎ cột "Code phần" để nhường chỗ cho Khách hàng → Kích phim.
         // ⚠ `row` là ẢNH CHỤP lúc quét (không tự làm mới) — nên ô Phương án in tự giữ state riêng.
         sessionColumns={[
@@ -400,19 +435,40 @@ export default function ReadyPage() {
               disabled={!canDoiPain} show={show} onChanged={refresh} />
           ) },
           { key: 'da_xac_nhan', header: 'Đã xác nhận', render: (r) => (
-            <span className="text-ink-soft">{(scanItemsRef.current[r.id] || []).map(labelOf).join(' + ') || '—'}</span>
+            <span className="text-ink-soft">{(scanItemsRef.current[r.id] || [])
+              .map((x) => `${x.items.map(labelOf).join(' + ')}${x.loai ? ` (${x.loai})` : ''}`).join(' · ') || '—'}</span>
           ) },
         ]}
         onScanAction={async (r) => {
           const items = [...scanSel];
           if (items.length === 0) throw new Error('Chọn mục cần xác nhận');
-          await confirmReadyItemsBatch(r.id, items.map((ma) => ({ ma })));
-          scanItemsRef.current[r.id] = items;
+          const st = scanItemsRef.current[r.id] || (scanItemsRef.current[r.id] = []);
+          // ⚠⚠ Phần in chờ ≥2 LOẠI đợt vải (mig 098): mỗi lần quét xác nhận MỘT dòng loại chưa xong — quét
+          //   lần 2 sang dòng loại kế tiếp ("xác nhận cả 2 lần"). Dòng đã đủ mục ⇒ backend 422 NOTHING ⇒ thử dòng sau.
+          const nhom = rows.filter((x) => x.id === r.id && x.tach_theo_loai);
+          if (!nhom.length) {
+            await confirmReadyItemsBatch(r.id, items.map((ma) => ({ ma })));
+            st.push({ items, dotVaiIds: null, loai: null });
+            return;
+          }
+          for (const g of nhom) {
+            try {
+              await confirmReadyItemsBatch(r.id, items.map((ma) => ({ ma })), g.dot_vai_ids);
+              st.push({ items, dotVaiIds: g.dot_vai_ids, loai: g.loai_dot_vai });
+              return;
+            } catch (e) {
+              if (e && e.errorCode === 'NOTHING') continue;
+              throw e;
+            }
+          }
+          throw new Error(`Đã xác nhận đủ cả ${nhom.length} dòng loại đợt vải`);
         }}
         onUndo={async (r) => {
-          const items = scanItemsRef.current[r.id] || [...scanSel];
-          for (const ma of items) { try { await uncheckReadyItem(r.id, ma); } catch { /* đã bỏ hoặc chưa có */ } }
-          delete scanItemsRef.current[r.id];
+          const st = scanItemsRef.current[r.id] || [];
+          const cuoi = st.pop() || { items: [...scanSel], dotVaiIds: null };
+          for (const ma of cuoi.items) {
+            try { await uncheckReadyItem(r.id, ma, cuoi.dotVaiIds); } catch { /* đã bỏ hoặc chưa có */ }
+          }
         }}
       />
 
@@ -424,7 +480,7 @@ export default function ReadyPage() {
       />
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
         title="Phần in đã hoàn tất kỹ thuật (3 mục)" maHeader="Phần in"
-        fetcher={(date) => readyDone(date, 'tech')} />
+        fetcher={(date) => readyDone(date, 'tech')} showPhuongAnIn />
 
       <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
         tenMan="Chuẩn bị kỹ thuật — READY" rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} tenFile="nghen-ready" />

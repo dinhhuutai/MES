@@ -8,8 +8,12 @@ import { startCameraDecode, cameraErrorMessage, playVideo } from './cameraDecode
 // ⚠⚠ 2 CHẾ ĐỘ TÁCH RIÊNG ('qr' | 'barcode') — KHÔNG quét chung: dò cả QR + 7 định dạng 1D trong cùng
 // một vòng làm **QR rất khó "qua"** (thực tế iPhone quét mãi không ra QR, reader 1D thì đọc bừa ra rác
 // từ đường kẻ bảng của phiếu). Mặc định 'qr' vì mã tem & code phần đều là QR.
-export default function QrScanner({ open, onClose, onResult, title = 'Quét QR / mã vạch' }) {
-  const [mode, setMode] = useState('qr');
+// ⚠ `cheDoMacDinh` = chế độ màn ÉP khi mới mở ('qr' | 'barcode'); không truyền ⇒ 'qr' như cũ.
+//   Người dùng vẫn bấm đổi được, và lựa chọn tay (`modeSel`) thắng mặc định — cùng khuôn
+//   `ScanCollectModal`, đừng đặt state thẳng bằng prop kẻo bấm đổi xong bị nhảy về mặc định.
+export default function QrScanner({ open, onClose, onResult, title = 'Quét QR / mã vạch', cheDoMacDinh = null }) {
+  const [modeSel, setMode] = useState(null); // null = theo mặc định của màn
+  const mode = modeSel || cheDoMacDinh || 'qr';
   // ⚠ CALLBACK REF (không dùng useRef): Modal chạy trên Headless UI Portal — lần render ĐẦU sau khi mở,
   // portal chưa có DOM target nên children CHƯA mount ⇒ ref còn null lúc effect chạy ⇒ trước đây ZXing
   // tự tạo <video> ẩn và khung hình đen vĩnh viễn. Dùng state để effect chạy LẠI đúng lúc thẻ video vào DOM.

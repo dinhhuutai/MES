@@ -380,7 +380,8 @@ export default function OqcPage() {
           { header: 'Người', value: (r) => r.nguoi || '' },
         ]} />
 
-      <QrScanner open={scanOpen} onClose={() => setScanOpen(false)} onResult={onScan} />
+      {/* OQC quét MÃ VẠCH trên tem là chính ⇒ mở ra đã ở chế độ mã vạch (vẫn bấm đổi sang QR được). */}
+      <QrScanner open={scanOpen} onClose={() => setScanOpen(false)} onResult={onScan} cheDoMacDinh="barcode" />
 
       <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
         tenMan="OQC" rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} tenFile="nghen-oqc" />

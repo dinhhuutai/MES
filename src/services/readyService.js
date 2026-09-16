@@ -8,13 +8,15 @@ export const getReadyItemCounts = () => client.get('/ready/item-counts');
 // Tra cứu mã vừa quét khi KHÔNG khớp dòng nào ở READY/QC READY → { tim_thay, ma_phan, ly_do, mo_ta }.
 // Chỉ để hiện LÝ DO cho người quét (đã QC xong / đã release / đã hủy) — không dùng cho nghiệp vụ.
 export const traCuuMaQuet = (code) => client.get('/ready/tra-cuu', { params: { code } });
-export const getReadyDetail = (id) => client.get(`/ready/${id}`);
+// `dotVaiIds` (tùy chọn, mig 098): thao tác/xem theo 1 DÒNG LOẠI ĐỢT VẢI của phần in chờ ≥2 loại.
+export const getReadyDetail = (id, dotVaiIds) => client.get(`/ready/${id}`,
+  { params: dotVaiIds && dotVaiIds.length ? { dotVaiIds: dotVaiIds.join(',') } : {} });
 // Xác nhận 1 mục kỹ thuật: ma ∈ KHUON|FILM|MUC|HSKT; value cho KHUON/FILM/MUC.
-export const confirmReadyItem = (id, ma, value) =>
-  client.post(`/ready/${id}/confirm/${ma}`, { value });
+export const confirmReadyItem = (id, ma, value, dotVaiIds) =>
+  client.post(`/ready/${id}/confirm/${ma}`, { value, dotVaiIds });
 // Xác nhận nhiều mục cùng lúc: items = [{ ma, value }].
-export const confirmReadyItemsBatch = (id, items) =>
-  client.post(`/ready/${id}/confirm-batch`, { items });
+export const confirmReadyItemsBatch = (id, items, dotVaiIds) =>
+  client.post(`/ready/${id}/confirm-batch`, { items, dotVaiIds });
 // Bulk 1 mục cho nhiều phần in (theo mã hàng): { phanInIds, ma, value }.
 export const confirmReadyBulk = (payload) => client.post('/ready/confirm-bulk', payload);
 export const confirmReadyQC = (id) => client.post(`/ready/${id}/confirm-qc`);
@@ -23,7 +25,7 @@ export const returnReadyToTech = (id, body) => client.post(`/ready/${id}/tra-ve`
 // Hủy xác nhận 1 mục (Admin/READY_CANCEL): ma ∈ KHUON|FILM|MUC|HSKT|QC_XAC_NHAN.
 export const cancelReadyItem = (id, ma) => client.post(`/ready/${id}/huy`, { ma });
 // Bỏ tích 1 mục kỹ thuật ngay trong luồng Quét/tích (quyền tech, khi tích lộn): ma ∈ KHUON|FILM|MUC.
-export const uncheckReadyItem = (id, ma) => client.post(`/ready/${id}/uncheck/${ma}`);
+export const uncheckReadyItem = (id, ma, dotVaiIds) => client.post(`/ready/${id}/uncheck/${ma}`, { dotVaiIds });
 // Lịch sử trạng thái (xác nhận READY đang hiệu lực) theo ngày — cho trang Hệ thống.
 export const listConfirmHistory = (params) => client.get('/ready/lich-su-xac-nhan', { params });
 

@@ -452,7 +452,9 @@ export default function ReadyQcPage() {
         getCodes={(r) => [r.ma_phan]}
         getBarcodes={(r) => [r.barcode]}
         matchMultiple={false}
-        canSelect={(r) => isReady(r) || 'chưa đủ mục kỹ thuật (Khuôn/Film/Mực) — QC chưa xác nhận được'}
+        canSelect={(r) => isReady(r) || (r.loai_dot_vai_chua_xong
+          ? `kỹ thuật chưa xác nhận đủ mục cho đợt vải loại ${r.loai_dot_vai_chua_xong}`
+          : 'chưa đủ mục kỹ thuật (Khuôn/Film/Mực) — QC chưa xác nhận được')}
         onNotFound={giaiThichQuetTruot}
         isSelected={(r) => selected.has(r.id)}
         onToggle={(r) => toggleOne(r.id)}

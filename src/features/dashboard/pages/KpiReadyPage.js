@@ -14,6 +14,7 @@ import { getKpiReady } from '../../../services/kpiReadyService';
 import { fmtNum, fmtDate, fmtDateTime } from '../../../utils/format';
 import { khopNhieu, chuanTuKhoa } from '../../../utils/timKiem';
 import { KpiCard } from '../components/charts';
+import KpiDrillModal from '../components/KpiDrillModal';
 import {
   gopTheoDon, dongTong, dongPhanTram, fmtPt, fmtPhut,
   tachTheoDotVai, giaTriTheoDot, COT_THEO_DOT, COT_TRAI_THEO_DOT, viTatTen,
@@ -125,6 +126,7 @@ export default function KpiReadyPage() {
   const [loaiNgay, setLoaiNgay] = useState('TG_LEN_MES');
   const [donLoc, setDonLoc] = useState([]);      // [] = mọi đơn trong phạm vi
   const [page, setPage] = useState(1);
+  const [drill, setDrill] = useState(null); // mã KPI đang xem chi tiết (KPI_DRILL)
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -309,19 +311,19 @@ export default function KpiReadyPage() {
 
       {/* ===== 5 KPI ===== */}
       <div className="mb-4 flex flex-wrap gap-2.5">
-        <KpiCard tone="emerald" icon="✅" label="% đơn READY đủ trước Release"
+        <KpiCard tone="emerald" icon="✅" label="% đơn READY đủ trước Release" onClick={kpi ? () => setDrill('READY_TRUOC') : undefined}
           value={kpi ? fmtPt(kpi.ready_truoc_release.pt) : '—'}
           sub={kpi ? `${fmtNum(kpi.ready_truoc_release.tu_so)}/${fmtNum(kpi.ready_truoc_release.mau_so)} phần in đã release` : ''} />
-        <KpiCard tone="rose" icon="⚠" label="Số lần thiếu sau Release"
+        <KpiCard tone="rose" icon="⚠" label="Số lần thiếu sau Release" onClick={kpi ? () => setDrill('THIEU_SAU') : undefined}
           value={kpi ? fmtNum(kpi.thieu_sau_release.so_lan) : '—'}
           sub="Đã Release 1 mà IQC chưa xác nhận READY" />
-        <KpiCard tone="amber" icon="↩" label="Số lần quay lại / rework"
+        <KpiCard tone="amber" icon="↩" label="Số lần quay lại / rework" onClick={kpi ? () => setDrill('REWORK') : undefined}
           value={kpi ? fmtNum(kpi.rework.so_lan) : '—'}
           sub={kpi ? `trên ${fmtNum(kpi.rework.so_phan_in)} phần in bị trả về` : ''} />
-        <KpiCard tone="sky" icon="⏱" label="Lead time đến READY"
+        <KpiCard tone="sky" icon="⏱" label="Lead time đến READY" onClick={kpi ? () => setDrill('LEAD') : undefined}
           value={kpi && kpi.lead_time.tb_phut != null ? fmtPhut(kpi.lead_time.tb_phut) : '—'}
           sub={kpi ? `TB · tổng ${fmtNum(kpi.lead_time.tong_phut)} phút / ${fmtNum(kpi.lead_time.so_phan_in)} phần in` : ''} />
-        <KpiCard tone="violet" icon="🔀" label="% bất thường xử lý đúng quyền"
+        <KpiCard tone="violet" icon="🔀" label="% bất thường xử lý đúng quyền" onClick={kpi ? () => setDrill('BAT_THUONG') : undefined}
           value={kpi ? fmtPt(kpi.bat_thuong.pt) : '—'}
           sub={kpi ? `${fmtNum(kpi.bat_thuong.tu_so)}/${fmtNum(kpi.bat_thuong.mau_so)} phần in đổi PA in > ${kpi.bat_thuong.nguong} lần` : ''} />
       </div>
@@ -506,6 +508,9 @@ export default function KpiReadyPage() {
       </div>
       <Pagination page={page} totalPages={totalPages} total={viewRows.length} onPage={setPage} />
 
+      {/* Bấm 1 ô KPI → danh sách phần in tạo nên con số đó (nguồn = `data.rows`, cùng tập tính KPI). */}
+      <KpiDrillModal ma={drill} rows={data?.rows || []} nguong={kpi?.bat_thuong?.nguong ?? 2}
+        onClose={() => setDrill(null)} />
       <Toast toast={toast} />
     </div>
   );

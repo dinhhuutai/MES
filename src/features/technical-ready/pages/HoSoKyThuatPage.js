@@ -168,7 +168,9 @@ export default function HoSoKyThuatPage() {
       const res = await changePhuongAnIn(detail.hskt.id, pa);
       setDetail(res.data); load();
       const m = res.data?.barcode_moi;
-      show(`Đã đổi phương án in (phiên bản mới)${m && m !== res.data?.barcode_cu ? ` · mã vạch → ${m}` : ''}`);
+      show(res.data?.gop_vao
+        ? `Mã vạch ${m} đã có hồ sơ khác dùng — đã liên kết ${res.data.so_phan_in_gop} phần in vào hồ sơ đó`
+        : `Đã đổi phương án in (phiên bản mới)${m && m !== res.data?.barcode_cu ? ` · mã vạch → ${m}` : ''}`);
       setPaConfirm(null);
     } catch (e) { show(e.message || 'Đổi phương án in thất bại', 'error'); }
     finally { setSavingPa(false); }

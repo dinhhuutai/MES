@@ -43,7 +43,9 @@ function ReturnNote({ info, nguon }) {
   );
 }
 
-export default function ReadyPanel({ phanInId, onClose, onChanged }) {
+// `dotVaiIds` + `loaiDotVai` (mig 098): panel mở từ 1 DÒNG LOẠI ĐỢT VẢI của phần in chờ ≥2 loại ⇒
+// trạng thái + nút xác nhận đều theo NHÓM đó (không truyền = như cũ, mức phần in).
+export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, onClose, onChanged }) {
   const { can } = usePermissions();
   const { toast, show } = useToast();
   const now = useNow(1000);
@@ -66,25 +68,27 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
   const reqCount = phaiBam.length;
   const doneCount = phaiBam.filter((it) => state[`${it.ma.toLowerCase()}_done`]).length;
 
+  // Khóa chuỗi cho deps (mảng mới mỗi render ⇒ không đưa thẳng vào useCallback).
+  const dotKey = (dotVaiIds || []).join(',');
   const load = useCallback(async () => {
     if (!phanInId) return;
     setLoading(true);
     try {
-      const res = await getReadyDetail(phanInId);
+      const res = await getReadyDetail(phanInId, dotVaiIds);
       setDetail(res.data);
     } catch (e) {
       show(e.message || 'Lỗi tải', 'error');
     } finally {
       setLoading(false);
     }
-  }, [phanInId, show]);
+  }, [phanInId, dotKey, show]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load(); }, [load]);
 
   const doConfirm = async (item) => {
     setBusy(item.ma);
     try {
-      await confirmReadyItem(phanInId, item.ma);
+      await confirmReadyItem(phanInId, item.ma, undefined, dotVaiIds);
       show(`Đã xác nhận ${item.label}`);
       await load();
       onChanged?.();
@@ -101,7 +105,7 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
   const doConfirmAll = async () => {
     setBusy('__ALL__');
     try {
-      await confirmReadyItemsBatch(phanInId, eligible.map((it) => ({ ma: it.ma })));
+      await confirmReadyItemsBatch(phanInId, eligible.map((it) => ({ ma: it.ma })), dotVaiIds);
       show(`Đã xác nhận ${eligible.length} mục`);
       await load();
       onChanged?.();
@@ -165,13 +169,24 @@ export default function ReadyPanel({ phanInId, onClose, onChanged }) {
     <SidePanel
       open={!!phanInId}
       onClose={onClose}
-      title={detail?.phan_in ? `READY — ${detail.phan_in.ma_phan}` : 'Chuẩn bị kỹ thuật'}
+      title={detail?.phan_in ? `READY — ${detail.phan_in.ma_phan}${detail.nhom_loai ? ` · ${detail.nhom_loai.ten}` : ''}` : 'Chuẩn bị kỹ thuật'}
       subtitle={detail?.phan_in ? `${detail.phan_in.ten_khach_hang} · ${detail.phan_in.mau_vai}` : ''}
     >
       {loading || !detail ? (
         <div className="py-10 text-center text-ink-soft">Đang tải...</div>
       ) : (
         <div className="space-y-4">
+          {detail.nhom_loai && (
+            <div className="rounded-control border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-violet-800">
+              Phần in đang chờ <b>{detail.nhom_loai.so_nhom} loại đợt vải</b> ({detail.nhom_loai.cac_nhom.join(' · ')}) — mỗi loại xác nhận RIÊNG.
+              Đang xem dòng <b>{detail.nhom_loai.ten}</b>: {detail.nhom_loai.ma_dot_vai.length} đợt vải.
+            </div>
+          )}
+          {!detail.nhom_loai && loaiDotVai && dotVaiIds && dotVaiIds.length > 0 && (
+            <div className="rounded-control border border-line bg-surface-muted px-3 py-2 text-xs text-ink-soft">
+              Phần in không còn chờ nhiều loại đợt vải — đang xác nhận ở mức phần in.
+            </div>
+          )}
           {/* Lý do bị trả về — để kỹ thuật biết PHẢI LÀM LẠI GÌ (Kế hoạch/Release 1 & QC READY). */}
           {detail.tra_ve_kh && <ReturnNote info={detail.tra_ve_kh} nguon="Kế hoạch (Release 1)" />}
           {detail.tra_ve && <ReturnNote info={detail.tra_ve} nguon="QC chuẩn bị kỹ thuật" />}
