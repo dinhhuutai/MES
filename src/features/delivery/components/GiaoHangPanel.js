@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useSelector } from 'react-redux';
 import SidePanel from '../../../components/common/SidePanel';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
@@ -22,6 +23,8 @@ export default function GiaoHangPanel({ giaoHangId, onClose, onChanged }) {
   const { can } = usePermissions();
   const { toast, show } = useToast();
   const canManage = can('DELIVERY_MANAGE');
+  // Người BẤM IN — trường `nguoi_in` của mẫu phiếu (khác `nguoi_tao` là người LẬP phiếu).
+  const nguoiIn = useSelector((s) => s.auth.user?.ho_ten || s.auth.user?.ten_dang_nhap || '');
 
   const [gh, setGh] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -60,7 +63,7 @@ export default function GiaoHangPanel({ giaoHangId, onClose, onChanged }) {
   // ⚠ Hàm ASYNC từ 08/09/2026 (hỏi mẫu đã gắn trước khi dựng) ⇒ phải `await`, nếu không lỗi rơi vào
   //   promise và try/catch đồng bộ không bắt được.
   const doPrint = async (gop) => {
-    try { await printPhieuGiao(gh, { gop }); }
+    try { await printPhieuGiao(gh, { gop, nguoiIn }); }
     catch (e) { show(e.message || 'Không mở được cửa sổ in', 'error'); }
   };
 

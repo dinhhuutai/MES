@@ -37,6 +37,7 @@ import DuyetPage from './features/duyet/pages/DuyetPage';
 import CaiDatThongBaoPage from './features/system/pages/CaiDatThongBaoPage';
 import NotificationsPage from './features/notifications/pages/NotificationsPage';
 import ToInPage from './features/system/pages/ToInPage';
+import KhachHangPage from './features/system/pages/KhachHangPage';
 import TichGiaoPage from './features/system/pages/TichGiaoPage';
 import ManualEntryPage from './features/system/pages/ManualEntryPage';
 import VaiVeUpdatePage from './features/system/pages/VaiVeUpdatePage';
@@ -150,6 +151,7 @@ const PAGES = {
   '/duyet': <DuyetPage />,
   '/he-thong/cai-dat-thong-bao': <CaiDatThongBaoPage />,
   '/he-thong/to-in': <ToInPage />,
+  '/he-thong/khach-hang': <KhachHangPage />,
   '/he-thong/tich-giao': <TichGiaoPage />,
 };
 

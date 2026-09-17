@@ -31,7 +31,7 @@ import LoaiDotVaiBadge from '../../planning/components/LoaiDotVaiBadge';
 import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import PhuongAnInCell from '../../../components/common/PhuongAnInCell';
-import { fmtDateTime } from '../../../utils/format';
+import { fmtDateTime, fmtDate } from '../../../utils/format';
 import { khuonRequired } from '../constants';
 import exportReadyExcel from '../utils/exportReadyExcel';
 
@@ -228,9 +228,14 @@ export default function ReadyPage() {
     setBulkSaving(true);
     try {
       const chon = rows.filter((r) => selected.has(r._key));
-      // Dòng THƯỜNG → endpoint hàng loạt (mức phần in) như cũ; dòng LOẠI ĐỢT VẢI → xác nhận riêng nhóm đó.
-      const thuong = [...new Set(chon.filter((r) => !r.tach_theo_loai).map((r) => r.id))];
-      const tach = chon.filter((r) => r.tach_theo_loai);
+      // ⚠⚠ DÒNG NÀO CÓ `dot_vai_ids` THÌ XÁC NHẬN THEO ĐỢT — kể cả khi phần in chỉ còn 1 đợt chờ
+      //   (bỏ điều kiện `tach_theo_loai` cũ). Lý do: phần in đã Ready từ đợt trước thì dòng TỔNG đang
+      //   DAT, đi đường "mức phần in" sẽ ăn 409 "Mục đã được xác nhận" và đợt MỚI không xác nhận được
+      //   — đúng lỗi người dùng báo 16/09/2026. Chỉ dòng KHÔNG có đợt chờ nào (nhánh Test Run trả về)
+      //   mới đi đường hàng loạt mức phần in như cũ.
+      const coDot = (r) => Array.isArray(r.dot_vai_ids) && r.dot_vai_ids.length > 0;
+      const thuong = [...new Set(chon.filter((r) => !coDot(r)).map((r) => r.id))];
+      const tach = chon.filter(coDot);
       let okCount = 0;
       let skippedCount = 0;
       if (thuong.length) {
@@ -276,13 +281,17 @@ export default function ReadyPage() {
     { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
     { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
-    // ⚠ Loại của các đợt ĐANG CHỜ ở READY. Phần in chờ ≥2 loại ⇒ TÁCH DÒNG, mỗi dòng 1 loại + xác nhận riêng.
+    // ⚠⚠ TÁCH DÒNG THEO TỪNG ĐỢT VẢI (16/09/2026 — trước đây theo LOẠI đợt vải): phần in đang chờ ≥2
+    //   đợt ⇒ mỗi đợt 1 dòng, xác nhận Khuôn/Film/Mực riêng. 2 đợt CÙNG LOẠI cũng tách, nên phải hiện
+    //   SL + ngày vải về — đó là thứ duy nhất phân biệt 2 dòng trên màn hình.
     { key: 'loai_dot_vai', header: 'Loại đợt vải', render: (r) => (
       <div>
         <LoaiDotVaiBadge value={r.loai_dot_vai} />
         {r.tach_theo_loai && (
           <div className="mt-0.5 text-[11px] text-violet-700" title={r.ma_dot_vai_list}>
-            1/{r.so_nhom_loai} loại · xác nhận riêng
+            Đợt {r.thu_tu_dot}/{r.so_nhom_loai}
+            {r.so_luong_dot ? ` · ${Number(r.so_luong_dot).toLocaleString('vi-VN')} pcs` : ''}
+            {r.ngay_dot ? ` · ${fmtDate(r.ngay_dot)}` : ''}
           </div>
         )}
       </div>
@@ -340,7 +349,13 @@ export default function ReadyPage() {
       <FieldFilters fields={FILTER_FIELDS} values={filters} onField={(k, v) => setFilters((f) => ({ ...f, [k]: v }))} onClear={() => setFilters({})} open={showFilters} />
 
       <DataTable columns={columns} rows={viewRows} rowKey="_key" loading={loading} sttStart={0}
-        onRowClick={(r) => setSel({ id: r.id, dotVaiIds: r.tach_theo_loai ? r.dot_vai_ids : null, loai: r.loai_dot_vai })}
+        onRowClick={(r) => setSel({
+          id: r.id,
+          // Luôn mở panel THEO ĐỢT khi dòng có đợt chờ (không chỉ khi tách dòng) — panel phải hiện
+          // đúng trạng thái của đợt đó, nếu không nó nói "đã xác nhận" trong khi bảng nói chưa.
+          dotVaiIds: (r.dot_vai_ids && r.dot_vai_ids.length) ? r.dot_vai_ids : null,
+          loai: r.loai_dot_vai,
+        })}
         rowClassName={(r) => slaRowClass(evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status)}
         emptyText="Tất cả phần in đã READY 🎉" />
 
@@ -443,25 +458,25 @@ export default function ReadyPage() {
           const items = [...scanSel];
           if (items.length === 0) throw new Error('Chọn mục cần xác nhận');
           const st = scanItemsRef.current[r.id] || (scanItemsRef.current[r.id] = []);
-          // ⚠⚠ Phần in chờ ≥2 LOẠI đợt vải (mig 098): mỗi lần quét xác nhận MỘT dòng loại chưa xong — quét
-          //   lần 2 sang dòng loại kế tiếp ("xác nhận cả 2 lần"). Dòng đã đủ mục ⇒ backend 422 NOTHING ⇒ thử dòng sau.
-          const nhom = rows.filter((x) => x.id === r.id && x.tach_theo_loai);
+          // ⚠⚠⚠ QUÉT 1 LẦN = XÁC NHẬN **MỌI ĐỢT VẢI ĐANG CHỜ** của phần in đó (người dùng chốt
+          //   16/09/2026). Máy quét chỉ đọc được code phần / mã vạch phần in — KHÔNG nói được là đợt
+          //   nào ⇒ hệ thống không có cách nào đoán, nên xác nhận hết.
+          //   (Bản cũ thử LẦN LƯỢT từng đợt và dừng ở đợt đầu chưa xong ⇒ phải quét 2 lần cho 2 đợt,
+          //    người đứng máy không biết mình còn thiếu lần nào.)
+          // ⚠ Backend nhận TẬP CON bất kỳ của các đợt đang chờ (`chonNhom`) nên gửi hết id trong MỘT
+          //   lời gọi — 1 transaction, không có cảnh nửa đợt xác nhận được nửa đợt lỗi.
+          const nhom = rows.filter((x) => x.id === r.id
+            && Array.isArray(x.dot_vai_ids) && x.dot_vai_ids.length > 0);
           if (!nhom.length) {
             await confirmReadyItemsBatch(r.id, items.map((ma) => ({ ma })));
             st.push({ items, dotVaiIds: null, loai: null });
             return;
           }
-          for (const g of nhom) {
-            try {
-              await confirmReadyItemsBatch(r.id, items.map((ma) => ({ ma })), g.dot_vai_ids);
-              st.push({ items, dotVaiIds: g.dot_vai_ids, loai: g.loai_dot_vai });
-              return;
-            } catch (e) {
-              if (e && e.errorCode === 'NOTHING') continue;
-              throw e;
-            }
-          }
-          throw new Error(`Đã xác nhận đủ cả ${nhom.length} dòng loại đợt vải`);
+          const tatCaIds = [...new Set(nhom.flatMap((g) => g.dot_vai_ids))];
+          const nhan = nhom.length > 1
+            ? `${nhom.length} đợt` : (nhom[0].loai_dot_vai || null);
+          await confirmReadyItemsBatch(r.id, items.map((ma) => ({ ma })), tatCaIds);
+          st.push({ items, dotVaiIds: tatCaIds, loai: nhan });
         }}
         onUndo={async (r) => {
           const st = scanItemsRef.current[r.id] || [];

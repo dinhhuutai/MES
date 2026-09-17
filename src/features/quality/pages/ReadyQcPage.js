@@ -36,6 +36,8 @@ const TECH_ITEMS = [
 ];
 
 const fmt = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '');
+// Ngày vải về của đợt (dòng phụ cột "Loại đợt vải") — chỉ ngày, không giờ.
+const fmtNgay = (d) => (d ? new Date(d).toLocaleDateString('vi-VN') : '');
 
 const FILTER_FIELDS = [
   { key: 'codePhan', label: 'Code phần', col: 'ma_phan' }, { key: 'khach', label: 'Khách hàng', col: 'ten_khach_hang' },
@@ -105,7 +107,8 @@ export default function ReadyQcPage() {
       if (done.has(k)) return;      // đã đổ cả nhóm ở vị trí thành viên đầu tiên
       done.add(k);
       const list = bySet.get(k);
-      const chuaDu = list.filter((x) => x.tech_done !== true).length;
+      // ⚠ Đếm theo PHẦN IN (khử trùng `id`) — bảng nay tách dòng theo đợt vải nên đếm dòng là gấp đôi.
+      const chuaDu = new Set(list.filter((x) => x.tech_done !== true).map((x) => x.id)).size;
       list.forEach((m, i) => out.push({
         ...m, _set: k, _setFirst: i === 0, _setSize: list.length, _setChuaQc: chuaDu,
       }));
@@ -169,7 +172,9 @@ export default function ReadyQcPage() {
     setReturnChecklists(new Set());
     setReturnReason('');
     try {
-      const res = await getReadyDetail(row.id);
+      // Panel mở từ 1 DÒNG ĐỢT VẢI ⇒ hiện trạng thái Khuôn/Film/Mực CỦA ĐỢT ĐÓ (không phải dòng tổng),
+      // nếu không panel nói "đã xác nhận" trong khi dòng trên bảng đang báo chưa.
+      const res = await getReadyDetail(row.id, row.dot_vai_ids);
       setDetail(res.data);
     } catch (e) {
       show(e.message || 'Lỗi tải chi tiết', 'error');
@@ -215,19 +220,33 @@ export default function ReadyQcPage() {
   };
 
   const byMa = (detail?.checkpoints || []).reduce((acc, c) => ({ ...acc, [c.ma_checkpoint]: c }), {});
-  const techDone = detail?.state?.tech_done === true;
+  // ⚠⚠ ĐÒI CẢ HAI: `detail.state.tech_done` = đợt ĐANG XEM đã đủ mục (dữ liệu tươi, theo đợt) và
+  //   `editing.tech_done` = MỌI đợt của phần in đã đủ mục (điều kiện thật của `confirmQC`). Chỉ lấy
+  //   `detail` thì mở dòng "đợt 1 đã xong" sẽ bật nút trong khi đợt 2 còn thiếu ⇒ bấm là ăn 409.
+  const techDone = detail?.state?.tech_done === true && editing?.tech_done === true;
 
   // QC chỉ xác nhận được khi kỹ thuật đã ĐỦ MỤC (backend tính theo khách: II/AD chỉ cần Film+Mực).
+  // ⚠⚠ `tech_done` ở màn này CỐ Ý Ở MỨC PHẦN IN (mọi đợt vải đủ mục) dù bảng đã tách dòng theo đợt —
+  //   QC xác nhận 1 lần là phủ CẢ phần in, nên bật checkbox theo từng đợt sẽ cho tick rồi ăn 409.
+  //   Trạng thái riêng của đợt nằm ở `tech_done_dot` (chỉ để HIỂN THỊ).
   const isReady = (r) => r.tech_done === true;
-  const readyRows = rows.filter(isReady);
+  // ⚠ Đếm theo PHẦN IN (khử trùng `id`): 1 phần in chờ 2 đợt ra 2 dòng, đếm dòng là gấp đôi.
+  const readyPins = useMemo(
+    () => [...new Set(rows.filter(isReady).map((r) => r.id))], [rows]);
 
+  // ⚠⚠ `selected` khóa theo **id PHẦN IN**, KHÔNG theo `_key`: QC xác nhận ở mức phần in ⇒ tick 1 dòng
+  //   thì cả 2 dòng của phần in đó cùng sáng — đúng bản chất, và `doBatch` không gửi trùng id.
   const toggleOne = (id) => setSelected((s) => {
     const next = new Set(s);
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
-  const allChecked = readyRows.length > 0 && readyRows.every((r) => selected.has(r.id));
-  const toggleAll = () => setSelected(() => (allChecked ? new Set() : new Set(readyRows.map((r) => r.id))));
+  const allChecked = readyPins.length > 0 && readyPins.every((id) => selected.has(id));
+  const toggleAll = () => setSelected(() => (allChecked ? new Set() : new Set(readyPins)));
+
+  // 1 dòng / PHẦN IN cho modal quét (bảng đã tách dòng theo đợt vải — xem ghi chú ở chỗ dùng).
+  const scanRows = useMemo(
+    () => rows.filter((r, i) => rows.findIndex((x) => x.id === r.id) === i), [rows]);
 
   const [exporting, setExporting] = useState(false);
   const doExport = async () => {
@@ -308,7 +327,21 @@ export default function ReadyQcPage() {
         <div className="text-xs text-ink-soft">{[r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—'}</div>
       </div>
     ) },
-    { key: 'loai_dot_vai', header: 'Loại đợt vải', render: (r) => <LoaiDotVaiBadge value={r.loai_dot_vai} /> },
+    // ⚠⚠ TÁCH DÒNG THEO TỪNG ĐỢT VẢI (16/09/2026) — giống màn READY của Kỹ thuật, để cột này chỉ hiện
+    //   MỘT loại và QC nhìn ra ĐỢT NÀO kỹ thuật chưa làm xong. 2 đợt cùng loại cũng tách ⇒ phải hiện
+    //   SL + ngày vải về, đó là thứ duy nhất phân biệt 2 dòng.
+    { key: 'loai_dot_vai', header: 'Loại đợt vải', render: (r) => (
+      <div>
+        <LoaiDotVaiBadge value={r.loai_dot_vai} />
+        {r.tach_theo_loai && (
+          <div className="mt-0.5 text-[11px] text-violet-700" title={r.ma_dot_vai_list}>
+            Đợt {r.thu_tu_dot}/{r.so_nhom_loai}
+            {r.so_luong_dot ? ` · ${Number(r.so_luong_dot).toLocaleString('vi-VN')} pcs` : ''}
+            {r.ngay_dot ? ` · ${fmtNgay(r.ngay_dot)}` : ''}
+          </div>
+        )}
+      </div>
+    ) },
     // Phương án in (ERP `Pain` trên HSKT): 1 Bàn · 2 Máy · 3 Robot.
     // Đổi được ngay tại chỗ như màn READY của Kỹ thuật: ⟳ xoay Bàn → Robot → Máy, ✓ mới ghi
     // (kèm đổi số cuối mã vạch HSKT + đặt `pa_in_sua_tay` để job ERP không đè lại).
@@ -348,19 +381,21 @@ export default function ReadyQcPage() {
         <NghenButton rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} onClick={() => setNghenOpen(true)} />
         <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
-        <Badge tone="warning">{readyRows.length} đủ mục · {meta.total} ở READY</Badge>
+        <Badge tone="warning">{readyPins.length} đủ mục · {meta.total} ở READY</Badge>
       </Toolbar>
 
       <FieldFilters fields={FILTER_FIELDS} values={filters} onField={(k, v) => setFilters((f) => ({ ...f, [k]: v }))} onClear={() => setFilters({})} open={showFilters} />
 
-      <DataTable columns={columns} rows={viewRows} loading={loading} onRowClick={(r) => open(r)} sttStart={0}
+      {/* ⚠⚠ `rowKey="_key"` BẮT BUỘC sau khi tách dòng theo đợt: 2 dòng của cùng phần in chung `id`,
+          để mặc định là React trùng key và bảng vẽ sai/nhảy dòng. */}
+      <DataTable columns={columns} rows={viewRows} rowKey="_key" loading={loading} onRowClick={(r) => open(r)} sttStart={0}
         rowClassName={(r) => `${slaRowClass(evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status)} ${r._set ? 'border-l-[3px] border-l-primary/60' : ''}`}
         emptyText="Không có phần in nào ở READY" />
 
       <SidePanel
         open={!!editing}
         onClose={() => setEditing(null)}
-        title={`QC READY — ${editing?.ma_phan || ''}`}
+        title={`QC READY — ${editing?.ma_phan || ''}${editing?.tach_theo_loai ? ` · đợt ${editing.thu_tu_dot}/${editing.so_nhom_loai}` : ''}`}
         subtitle={editing ? [editing.ten_khach_hang, editing.ma_don_hang, editing.ma_hang, editing.mau_vai].filter(Boolean).join(' · ') : ''}
         footer={
           <>
@@ -434,20 +469,31 @@ export default function ReadyQcPage() {
                 {techDone && <OwnerHint checkpoint="QC_XAC_NHAN" className="pt-1" />}
                 {techDone
                   ? <p className="pt-1 text-xs text-ink-soft">QC xác nhận → READY hoàn thành, cho phép Release 1.</p>
-                  : <p className="pt-1 text-xs font-medium text-warning">Kỹ thuật chưa xác nhận đủ mục — QC chưa thể xác nhận.</p>}
+                  : (
+                    <p className="pt-1 text-xs font-medium text-warning">
+                      Kỹ thuật chưa xác nhận đủ mục — QC chưa thể xác nhận.
+                      {/* Nêu RÕ đợt nào còn thiếu: phần in có thể đã xong đợt đang xem mà còn đợt khác
+                          chưa làm ⇒ nếu không nói ra thì QC không hiểu vì sao nút bị khóa. */}
+                      {editing?.loai_dot_vai_chua_xong
+                        ? ` Còn đợt vải: ${editing.loai_dot_vai_chua_xong}.` : ''}
+                    </p>
+                  )}
               </>
             )}
           </div>
         )}
       </SidePanel>
 
-      {/* Truyền ĐỦ `rows` (không phải `readyRows`) để quét phần in nào ĐANG HIỆN trên bảng cũng khớp;
-          phần in chưa đủ mục kỹ thuật thì `canSelect` báo rõ lý do thay vì "Không thấy". */}
+      {/* Truyền ĐỦ danh sách (không phải riêng dòng đã đủ mục) để quét phần in nào ĐANG HIỆN trên bảng
+          cũng khớp; phần in chưa đủ mục kỹ thuật thì `canSelect` báo rõ lý do thay vì "Không thấy".
+          ⚠⚠ DEDUPE THEO `id`: bảng nay tách dòng theo đợt vải nên 1 phần in có nhiều dòng cùng `id` —
+          đưa cả vào modal thì `getId` trùng nhau (React key trùng, và `khongGomSet` của màn READY sẽ
+          coi là "mã trỏ nhiều phần in"). QC xác nhận ở mức phần in nên 1 dòng/phần in là đúng. */}
       <ScanCollectModal
         open={scanOpen}
         onClose={() => setScanOpen(false)}
         title="Quét / tích phần in — QC READY"
-        rows={rows}
+        rows={scanRows}
         getId={(r) => r.id}
         getCodes={(r) => [r.ma_phan]}
         getBarcodes={(r) => [r.barcode]}

@@ -176,10 +176,14 @@ export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, onClose, o
         <div className="py-10 text-center text-ink-soft">Đang tải...</div>
       ) : (
         <div className="space-y-4">
-          {detail.nhom_loai && (
+          {/* ⚠ Chỉ nhắc khi phần in đang chờ ≥2 ĐỢT VẢI — 1 đợt thì panel vẫn chạy theo đợt nhưng
+              người dùng không cần biết, hiện banner chỉ tổ gây phân tâm. */}
+          {detail.nhom_loai && detail.nhom_loai.so_nhom > 1 && (
             <div className="rounded-control border border-violet-200 bg-violet-50 px-3 py-2 text-sm text-violet-800">
-              Phần in đang chờ <b>{detail.nhom_loai.so_nhom} loại đợt vải</b> ({detail.nhom_loai.cac_nhom.join(' · ')}) — mỗi loại xác nhận RIÊNG.
-              Đang xem dòng <b>{detail.nhom_loai.ten}</b>: {detail.nhom_loai.ma_dot_vai.length} đợt vải.
+              Phần in đang chờ <b>{detail.nhom_loai.so_nhom} đợt vải</b> — mỗi đợt xác nhận RIÊNG.
+              Đang xem <b>{detail.nhom_loai.so_dot_chon > 1
+                ? `${detail.nhom_loai.so_dot_chon} đợt` : detail.nhom_loai.ten}</b>
+              {detail.nhom_loai.ma_dot_vai.length ? `: ${detail.nhom_loai.ma_dot_vai.join(', ')}` : ''}.
             </div>
           )}
           {!detail.nhom_loai && loaiDotVai && dotVaiIds && dotVaiIds.length > 0 && (

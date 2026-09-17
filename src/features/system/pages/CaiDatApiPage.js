@@ -16,8 +16,10 @@ import LichSuApiPanel from '../components/LichSuApiPanel';
 // có màn *Đồng bộ ERP* riêng (bảng `erp_sync_log`), đưa vào đây sẽ thành 2 chỗ xem cùng một thứ.
 // ⚠ Thêm API mới có ghi vết thì nhớ khai vào đây, nếu không nút Lịch sử sẽ không hiện dù backend
 //   vẫn ghi đủ (`utils/erpApiLog.ghiLog` + `caidatapi.repository.lichSu` lọc theo `hanh_dong`).
+// ⚠⚠ PHẢI KHỚP `caidatapi.service.MA_CO_LICH_SU` bên BACKEND — khai một bên thôi thì nút hiện ra
+//   nhưng bấm vào ra 404 `NO_HISTORY` (đúng lỗi đã gặp 16/09/2026 với 5 API thêm về sau).
 const CO_LICH_SU = new Set([
-  'ERP_BARCODE_TEM', 'ERP_GHI_IN_TEM',
+  'ERP_BARCODE_TEM', 'ERP_BARCODE_TEM_17', 'ERP_BARCODE_TEM_13', 'ERP_GHI_IN_TEM',
   'ERP_LAY_ID_PHIEU_GIAO', 'ERP_GUI_PHIEU_GIAO', 'ERP_GUI_PHAN_LOAI_LOI',
 ]);
 

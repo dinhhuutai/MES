@@ -49,13 +49,24 @@ const PHIEU_MAU = {
   ghi_chu: 'Giao trong ngày, gọi trước khi tới',
   ten_khach_hang: 'CÔNG TY TNHH MAY MẶC ABC',
   ma_don_hang: 'DH-2609-018',
+  // 4 trường thêm 16/09/2026 — có ở đây thì Xem trước / In thử mới thấy được ô vừa kéo vào.
+  dia_chi: 'Lô A1, KCN Long An, huyện Bến Lức, tỉnh Long An',
+  dia_chi_giao: 'Kho B — 25 Nguyễn Văn Cừ, Quận 5, TP.HCM',
+  giao_hang_tai: 'Kho B — 25 Nguyễn Văn Cừ, Quận 5, TP.HCM',
+  bo_phan_bh: 'THLA',
   tems: [
     { ma_tem: '152608057689', nguon: 'KCS', phan_list: 'SL-2609-001-A01-F01-C01', ma_hang: 'SP-1120',
-      mau_vai: 'Trắng', kich_vai: '1.6m', kich_phim: '60x90', ma_lenh_san_xuat: 'LSX1902', so_luong_giao: 420 },
+      mau_vai: 'Trắng', kich_vai: '1.6m', kich_phim: '60x90', ma_lenh_san_xuat: 'LSX1902', so_luong_giao: 420,
+      sl_oqc_dat: 420, sl_oqc_dat_sua: 0, ten_khach_hang: 'CÔNG TY TNHH MAY MẶC ABC',
+      ma_don_hang: 'DH-2609-018', ghi_chu: '' },
     { ma_tem: '172608057712', nguon: 'SUA', la_tem_sua: true, phan_list: 'SL-2609-001-A01-F01-C01', ma_hang: 'SP-1120',
-      mau_vai: 'Trắng', kich_vai: '1.6m', kich_phim: '60x90', ma_lenh_san_xuat: 'LSX1902', so_luong_giao: 35 },
+      mau_vai: 'Trắng', kich_vai: '1.6m', kich_phim: '60x90', ma_lenh_san_xuat: 'LSX1902', so_luong_giao: 35,
+      sl_oqc_dat: 35, sl_oqc_dat_sua: 35, ten_khach_hang: 'CÔNG TY TNHH MAY MẶC ABC',
+      ma_don_hang: 'DH-2609-018', ghi_chu: 'Hàng đã qua sửa' },
     { ma_tem: '152608057903', nguon: 'KCS', phan_list: 'SL-2609-001-A02-F03-C02', ma_hang: 'SP-1121',
-      mau_vai: 'Đen', kich_vai: '1.5m', kich_phim: '55x80', ma_lenh_san_xuat: 'LSX1907', so_luong_giao: 260 },
+      mau_vai: 'Đen', kich_vai: '1.5m', kich_phim: '55x80', ma_lenh_san_xuat: 'LSX1907', so_luong_giao: 260,
+      sl_oqc_dat: 300, sl_oqc_dat_sua: 0, ten_khach_hang: 'CÔNG TY TNHH MAY MẶC ABC',
+      ma_don_hang: 'DH-2609-019', ghi_chu: 'Giao đợt 1/2' },
   ],
 };
 
@@ -66,12 +77,20 @@ const MAU_O_PHIEU = {
   ngay_in: new Date().toISOString(), ghi_chu: 'Giao trong ngày', kieu_in: 'Bản CHI TIẾT theo từng tem',
   ten_khach_hang: 'CÔNG TY TNHH MAY MẶC ABC', ma_don_hang: 'DH-2609-018',
   so_tem: 3, so_dong: 3, tong_sl: 715,
+  // ⚠ THÊM TRƯỜNG MỚI VÀO `TRUONG_PHIEU` THÌ THÊM CẢ Ở ĐÂY, nếu không ô trên LƯỚI THIẾT KẾ hiện
+  //   trống và người dùng tưởng trường đó hỏng (dù bản in thật vẫn ra chữ).
+  dia_chi: 'Lô A1, KCN Long An, huyện Bến Lức, tỉnh Long An',
+  dia_chi_giao: 'Kho B — 25 Nguyễn Văn Cừ, Quận 5, TP.HCM',
+  giao_hang_tai: 'Kho B — 25 Nguyễn Văn Cừ, Quận 5, TP.HCM',
+  bo_phan_bh: 'THLA', nguoi_in: 'Nguyễn Văn A',
 };
 const MAU_O_DONG = {
   stt: 1, ma_tem: '152608057689', nguon: 'KCS', phan_list: 'SL-2609-001-A01-F01-C01',
   ma_hang: 'SP-1120', mau_vai: 'Trắng', kich_vai: '1.6m', kich_phim: '60x90',
   kich_vai_phim: '1.6m / 60x90', ma_lenh_san_xuat: 'LSX1902', so_luong_giao: 420,
   so_tem_gop: 2, co_sua: ' *',
+  sl_oqc_dat: 420, ma_don_hang: 'DH-2609-018',
+  ten_khach_hang: 'CÔNG TY TNHH MAY MẶC ABC', ghi_chu: 'Giao đợt 1/2',
 };
 
 // Kẹp vùng chọn vào trong lưới hiện tại — sau khi xóa hàng/cột, vùng cũ có thể trỏ ra ngoài.

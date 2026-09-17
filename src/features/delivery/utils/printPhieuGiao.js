@@ -30,6 +30,15 @@ const ngay = (d) => {
 //   nó thành mã KHÔNG có thật, in lên phiếu giao là quét không ra. `maTemNhan` chặn ca đó.
 const maHien = (t) => maTemNhan(t.ma_tem, t.nguon === 'SUA' ? 17 : 15, null, t.la_tem_sua);
 
+// SL ĐẠT TỪ OQC của 1 dòng, tính theo ĐÚNG nguồn của dòng đó.
+// ⚠ Nguồn SỬA = `sl_oqc_dat_sua`; nguồn KCS = phần còn lại (`sl_oqc_dat − sl_oqc_dat_sua`) — lấy
+//   thẳng `sl_oqc_dat` cho dòng KCS là cộng nhầm cả phần hàng đã qua sửa vào.
+const slOqcDat = (t) => {
+  const tong = Number(t.sl_oqc_dat) || 0;
+  const sua = Number(t.sl_oqc_dat_sua) || 0;
+  return (t.nguon === 'SUA' || t.la_tem_sua) ? sua : Math.max(0, tong - sua);
+};
+
 // GỘP theo CODE PHẦN. Khóa gộp lấy cả mã hàng/màu/kích để 2 phần in trùng tên mà khác quy cách
 // không bị cộng nhầm vào nhau. Giữ THỨ TỰ gặp đầu tiên (đừng sort lại — phiếu in ra phải khớp
 // thứ tự người soạn nhìn trên màn hình).
@@ -40,6 +49,7 @@ export function gopTheoCodePhan(tems) {
     const cu = m.get(k);
     if (cu) {
       cu.so_luong_giao += Number(t.so_luong_giao) || 0;
+      cu.sl_oqc_dat += slOqcDat(t);
       cu.so_tem += 1;
       if (t.nguon === 'SUA' || t.la_tem_sua) cu.co_sua = true;
     } else {
@@ -47,6 +57,10 @@ export function gopTheoCodePhan(tems) {
         phan_list: t.phan_list, ma_hang: t.ma_hang, mau_vai: t.mau_vai,
         kich_vai: t.kich_vai, kich_phim: t.kich_phim,
         so_luong_giao: Number(t.so_luong_giao) || 0, so_tem: 1,
+        sl_oqc_dat: slOqcDat(t),
+        // Nhóm gộp theo CODE PHẦN nên mọi tem trong nhóm cùng một phần in ⇒ cùng đơn/khách; lấy của
+        // tem đầu là đủ.
+        ma_don_hang: t.ma_don_hang, ten_khach_hang: t.ten_khach_hang,
         co_sua: t.nguon === 'SUA' || !!t.la_tem_sua,
       });
     }
@@ -85,7 +99,7 @@ const CSS = `
 //   · mức DÒNG  → khối `lap` (mỗi phần tử = 1 dòng bảng chi tiết)
 // ⚠ Thêm trường mới vào `TRUONG_PHIEU`/`TRUONG_DONG_PHIEU` thì PHẢI thêm ở đây, nếu không ô trên
 //   phiếu ra RỖNG mà không báo lỗi gì (đúng bẫy đã ghi cho nhóm "Gia công" của mẫu tem).
-function duLieuPhieu(gh, gop, soDong) {
+function duLieuPhieu(gh, gop, soDong, nguoiIn = '') {
   const tems = gh.tems || [];
   return {
     ma_phieu_giao: gh.ma_phieu_giao || '',
@@ -94,13 +108,22 @@ function duLieuPhieu(gh, gop, soDong) {
     ngay_in: new Date().toISOString(),
     ghi_chu: gh.ghi_chu || '',
     kieu_in: gop ? 'Bản GỘP theo code phần' : 'Bản CHI TIẾT theo từng tem',
+    // Địa điểm giao của CHÍNH phiếu (mig 099) — in lại vẫn ra đúng nơi đã giao.
+    giao_hang_tai: gh.giao_hang_tai || '',
+    // ⚠ NGƯỜI BẤM IN, không phải người lập phiếu (`nguoi_tao`): in lại phiếu của người khác thì đây
+    //   là người đang cầm tờ giấy. Truyền từ trang gọi — util không đọc redux store.
+    nguoi_in: nguoiIn || '',
     ten_khach_hang: gh.ten_khach_hang || '',
     ma_don_hang: gh.ma_don_hang || '',
+    dia_chi: gh.dia_chi || '',
+    dia_chi_giao: gh.dia_chi_giao || '',
+    bo_phan_bh: gh.bo_phan_bh || '',
     so_tem: tems.length,
     so_dong: soDong,
     tong_sl: tems.reduce((s, t) => s + (Number(t.so_luong_giao) || 0), 0),
   };
 }
+
 
 function duLieuDong(gh, gop) {
   const tems = gh.tems || [];
@@ -114,6 +137,11 @@ function duLieuDong(gh, gop) {
       kich_vai_phim: kichVaiPhim(g.kich_vai, g.kich_phim),
       so_tem_gop: g.so_tem, co_sua: g.co_sua ? ' *' : '',
       so_luong_giao: Number(g.so_luong_giao) || 0,
+      sl_oqc_dat: g.sl_oqc_dat || 0,
+      ma_don_hang: g.ma_don_hang || '', ten_khach_hang: g.ten_khach_hang || '',
+      // ⚠ Kiểu GỘP dồn nhiều tem vào 1 dòng ⇒ ghi chú của từng tem không còn ứng với dòng nào.
+      //   CỐ Ý để trống thay vì lấy ghi chú của tem đầu (in ra sẽ gây hiểu nhầm là của cả nhóm).
+      ghi_chu: '',
     }));
   }
   return tems.map((t, i) => ({
@@ -126,11 +154,14 @@ function duLieuDong(gh, gop) {
     kich_vai_phim: kichVaiPhim(t.kich_vai, t.kich_phim),
     so_tem_gop: 1, co_sua: (t.nguon === 'SUA' || t.la_tem_sua) ? ' *' : '',
     so_luong_giao: Number(t.so_luong_giao) || 0,
+    sl_oqc_dat: slOqcDat(t),
+    ma_don_hang: t.ma_don_hang || '', ten_khach_hang: t.ten_khach_hang || '',
+    ghi_chu: t.ghi_chu || '',
   }));
 }
 
 // Dựng tờ phiếu theo MẪU đã gắn. Trả `null` = chưa gắn mẫu / lỗi → bên gọi lùi về bố cục cứng.
-async function htmlTheoMau(gh, gop) {
+async function htmlTheoMau(gh, gop, nguoiIn) {
   const maViTri = gop ? 'GH_PHIEU_GIAO_GOP' : 'GH_PHIEU_GIAO_CT';
   let boCuc;
   try {
@@ -140,7 +171,7 @@ async function htmlTheoMau(gh, gop) {
   } catch { return null; }                       // chưa chạy migration / mất mạng → dùng bố cục cứng
   try {
     const dongs = duLieuDong(gh, gop);
-    const than = await renderPhieu(boCuc, duLieuPhieu(gh, gop, dongs.length), dongs);
+    const than = await renderPhieu(boCuc, duLieuPhieu(gh, gop, dongs.length, nguoiIn), dongs);
     return htmlToPhieu(boCuc, than, `Phiếu giao ${gh.ma_phieu_giao}`, true);
   } catch (e) {
     console.error('[phieu-giao] Dựng phiếu theo mẫu lỗi, dùng bố cục mặc định:', e);
@@ -149,7 +180,7 @@ async function htmlTheoMau(gh, gop) {
 }
 
 // ─── BỐ CỤC CỨNG (đường lùi — A4 dọc) ───────────────────────────────────────
-function htmlCung(gh, gop) {
+function htmlCung(gh, gop, nguoiIn = '') {
   const tems = gh.tems || [];
   const tong = tems.reduce((s, t) => s + (Number(t.so_luong_giao) || 0), 0);
 
@@ -196,6 +227,10 @@ function htmlCung(gh, gop) {
       <div><b>Đơn hàng</b>${esc(gh.ma_don_hang) || '—'}</div>
       <div><b>Số tem</b>${tems.length}</div>
       <div><b>Tổng SL giao</b>${num(tong)}</div>
+      ${gh.bo_phan_bh ? `<div><b>Bộ phận BH</b>${esc(gh.bo_phan_bh)}</div>` : ''}
+      ${/* Chỉ in dòng khi CÓ dữ liệu — phiếu cũ (trước mig 099) không có gì thì giữ nguyên bố cục. */''}
+      ${gh.dia_chi ? `<div style="grid-column:1/-1"><b>Địa chỉ</b>${esc(gh.dia_chi)}</div>` : ''}
+      ${gh.giao_hang_tai ? `<div style="grid-column:1/-1"><b>Giao hàng tại</b>${esc(gh.giao_hang_tai)}</div>` : ''}
       ${gh.ghi_chu ? `<div style="grid-column:1/-1"><b>Ghi chú</b>${esc(gh.ghi_chu)}</div>` : ''}
     </div>
     <table><thead>${head}</thead><tbody>${rows || `<tr><td colspan="${soCot + 1}" class="c">(Phiếu chưa có tem)</td></tr>`}</tbody>
@@ -206,7 +241,7 @@ function htmlCung(gh, gop) {
       <div>Người vận chuyển<span></span>(Ký, ghi rõ họ tên)</div>
       <div>Người nhận<span></span>(Ký, ghi rõ họ tên)</div>
     </div>
-    <div class="ft">In lúc ${new Date().toLocaleString('vi-VN')}</div>
+    <div class="ft">In lúc ${new Date().toLocaleString('vi-VN')}${nguoiIn ? ` · Người in: ${esc(nguoiIn)}` : ''}</div>
     </body></html>`;
 
   return html;
@@ -228,11 +263,11 @@ function moCuaSo(html, tuIn) {
 // ⚠⚠ HÀM NAY LÀ `async` (từ 08/09/2026 — phải hỏi mẫu đã gắn trước khi dựng). Bên gọi PHẢI `await`,
 //   nếu không lỗi "popup bị chặn" rơi vào promise và try/catch đồng bộ KHÔNG bắt được ⇒ người dùng
 //   bấm in mà không thấy gì, cũng không có toast.
-export async function printPhieuGiao(gh, { gop = false } = {}) {
+export async function printPhieuGiao(gh, { gop = false, nguoiIn = '' } = {}) {
   if (!gh) return;
-  const theoMau = await htmlTheoMau(gh, gop);
+  const theoMau = await htmlTheoMau(gh, gop, nguoiIn);
   if (theoMau) { moCuaSo(theoMau, false); return; }
-  moCuaSo(htmlCung(gh, gop), true);
+  moCuaSo(htmlCung(gh, gop, nguoiIn), true);
 }
 
 // Dựng tài liệu XEM TRƯỚC (không tự in) — dùng ở màn Thiết kế phiếu.

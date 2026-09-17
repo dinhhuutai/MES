@@ -166,7 +166,9 @@ export const MODULES = [
       // luôn từ trang "Owner checkpoint/checklist" ngay trên — KHÔNG có bảng owner riêng.
       { ten: 'Chọn đơn hàng (KPI)', route: '/he-thong/kpi-don-hang', perm: 'KPI_DON_HANG_MANAGE' },
       { ten: 'Trạng thái', route: '/he-thong/trang-thai', perm: 'STATUS_VIEW' },
-      { ten: 'Hủy lệnh xác nhận', route: '/he-thong/lich-su-trang-thai', perm: ['READY_CANCEL', 'RELEASE1', 'RELEASE2', 'PROD_RUN', 'KCS', 'SUA', 'OQC', 'LENH_CANCEL_ANY', 'DELIVERY_MANAGE'] },
+      // ⚠ `TICH_GIAO` phải có trong danh sách: bán hàng chỉ được cấp quyền đó (KHÔNG có
+      //   `DELIVERY_MANAGE`) mà vẫn cần vào tab "Hủy tích tem giao" để gỡ tem tích nhầm.
+      { ten: 'Hủy lệnh xác nhận', route: '/he-thong/lich-su-trang-thai', perm: ['READY_CANCEL', 'RELEASE1', 'RELEASE2', 'PROD_RUN', 'KCS', 'SUA', 'OQC', 'LENH_CANCEL_ANY', 'DELIVERY_MANAGE', 'TICH_GIAO'] },
       // Chốt chặn "bán hàng tích tem" (mig 092) — đặt ở Hệ thống theo yêu cầu người dùng: người tích
       // là BÁN HÀNG, không thuộc tổ giao hàng. Tem chưa tích thì màn Giao hàng KHÔNG hiện.
       { ten: 'Chờ GN tích', route: '/he-thong/tich-giao', perm: ['TICH_GIAO', 'DELIVERY_MANAGE'] },
@@ -192,6 +194,9 @@ export const MODULES = [
       { ten: 'Cài đặt thông báo', route: '/he-thong/cai-dat-thong-bao', perm: 'WORKFLOW_VIEW' },
       // Danh mục TỔ IN (mig 084) — mã tổ gửi thẳng lên ERP qua `@pToin` mỗi lần in tem.
       { ten: 'Danh mục tổ in', route: '/he-thong/to-in', perm: 'TO_IN_MANAGE' },
+      // Khách hàng (mig 099) — địa chỉ + địa chỉ giao mặc định để in lên PHIẾU GIAO.
+      // ⚠ Mở thêm cho `DELIVERY_MANAGE`: tổ giao hàng cần tra địa chỉ (backend chỉ cho họ ĐỌC).
+      { ten: 'Khách hàng', route: '/he-thong/khach-hang', perm: ['KHACH_HANG_MANAGE', 'DELIVERY_MANAGE'] },
       { ten: 'Người dùng online', route: '/he-thong/online', perm: 'PRESENCE_VIEW' },
       // Phiên đăng nhập theo THIẾT BỊ (mig 081): xem 1 tài khoản đang đăng nhập ở những máy nào và
       // đăng xuất máy không dùng nữa. Xem chỉ cần PRESENCE_VIEW; đăng xuất người KHÁC cần PHIEN_MANAGE.

@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useSelector } from 'react-redux';
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
 import Toolbar from '../../../components/common/Toolbar';
@@ -9,6 +10,7 @@ import Toast from '../../../components/common/Toast';
 import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
+import Modal from '../../../components/common/Modal';
 import useToast from '../../../hooks/useToast';
 import useSocketReload from '../../../hooks/useSocketReload';
 import usePermissions from '../../../hooks/usePermissions';
@@ -18,7 +20,7 @@ import {
   listTemSanSang, createGiaoHang, listGiaoHang, getGiaoHang,
   listTemChoTich, tichTemGiao, traCuuTemTich, historyGiao, doneGiao,
 } from '../../../services/deliveryService';
-import { Input, Select } from '../../../components/common/controls';
+import { Input, Select, Field, Textarea } from '../../../components/common/controls';
 import DateRangePicker from '../../../components/common/DateRangePicker';
 import { fmtNum, fmtDate, fmtDateTime, temCode, maTemNhan, laMaTemRieng } from '../../../utils/format';
 import GiaoHangPanel from '../components/GiaoHangPanel';
@@ -84,6 +86,9 @@ export default function GiaoHangPage() {
   const { toast, show } = useToast();
   const now = useNow(1000);
   const canManage = can('DELIVERY_MANAGE');
+  // Người BẤM IN (in lại phiếu của người khác thì đây mới là người cầm tờ giấy) — trường `nguoi_in`
+  // của mẫu phiếu. ⚠ Lấy ở TRANG rồi truyền xuống: `printPhieuGiao` là util, không đọc redux store.
+  const nguoiIn = useSelector((s) => s.auth.user?.ho_ten || s.auth.user?.ten_dang_nhap || '');
 
   const [tab, setTab] = useState('tem');           // 'tem' = tem chờ giao · 'phieu' = danh sách phiếu
   const [nghenOpen, setNghenOpen] = useState(false);
@@ -94,6 +99,10 @@ export default function GiaoHangPage() {
   const [selected, setSelected] = useState({});
   const [sel, setSel] = useState(null);            // phiếu đang mở panel
   const [creating, setCreating] = useState(false);
+  // Modal nhập "Giao hàng tại" trước khi in — `{ gop }` = kiểu in đang chờ, null = đóng.
+  // ⚠ Địa điểm này lưu vào PHIẾU (mig 099) nên in lại vẫn ra đúng; bỏ trống vẫn in được bình thường.
+  const [inForm, setInForm] = useState(null);
+  const [giaoTai, setGiaoTai] = useState('');
   const [journey, setJourney] = useState(null);
   const [scanOpen, setScanOpen] = useState(false);
   const [selTich, setSelTich] = useState(() => new Set());
@@ -183,11 +192,13 @@ export default function GiaoHangPage() {
 
   // ─── IN PHIẾU = TẠO PHIẾU + XÁC NHẬN GIAO + IN ────────────────────────────────────────────
   // `gop`: false = in CHI TIẾT (1 dòng/tem) · true = in GỘP theo code phần.
-  const doInPhieu = async (gop) => {
+  const doInPhieu = async (gop, giaoHangTai = '') => {
     setCreating(true);
     try {
       const items = selectedList.map((x) => ({ temId: x.row.tem_id, nguon: x.row.nguon, soLuong: Number(x.qty) || null }));
-      const r = await createGiaoHang({ items, xacNhan: true });
+      // `giaoHangTai` lưu vào CHÍNH phiếu (mig 099) ⇒ in lại từ sidebar vẫn ra đúng địa điểm.
+      // ⚠ Thiếu migration thì backend tự bỏ qua trường này, phiếu vẫn lập bình thường.
+      const r = await createGiaoHang({ items, xacNhan: true, giaoHangTai });
       show(`Đã tạo & xác nhận giao phiếu ${r.data.ma_phieu_giao}`);
       setSelected({});
       load();
@@ -195,7 +206,7 @@ export default function GiaoHangPage() {
       // phải biết là chỉ thiếu bước in để còn vào "Đã hoàn thành" bấm In lại).
       // ⚠ `printPhieuGiao` là ASYNC (phải hỏi mẫu đã gắn) ⇒ BẮT BUỘC `await`, thiếu thì lỗi rơi vào
       //   promise và khối catch đồng bộ không bắt được.
-      try { await printPhieuGiao(r.data, { gop }); }
+      try { await printPhieuGiao(r.data, { gop, nguoiIn }); }
       catch (e) { show(`${e.message} — phiếu ${r.data.ma_phieu_giao} đã chốt, vào "Đã hoàn thành" để in lại`, 'error'); }
     } catch (e) {
       show(e.message || 'Tạo phiếu thất bại', 'error');
@@ -209,7 +220,7 @@ export default function GiaoHangPage() {
   const inLaiPhieu = async (id, gop) => {
     try {
       const r = await getGiaoHang(id);
-      await printPhieuGiao(r.data, { gop });
+      await printPhieuGiao(r.data, { gop, nguoiIn });
     } catch (e) {
       show(e.message || 'Không in lại được phiếu', 'error');
     }
@@ -430,9 +441,10 @@ export default function GiaoHangPage() {
                 <span className="hidden text-xs text-ink-soft sm:inline">In phiếu = xác nhận giao</span>
                 <Button chiXemOk variant="ghost" onClick={() => setSelected({})}>Bỏ chọn</Button>
                 {canManage && <>
-                  {/* 2 kiểu in (người dùng chốt): chi tiết từng tem · gộp theo code phần. */}
-                  <Button variant="secondary" icon="printer" onClick={() => doInPhieu(false)} loading={creating}>In phiếu (chi tiết)</Button>
-                  <Button icon="printer" onClick={() => doInPhieu(true)} loading={creating}>In phiếu (gộp theo phần in)</Button>
+                  {/* 2 kiểu in (người dùng chốt): chi tiết từng tem · gộp theo code phần.
+                      Bấm ra modal nhập "Giao hàng tại" rồi mới tạo phiếu — xem `inForm`. */}
+                  <Button variant="secondary" icon="printer" onClick={() => { setGiaoTai(''); setInForm({ gop: false }); }} loading={creating}>In phiếu (chi tiết)</Button>
+                  <Button icon="printer" onClick={() => { setGiaoTai(''); setInForm({ gop: true }); }} loading={creating}>In phiếu (gộp theo phần in)</Button>
                 </>}
               </div>
             </div>
@@ -504,6 +516,35 @@ export default function GiaoHangPage() {
       <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
         tenMan="Giao hàng" rows={displayRows} tenFile="nghen-giao-hang"
         trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} />
+      {/* ⚠⚠ Bấm "In phiếu" KHÔNG in ngay mà hỏi "Giao hàng tại" trước — địa điểm này được LƯU VÀO
+          PHIẾU (mig 099) nên phải nhập TRƯỚC khi tạo, không vá vào sau được.
+          Bỏ trống vẫn in bình thường (ô trên phiếu để trống) — đây là thông tin thêm, không chặn
+          việc giao hàng. */}
+      <Modal
+        open={!!inForm}
+        onClose={() => setInForm(null)}
+        title={inForm?.gop ? 'In phiếu giao (gộp theo phần in)' : 'In phiếu giao (chi tiết)'}
+        footer={
+          <>
+            <Button chiXemOk variant="ghost" onClick={() => setInForm(null)}>Đóng</Button>
+            <Button icon="printer" loading={creating}
+              onClick={async () => { const g = inForm.gop; setInForm(null); await doInPhieu(g, giaoTai); }}>
+              Tạo phiếu &amp; in
+            </Button>
+          </>
+        }
+      >
+        <div className="mb-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          Bấm <b>Tạo phiếu &amp; in</b> là <b>xác nhận giao luôn</b>: {selectedList.length} tem
+          (tổng <b>{fmtNum(selectedList.reduce((s, x) => s + (Number(x.qty) || 0), 0))}</b>) sẽ rời
+          danh sách này. Lấy lại ở <i>Hệ thống › Hủy lệnh xác nhận › Hủy phiếu giao</i>.
+        </div>
+        <Field label="Giao hàng tại">
+          <Textarea rows={2} value={giaoTai} onChange={(e) => setGiaoTai(e.target.value)}
+            placeholder="Vd: Kho B — Lô A1, KCN Long An (để trống nếu không cần in địa điểm)" />
+        </Field>
+      </Modal>
+
       <Toast toast={toast} />
     </div>
   );

@@ -19,7 +19,7 @@ import { listCancelableLenh, cancelLenh, giaCongTemCancelable, huyGiaCongTem } f
 import { listCancelableTem, cancelPrintTem, listCloseCandidates, closeProduction, listReopenCandidates, reopenProduction, listUndoStartCandidates, undoStartProduction } from '../../../services/productionService';
 import { listCancelKcs, cancelKcs, listCancelSua, cancelSua, listCancelOqc, cancelOqc,
   listTemSuaCancelable, listTemSuaDeleted, huyTemSua, moTemSua } from '../../../services/qualityService';
-import { listPhieuGiaoCancelable, huyPhieuGiao } from '../../../services/deliveryService';
+import { listPhieuGiaoCancelable, huyPhieuGiao, listTemChoTich, boTichTemGiao } from '../../../services/deliveryService';
 import { fmtNum } from '../../../utils/format';
 import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import { khopNhieu, chuanTuKhoa } from '../../../utils/timKiem';
@@ -1841,6 +1841,129 @@ function PhieuGiaoCancelSection({ show }) {
   );
 }
 
+// ─── Tab: Hủy tích tem giao ──────────────────────────────────────────────────
+// Bỏ cờ `tem.da_tich_giao` (mig 092) ⇒ tem RỜI *Giao hàng › Danh sách tem giao*, quay về hàng đợi
+// *Hệ thống › Chờ GN tích*. Dùng khi bán hàng tích nhầm chuyến.
+//
+// ⚠ CỐ Ý KHÔNG viết endpoint mới: dùng lại ĐÚNG 2 API mà trang *Chờ GN tích* đang dùng
+//   (`/giao-hang/tich/cho?daTich=1` + `/giao-hang/tich/bo`) — 2 nơi cùng một luật, không thể lệch.
+//   Tab này chỉ là lối vào thứ hai, gom về chỗ người dùng quen tìm mọi thao tác HỦY.
+// ⚠⚠ Tem ĐÃ vào phiếu giao thì KHÔNG bỏ tích được (backend trả `vuong_phieu`) — phải nói RÕ vướng
+//   phiếu nào, im lặng bỏ qua thì người dùng bấm mãi không hiểu vì sao không có gì xảy ra.
+function TichGiaoCancelSection({ show }) {
+  const [rows, setRows] = useState([]);
+  const [coCot, setCoCot] = useState(true);     // đã chạy mig 092 chưa
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [sel, setSel] = useState(() => new Set());
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listTemChoTich({ search: search || undefined, daTich: 1 });
+      setRows(res.data.items || []);
+      setCoCot(res.data.co_cot !== false);
+      setSel(new Set());
+    } catch (e) {
+      show(e.message || 'Lỗi tải', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [search, show]);
+
+  useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
+
+  const toggle = (r) => setSel((s) => {
+    const n = new Set(s);
+    if (n.has(r.tem_id)) n.delete(r.tem_id); else n.add(r.tem_id);
+    return n;
+  });
+  const allChecked = rows.length > 0 && rows.every((r) => sel.has(r.tem_id));
+  const toggleAll = () => setSel(() => (allChecked ? new Set() : new Set(rows.map((r) => r.tem_id))));
+
+  const doBoTich = async () => {
+    const ids = [...sel];
+    if (!ids.length) return;
+    setBusy(true);
+    try {
+      const res = await boTichTemGiao(ids);
+      const d = res.data || {};
+      if (d.vuong_phieu && d.vuong_phieu.length) {
+        show(`Bỏ tích ${d.da_bo} tem. ${d.vuong_phieu.length} tem đã nằm trong phiếu giao (${
+          d.vuong_phieu.slice(0, 3).map((x) => x.phieu).join(', ')}) — hủy phiếu đó trước ở tab "Hủy phiếu giao"`, 'error');
+      } else {
+        show(`Đã bỏ tích ${d.da_bo} tem — quay lại hàng đợi Chờ GN tích`);
+      }
+      load();
+    } catch (e) {
+      show(e.message || 'Bỏ tích thất bại', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const columns = [
+    { key: 'sel', header: (
+      <input type="checkbox" checked={allChecked} onChange={toggleAll} disabled={!rows.length}
+        className="h-4 w-4 rounded border-line text-primary focus:ring-primary" />
+    ), className: 'w-10', selection: true, render: (r) => (
+      <input type="checkbox" checked={sel.has(r.tem_id)} onChange={() => toggle(r)}
+        className="h-4 w-4 rounded border-line text-primary focus:ring-primary" />
+    ) },
+    { key: 'ma_tem', header: 'Mã tem', render: (r) => (
+      <Badge tone={r.la_tem_sua ? 'warning' : 'info'}>{r.ma_tem}</Badge>
+    ) },
+    { key: 'nguon', header: 'Loại', render: (r) => (r.la_tem_sua ? 'Hàng sửa (tem 17)' : 'KCS đạt (tem 15)') },
+    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.khach_list || '—' },
+    { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.don_list || '—' },
+    { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
+    { key: 'ma_phan', header: 'Code phần', render: (r) => r.phan_list || '—' },
+    { key: 'mau_vai', header: 'Màu · Kích', render: (r) => [r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—' },
+    { key: 'con_giao', header: 'Chờ giao', className: 'text-right tabular-nums font-medium text-primary', render: (r) => fmtNum(r.con_giao) },
+    { key: 'nguoi_tich_giao', header: 'Người tích', render: (r) => r.nguoi_tich_giao || '—' },
+    { key: 'tg_tich_giao', header: 'Giờ tích', render: (r) => fmtTime(r.tg_tich_giao) },
+  ];
+
+  return (
+    <div>
+      <Toolbar title="Hủy tích tem giao"
+        subtitle="Bán hàng tích nhầm chuyến — bỏ tích để tem rời màn Giao hàng, quay về hàng đợi Chờ GN tích"
+        search={search} onSearch={setSearch}
+        searchPlaceholder="Tìm mã tem, khách, đơn, mã hàng, code phần...">
+        <Badge tone="info">{rows.length} tem đã tích</Badge>
+      </Toolbar>
+
+      {!coCot && (
+        <div className="mb-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          <b>Chưa chạy migration 092.</b> Chức năng tích tem chưa dùng được — chạy
+          <code className="mx-1 rounded bg-amber-100 px-1">database/migrations/092_tich_giao_hang.sql</code>
+          bằng user <code>postgres</code> rồi tải lại trang.
+        </div>
+      )}
+
+      <div className="mb-3 rounded-control border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700">
+        Bỏ tích <b>không đụng sổ cái số lượng</b> — chỉ gỡ cờ "đã tích" nên tem thôi hiện ở
+        <b> Giao hàng › Danh sách tem giao</b> và quay lại <b>Hệ thống › Chờ GN tích</b>.
+        ⚠ Tem đã nằm trong phiếu giao thì phải <b>hủy phiếu đó trước</b> (tab bên cạnh).
+      </div>
+
+      <DataTable columns={columns} rows={rows} loading={loading} rowKey="tem_id"
+        emptyText="Chưa tích tem nào" />
+
+      {sel.size > 0 && (
+        <div className="sticky bottom-4 mt-4 flex items-center justify-between rounded-card border border-line bg-surface px-5 py-3 shadow-card-hover">
+          <span className="text-sm text-ink">Đã chọn <b>{sel.size}</b> tem</span>
+          <div className="flex gap-2">
+            <Button chiXemOk variant="ghost" onClick={() => setSel(new Set())}>Bỏ chọn</Button>
+            <Button variant="danger" icon="x" onClick={doBoTich} loading={busy}>Bỏ tích ({sel.size})</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function LichSuTrangThaiPage() {
   const { can } = usePermissions();
   const { toast, show } = useToast();
@@ -1866,6 +1989,9 @@ export default function LichSuTrangThaiPage() {
     can('OQC') && { key: 'huyoqc', label: 'Hủy xác nhận OQC' },
     // Hủy phiếu giao — đảo sổ cái đã giao, tem quay lại *Giao hàng › Danh sách tem giao*.
     can('DELIVERY_MANAGE') && { key: 'huyphieugiao', label: 'Hủy phiếu giao' },
+    // Hủy tích tem — gỡ cờ `da_tich_giao`, tem về lại hàng đợi *Chờ GN tích*. Cùng bộ quyền với
+    // trang tích tem (bán hàng có `TICH_GIAO` nhưng thường KHÔNG có `DELIVERY_MANAGE`).
+    (can('TICH_GIAO') || can('DELIVERY_MANAGE')) && { key: 'huytich', label: 'Hủy tích tem giao' },
   ].filter(Boolean);
 
   const [tab, setTab] = useState(tabs[0]?.key);
@@ -1905,6 +2031,7 @@ export default function LichSuTrangThaiPage() {
       {tab === 'motemsua' && <TemSuaReopenSection show={show} />}
       {tab === 'huyoqc' && <QcCancelSection show={show} kind="oqc" />}
       {tab === 'huyphieugiao' && <PhieuGiaoCancelSection show={show} />}
+      {tab === 'huytich' && <TichGiaoCancelSection show={show} />}
 
       <Toast toast={toast} />
     </div>
