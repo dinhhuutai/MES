@@ -166,11 +166,15 @@ export default function PhanInTraCuuPanel({ open, onClose, row }) {
                 {(tl.pending?.dot_vai || []).length > 0 && (
                   <div className="rounded-card border border-dashed border-line p-3">
                     <div className="mb-1 text-sm font-medium text-ink-soft">Đợt vải chưa release</div>
-                    {(tl.pending?.dot_vai || []).map((p, i) => (
+                    {/* `dots` = mỗi đợt kèm READY RIÊNG (backend 22/09/2026); backend cũ chỉ có `dot_vai`. */}
+                    {(tl.pending?.dots || tl.pending?.dot_vai || []).map((p, i) => (
                       <div key={p.ma_dot_vai || i} className="flex flex-wrap items-center gap-2 text-xs text-ink-soft">
                         <span>{p.ma_dot_vai}</span>
                         <span>SL {fmtNum(p.so_luong)}</span>
                         {p.tg_len_mes && <span>lên MES {fmtDateTime(p.tg_len_mes)}</span>}
+                        {p.ready && (p.ready.da_ready
+                          ? <Badge tone="success">Ready {fmtDateTime(p.ready.tg_ready_xong)}{p.ready.khong_qua_ky_thuat ? ' · hệ thống' : ''}</Badge>
+                          : <Badge tone="warning">Chưa Ready</Badge>)}
                       </div>
                     ))}
                   </div>

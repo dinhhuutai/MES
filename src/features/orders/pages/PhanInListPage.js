@@ -888,7 +888,35 @@ export default function PhanInListPage() {
                     )}
                   </li>
                 );
-                const pendingBlock = pending && (
+                // ⚠⚠ MỖI ĐỢT VẢI CHỜ RELEASE = 1 KHỐI RIÊNG, READY CỦA CHÍNH ĐỢT ĐÓ (22/09/2026 — người dùng: "2 đợt
+                //   vải thì phải có 2 lần xác nhận ready"). Backend trả `pending.dots[].ready` (xác nhận riêng của
+                //   đợt, hoặc lần xác nhận đầu tiên sau khi đợt lên READY). Backend cũ chưa có `dots` ⇒ lùi về 1 khối.
+                const pendingDots = pending?.dots?.length ? pending.dots : null;
+                const pendingBlock = pending && (pendingDots ? (
+                  <>
+                    {pendingDots.map((d, di) => (
+                      <div key={d.id || d.ma_dot_vai} className="rounded-control border border-dashed border-line bg-surface-muted/20 p-2.5">
+                        <div className="mb-2 flex flex-wrap items-center gap-2">
+                          <Badge tone="default">Đợt vải {di + 1}/{pendingDots.length} · chờ release</Badge>
+                          {d.loai_dot_vai && <Badge tone="info">{d.loai_dot_vai}</Badge>}
+                          {d.ready?.da_ready
+                            ? <Badge tone="success">Đã Ready {fmtDateTime(d.ready.tg_ready_xong)}</Badge>
+                            : <Badge tone="warning">Chưa Ready</Badge>}
+                        </div>
+                        <div className="mb-2 pl-1 text-xs text-ink-soft">
+                          <b className="text-ink">{d.ma_dot_vai}</b> · vải về {fmtNum(d.so_luong)}
+                          {d.ngay_vai_ve ? ` · ngày về ${fmtDate(d.ngay_vai_ve)}` : ''}
+                          {d.tg_len_mes ? ` · lên MES ${fmtDateTime(d.tg_len_mes)}` : ''}
+                        </div>
+                        {d.ready?.checklists?.length ? (
+                          <ol>{renderNode(d.ready, 0, [d.ready], false)}</ol>
+                        ) : (
+                          <p className="pl-1 text-xs text-ink-soft">Đợt này chưa có mục READY nào được xác nhận.</p>
+                        )}
+                      </div>
+                    ))}
+                  </>
+                ) : (
                   <div className="rounded-control border border-dashed border-line bg-surface-muted/20 p-2.5">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       <Badge tone="default">Đợt vải chờ release</Badge>
@@ -902,7 +930,7 @@ export default function PhanInListPage() {
                       <p className="pl-1 text-xs text-ink-soft">Đợt vải chờ release — chưa xác nhận READY.</p>
                     )}
                   </div>
-                );
+                ));
                 return (
                   <div className="space-y-4">
                     {journeys.length === 0 && !pending ? (
