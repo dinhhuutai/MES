@@ -10,7 +10,12 @@
 //   const { items, total, thieu } = await taiHetTrang((p) => listReplanCandidates({ search, ...p }));
 //   const { items } = await taiHetTrang(fn, { limit: LIMIT_TAI_LON });   // endpoint đã nới trần
 //
-// `fetcher(p)` nhận `{ page, limit }` và phải trả về `res` có `res.data.items` + `res.data.meta.total`.
+// `fetcher(p)` nhận `{ page, limit }` và trả `res` theo MỘT trong hai hình dạng đang có trong hệ:
+//   · `res.data.items` + `res.data.meta.total`  (đa số endpoint — dùng `buildMeta`)
+//   · `res.data.rows`  + `res.data.total`       (vd `GET /quality/phan-loai-loi`)
+// ⚠ Nhận cả 2 là CỐ Ý: viết hàm lặp trang thứ hai cho hình dạng còn lại thì sớm muộn 2 bản lệch
+//   luật (trần `MAX_TRANG`, cách tính `thieu`). Endpoint trả hình dạng khác hẳn ⇒ `ds` rỗng ở lượt
+//   đầu và vòng lặp dừng ngay, KHÔNG lặp vô hạn.
 // Trả `thieu = true` khi chạm trần an toàn mà vẫn chưa gom đủ ⇒ trang gọi NÊN báo cho người dùng
 // thay vì lặng lẽ hiển thị thiếu.
 
@@ -34,8 +39,9 @@ export default async function taiHetTrang(fetcher, { limit = LIMIT_TAI } = {}) {
   for (; trang <= MAX_TRANG; trang += 1) {
     // eslint-disable-next-line no-await-in-loop
     const res = await fetcher({ page: trang, limit });
-    const ds = res?.data?.items || [];
-    total = res?.data?.meta?.total ?? ds.length;
+    const d = res?.data || {};
+    const ds = d.items || d.rows || [];
+    total = d.meta?.total ?? d.total ?? ds.length;
     items.push(...ds);
     // Hết dòng, hoặc đã gom đủ theo `total` → dừng. Danh sách ≤ 200 dòng chỉ tốn ĐÚNG 1 lời gọi.
     if (!ds.length || items.length >= total) break;

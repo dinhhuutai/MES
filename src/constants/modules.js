@@ -108,7 +108,10 @@ export const MODULES = [
       { ten: 'Tổng quan', route: '/dashboard' },
       // ⚠ Trang DUY NHẤT của module Dashboard có gác quyền (mig 093) — 3 trang kia mở cho mọi
       //   người đăng nhập. Người chọn đơn hàng cũng phải xem được kết quả ⇒ nhận cả 2 quyền.
-      { ten: 'KPI READY', route: '/dashboard/kpi-ready', perm: ['KPI_READY_VIEW', 'KPI_DON_HANG_MANAGE'] },
+      // ⚠ Nhãn đổi "KPI READY" → "Theo dõi PO" (20/09/2026). **ROUTE · QUYỀN · API GIỮ NGUYÊN** —
+      //   đổi route là gãy link/bookmark cũ, đổi mã quyền là phải gán lại cho mọi vai trò (cùng cách
+      //   đã làm khi đổi nhãn "Tình trạng theo trạm" → "Sơ đồ phần in").
+      { ten: 'Theo dõi PO', route: '/dashboard/kpi-ready', perm: ['KPI_READY_VIEW', 'KPI_DON_HANG_MANAGE'] },
       { ten: 'Thời gian trạm', route: '/dashboard/thoi-gian-tram' },
       { ten: 'Lịch sử nghẽn', route: '/dashboard/lich-su-nghen' },
       { ten: 'Sơ đồ phần in', route: '/dashboard/tinh-trang-tram' },

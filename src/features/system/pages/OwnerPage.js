@@ -238,7 +238,7 @@ export default function OwnerPage() {
         <div className="card mb-4 overflow-hidden">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-2.5">
             <div className="text-sm font-semibold text-ink">
-              Owner từng cột của bảng KPI READY <span className="text-ink-soft">({cotKpi.length} cột)</span>
+              Owner từng cột của bảng Theo dõi PO <span className="text-ink-soft">({cotKpi.length} cột)</span>
             </div>
             <div className="text-xs text-ink-soft">
               Owner gán vào <b>checkpoint / checklist</b> mà cột đó ăn theo — cột dùng chung một

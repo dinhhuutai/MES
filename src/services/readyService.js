@@ -19,7 +19,9 @@ export const confirmReadyItemsBatch = (id, items, dotVaiIds) =>
   client.post(`/ready/${id}/confirm-batch`, { items, dotVaiIds });
 // Bulk 1 mục cho nhiều phần in (theo mã hàng): { phanInIds, ma, value }.
 export const confirmReadyBulk = (payload) => client.post('/ready/confirm-bulk', payload);
-export const confirmReadyQC = (id) => client.post(`/ready/${id}/confirm-qc`);
+// `dotVaiIds` = QC xác nhận THEO ĐỢT VẢI (21/09/2026); bỏ trống = mức phần in như cũ.
+export const confirmReadyQC = (id, dotVaiIds) =>
+  client.post(`/ready/${id}/confirm-qc`, { dotVaiIds: dotVaiIds || [] });
 // QC trả về Ready kỹ thuật: { checklists: ['FILM',...], lyDo }.
 export const returnReadyToTech = (id, body) => client.post(`/ready/${id}/tra-ve`, body);
 // Hủy xác nhận 1 mục (Admin/READY_CANCEL): ma ∈ KHUON|FILM|MUC|HSKT|QC_XAC_NHAN.
@@ -33,8 +35,9 @@ export const listConfirmHistory = (params) => client.get('/ready/lich-su-xac-nha
 export const listReopenReadyCandidates = (params) => client.get('/ready/reopen/candidates', { params });
 export const reopenReady = (phanInId) => client.post(`/ready/reopen/${phanInId}`);
 // QC xác nhận hàng loạt nhiều phần in.
-export const confirmReadyQcBatch = (phanInIds) =>
-  client.post('/ready/qc-confirm-batch', { phanInIds });
+// items: [{ id, dot_vai_ids }] — mỗi DÒNG (đợt vải) 1 phần tử.
+export const confirmReadyQcBatch = (items) =>
+  client.post('/ready/qc-confirm-batch', { items });
 // Lịch sử theo ngày. scope: 'tech' | 'qc'.
 export const readyHistory = (date, scope) => client.get('/ready/history', { params: { date, scope } });
 // Danh sách phần in đã hoàn thành checkpoint READY theo ngày. scope: 'tech' | 'qc'.

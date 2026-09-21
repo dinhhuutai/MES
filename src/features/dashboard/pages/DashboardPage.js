@@ -5,6 +5,7 @@ import Badge from '../../../components/common/Badge';
 import Toast from '../../../components/common/Toast';
 import SidePanel from '../../../components/common/SidePanel';
 import KcsBreakdown from '../../../components/common/KcsBreakdown';
+import BangTheoDoi from '../components/BangTheoDoi';
 import useToast from '../../../hooks/useToast';
 import useSocketReload from '../../../hooks/useSocketReload';
 import { getActivity, getStageCounts, getBang2, getTinhTrangPhanIn, getHoanThanhHomNay, getChartDetail, getDieuPhoi, getFlow, getFlowOwners } from '../../../services/dashboardService';
@@ -861,6 +862,11 @@ export default function DashboardPage() {
           </div>
         );
       })()}
+
+      {/* Bảng theo dõi 10 check point — dựng lại tờ giấy của xưởng, nguồn số = engine sĩ số
+          (`utils/siSoTram.js`) nên 4 ô đầu khớp tuyệt đối với dải "Theo dõi" của các màn xác nhận.
+          ⚠ Tự tải + tự chịu lỗi (không chặn phần còn lại của Dashboard) và có ô chọn kỳ riêng. */}
+      <BangTheoDoi />
 
       {/* Tầng 1 — tổng quan giai đoạn */}
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">

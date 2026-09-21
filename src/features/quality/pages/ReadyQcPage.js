@@ -46,6 +46,9 @@ const FILTER_FIELDS = [
   { key: 'kichPhim', label: 'Kích phim', col: 'kich_phim' },
 ];
 
+// Mức MODULE (không lồng trong component) để dùng trong useMemo/useCallback khỏi vướng deps.
+const isReady = (r) => r.tech_done === true;
+
 export default function ReadyQcPage() {
   const { can } = usePermissions();
   const { toast, show } = useToast();
@@ -208,8 +211,8 @@ export default function ReadyQcPage() {
   const doConfirm = async () => {
     setSaving(true);
     try {
-      await confirmReadyQC(editing.id);
-      show(`QC xác nhận ${editing.ma_phan} — READY hoàn thành 🎉`);
+      await confirmReadyQC(editing.id, editing.dot_vai_ids);
+      show(`QC xác nhận ${editing.ma_phan}${editing.tach_theo_loai ? ` · đợt ${editing.thu_tu_dot}` : ''} — READY hoàn thành 🎉`);
       setEditing(null);
       load();
     } catch (e) {
@@ -220,33 +223,36 @@ export default function ReadyQcPage() {
   };
 
   const byMa = (detail?.checkpoints || []).reduce((acc, c) => ({ ...acc, [c.ma_checkpoint]: c }), {});
-  // ⚠⚠ ĐÒI CẢ HAI: `detail.state.tech_done` = đợt ĐANG XEM đã đủ mục (dữ liệu tươi, theo đợt) và
-  //   `editing.tech_done` = MỌI đợt của phần in đã đủ mục (điều kiện thật của `confirmQC`). Chỉ lấy
-  //   `detail` thì mở dòng "đợt 1 đã xong" sẽ bật nút trong khi đợt 2 còn thiếu ⇒ bấm là ăn 409.
+  // ⚠⚠⚠ QC XÁC NHẬN THEO ĐỢT VẢI (21/09/2026 — người dùng chốt): `tech_done` của mỗi dòng nay là của
+  //   CHÍNH ĐỢT đó; màn chỉ còn hiện đợt KỸ THUẬT ĐÃ XONG (hàng đợi của QC). Đợt khác chưa xong
+  //   KHÔNG còn chặn nút xác nhận của đợt này.
   const techDone = detail?.state?.tech_done === true && editing?.tech_done === true;
 
-  // QC chỉ xác nhận được khi kỹ thuật đã ĐỦ MỤC (backend tính theo khách: II/AD chỉ cần Film+Mực).
-  // ⚠⚠ `tech_done` ở màn này CỐ Ý Ở MỨC PHẦN IN (mọi đợt vải đủ mục) dù bảng đã tách dòng theo đợt —
-  //   QC xác nhận 1 lần là phủ CẢ phần in, nên bật checkbox theo từng đợt sẽ cho tick rồi ăn 409.
-  //   Trạng thái riêng của đợt nằm ở `tech_done_dot` (chỉ để HIỂN THỊ).
-  const isReady = (r) => r.tech_done === true;
-  // ⚠ Đếm theo PHẦN IN (khử trùng `id`): 1 phần in chờ 2 đợt ra 2 dòng, đếm dòng là gấp đôi.
-  const readyPins = useMemo(
-    () => [...new Set(rows.filter(isReady).map((r) => r.id))], [rows]);
+  // Khóa chọn = `_key` của DÒNG (mỗi dòng = 1 đợt vải) — xác nhận theo đợt nên 2 dòng cùng phần in
+  // phải chọn được riêng.
+  const readyKeys = useMemo(() => rows.filter(isReady).map((r) => r._key), [rows]);
 
-  // ⚠⚠ `selected` khóa theo **id PHẦN IN**, KHÔNG theo `_key`: QC xác nhận ở mức phần in ⇒ tick 1 dòng
-  //   thì cả 2 dòng của phần in đó cùng sáng — đúng bản chất, và `doBatch` không gửi trùng id.
   const toggleOne = (id) => setSelected((s) => {
     const next = new Set(s);
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
-  const allChecked = readyPins.length > 0 && readyPins.every((id) => selected.has(id));
-  const toggleAll = () => setSelected(() => (allChecked ? new Set() : new Set(readyPins)));
+  const allChecked = readyKeys.length > 0 && readyKeys.every((k) => selected.has(k));
+  const toggleAll = () => setSelected(() => (allChecked ? new Set() : new Set(readyKeys)));
 
-  // 1 dòng / PHẦN IN cho modal quét (bảng đã tách dòng theo đợt vải — xem ghi chú ở chỗ dùng).
+  // 1 dòng / PHẦN IN cho modal quét (máy quét chỉ đọc code phần, không biết đợt nào) — quét 1 lần
+  // chọn MỌI đợt đủ mục của phần in đó (cùng luật với màn READY Kỹ thuật).
   const scanRows = useMemo(
     () => rows.filter((r, i) => rows.findIndex((x) => x.id === r.id) === i), [rows]);
+  const keysCuaPin = useCallback((id) => rows.filter((x) => x.id === id && isReady(x)).map((x) => x._key), [rows]);
+  const scanSelected = (r) => keysCuaPin(r.id).some((k) => selected.has(k));
+  const scanToggle = (r) => setSelected((s) => {
+    const next = new Set(s);
+    const ks = keysCuaPin(r.id);
+    const dangChon = ks.some((k) => next.has(k));
+    ks.forEach((k) => (dangChon ? next.delete(k) : next.add(k)));
+    return next;
+  });
 
   const [exporting, setExporting] = useState(false);
   const doExport = async () => {
@@ -260,7 +266,9 @@ export default function ReadyQcPage() {
   const doBatch = async () => {
     setBatching(true);
     try {
-      const res = await confirmReadyQcBatch([...selected]);
+      const items = rows.filter((r) => selected.has(r._key))
+        .map((r) => ({ id: r.id, dot_vai_ids: r.dot_vai_ids || [] }));
+      const res = await confirmReadyQcBatch(items);
       const { okCount, failedCount } = res.data;
       show(failedCount ? `QC xác nhận ${okCount} phần in, ${failedCount} lỗi` : `Đã QC xác nhận ${okCount} phần in 🎉`,
         failedCount ? 'error' : 'success');
@@ -280,9 +288,9 @@ export default function ReadyQcPage() {
       // Phần in CHƯA đủ mục kỹ thuật vẫn hiện ô checkbox nhưng KHÓA (trước đây để trống hẳn nên
       // nhìn như bảng bị mất cột chọn) — kèm tooltip nói rõ vì sao chưa chọn được.
       render: (r) => canQC && (
-        <input type="checkbox" checked={selected.has(r.id)} disabled={!isReady(r)}
+        <input type="checkbox" checked={selected.has(r._key)} disabled={!isReady(r)}
           onClick={(e) => e.stopPropagation()}
-          onChange={() => toggleOne(r.id)}
+          onChange={() => toggleOne(r._key)}
           className="disabled:cursor-not-allowed disabled:opacity-40"
           title={isReady(r) ? 'Chọn phần in' : 'Chưa đủ mục kỹ thuật — QC chưa xác nhận được'}
           aria-label="Chọn phần in" />
@@ -368,7 +376,7 @@ export default function ReadyQcPage() {
 
   return (
     <div>
-      <Toolbar title="QC chuẩn bị kỹ thuật" subtitle="Toàn bộ phần in ở READY — QC xác nhận khi đủ mục kỹ thuật (xác nhận Khuôn là Film tự đạt theo; hàng gia công II/AD chỉ cần Mực). SLA nghẽn QC chỉ tính sau khi kỹ thuật đủ mục."
+      <Toolbar title="QC chuẩn bị kỹ thuật" subtitle="Đợt vải mà kỹ thuật đã xác nhận XONG — QC xác nhận THEO TỪNG ĐỢT (xác nhận Khuôn là Film tự đạt theo; hàng gia công II/AD chỉ cần Mực)."
         search={search} onSearch={setSearch}
         searchPlaceholder="Tìm code phần, mã hàng, màu/kích vải, kích phim...">
         {/* Làm tươi NGAY khi mở modal quét: phòng trường hợp tab để lâu / mất socket giữa chừng. */}
@@ -381,7 +389,7 @@ export default function ReadyQcPage() {
         <NghenButton rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} onClick={() => setNghenOpen(true)} />
         <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
-        <Badge tone="warning">{readyPins.length} đủ mục · {meta.total} ở READY</Badge>
+        <Badge tone="warning">{rows.length} đợt · {meta.total} phần in chờ QC</Badge>
       </Toolbar>
 
       <FieldFilters fields={FILTER_FIELDS} values={filters} onField={(k, v) => setFilters((f) => ({ ...f, [k]: v }))} onClear={() => setFilters({})} open={showFilters} />
@@ -502,8 +510,8 @@ export default function ReadyQcPage() {
           ? `kỹ thuật chưa xác nhận đủ mục cho đợt vải loại ${r.loai_dot_vai_chua_xong}`
           : 'chưa đủ mục kỹ thuật (Khuôn/Film/Mực) — QC chưa xác nhận được')}
         onNotFound={giaiThichQuetTruot}
-        isSelected={(r) => selected.has(r.id)}
-        onToggle={(r) => toggleOne(r.id)}
+        isSelected={scanSelected}
+        onToggle={scanToggle}
         primaryLabel={(r) => r.ma_phan || r.barcode || '—'}
         secondaryLabel={(r) => [r.ten_khach_hang, r.ma_hang, r.mau_vai].filter(Boolean).join(' · ')}
         rowAction={{ label: 'Trả về', icon: 'log-out', onClick: (r) => { setScanOpen(false); open(r, true); } }}

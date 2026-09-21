@@ -10,7 +10,9 @@ import FieldFilters, { FilterToggle } from '../../../components/common/FieldFilt
 import exportPanelExcel from '../../../components/common/exportPanelExcel';
 import { Select } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
-import { getThoiGianTram } from '../../../services/thoiGianTramService';
+import Icon from '../../../components/common/Icon';
+import Spinner from '../../../components/common/Spinner';
+import { getThoiGianTram, getThoiGianTramChecklist } from '../../../services/thoiGianTramService';
 import { fmtNum, fmtDateTime } from '../../../utils/format';
 import { KpiCard } from '../components/charts';
 import { fmtPhut } from '../utils/kpiReadyTable';
@@ -65,6 +67,11 @@ export default function ThoiGianTramPage() {
   const [goc, setGoc] = useState('TRAM');
   const [tramLoc, setTramLoc] = useState(''); // '' = mọi trạm (lọc CLIENT trên tập đã tải)
   const [chiQuaSla, setChiQuaSla] = useState(false);
+  // Sổ xuống CHECKLIST của từng trạm (tải lười). `cl[<khóa lọc>|<mã trạm>] = { checklist, rows }`
+  // ⇒ đổi bộ lọc là khóa đổi theo, dữ liệu cũ tự hết hiệu lực chứ không phải nhớ đi xóa cache.
+  const [moRong, setMoRong] = useState(() => new Set());
+  const [cl, setCl] = useState({});
+  const [clDangTai, setClDangTai] = useState({});
 
   // Chuỗi khóa ổn định cho effect — không đưa object `filters` thẳng vào deps (bẫy §9).
   const khoaLoc = JSON.stringify({ range, loaiMoc, trangThai, search, filters });
@@ -101,6 +108,60 @@ export default function ThoiGianTramPage() {
   const tramCoDl = useMemo(() => tongTram.filter((t) => t.so_don_vi > 0), [tongTram]);
   const tenTram = (ma) => (tramDs.find((t) => t.ma === ma) || {}).ten || ma;
 
+  // ─── Sổ xuống checklist của 1 trạm ───────────────────────────────────────
+  // ⚠ Dùng CHÍNH `thongKe()` của dòng cha để tổng hợp ⇒ cha và con không thể dùng 2 công thức khác
+  //   nhau (TB · trung vị · P90 · quá SLA). Khác duy nhất: SLA lấy của CHECKLIST, không của trạm.
+  const toggleCl = useCallback(async (maTram) => {
+    setMoRong((cu) => {
+      const s = new Set(cu);
+      if (s.has(maTram)) s.delete(maTram); else s.add(maTram);
+      return s;
+    });
+    const khoa = `${khoaLoc}|${maTram}`;
+    if (cl[khoa] || clDangTai[khoa]) return;
+    setClDangTai((c) => ({ ...c, [khoa]: true }));
+    try {
+      const r = await getThoiGianTramChecklist(maTram, {
+        tuNgay: range.from || '', denNgay: range.to || '', loaiMoc, trangThai, timKiem: search, ...filters,
+      });
+      setCl((c) => ({ ...c, [khoa]: r.data }));
+    } catch (e) {
+      // ⚠ Nuốt lỗi + hiện toast: đây là phần THÊM, hỏng nó không được chặn bảng chính.
+      show(e.message || 'Không tải được checklist của trạm', 'error');
+      setMoRong((cu) => { const s = new Set(cu); s.delete(maTram); return s; });
+    } finally {
+      setClDangTai((c) => ({ ...c, [khoa]: false }));
+    }
+  }, [khoaLoc, cl, clDangTai, range, loaiMoc, trangThai, search, filters, show]);
+
+  // Bảng "Tổng hợp theo trạm" ở dạng PHẲNG: dòng trạm + (nếu đang bung) các dòng checklist ngay dưới.
+  // ⚠ CỐ Ý không dùng `subRows` của `DataTable`: prop đó dựng sẵn cho dữ liệu có SẴN + ô hợp nhất,
+  //   còn ở đây dòng con TẢI LƯỜI và mang đúng bộ cột của dòng cha. Phẳng thì dễ đoán hơn hẳn.
+  const bangTram = useMemo(() => {
+    const out = [];
+    tongTram.forEach((t) => {
+      out.push({ ...t, _key: t.ma });
+      if (!moRong.has(t.ma)) return;
+      const d = cl[`${khoaLoc}|${t.ma}`];
+      // ⚠ Dòng chờ phải mang ĐỦ khóa của `thongKe` (rỗng) — thiếu thì các cột số render `undefined`
+      //   và `fmtNum` in ra "NaN" ngay giữa bảng.
+      if (!d) {
+        out.push({ _key: `${t.ma}#dangtai`, _cl: true, ten: 'Đang tải…', ...thongKe([], null) });
+        return;
+      }
+      d.checklist.forEach((c) => {
+        const ds = d.rows.filter((r) => r.ma_checkpoint === c.ma);
+        out.push({
+          _key: `${t.ma}#${c.ma}`, _cl: true, ma: c.ma, ten: c.ten, don_vi: t.don_vi,
+          sla_phut: c.sla_phut, mo_ta: `Đã xác nhận ${fmtNum(c.so_xac_nhan)}/${fmtNum(c.so_don_vi)}`
+            + ' · chưa xác nhận thì tính tới lúc rời trạm',
+          ...thongKe(ds, c.sla_phut),
+        });
+      });
+    });
+    return out;
+  }, [tongTram, moRong, cl, khoaLoc]);
+
   const chipCounts = useMemo(() => {
     const m = { '': (data?.rows || []).length };
     (data?.rows || []).forEach((r) => { m[r.ma_tram] = (m[r.ma_tram] || 0) + 1; });
@@ -109,8 +170,26 @@ export default function ThoiGianTramPage() {
 
   // ─── Cột từng góc nhìn ───────────────────────────────────────────────────
   const cotTram = [
+    // ⚠ Nút mũi tên phải `stopPropagation`: `onRowClick` của bảng này đang drill sang tab Chi tiết,
+    //   thiếu là bấm sổ xuống lại nhảy màn.
     { key: 'ten', header: 'Trạm', className: 'font-medium text-ink', render: (t) => (
-      <div><div>{t.ten}</div><div className="text-[11px] font-normal text-ink-soft">{t.mo_ta}</div></div>
+      <div className={t._cl ? 'pl-6' : ''}>
+        <div className="flex items-center gap-1.5">
+          {!t._cl && t.so_checklist > 0 && (
+            <button type="button" title={moRong.has(t.ma) ? 'Thu gọn checklist' : `Xem ${t.so_checklist} checklist`}
+              onClick={(e) => { e.stopPropagation(); toggleCl(t.ma); }}
+              className="-ml-1 rounded p-0.5 text-ink-soft transition hover:bg-surface-muted hover:text-ink">
+              {clDangTai[`${khoaLoc}|${t.ma}`]
+                ? <Spinner size={13} />
+                : <Icon name={moRong.has(t.ma) ? 'chevron-down' : 'chevron-right'} size={14} />}
+            </button>
+          )}
+          {!t._cl && !t.so_checklist && <span className="w-[18px]" aria-hidden="true" />}
+          {t._cl && <span className="text-ink-soft">↳</span>}
+          <span className={t._cl ? 'font-normal text-ink-soft' : ''}>{t.ten}</span>
+        </div>
+        {t.mo_ta && <div className="text-[11px] font-normal text-ink-soft">{t.mo_ta}</div>}
+      </div>
     ) },
     { key: 'don_vi', header: 'Đơn vị đo', render: (t) => DON_VI[t.don_vi] || t.don_vi },
     { key: 'sla_phut', header: 'SLA', className: 'text-right', render: (t) => phutTxt(t.sla_phut) },
@@ -175,8 +254,11 @@ export default function ThoiGianTramPage() {
     const p = (v) => (v === null || v === undefined ? '' : Number(v));
     try {
       if (goc === 'TRAM') {
-        await exportPanelExcel({ title: 'Thời gian trạm — tổng hợp', subtitle: moTa, fileName: 'thoi-gian-tram-tong-hop', rows: tongTram,
+        // ⚠ Xuất ĐÚNG những dòng đang hiện (kể cả checklist đã bung) — cột "Cấp" để người đọc không
+        //   cộng nhầm dòng con vào dòng cha (checklist là CÙNG tập đơn vị, chỉ khác mốc ra).
+        await exportPanelExcel({ title: 'Thời gian trạm — tổng hợp', subtitle: moTa, fileName: 'thoi-gian-tram-tong-hop', rows: bangTram,
           cols: [
+            { header: 'Cấp', value: (t) => (t._cl ? 'Checklist' : 'Trạm') },
             { header: 'Trạm', value: (t) => t.ten }, { header: 'Đơn vị đo', value: (t) => DON_VI[t.don_vi] || '' },
             { header: 'SLA (phút)', value: (t) => p(t.sla_phut), num: true },
             { header: 'Số đơn vị', value: (t) => t.so_don_vi, num: true }, { header: 'Số phần in', value: (t) => t.so_phan_in, num: true },
@@ -215,7 +297,7 @@ export default function ThoiGianTramPage() {
     } catch (e) { show(e.message || 'Xuất Excel thất bại', 'error'); }
   };
 
-  const soDong = goc === 'TRAM' ? tongTram.length : goc === 'PIN' ? dsPin.length : goc === 'DOT' ? dsDot.length : rows.length;
+  const soDong = goc === 'TRAM' ? bangTram.length : goc === 'PIN' ? dsPin.length : goc === 'DOT' ? dsDot.length : rows.length;
   const soLoc = Object.values(filters).filter(Boolean).length;
 
   return (
@@ -274,8 +356,9 @@ export default function ThoiGianTramPage() {
       </div>
 
       {goc === 'TRAM' && (
-        <DataTable columns={cotTram} rows={tongTram} rowKey="ma" loading={loading} pageSize={0}
-          onRowClick={(t) => { setTramLoc(t.ma); setGoc('CHI_TIET'); }}
+        <DataTable columns={cotTram} rows={bangTram} rowKey="_key" loading={loading} pageSize={0}
+          rowClassName={(t) => (t._cl ? 'bg-surface-muted/40' : '')}
+          onRowClick={(t) => { if (t._cl) return; setTramLoc(t.ma); setGoc('CHI_TIET'); }}
           emptyText="Không có dữ liệu trong khoảng đã chọn" />
       )}
       {goc === 'PIN' && (
@@ -295,6 +378,8 @@ export default function ThoiGianTramPage() {
         ⏳ = còn ở trạm (tính tới bây giờ) · chữ đỏ = quá SLA của trạm · “Tổng các trạm” cộng thời gian ở từng trạm
         (một phần in có thể ở 2 trạm cùng lúc nên tổng có thể lớn hơn “Vào đầu → rời cuối”).
         Trạm READY đo ở mức phần in (khuôn/film/mực dùng chung mọi đợt vải) nên ở góc nhìn đợt vải được gắn cho mọi đợt của phần in đó.
+        {' '}Bấm mũi tên ở dòng trạm để sổ xuống <b>checklist</b> của trạm đó — cùng tập đơn vị và cùng mốc vào, chỉ khác mốc ra
+        (lúc xác nhận chính checklist ấy); chưa xác nhận mà hàng đã rời trạm thì tính tới lúc rời, xác nhận từ trước khi vào thì tính 0 phút.
       </p>
       <Toast toast={toast} />
     </div>

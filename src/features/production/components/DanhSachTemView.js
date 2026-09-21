@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Toolbar from '../../../components/common/Toolbar';
 import Badge from '../../../components/common/Badge';
+import Button from '../../../components/common/Button';
 import DataTable from '../../../components/common/DataTable';
 import SidePanel from '../../../components/common/SidePanel';
 import Pagination from '../../../components/common/Pagination';
@@ -11,6 +12,8 @@ import FieldFilters, { FilterToggle } from '../../../components/common/FieldFilt
 import DateRangePicker from '../../../components/common/DateRangePicker';
 import useToast from '../../../hooks/useToast';
 import { fmtNum, fmtDateTime, temCode } from '../../../utils/format';
+import exportCheckpointExcel, { cotTemChung, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
+import taiHetTrang, { LIMIT_TAI_LON } from '../../../utils/taiHetTrang';
 import TemInPreview from './TemInPreview';
 import { toTemSanXuat, toTemGiaCongVe } from '../utils/printTemLabel';
 
@@ -138,6 +141,7 @@ export default function DanhSachTemView({
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [tem, setTem] = useState(null);         // hàng đang mở SidePanel
+  const [dangXuat, setDangXuat] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -162,6 +166,46 @@ export default function DanhSachTemView({
 
   const fields = laGiaCong ? FIELDS_CHUNG : [...FIELDS_CHUNG, FIELD_CHUYEN];
   const textFilters = Object.fromEntries(fields.map((f) => [f.key, filters[f.key] || '']));
+
+  // ⚠⚠ Phân trang Ở SERVER (20 dòng/trang) ⇒ tải hết mọi trang rồi mới xuất; lấy `rows` là chỉ ra
+  //   ĐÚNG TRANG ĐANG XEM. Endpoint này đã nới trần `TRAN_TAI_HET` nên xin `LIMIT_TAI_LON` là đủ 1 lượt.
+  // ⚠ Bộ cột bám đúng bảng của từng trang: tem gia công không có ngày ca / giờ SX (không ai đứng
+  //   chuyền in nó) nên thay bằng cột "Giờ nhận về" + nhà gia công ở phần chung.
+  const doExcel = async () => {
+    setDangXuat(true);
+    try {
+      const { items, thieu, total } = await taiHetTrang(
+        (p) => fetcher({ search, ...filters, ...p }), { limit: LIMIT_TAI_LON }
+      );
+      if (thieu) show(`Chỉ tải được ${items.length}/${total} tem — hãy thu hẹp bằng bộ lọc`, 'error');
+      await exportCheckpointExcel({
+        cols: [
+          ...cotTemChung((r) => maHienThi(r, laGiaCong)),
+          { header: 'Trạng thái', width: 14, value: (r) => (TT[r.trang_thai] || [r.trang_thai || ''])[0] },
+          { header: laGiaCong ? 'Giờ nhận về' : 'Giờ in tem', width: 18, center: true,
+            value: (r) => (r.created_date ? new Date(r.created_date).toLocaleString('vi-VN') : '') },
+          ...(laGiaCong ? [] : [
+            { header: 'Ngày ca', width: 14, value: (r) => (r.ma_ngay_ca == null ? '' : String(r.ma_ngay_ca)) },
+            { header: 'Giờ SX', width: 16, center: true,
+              value: (r) => [r.gio_sx_bd, r.gio_sx_kt].filter(Boolean).join(' → ') },
+          ]),
+          { header: 'SL in', width: 12, num: true, value: (r) => (r.so_luong == null ? null : Number(r.so_luong)) },
+        ],
+        rows: items,
+        title,
+        fileName: laGiaCong ? 'danh-sach-tem-gia-cong' : 'danh-sach-tem-in',
+        moTaLoc: moTaBoLoc({
+          'tìm kiếm': search,
+          [laGiaCong ? 'ngày nhận về' : 'ngày in tem']: [filters.ngayTu, filters.ngayDen].filter(Boolean).join(' → '),
+          ...Object.fromEntries(fields.map((f) => [f.label.toLowerCase(), filters[f.key] || ''])),
+        }),
+      });
+    } catch (e) {
+      show(e.message || 'Xuất Excel thất bại', 'error');
+    } finally {
+      setDangXuat(false);
+    }
+  };
 
   const cols = [
     { key: 'ma_tem', header: 'Mã tem', render: (r) => <span className="font-medium text-ink">{chu(maHienThi(r, laGiaCong))}</span> },
@@ -195,6 +239,8 @@ export default function DanhSachTemView({
         <DateRangePicker value={{ from: filters.ngayTu || '', to: filters.ngayDen || '' }}
           onChange={setNgay} placeholder={laGiaCong ? 'Ngày nhận về' : 'Ngày in tem'} />
         <FilterToggle open={showFilter} count={filterCount} onClick={() => setShowFilter((v) => !v)} />
+        <Button chiXemOk variant="secondary" icon="download" onClick={doExcel}
+          loading={dangXuat} disabled={!meta.total}>Excel ({fmtNum(meta.total)})</Button>
         <Badge tone="info">{fmtNum(meta.total)} tem</Badge>
       </div>
 

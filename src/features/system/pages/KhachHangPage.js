@@ -6,7 +6,7 @@ import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import Modal from '../../../components/common/Modal';
 import Toast from '../../../components/common/Toast';
-import { Field, Textarea } from '../../../components/common/controls';
+import { Field, Input, Textarea } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import { listKhachHang, updateKhachHang } from '../../../services/khachHangService';
@@ -31,6 +31,7 @@ export default function KhachHangPage() {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [coCot, setCoCot] = useState(true);     // đã chạy mig 099 chưa
+  const [coCotTen, setCoCotTen] = useState(true); // đã chạy mig 101 chưa (dò RIÊNG)
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -44,6 +45,7 @@ export default function KhachHangPage() {
       setRows(res.data.items || []);
       setTotal(res.data.meta?.total || 0);
       setCoCot(res.data.meta?.co_cot !== false);
+      setCoCotTen(res.data.meta?.co_cot_ten !== false);
     } catch (e) { show(e.message || 'Không tải được danh sách khách hàng', 'error'); }
     setLoading(false);
     // ⚠ deps là `show` (ổn định nhờ useCallback([])) — KHÔNG để cả object `useToast()` vào đây.
@@ -57,6 +59,9 @@ export default function KhachHangPage() {
     setSaving(true);
     try {
       await updateKhachHang(form.id, {
+        // ⚠ Chỉ gửi khi đã có cột — gửi lên khi thiếu mig 101 là ăn 409 THIEU_MIGRATION, chặn luôn
+        //   việc lưu địa chỉ.
+        ...(coCotTen ? { tenDayDu: form.ten_day_du || '' } : {}),
         diaChi: form.dia_chi || '',
         diaChiGiao: form.dia_chi_giao || '',
         ghiChu: form.ghi_chu || '',
@@ -70,7 +75,10 @@ export default function KhachHangPage() {
   // ⚠ `DataTable` đọc `c.key` để lấy giá trị ô — không có `col`, không có `center`.
   const columns = [
     { key: 'ma_khach_hang', header: 'Mã khách', render: (r) => <Badge tone="info">{r.ma_khach_hang}</Badge> },
-    { key: 'ten_khach_hang', header: 'Tên khách hàng', className: 'font-medium text-ink' },
+    { key: 'ten_khach_hang', header: 'Tên khách hàng (ERP)', className: 'font-medium text-ink' },
+    { key: 'ten_day_du', header: 'Tên đầy đủ công ty', render: (r) => (
+      <span className="whitespace-normal break-words">{r.ten_day_du || <span className="text-ink-soft">—</span>}</span>
+    ) },
     { key: 'dia_chi', header: 'Địa chỉ', render: (r) => (
       <span className="whitespace-normal break-words">{r.dia_chi || <span className="text-ink-soft">—</span>}</span>
     ) },
@@ -96,6 +104,15 @@ export default function KhachHangPage() {
         search={search} onSearch={setSearch} searchPlaceholder="Tìm mã khách, tên, địa chỉ...">
         <Badge tone="info">{total} khách hàng</Badge>
       </Toolbar>
+
+      {!coCotTen && (
+        <div className="mb-4 rounded-card border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
+          <b>Chưa chạy migration 101.</b> Chưa lưu được tên đầy đủ công ty — phiếu giao đang in mã khách.
+          Chạy
+          <code className="mx-1 rounded bg-amber-100 px-1 dark:bg-amber-900/60">database/migrations/101_khach_hang_ten_day_du.sql</code>
+          bằng user <code>postgres</code> rồi tải lại trang.
+        </div>
+      )}
 
       {!coCot && (
         <div className="mb-4 rounded-card border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-200">
@@ -134,6 +151,13 @@ export default function KhachHangPage() {
           <div className="font-medium text-ink">{form?.ten_khach_hang}</div>
           <div className="text-xs text-ink-soft">Mã ERP: {form?.ma_khach_hang} · {form?.so_don_hang ?? 0} đơn hàng</div>
         </div>
+        {coCotTen && (
+          <Field label="Tên đầy đủ công ty (in lên phiếu giao)">
+            <Input value={form?.ten_day_du || ''} maxLength={255}
+              onChange={(e) => setForm((f) => ({ ...f, ten_day_du: e.target.value }))}
+              placeholder="Vd: Công ty TNHH ABC Việt Nam — bỏ trống thì phiếu in mã khách" />
+          </Field>
+        )}
         <Field label="Địa chỉ (trụ sở)">
           <Textarea rows={2} value={form?.dia_chi || ''}
             onChange={(e) => setForm((f) => ({ ...f, dia_chi: e.target.value }))}

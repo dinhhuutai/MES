@@ -24,10 +24,11 @@ import useSocketReload from '../../../hooks/useSocketReload';
 import useNow from '../../../hooks/useNow';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 import usePermissions from '../../../hooks/usePermissions';
-import { listSuaCandidates, recordSua, suaHistory, suaDone, luuNguoiSua } from '../../../services/qualityService';
+import { listSuaCandidates, recordSua, suaHistory, suaDone, luuNguoiSua, guiLaiErpSua } from '../../../services/qualityService';
 import { getTemLabel } from '../../../services/productionService';
 import { listUserOptions } from '../../../services/userService';
 import { printSuaOqcTem } from '../../production/utils/printTemLabel';
+import exportCheckpointExcel, { cotTemChung, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
 import { fmtNum, timTheoMaTem, temCode } from '../../../utils/format';
 
 const empty = { soLuongHuyThang: '', soLuongSua: '', soLuongSuaDat: '', soLuongSuaHuy: '' };
@@ -166,6 +167,36 @@ export default function SuaPage() {
     } finally { setInBusy(false); }
   };
 
+  // GỬI SỬA ĐẠT SANG ERP (proc MES_spr_MES2SK6, 21/09/2026) — backend tự gửi NGẦM 1 lần/lượt ngay khi
+  // xác nhận sửa; cột này chỉ để thấy lượt nào TRƯỢT và gửi lại. Ghi đè tại chỗ sau khi bấm (DonePanel
+  // không tự tải lại) để khỏi bấm 2 lần.
+  const [erpGui, setErpGui] = useState({});   // { [suaId]: 'DANG' | 'OK' | 'LOI' }
+  const doGuiLaiErp = async (r) => {
+    setErpGui((m) => ({ ...m, [r.sua_id]: 'DANG' }));
+    try {
+      await guiLaiErpSua(r.sua_id);
+      setErpGui((m) => ({ ...m, [r.sua_id]: 'OK' }));
+      show(`Đã gửi sửa đạt tem ${ma17(r)} sang ERP`);
+    } catch (e) {
+      // 409 DA_GUI = lượt này thực ra đã gửi được rồi ⇒ hiện đúng trạng thái thay vì báo lỗi đỏ.
+      const daGui = e?.response?.data?.errorCode === 'DA_GUI' || e?.errorCode === 'DA_GUI';
+      setErpGui((m) => ({ ...m, [r.sua_id]: daGui ? 'OK' : 'LOI' }));
+      show(e.message || 'Gửi ERP thất bại', daGui ? undefined : 'error');
+    }
+  };
+  const oErp = (r) => {
+    if (!r.sua_id || !(Number(r.so_luong) > 0)) return <span className="text-ink-soft">—</span>;
+    const tt = erpGui[r.sua_id] || r.erp_sua_dat;
+    if (tt === 'OK') return <Badge tone="success">Đã gửi</Badge>;
+    return (
+      <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+        {tt === 'LOI' ? <Badge tone="danger">Lỗi</Badge> : <Badge tone="warning">Chưa gửi</Badge>}
+        <Button variant="secondary" className="px-2 py-0.5 text-xs" icon="wifi"
+          loading={tt === 'DANG'} onClick={() => doGuiLaiErp(r)}>Gửi lại</Button>
+      </div>
+    );
+  };
+
   const doneColumns = [
     { key: 'ma', header: 'Tem', className: 'whitespace-nowrap', render: (r) => <Badge tone="info">{r.ma || '—'}</Badge> },
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
@@ -179,6 +210,7 @@ export default function SuaPage() {
     { key: 'tg', header: 'Giờ', className: 'whitespace-nowrap tabular-nums', render: (r) => (r.tg ? new Date(r.tg).toLocaleTimeString('vi-VN') : '') },
     // Người sửa đã ghi ở lần in trước (mig 080) — thấy ngay dòng nào đã in, ai sửa.
     { key: 'nguoi_sua', header: 'Người sửa', render: (r) => r.nguoi_sua || '—' },
+    { key: 'erp_sua_dat', header: 'ERP', className: 'whitespace-nowrap', render: oErp },
   ];
 
   // Quét QR (ma_tem) → tra tem đang chờ sửa → mở modal nhập.
@@ -258,6 +290,27 @@ export default function SuaPage() {
     </Field>
   );
 
+  // Xuất Excel ĐÚNG danh sách đang hiện. ⚠ Màn này lọc Ở SERVER (ô tìm + 6 trường + khoảng ngày in
+  // tem đều gửi lên `listSuaCandidates`) nên `rows` CHÍNH LÀ tập sau bộ lọc — không có bước lọc client.
+  const doExcel = () => exportCheckpointExcel({
+    cols: [
+      ...cotTemChung(),
+      { header: 'Ca SX', width: 12, value: (r) => (r.ca == null ? '' : String(r.ca)) },
+      { header: 'Người XN trạm trước', width: 20, value: (r) => (r.nguoi_truoc == null ? '' : String(r.nguoi_truoc)) },
+      { header: 'SL in', width: 12, num: true, value: (r) => (r.so_luong == null ? null : Number(r.so_luong)) },
+      { header: 'SL cần sửa', width: 12, num: true, value: (r) => (r.con_sua == null ? null : Number(r.con_sua)) },
+      { header: 'Bị OQC trả về', width: 14, value: (r) => ((r.tra_ve || r.tra_ve_ly_do) ? 'Có' : '') },
+    ],
+    rows,
+    title: 'Sửa hàng lỗi — tem chờ sửa',
+    fileName: 'sua-cho-sua',
+    moTaLoc: moTaBoLoc({
+      'tìm kiếm': search,
+      'ngày in tem': [range.from, range.to].filter(Boolean).join(' → '),
+      ...filters,
+    }),
+  });
+
   return (
     <div>
       <Toolbar title="Sửa hàng lỗi" subtitle="Xử lý tem lỗi từ KCS / OQC"
@@ -271,6 +324,9 @@ export default function SuaPage() {
         <Button chiXemOk variant={showFilters || activeFilters.length ? 'secondary' : 'ghost'} icon="filter"
           onClick={() => setShowFilters((v) => !v)}>Bộ lọc{activeFilters.length ? ` (${activeFilters.length})` : ''}</Button>
         <NghenButton rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} onClick={() => setNghenOpen(true)} />
+        <Button chiXemOk variant="secondary" icon="download" onClick={doExcel} disabled={!rows.length}>
+          Excel ({rows.length})
+        </Button>
         <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="warning">{rows.length} tem chờ sửa</Badge>
@@ -375,6 +431,11 @@ export default function SuaPage() {
           COT_EXCEL_GIO_HT,
           { header: 'Người', value: (r) => r.nguoi || '' },
           { header: 'Người sửa', value: (r) => r.nguoi_sua || '' },
+          { header: 'ERP', value: (r) => {
+            const tt = erpGui[r.sua_id] || r.erp_sua_dat;
+            if (!(Number(r.so_luong) > 0)) return '';
+            return tt === 'OK' ? 'Đã gửi' : tt === 'LOI' ? 'Lỗi' : 'Chưa gửi';
+          } },
         ]} />
 
       {/* MODAL IN TEM 17 — bảng thông tin các tem sắp in + ô nhập TÊN NGƯỜI SỬA từng dòng.

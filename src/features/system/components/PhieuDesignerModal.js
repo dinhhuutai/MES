@@ -47,7 +47,7 @@ const PHIEU_MAU = {
   ngay_giao: new Date().toISOString(),
   created_date: new Date().toISOString(),
   ghi_chu: 'Giao trong ngày, gọi trước khi tới',
-  ten_khach_hang: 'CÔNG TY TNHH MAY MẶC ABC',
+  ten_khach_hang: 'ABC', ten_day_du_khach: 'CÔNG TY TNHH MAY MẶC ABC',
   ma_don_hang: 'DH-2609-018',
   // 4 trường thêm 16/09/2026 — có ở đây thì Xem trước / In thử mới thấy được ô vừa kéo vào.
   dia_chi: 'Lô A1, KCN Long An, huyện Bến Lức, tỉnh Long An',
@@ -57,16 +57,21 @@ const PHIEU_MAU = {
   tems: [
     { ma_tem: '152608057689', nguon: 'KCS', phan_list: 'SL-2609-001-A01-F01-C01', ma_hang: 'SP-1120',
       mau_vai: 'Trắng', kich_vai: '1.6m', kich_phim: '60x90', ma_lenh_san_xuat: 'LSX1902', so_luong_giao: 420,
-      sl_oqc_dat: 420, sl_oqc_dat_sua: 0, ten_khach_hang: 'CÔNG TY TNHH MAY MẶC ABC',
-      ma_don_hang: 'DH-2609-018', ghi_chu: '' },
+      sl_oqc_dat: 420, sl_oqc_dat_sua: 0, ten_khach_hang: 'ABC', ten_day_du_khach: 'CÔNG TY TNHH MAY MẶC ABC',
+      ma_don_hang: 'DH-2609-018', ghi_chu: '', gc_mau_vai: 'Trắng ngà' },
     { ma_tem: '172608057712', nguon: 'SUA', la_tem_sua: true, phan_list: 'SL-2609-001-A01-F01-C01', ma_hang: 'SP-1120',
       mau_vai: 'Trắng', kich_vai: '1.6m', kich_phim: '60x90', ma_lenh_san_xuat: 'LSX1902', so_luong_giao: 35,
-      sl_oqc_dat: 35, sl_oqc_dat_sua: 35, ten_khach_hang: 'CÔNG TY TNHH MAY MẶC ABC',
-      ma_don_hang: 'DH-2609-018', ghi_chu: 'Hàng đã qua sửa' },
+      sl_oqc_dat: 35, sl_oqc_dat_sua: 35, ten_khach_hang: 'ABC', ten_day_du_khach: 'CÔNG TY TNHH MAY MẶC ABC',
+      ma_don_hang: 'DH-2609-018', ghi_chu: 'Hàng đã qua sửa', gc_mau_vai: 'Trắng ngà' },
     { ma_tem: '152608057903', nguon: 'KCS', phan_list: 'SL-2609-001-A02-F03-C02', ma_hang: 'SP-1121',
       mau_vai: 'Đen', kich_vai: '1.5m', kich_phim: '55x80', ma_lenh_san_xuat: 'LSX1907', so_luong_giao: 260,
-      sl_oqc_dat: 300, sl_oqc_dat_sua: 0, ten_khach_hang: 'CÔNG TY TNHH MAY MẶC ABC',
-      ma_don_hang: 'DH-2609-019', ghi_chu: 'Giao đợt 1/2' },
+      sl_oqc_dat: 300, sl_oqc_dat_sua: 0, ten_khach_hang: 'ABC', ten_day_du_khach: 'CÔNG TY TNHH MAY MẶC ABC',
+      ma_don_hang: 'DH-2609-019', ghi_chu: 'Giao đợt 1/2', gc_mau_vai: 'Đen tuyền' },
+    // Dòng hàng RCS (mã hàng chứa "RCS") — để thấy cột KLG / Tổng TL (KG) khi xem trước.
+    { ma_tem: '152608057950', nguon: 'KCS', phan_list: 'SL-2609-002-A01-F01-C01', ma_hang: '091145 RCS',
+      mau_vai: 'Xanh', kich_vai: '1.6m', kich_phim: '60x90', ma_lenh_san_xuat: 'LSX1910', so_luong_giao: 500,
+      sl_oqc_dat: 500, sl_oqc_dat_sua: 0, ten_khach_hang: 'ABC', ten_day_du_khach: 'CÔNG TY TNHH MAY MẶC ABC',
+      ma_don_hang: 'DH-2609-020', ghi_chu: '', gc_mau_vai: '', klg: 0.012 },
   ],
 };
 
@@ -75,7 +80,7 @@ const PHIEU_MAU = {
 const MAU_O_PHIEU = {
   ma_phieu_giao: 'PG0123', ngay_giao: new Date().toISOString(), ngay_lap: new Date().toISOString(),
   ngay_in: new Date().toISOString(), ghi_chu: 'Giao trong ngày', kieu_in: 'Bản CHI TIẾT theo từng tem',
-  ten_khach_hang: 'CÔNG TY TNHH MAY MẶC ABC', ma_don_hang: 'DH-2609-018',
+  ten_khach_hang: 'ABC', ten_day_du_khach: 'CÔNG TY TNHH MAY MẶC ABC', ma_don_hang: 'DH-2609-018',
   so_tem: 3, so_dong: 3, tong_sl: 715,
   // ⚠ THÊM TRƯỜNG MỚI VÀO `TRUONG_PHIEU` THÌ THÊM CẢ Ở ĐÂY, nếu không ô trên LƯỚI THIẾT KẾ hiện
   //   trống và người dùng tưởng trường đó hỏng (dù bản in thật vẫn ra chữ).
@@ -83,6 +88,7 @@ const MAU_O_PHIEU = {
   dia_chi_giao: 'Kho B — 25 Nguyễn Văn Cừ, Quận 5, TP.HCM',
   giao_hang_tai: 'Kho B — 25 Nguyễn Văn Cừ, Quận 5, TP.HCM',
   bo_phan_bh: 'THLA', nguoi_in: 'Nguyễn Văn A',
+  tong_tl_kg: 6,
 };
 const MAU_O_DONG = {
   stt: 1, ma_tem: '152608057689', nguon: 'KCS', phan_list: 'SL-2609-001-A01-F01-C01',
@@ -90,8 +96,41 @@ const MAU_O_DONG = {
   kich_vai_phim: '1.6m / 60x90', ma_lenh_san_xuat: 'LSX1902', so_luong_giao: 420,
   so_tem_gop: 2, co_sua: ' *',
   sl_oqc_dat: 420, ma_don_hang: 'DH-2609-018',
-  ten_khach_hang: 'CÔNG TY TNHH MAY MẶC ABC', ghi_chu: 'Giao đợt 1/2',
+  ten_khach_hang: 'ABC', ten_day_du_khach: 'CÔNG TY TNHH MAY MẶC ABC', ghi_chu: 'Giao đợt 1/2',
+  gc_mau_vai: 'Trắng ngà',
+  la_rcs: 'RCS', klg: 0.012, tong_tl_kg: 5.04,
 };
+
+// "Chỉ hiện cột khi <trường dòng> chứa <chuỗi>" — đặt ở ô TIÊU ĐỀ vùng lặp (hàng 1). Bộ render
+// (`renderMauPhieu.cotAnTheoDieuKien`) ẩn CẢ CỘT khi không dòng nào thỏa. Mức MODULE (không lồng trong
+// component) để không mất focus khi gõ — bẫy §9.
+const O_NHO = 'h-9 w-full rounded-input border border-line bg-surface px-2 text-base md:text-sm outline-none focus:border-primary';
+function HienKhiCot({ hk, dsTruong, onDoi }) {
+  const bat = !!(hk && hk.truong);
+  return (
+    <div className="mt-3 rounded-control border border-line p-3">
+      <label className="flex items-center gap-2 text-sm font-medium text-ink">
+        <input type="checkbox" checked={bat}
+          onChange={(e) => onDoi(e.target.checked ? { truong: 'ma_hang', chua: 'RCS' } : null)} />
+        Chỉ hiện CỘT này khi…
+      </label>
+      {bat && (
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <select className={O_NHO} value={hk.truong}
+            onChange={(e) => onDoi({ ...hk, truong: e.target.value })}>
+            {dsTruong.map((t) => <option key={t.ma} value={t.ma}>{t.ten}</option>)}
+          </select>
+          <input className={O_NHO} value={hk.chua || ''} placeholder="chứa chuỗi…"
+            onChange={(e) => onDoi({ ...hk, chua: e.target.value })} />
+          <p className="col-span-2 text-[11px] text-ink-soft">
+            Không dòng nào có <b>{(dsTruong.find((t) => t.ma === hk.truong) || {}).ten || hk.truong}</b> chứa
+            "<b>{hk.chua}</b>" thì cả cột bị ẩn khi in (vd hàng RCS: Mã hàng chứa RCS ⇒ hiện KLG / Tổng TL).
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // Kẹp vùng chọn vào trong lưới hiện tại — sau khi xóa hàng/cột, vùng cũ có thể trỏ ra ngoài.
 function kepVung(khung, v) {
@@ -556,6 +595,7 @@ export default function PhieuDesignerModal({ open, mau, dm, onLuu, onClose }) {
 
                 <aside className="w-[21rem] shrink-0 overflow-y-auto border-l border-line p-3">
                   {neo ? (
+                    <>
                     <OPanel
                       khoa={neo} o={oNeo} dm={dmKhoi} vung={vung} soO={khoas.length} tinHieuChon={lanChon}
                       data={dataMau}
@@ -565,6 +605,13 @@ export default function PhieuDesignerModal({ open, mau, dm, onLuu, onClose }) {
                       onDoiHang={(mm) => doDoiCaoHang(tachKhoa(neo)[0], mm)}
                       onDoiCot={(mm) => doDoiRongCot(tachKhoa(neo)[1], mm)}
                     />
+                    {/* CỘT CÓ ĐIỀU KIỆN (21/09/2026) — chỉ ở ô TIÊU ĐỀ của vùng lặp. Vd hàng RCS:
+                        "Chỉ hiện cột khi Mã hàng chứa RCS" cho 2 cột KLG / Tổng TL (KG). */}
+                    {laLap && tachKhoa(neo)[0] === 0 && (
+                      <HienKhiCot hk={oNeo?.hien_khi} dsTruong={dmKhoi?.truong || []}
+                        onDoi={(hk) => datKhung(datO(khung, neo, { hien_khi: hk }))} />
+                    )}
+                    </>
                   ) : (
                     <div className="rounded-control border border-dashed border-line p-4 text-center text-sm text-ink-soft">
                       Bấm (hoặc kéo chọn) trên lưới để sửa ô.

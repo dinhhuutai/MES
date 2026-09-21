@@ -18,13 +18,14 @@ import useNow from '../../../hooks/useNow';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 import {
   listTemSanSang, createGiaoHang, listGiaoHang, getGiaoHang,
-  listTemChoTich, tichTemGiao, traCuuTemTich, historyGiao, doneGiao,
+  listTemChoTich, tichTemGiao, traCuuTemTich, historyGiao, doneGiao, datGiaoHangTai, datKlgPhieu,
 } from '../../../services/deliveryService';
 import { Input, Select, Field, Textarea } from '../../../components/common/controls';
 import DateRangePicker from '../../../components/common/DateRangePicker';
 import { fmtNum, fmtDate, fmtDateTime, temCode, maTemNhan, laMaTemRieng } from '../../../utils/format';
+import exportCheckpointExcel, { cotTemChung, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
 import GiaoHangPanel from '../components/GiaoHangPanel';
-import { printPhieuGiao } from '../utils/printPhieuGiao';
+import { printPhieuGiao, laHangRcs, klgSo } from '../utils/printPhieuGiao';
 import TemJourneyPanel from '../../../components/common/TemJourneyPanel';
 import Icon from '../../../components/common/Icon';
 import { getTemHanhTrinh } from '../../../services/qualityService';
@@ -103,6 +104,8 @@ export default function GiaoHangPage() {
   // ⚠ Địa điểm này lưu vào PHIẾU (mig 099) nên in lại vẫn ra đúng; bỏ trống vẫn in được bình thường.
   const [inForm, setInForm] = useState(null);
   const [giaoTai, setGiaoTai] = useState('');
+  // KLG (kg/pcs) hàng RCS nhập lúc in — khóa: `_key` dòng chọn (tạo phiếu) · `giao_hang_tem.id` (in lại).
+  const [klgMap, setKlgMap] = useState({});
   const [journey, setJourney] = useState(null);
   const [scanOpen, setScanOpen] = useState(false);
   const [selTich, setSelTich] = useState(() => new Set());
@@ -163,6 +166,12 @@ export default function GiaoHangPage() {
   useSocketReload(['delivery:updated', 'quality:updated'], () => load(true));
 
   const selectedList = useMemo(() => Object.values(selected), [selected]);
+  // Dòng hàng RCS cần nhập KLG trong modal in: lúc TẠO lấy từ dòng đang chọn, lúc IN LẠI lấy từ phiếu.
+  const dongRcs = !inForm ? [] : inForm.id
+    ? (inForm.gh?.tems || []).filter((t) => laHangRcs(t.ma_hang))
+      .map((t) => ({ key: t.id, ma: t.ma_tem, maHang: t.ma_hang, sl: Number(t.so_luong_giao) || 0 }))
+    : selectedList.filter((x) => laHangRcs(x.row.ma_hang))
+      .map((x) => ({ key: x.row._key, ma: x.row.ma_tem_display || x.row.ma_tem, maHang: x.row.ma_hang, sl: Number(x.qty) || 0 }));
 
   // TÁCH mỗi tem theo NGUỒN: KCS (15-) + Sửa (17-) — như màn OQC, KHÔNG gộp 1 dòng.
   // _key = tem_id + nguồn; con_src = SL còn giao của đúng nguồn đó.
@@ -195,7 +204,11 @@ export default function GiaoHangPage() {
   const doInPhieu = async (gop, giaoHangTai = '') => {
     setCreating(true);
     try {
-      const items = selectedList.map((x) => ({ temId: x.row.tem_id, nguon: x.row.nguon, soLuong: Number(x.qty) || null }));
+      const items = selectedList.map((x) => ({
+        temId: x.row.tem_id, nguon: x.row.nguon, soLuong: Number(x.qty) || null,
+        // Hàng RCS: KLG lưu vào dòng phiếu (mig 102) ⇒ in lại ra đúng số.
+        ...(laHangRcs(x.row.ma_hang) && klgSo(klgMap[x.row._key]) != null ? { klg: klgSo(klgMap[x.row._key]) } : {}),
+      }));
       // `giaoHangTai` lưu vào CHÍNH phiếu (mig 099) ⇒ in lại từ sidebar vẫn ra đúng địa điểm.
       // ⚠ Thiếu migration thì backend tự bỏ qua trường này, phiếu vẫn lập bình thường.
       const r = await createGiaoHang({ items, xacNhan: true, giaoHangTai });
@@ -217,12 +230,49 @@ export default function GiaoHangPage() {
 
   // IN LẠI phiếu đã có (sidebar Lịch sử / Đã hoàn thành / tab Phiếu giao).
   // ⚠ Phải tải lại chi tiết phiếu: bảng chỉ có dòng tóm tắt, không có danh sách tem để dựng phiếu.
+  // ⚠⚠ KHÔNG in ngay mà MỞ MODAL hỏi "Giao hàng tại" y như lúc tạo phiếu (người dùng chốt 20/09/2026):
+  //   in lại thường là in cho chuyến đi thật, mà nơi giao có thể khác lúc lập. Ô đổ SẴN giá trị đang
+  //   lưu của phiếu ⇒ không sửa gì thì bấm in là xong, đúng như trước.
   const inLaiPhieu = async (id, gop) => {
     try {
       const r = await getGiaoHang(id);
-      await printPhieuGiao(r.data, { gop, nguoiIn });
+      setGiaoTai(r.data.giao_hang_tai || '');
+      setKlgMap(Object.fromEntries((r.data.tems || []).filter((t) => laHangRcs(t.ma_hang))
+        .map((t) => [t.id, t.klg != null ? String(Number(t.klg)) : ''])));
+      setInForm({ gop, id, gh: r.data });
+    } catch (e) {
+      show(e.message || 'Không mở được phiếu để in lại', 'error');
+    }
+  };
+
+  // Bấm nút in trong modal: (1) địa điểm có đổi ⇒ GHI ĐÈ vào phiếu trước · (2) rồi mới in.
+  // ⚠⚠ Lưu hỏng thì DỪNG, KHÔNG in: in ra tờ mang địa điểm CŨ trong khi người dùng vừa gõ địa điểm
+  //   mới là kiểu sai âm thầm khó phát hiện nhất (họ tin vào thứ mình vừa nhập).
+  const doInLai = async () => {
+    const { id, gop, gh } = inForm;
+    const cu = gh.giao_hang_tai || '';
+    const moi = (giaoTai || '').trim();
+    setCreating(true);
+    try {
+      let phieu = gh;
+      if (moi !== cu) {
+        await datGiaoHangTai(id, moi);
+        phieu = { ...gh, giao_hang_tai: moi };
+      }
+      // KLG hàng RCS đổi ⇒ ghi đè vào phiếu trước khi in (cùng luật "Giao hàng tại").
+      const doiKlg = (gh.tems || []).filter((t) => laHangRcs(t.ma_hang)
+        && klgSo(klgMap[t.id]) !== (t.klg != null ? Number(t.klg) : null));
+      if (doiKlg.length) {
+        await datKlgPhieu(id, doiKlg.map((t) => ({ id: t.id, klg: klgSo(klgMap[t.id]) })));
+        phieu = { ...phieu, tems: (phieu.tems || []).map((t) => (laHangRcs(t.ma_hang) ? { ...t, klg: klgSo(klgMap[t.id]) } : t)) };
+      }
+      setInForm(null);
+      await printPhieuGiao(phieu, { gop, nguoiIn });
+      if (moi !== cu || doiKlg.length) load();   // bảng/panel đang mở hiện lại dữ liệu mới
     } catch (e) {
       show(e.message || 'Không in lại được phiếu', 'error');
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -264,6 +314,50 @@ export default function GiaoHangPage() {
   const giaiThichQuetTruot = async (raw) => {
     try { return (await traCuuTemTich(raw)).data.mo_ta || null; } catch { return null; }
   };
+
+  // ─── XUẤT EXCEL ───────────────────────────────────────────────────────────────────────────
+  // ⚠ Mỗi tab xuất ĐÚNG tập đang hiện của nó: tab "Tem chờ giao" dùng `displayRows` (1 tem TÁCH 2
+  //   dòng theo nguồn KCS/Sửa — giống hệt bảng và nút Nghẽn), tab "Phiếu giao" dùng `phieus`.
+  //   Lấy `tems` cho tab đầu là ra ÍT dòng hơn bảng; gộp 2 tab vào 1 nút thì cột của 2 tập khác hẳn nhau.
+  const doExcelTem = () => exportCheckpointExcel({
+    cols: [
+      ...cotTemChung((r) => r.ma_tem_display || r.ma_tem),
+      { header: 'Nguồn', width: 14, value: (r) => (r.la_sua ? 'Sửa (tem 17)' : 'KCS (tem 15)') },
+      { header: 'Người tích', width: 18, value: (r) => (r.nguoi_tich_giao == null ? '' : String(r.nguoi_tich_giao)) },
+      { header: 'SL in', width: 12, num: true, value: (r) => (r.so_luong == null ? null : Number(r.so_luong)) },
+      { header: 'Còn giao', width: 12, num: true, value: (r) => (r.con_src == null ? null : Number(r.con_src)) },
+    ],
+    rows: displayRows,
+    title: 'Giao hàng — tem chờ giao',
+    fileName: 'giao-hang-tem-cho-giao',
+    moTaLoc: moTaBoLoc({
+      'ngày in tem': [range.from, range.to].filter(Boolean).join(' → '),
+      ...filters,
+    }),
+  });
+
+  const doExcelPhieu = () => exportCheckpointExcel({
+    cols: [
+      { header: 'Mã phiếu', width: 18, value: (r) => (r.ma_phieu_giao == null ? '' : String(r.ma_phieu_giao)) },
+      { header: 'Trạng thái', width: 13, value: (r) => (TT_PHIEU[r.trang_thai] || ['Chờ giao'])[0] },
+      { header: 'Khách hàng', width: 18, value: (r) => (r.ten_khach_hang == null ? '' : String(r.ten_khach_hang)) },
+      { header: 'Đơn hàng', width: 18, value: (r) => (r.ma_don_hang == null ? '' : String(r.ma_don_hang)) },
+      { header: 'Số tem', width: 10, num: true, value: (r) => (r.so_tem == null ? null : Number(r.so_tem)) },
+      { header: 'Tổng SL', width: 12, num: true, value: (r) => (r.tong_sl == null ? null : Number(r.tong_sl)) },
+      { header: 'Giờ lập', width: 18, center: true,
+        value: (r) => (r.created_date ? new Date(r.created_date).toLocaleString('vi-VN') : '') },
+      { header: 'Người lập', width: 18, value: (r) => (r.nguoi_tao == null ? '' : String(r.nguoi_tao)) },
+      { header: 'Ngày giao', width: 13, type: 'date', center: true, value: (r) => r.ngay_giao },
+    ],
+    rows: phieus,
+    title: 'Giao hàng — danh sách phiếu giao',
+    fileName: 'giao-hang-phieu',
+    moTaLoc: moTaBoLoc({
+      'tìm kiếm': pSearch,
+      'trạng thái': pTrangThai ? (TT_PHIEU[pTrangThai] || [pTrangThai])[0] : '',
+      'ngày lập': [pRange.from, pRange.to].filter(Boolean).join(' → '),
+    }),
+  });
 
   const temCols = [
     { key: 'sel', header: '', className: 'w-10', selection: true, render: (r) => (
@@ -357,6 +451,12 @@ export default function GiaoHangPage() {
             Tích tem ({choTich.length})
           </Button>
         )}
+        {/* Nút Excel bám TAB đang mở — 2 tab là 2 tập dữ liệu khác hẳn nhau (tem ↔ phiếu). */}
+        <Button chiXemOk variant="secondary" icon="download"
+          onClick={tab === 'tem' ? doExcelTem : doExcelPhieu}
+          disabled={tab === 'tem' ? !displayRows.length : !phieus.length}>
+          Excel ({tab === 'tem' ? displayRows.length : phieus.length})
+        </Button>
         <Button chiXemOk variant="ghost" icon="history" onClick={() => setHisOpen(true)}>Lịch sử</Button>
         <Button chiXemOk variant="ghost" icon="check" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
       </Toolbar>
@@ -443,8 +543,8 @@ export default function GiaoHangPage() {
                 {canManage && <>
                   {/* 2 kiểu in (người dùng chốt): chi tiết từng tem · gộp theo code phần.
                       Bấm ra modal nhập "Giao hàng tại" rồi mới tạo phiếu — xem `inForm`. */}
-                  <Button variant="secondary" icon="printer" onClick={() => { setGiaoTai(''); setInForm({ gop: false }); }} loading={creating}>In phiếu (chi tiết)</Button>
-                  <Button icon="printer" onClick={() => { setGiaoTai(''); setInForm({ gop: true }); }} loading={creating}>In phiếu (gộp theo phần in)</Button>
+                  <Button variant="secondary" icon="printer" onClick={() => { setGiaoTai(''); setKlgMap({}); setInForm({ gop: false }); }} loading={creating}>In phiếu (chi tiết)</Button>
+                  <Button icon="printer" onClick={() => { setGiaoTai(''); setKlgMap({}); setInForm({ gop: true }); }} loading={creating}>In phiếu (gộp theo phần in)</Button>
                 </>}
               </div>
             </div>
@@ -523,26 +623,71 @@ export default function GiaoHangPage() {
       <Modal
         open={!!inForm}
         onClose={() => setInForm(null)}
-        title={inForm?.gop ? 'In phiếu giao (gộp theo phần in)' : 'In phiếu giao (chi tiết)'}
+        title={`${inForm?.id ? 'In lại phiếu giao' : 'In phiếu giao'} ${inForm?.gop ? '(gộp theo phần in)' : '(chi tiết)'}`}
         footer={
           <>
             <Button chiXemOk variant="ghost" onClick={() => setInForm(null)}>Đóng</Button>
             <Button icon="printer" loading={creating}
-              onClick={async () => { const g = inForm.gop; setInForm(null); await doInPhieu(g, giaoTai); }}>
-              Tạo phiếu &amp; in
+              onClick={async () => {
+                if (inForm.id) { await doInLai(); return; }          // in lại phiếu đã có
+                const g = inForm.gop; setInForm(null); await doInPhieu(g, giaoTai);
+              }}>
+              {inForm?.id ? 'In phiếu' : 'Tạo phiếu & in'}
             </Button>
           </>
         }
       >
-        <div className="mb-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-          Bấm <b>Tạo phiếu &amp; in</b> là <b>xác nhận giao luôn</b>: {selectedList.length} tem
-          (tổng <b>{fmtNum(selectedList.reduce((s, x) => s + (Number(x.qty) || 0), 0))}</b>) sẽ rời
-          danh sách này. Lấy lại ở <i>Hệ thống › Hủy lệnh xác nhận › Hủy phiếu giao</i>.
-        </div>
+        {inForm?.id ? (
+          <div className="mb-3 rounded-control bg-surface-muted px-3 py-2 text-xs text-ink-soft">
+            Phiếu <b className="text-ink">{inForm.gh?.ma_phieu_giao}</b> · {inForm.gh?.tems?.length || 0} tem.
+            Sửa ô dưới rồi bấm in thì <b>nơi giao được ghi đè vào phiếu</b> (in lại lần sau ra địa điểm mới).
+          </div>
+        ) : (
+          <div className="mb-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+            Bấm <b>Tạo phiếu &amp; in</b> là <b>xác nhận giao luôn</b>: {selectedList.length} tem
+            (tổng <b>{fmtNum(selectedList.reduce((s, x) => s + (Number(x.qty) || 0), 0))}</b>) sẽ rời
+            danh sách này. Lấy lại ở <i>Hệ thống › Hủy lệnh xác nhận › Hủy phiếu giao</i>.
+          </div>
+        )}
         <Field label="Giao hàng tại">
           <Textarea rows={2} value={giaoTai} onChange={(e) => setGiaoTai(e.target.value)}
             placeholder="Vd: Kho B — Lô A1, KCN Long An (để trống nếu không cần in địa điểm)" />
         </Field>
+        {dongRcs.length > 0 && (
+          <div className="mt-3">
+            <div className="mb-1 text-sm font-medium text-ink">Hàng RCS — nhập KLG (kg / pcs)</div>
+            <p className="mb-2 text-xs text-ink-soft">Phiếu sẽ có thêm cột <b>KLG</b> và <b>Tổng TL (KG)</b> = SL × KLG. Bỏ trống thì ô để trống.</p>
+            <div className="max-h-64 overflow-auto rounded-control border border-line">
+              <table className="w-full text-sm">
+                <thead className="bg-surface-muted text-xs text-ink-soft">
+                  <tr><th className="px-2 py-1 text-left">Mã tem</th><th className="px-2 py-1 text-left">Mã hàng</th>
+                    <th className="px-2 py-1 text-right">SL</th><th className="px-2 py-1 text-right">KLG</th>
+                    <th className="px-2 py-1 text-right">Tổng TL (KG)</th></tr>
+                </thead>
+                <tbody>
+                  {dongRcs.map((d) => {
+                    const k = klgSo(klgMap[d.key]);
+                    return (
+                      <tr key={d.key} className="border-t border-line">
+                        <td className="px-2 py-1 font-mono text-xs">{d.ma}</td>
+                        <td className="px-2 py-1">{d.maHang}</td>
+                        <td className="px-2 py-1 text-right">{fmtNum(d.sl)}</td>
+                        <td className="px-2 py-1 text-right">
+                          <input inputMode="decimal" value={klgMap[d.key] ?? ''} placeholder="0.000"
+                            onChange={(e) => setKlgMap((m) => ({ ...m, [d.key]: e.target.value }))}
+                            className="h-8 w-24 rounded-input border border-line bg-surface px-2 text-right text-base outline-none focus:border-primary md:text-sm" />
+                        </td>
+                        <td className="px-2 py-1 text-right">
+                          {k != null ? (Math.round(d.sl * k * 1000) / 1000).toLocaleString('vi-VN') : '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </Modal>
 
       <Toast toast={toast} />

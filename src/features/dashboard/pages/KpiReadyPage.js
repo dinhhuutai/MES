@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import Badge from '../../../components/common/Badge';
 import Toast from '../../../components/common/Toast';
 import Button from '../../../components/common/Button';
@@ -18,6 +18,7 @@ import KpiDrillModal from '../components/KpiDrillModal';
 import {
   gopTheoDon, dongTong, dongPhanTram, fmtPt, fmtPhut,
   tachTheoDotVai, giaTriTheoDot, COT_THEO_DOT, COT_TRAI_THEO_DOT, viTatTen,
+  nhomDotTheoNgay, giaTriNhomDot, gopCotTheoNhomDot, mocCua, tgPhut, tgTinh, tgTong,
 } from '../utils/kpiReadyTable';
 
 // ⚠ Cột bên TRÁI (thông tin phần in) khai ở đây; 23 cột checklist do BACKEND trả về (`data.cot`)
@@ -73,9 +74,18 @@ const H_HEAD = 30;
 const H_OWNER = 28;
 const H_FOOT = 29;
 
-// `tachDot` = đang ở chế độ tách dòng theo đợt vải ⇒ 2 cột theo-đợt lấy từ `row._dot`.
+// Dòng này có đang tách theo đợt vải không. **CẢ 2 CHẾ ĐỘ ĐỀU TÁCH** (20/09/2026), chỉ khác khóa nhóm:
+//   · *Theo đơn*  → nhóm theo NGÀY VẢI VỀ của cả đơn (`_nhomDot` — xem `nhomDotTheoNgay`)
+//   · *Chi tiết*  → từng bản ghi đợt vải của phần in (`_dot`)
+// ⚠ Đơn / phần in KHÔNG có đợt vải nào ⇒ `false` ⇒ mọi ô hợp nhất và lấy giá trị mức trên, đúng như
+//   trước khi có tính năng tách dòng (đừng để ô trống vô cớ).
+export const dongTachDot = (r) => !!(r && (r._nhomDot || r._dot));
+
+// `tachDot` = dòng đang tách theo đợt vải ⇒ các cột theo-đợt lấy từ `_nhomDot` / `_dot`.
 const giaTriTrai = (r, ma, tachDot) => {
-  if (tachDot && COT_TRAI_THEO_DOT.has(ma)) return giaTriTheoDot(r, ma);
+  if (tachDot && COT_TRAI_THEO_DOT.has(ma)) {
+    return r._nhomDot ? giaTriNhomDot(r._nhomDot, ma) : giaTriTheoDot(r, ma);
+  }
   return {
     khach: r.ten_khach_hang, don: r.ma_don_hang, ma_hang: r.ma_hang, mau_vai: r.mau_vai,
     kich_vai: r.kich_vai, kich_phim: r.kich_phim, code_phan: r.ma_phan,
@@ -88,7 +98,13 @@ const giaTriTrai = (r, ma, tachDot) => {
 // Ô của 1 cột checklist. `v` là giá trị đã gộp (chế độ đơn) hoặc giá trị thô (chế độ chi tiết).
 // `tachDot` = dòng này thuộc một ĐỢT VẢI cụ thể ⇒ 4 cột mốc theo-đợt đọc từ `row._dot`.
 function OChecklist({ cot, row, gop, tachDot }) {
-  if (tachDot && COT_THEO_DOT.has(cot.ma)) {
+  if (tachDot && COT_THEO_DOT.has(cot.ma) && dongTachDot(row)) {
+    // Chế độ *Theo đơn*: dòng là một NHÓM ĐỢT ⇒ hiện "x/N" như các cột mốc gộp khác.
+    if (row._nhomDot) {
+      const { qua, tong } = gopCotTheoNhomDot(cot, row._nhomDot);
+      const tone = qua === 0 ? 'text-ink-soft' : qua === tong ? 'text-emerald-600 font-semibold' : 'text-amber-600';
+      return <span className={`tabular-nums ${tone}`}>{qua}/{tong}</span>;
+    }
     const t = giaTriTheoDot(row, cot.ma);
     if (!t) return <span className="text-ink-soft">—</span>;
     return <span className="text-emerald-600" title={fmtDateTime(t)}>✓</span>;
@@ -115,6 +131,35 @@ function OChecklist({ cot, row, gop, tachDot }) {
   return <span className="text-emerald-600" title={fmtDateTime(t)}>✓</span>;
 }
 
+// ─── Ô THỜI GIAN đứng NGAY CẠNH cột mốc (20/09/2026) ────────────────────────
+// "Mốc cột này − mốc bước liền trước" ⇒ phần in nằm ở bước đó bao lâu. Chuỗi mốc nguồn do backend
+// khai (`cot.tg_tu`), FE chỉ tính hiệu số — xem `utils/kpiReady.js`.
+// ⚠ Chế độ gộp thì CỘNG (người dùng chốt "theo đơn thì tính tổng lại"), không trung bình.
+// ⚠ Dòng con của khối đợt vải: cột KHÔNG tách-theo-đợt đã hợp nhất ô nên chỉ tính ở dòng đầu.
+function OTg({ cot, row, gop, tachDot, tenMoc }) {
+  let v;
+  let tu = null;
+  if (tachDot && COT_THEO_DOT.has(cot.ma) && dongTachDot(row)) {
+    if (row._nhomDot) v = tgTong(row._nhomDot.ds, cot, (x) => mocCua(x));
+    else { const k = tgTinh(row, cot, mocCua(row)); v = k.phut; tu = k.tu; }
+  } else if (gop) {
+    v = tgTong(row._rows || [], cot);
+  } else {
+    const k = tgTinh(row, cot);
+    v = k.phut;
+    tu = k.tu;
+  }
+  if (v === null || v === undefined) {
+    return <span className="text-ink-soft" title="Không có mốc bước trước để đo (hoặc bước trước xảy ra SAU bước này)">—</span>;
+  }
+  // ⚠ Tooltip phải nói RÕ đo TỪ MỐC NÀO: luật lùi nguồn có thể khiến 2 dòng cạnh nhau đo từ 2 gốc
+  //   khác nhau (vd hàng release trước khi QA xác nhận thì đo từ "Vải"), giấu đi là so nhầm.
+  const nhan = tu ? ` · đo từ "${tenMoc[tu] || tu}"` : ' · cộng các dòng con';
+  return (
+    <span className="tabular-nums text-ink-soft" title={`${fmtNum(v)} phút${nhan}`}>{fmtPhut(v)}</span>
+  );
+}
+
 export default function KpiReadyPage() {
   const { toast, show } = useToast();
   const [data, setData] = useState(null);
@@ -137,7 +182,7 @@ export default function KpiReadyPage() {
       });
       setData(r.data);
     } catch (e) {
-      if (!silent) show(e.message || 'Lỗi tải KPI READY', 'error');
+      if (!silent) show(e.message || 'Lỗi tải Theo dõi PO', 'error');
     } finally {
       setLoading(false);
     }
@@ -169,6 +214,19 @@ export default function KpiReadyPage() {
   //   xem ⇒ đổi toggle thì 2 dòng cuối bảng đứng yên, đúng bản chất (cùng một tập hàng).
   const tong = useMemo(() => dongTong(rows, cot), [rows, cot]);
   const ptRow = useMemo(() => dongPhanTram(rows, cot, tong), [rows, cot, tong]);
+  // Σ thời gian từng cột mốc — dòng Σ ở chân bảng. Tính trên `rows` (mức PHẦN IN) nên KHÔNG đổi khi
+  // bấm toggle chế độ xem, đúng như 2 dòng chân bảng còn lại.
+  // Nhãn mốc cho tooltip cột TG (`moc_vai` → "Vải"). `moc_kt_xong` KHÔNG phải cột hiển thị nên khai tay.
+  const tenMoc = useMemo(() => {
+    const o = { moc_kt_xong: 'Kỹ thuật xong (mục cuối)' };
+    cot.forEach((c) => { if (c.col) o[c.col] = c.ten; });
+    return o;
+  }, [cot]);
+  const tgTongCot = useMemo(() => {
+    const o = {};
+    cot.forEach((c) => { if (c.tg_tu) o[c.ma] = tgTong(rows, c); });
+    return o;
+  }, [rows, cot]);
 
   useEffect(() => { setPage(1); }, [cheDo, search, donLoc, loaiNgay, range.from, range.to]);
   const totalPages = Math.max(1, Math.ceil(viewRows.length / PAGE_SIZE));
@@ -180,9 +238,17 @@ export default function KpiReadyPage() {
   );
 
   const gop = cheDo === 'DON';
+  // ⚠ Chế độ *Theo đơn* nay CŨNG tách dòng theo đợt vải ⇒ phải có cột "Đợt vải" để phân biệt các
+  //   dòng con (không có nó thì mấy dòng chỉ khác nhau ở con số, nhìn như dữ liệu lặp).
   const cotTrai = gop
-    ? [...COT_TRAI.filter((c) => !BO_O_CHE_DO_DON.has(c.ma)), ...COT_DON]
+    ? (() => {
+        const ds = COT_TRAI.filter((c) => !BO_O_CHE_DO_DON.has(c.ma));
+        const i = ds.findIndex((c) => c.ma === 'slnv');
+        return [...ds.slice(0, i), COT_DOT_VAI, ...ds.slice(i), ...COT_DON];
+      })()
     : COT_TRAI_CHI_TIET;
+  // Số cột THỜI GIAN chèn thêm — cần cho `colSpan` của dòng trống và dòng % ở chân bảng.
+  const soCotTg = cot.filter((c) => c.tg_tu).length;
   // Owner của cột TRÁI — backend trả riêng ở `data.cot_trai` (neo vào checklist của chính cột đó).
   const ownerCot = (c) => (c.coOwner ? (cotTrai0.find((x) => x.ma === c.ma) || {}).owner : null);
 
@@ -190,8 +256,19 @@ export default function KpiReadyPage() {
   // `_stt` đánh theo PHẦN IN nên khối nhiều đợt vẫn mang đúng một số thứ tự.
   const renderRows = useMemo(() => {
     const base = (page - 1) * PAGE_SIZE;
-    if (gop) return pageRows.map((r, i) => ({ ...r, _dau: true, _span: 1, _stt: base + i + 1 }));
     const out = [];
+    if (gop) {
+      // Theo đơn: 1 đơn → N dòng theo NGÀY VẢI VỀ, ô thông tin đơn hợp nhất bằng `rowSpan`.
+      // ⚠ Đơn chưa có đợt vải nào vẫn ra ĐÚNG 1 dòng — bảng không được nuốt mất đơn.
+      pageRows.forEach((r, i) => {
+        const nhom = nhomDotTheoNgay(r);
+        if (!nhom.length) { out.push({ ...r, _dau: true, _span: 1, _stt: base + i + 1 }); return; }
+        nhom.forEach((g, j) => out.push({
+          ...r, _id: `${r._id}#${j}`, _dau: j === 0, _span: nhom.length, _nhomDot: g, _stt: base + i + 1,
+        }));
+      });
+      return out;
+    }
     pageRows.forEach((r, i) => {
       tachTheoDotVai([r]).forEach((x) => out.push({ ...x, _stt: base + i + 1 }));
     });
@@ -207,7 +284,15 @@ export default function KpiReadyPage() {
       // ⚠⚠ Excel TÁCH DÒNG y như bảng, và các ô mức PHẦN IN chỉ điền ở DÒNG ĐẦU của khối — để trống
       //   ở dòng con. Lặp giá trị ra mọi dòng là mở đường cho người đọc bôi đen cột rồi cộng nhầm
       //   (SL in / SLĐH sẽ nhân lên theo số đợt vải).
-      const xuatRows = gop ? viewRows : tachTheoDotVai(viewRows);
+      // ⚠ Theo đơn nay CŨNG tách dòng theo đợt vải ⇒ Excel phải tách y hệt bảng, nếu không file
+      //   xuất ra và màn hình nói 2 chuyện khác nhau.
+      const xuatRows = gop
+        ? viewRows.flatMap((r) => {
+            const nhom = nhomDotTheoNgay(r);
+            if (!nhom.length) return [{ ...r, _dau: true }];
+            return nhom.map((g, j) => ({ ...r, _dau: j === 0, _nhomDot: g }));
+          })
+        : tachTheoDotVai(viewRows);
       // Ô mức phần in ở dòng CON (không phải dòng đầu khối) → để TRỐNG.
       const boQua = (r, tach) => !tach && r._dau === false;
       const cols = [
@@ -218,9 +303,9 @@ export default function KpiReadyPage() {
           return {
             header: own ? `${c.ten}\n${own}` : c.ten, width: c.so ? 12 : 18, num: !!c.so,
             value: (r) => {
-              const tach = !gop && COT_TRAI_THEO_DOT.has(c.ma);
+              const tach = dongTachDot(r) && COT_TRAI_THEO_DOT.has(c.ma);
               if (boQua(r, tach)) return '';
-              const v = giaTriTrai(r, c.ma, !gop);
+              const v = giaTriTrai(r, c.ma, dongTachDot(r));
               if (c.ngay) return v ? fmtDate(v) : '';
               return v ?? (c.so ? 0 : '');
             },
@@ -228,27 +313,49 @@ export default function KpiReadyPage() {
         }),
         // ⚠ Owner nhét vào CHÍNH ô header (xuống dòng) — `exportPanelExcel` chỉ có 1 hàng header;
         //   bỏ owner đi thì file Excel mất đúng thứ trang này sinh ra để trả lời ("ai phụ trách").
-        ...cot.map((c) => ({
-          header: c.owner ? `${c.ten}\n${c.owner}` : c.ten, width: 14, num: c.nhom !== 'moc',
-          center: c.nhom === 'moc',
-          value: (r) => {
-            const tach = !gop && COT_THEO_DOT.has(c.ma);
-            if (boQua(r, tach)) return '';
-            if (tach) { const t = giaTriTheoDot(r, c.ma); return t ? fmtDateTime(t) : ''; }
-            if (c.nhom === 'moc') {
-              if (gop) { const g = r[`_${c.ma}`] || {}; return `${g.qua || 0}/${g.tong || 0}`; }
-              return r[c.col] ? fmtDateTime(r[c.col]) : '';
-            }
-            if (c.nhom === 'so') return gop ? (r[`_${c.ma}`] || 0) : Number(r[c.col] || 0);
-            const v = gop ? r[`_${c.ma}`]
-              : (Number(r[c.mauSo] || 0) > 0 ? (Number(r[c.tuSo] || 0) / Number(r[c.mauSo])) * 100 : null);
-            return v === null || v === undefined ? 0 : Math.round(v * 10) / 10;
-          },
-        })),
+        ...cot.flatMap((c) => {
+          const tachCua = (r) => dongTachDot(r) && COT_THEO_DOT.has(c.ma);
+          const oMoc = {
+            header: c.owner ? `${c.ten}\n${c.owner}` : c.ten, width: 14, num: c.nhom !== 'moc',
+            center: c.nhom === 'moc',
+            value: (r) => {
+              const tach = tachCua(r);
+              if (boQua(r, tach)) return '';
+              if (tach) {
+                if (r._nhomDot) { const g = gopCotTheoNhomDot(c, r._nhomDot); return `${g.qua}/${g.tong}`; }
+                const t = giaTriTheoDot(r, c.ma);
+                return t ? fmtDateTime(t) : '';
+              }
+              if (c.nhom === 'moc') {
+                if (gop) { const g = r[`_${c.ma}`] || {}; return `${g.qua || 0}/${g.tong || 0}`; }
+                return r[c.col] ? fmtDateTime(r[c.col]) : '';
+              }
+              if (c.nhom === 'so') return gop ? (r[`_${c.ma}`] || 0) : Number(r[c.col] || 0);
+              const v = gop ? r[`_${c.ma}`]
+                : (Number(r[c.mauSo] || 0) > 0 ? (Number(r[c.tuSo] || 0) / Number(r[c.mauSo])) * 100 : null);
+              return v === null || v === undefined ? 0 : Math.round(v * 10) / 10;
+            },
+          };
+          if (!c.tg_tu) return [oMoc];
+          // ⚠ Excel ghi SỐ PHÚT THÔ (không phải "2n 3g") để người đọc còn cộng/lọc được — đó chính là
+          //   lý do file Excel tồn tại. Đơn vị ghi rõ trên tiêu đề cột.
+          return [oMoc, {
+            header: `TG ${c.ten} (phút)`, width: 12, num: true,
+            value: (r) => {
+              const tach = tachCua(r);
+              if (boQua(r, tach)) return '';
+              let v;
+              if (tach) v = r._nhomDot ? tgTong(r._nhomDot.ds, c, (x) => mocCua(x)) : tgPhut(r, c, mocCua(r));
+              else if (gop) v = tgTong(r._rows || [], c);
+              else v = tgPhut(r, c);
+              return v === null || v === undefined ? '' : v;
+            },
+          }];
+        }),
       ];
       await exportPanelExcel({
-        cols, rows: xuatRows, title: 'KPI READY',
-        subtitle: `${gop ? 'Theo đơn hàng' : 'Chi tiết theo code phần (tách dòng theo đợt vải)'}`
+        cols, rows: xuatRows, title: 'Theo dõi PO',
+        subtitle: `${gop ? 'Theo đơn hàng (tách dòng theo ngày vải về)' : 'Chi tiết theo code phần (tách dòng theo đợt vải)'}`
           + ` · ${xuatRows.length} dòng · ${viewRows.length} ${gop ? 'đơn hàng' : 'phần in'}`
           + ` · ${rows.length} phần in${range.from || range.to ? ` · ${range.from || '…'} → ${range.to || '…'}` : ''}`,
         fileName: `kpi-ready-${gop ? 'theo-don' : 'chi-tiet'}`,
@@ -263,7 +370,7 @@ export default function KpiReadyPage() {
       {/* ===== Header ===== */}
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-ink">KPI READY</h1>
+          <h1 className="text-2xl font-bold text-ink">Theo dõi PO</h1>
           <p className="mt-0.5 text-sm text-ink-soft">
             Theo dõi phần in đi qua từng checklist, trên phạm vi các đơn hàng được chọn ở
             {' '}<span className="font-medium">Hệ thống → Chọn đơn hàng (KPI)</span>.
@@ -369,9 +476,16 @@ export default function KpiReadyPage() {
                   <th key={c.ma}
                     className={`${TH} ${c.w || ''} ${c.so ? 'text-right' : ''} border-l border-line`}>{c.ten}</th>
                 ))}
+                {/* ⚠ Cột MỐC nào có `tg_tu` thì kèm NGAY SAU một cột "TG" = mốc này − mốc bước trước. */}
                 {cot.map((c) => (
-                  <th key={c.ma} title={c.ghi_chu || ''}
-                    className={`${TH} border-l border-line text-center`}>{c.ten}</th>
+                  <Fragment key={c.ma}>
+                    <th title={c.ghi_chu || ''}
+                      className={`${TH} border-l border-line text-center`}>{c.ten}</th>
+                    {c.tg_tu && (
+                      <th title={`Thời gian từ bước trước tới "${c.ten}"`}
+                        className={`${TH} text-center font-normal text-ink-soft`}>TG</th>
+                    )}
+                  </Fragment>
                 ))}
               </tr>
               {/* Hàng 2: OWNER — gán ở Hệ thống → Owner checkpoint/checklist (KHÔNG có bảng riêng) */}
@@ -395,11 +509,14 @@ export default function KpiReadyPage() {
                 {/* ⚠ Hiện tên VIẾT TẮT ("Thạch Công Tuấn" → "C.Tuấn") — 23 cột owner cạnh nhau, tên
                     đầy đủ làm bảng phải kéo ngang liên tục. TÊN ĐẦY ĐỦ vẫn ở tooltip và file Excel. */}
                 {cot.map((c) => (
-                  <th key={c.ma}
-                    title={c.owner ? `Chịu trách nhiệm: ${c.owner}` : 'Chưa gán owner — vào Hệ thống → Owner checkpoint/checklist'}
-                    className={`${TH} border-l border-line text-center font-normal ${c.owner ? 'text-primary' : 'text-ink-soft/60'}`}>
-                    {viTatTen(c.owner) || '— chưa gán —'}
-                  </th>
+                  <Fragment key={c.ma}>
+                    <th
+                      title={c.owner ? `Chịu trách nhiệm: ${c.owner}` : 'Chưa gán owner — vào Hệ thống → Owner checkpoint/checklist'}
+                      className={`${TH} border-l border-line text-center font-normal ${c.owner ? 'text-primary' : 'text-ink-soft/60'}`}>
+                      {viTatTen(c.owner) || '— chưa gán —'}
+                    </th>
+                    {c.tg_tu && <th className={TH} aria-hidden="true" />}
+                  </Fragment>
                 ))}
               </tr>
             </thead>
@@ -410,6 +527,8 @@ export default function KpiReadyPage() {
               {renderRows.map((r, i) => {
                 const span = r._span > 1 ? r._span : undefined;
                 const oGop = (tach) => (!tach && span ? span : undefined);
+                // Dòng này có tách theo đợt vải không — CẢ 2 chế độ đều tách (khác nhau ở khóa nhóm).
+                const tachDong = dongTachDot(r);
                 return (
                   <tr key={r._id || i}
                     className={`border-t ${r._dau ? 'border-line' : 'border-line/40'} hover:bg-surface-muted/60`}>
@@ -420,9 +539,9 @@ export default function KpiReadyPage() {
                       {r._dau ? r._stt : ''}
                     </td>
                     {cotTrai.map((c) => {
-                      const tach = !gop && COT_TRAI_THEO_DOT.has(c.ma);
+                      const tach = tachDong && COT_TRAI_THEO_DOT.has(c.ma);
                       if (!tach && !r._dau) return null;
-                      const v = giaTriTrai(r, c.ma, !gop);
+                      const v = giaTriTrai(r, c.ma, tachDong);
                       // Cột NGÀY: hiện dd/mm/yyyy; ô "Đợt vải" giữ MÃ ĐỢT ở tooltip để vẫn tra được.
                       const noiDung = c.ngay
                         ? (v ? fmtDate(v) : <span className="text-ink-soft">—</span>)
@@ -436,13 +555,20 @@ export default function KpiReadyPage() {
                       );
                     })}
                     {cot.map((c) => {
-                      const tach = !gop && COT_THEO_DOT.has(c.ma);
+                      const tach = tachDong && COT_THEO_DOT.has(c.ma);
                       if (!tach && !r._dau) return null;
                       return (
-                        <td key={c.ma} rowSpan={oGop(tach)}
-                          className={`${TD} border-l border-line text-center align-top`}>
-                          <OChecklist cot={c} row={r} gop={gop} tachDot={!gop} />
-                        </td>
+                        <Fragment key={c.ma}>
+                          <td rowSpan={oGop(tach)}
+                            className={`${TD} border-l border-line text-center align-top`}>
+                            <OChecklist cot={c} row={r} gop={gop} tachDot={tachDong} />
+                          </td>
+                          {c.tg_tu && (
+                            <td rowSpan={oGop(tach)} className={`${TD} text-center align-top`}>
+                              <OTg cot={c} row={r} gop={gop} tachDot={tachDong} tenMoc={tenMoc} />
+                            </td>
+                          )}
+                        </Fragment>
                       );
                     })}
                   </tr>
@@ -450,7 +576,7 @@ export default function KpiReadyPage() {
               })}
               {!pageRows.length && (
                 <tr>
-                  <td colSpan={1 + cotTrai.length + cot.length} className="px-3 py-10 text-center text-sm text-ink-soft">
+                  <td colSpan={1 + cotTrai.length + cot.length + soCotTg} className="px-3 py-10 text-center text-sm text-ink-soft">
                     {loading ? 'Đang tải...' : 'Không có dữ liệu trong phạm vi đang chọn'}
                   </td>
                 </tr>
@@ -477,11 +603,21 @@ export default function KpiReadyPage() {
                     </td>
                   ))}
                   {cot.map((c) => (
-                    <td key={c.ma} style={{ position: 'sticky', bottom: H_FOOT }}
-                      className={`${TD} z-20 border-l border-line bg-surface-muted text-center tabular-nums`}>
-                      {c.nhom === 'moc' ? `${tong[`_${c.ma}`].qua}/${tong[`_${c.ma}`].tong}`
-                        : c.nhom === 'pt' ? fmtPt(tong[`_${c.ma}`]) : fmtNum(tong[`_${c.ma}`])}
-                    </td>
+                    <Fragment key={c.ma}>
+                      <td style={{ position: 'sticky', bottom: H_FOOT }}
+                        className={`${TD} z-20 border-l border-line bg-surface-muted text-center tabular-nums`}>
+                        {c.nhom === 'moc' ? `${tong[`_${c.ma}`].qua}/${tong[`_${c.ma}`].tong}`
+                          : c.nhom === 'pt' ? fmtPt(tong[`_${c.ma}`]) : fmtNum(tong[`_${c.ma}`])}
+                      </td>
+                      {/* ⚠ Σ thời gian tính trên TOÀN BỘ phần in đang lọc (`rows`), KHÔNG theo trang
+                          và KHÔNG theo chế độ xem — giống 2 dòng chân bảng còn lại. */}
+                      {c.tg_tu && (
+                        <td style={{ position: 'sticky', bottom: H_FOOT }}
+                          className={`${TD} z-20 bg-surface-muted text-center tabular-nums font-normal text-ink-soft`}>
+                          {tgTongCot[c.ma] === null ? '—' : fmtPhut(tgTongCot[c.ma])}
+                        </td>
+                      )}
+                    </Fragment>
                   ))}
                 </tr>
                 <tr className="border-t border-line text-ink-soft">
@@ -494,10 +630,17 @@ export default function KpiReadyPage() {
                   {cot.map((c) => {
                     const v = ptRow[`_${c.ma}`];
                     return (
-                      <td key={c.ma} style={{ position: 'sticky', bottom: 0 }}
-                        className={`${TD} z-20 border-l border-line bg-surface-muted text-center tabular-nums`}>
-                        {v === null || v === undefined ? '—' : fmtPt(v)}
-                      </td>
+                      <Fragment key={c.ma}>
+                        <td style={{ position: 'sticky', bottom: 0 }}
+                          className={`${TD} z-20 border-l border-line bg-surface-muted text-center tabular-nums`}>
+                          {v === null || v === undefined ? '—' : fmtPt(v)}
+                        </td>
+                        {/* Ô TG ở dòng % để TRỐNG: "phần trăm của một khoảng thời gian" không có nghĩa. */}
+                        {c.tg_tu && (
+                          <td style={{ position: 'sticky', bottom: 0 }}
+                            className={`${TD} z-20 bg-surface-muted`} aria-hidden="true" />
+                        )}
+                      </Fragment>
                     );
                   })}
                 </tr>

@@ -14,6 +14,8 @@ export const suaDone = (date) => client.get('/quality/sua/done', { params: { dat
 // Ghi NGƯỜI SỬA cho các lượt sửa được chọn, nhập ở modal In tem (mig 080).
 // items: [{ suaId, nguoiSuaId?, nguoiSua }]
 export const luuNguoiSua = (items) => client.post('/quality/sua/nguoi-sua', { items });
+// Gửi LẠI sửa đạt (tem 17) sang ERP cho 1 lượt sửa bị trượt (proc MES_spr_MES2SK6).
+export const guiLaiErpSua = (suaId) => client.post(`/quality/sua/luot/${suaId}/gui-lai-erp`);
 
 export const listOqcCandidates = (params) => client.get('/quality/oqc/candidates', { params });
 export const recordOqc = (temId, body) => client.post(`/quality/oqc/${temId}`, body);

@@ -13,10 +13,15 @@ import {
   listPhanLoaiLoi, traTemPhanLoai, luuPhanLoaiLoi, listBienPhap,
 } from '../../../services/phanLoaiLoiService';
 import { fmtDateTime, temCode } from '../../../utils/format';
+import exportCheckpointExcel, { cotTemChung, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
+import taiHetTrang from '../../../utils/taiHetTrang';
+import ChipTabs from '../../../components/common/ChipTabs';
+import Badge from '../../../components/common/Badge';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PHÂN LOẠI LỖI (mig 075) — module Sản xuất, dưới KCS.
-// Danh sách tem ĐÃ phân loại theo ngày → nút "Thêm" mở modal quét mã vạch / gõ mã → tra được tem
+// Danh sách tem ĐÃ KCS (có hàng hư) theo ngày KCS — cả tem ĐÃ lẫn CHƯA phân loại (21/09/2026); tem chưa
+// phân loại hiện chữ "Chưa phân loại lỗi" ở cột giờ. Bấm 1 dòng / nút "Thêm" mở modal quét mã vạch / gõ mã → tra được tem
 // thì mở SidePanel nhập bảng lỗi.
 // ⚠ Ô nhập mã LUÔN có bên cạnh camera (máy tính không có webcam vẫn dùng được) — cùng quy ước với
 //   `ScanCollectModal` ở các màn quét khác.
@@ -26,6 +31,11 @@ const homNay = () => {
   const d = new Date();
   return new Date(d - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 };
+
+const TT_TABS = [
+  { v: '', label: 'Tất cả' }, { v: 'CHUA', label: 'Chưa phân loại lỗi' }, { v: 'DA', label: 'Đã phân loại' },
+];
+const TEN_TT = { CHUA: 'chưa phân loại', DA: 'đã phân loại' };
 
 const O_MA = 'h-11 w-full rounded-input border border-line bg-surface px-3.5 text-base md:text-sm outline-none focus:border-primary';
 
@@ -37,6 +47,8 @@ export default function PhanLoaiLoiPage() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [tinhTrang, setTinhTrang] = useState('');   // '' · CHUA · DA
+  const [dem, setDem] = useState({});
 
   const [moThem, setMoThem] = useState(false);
   const [maNhap, setMaNhap] = useState('');
@@ -47,16 +59,17 @@ export default function PhanLoaiLoiPage() {
   const [dangLuu, setDangLuu] = useState(false);
   const [loaiLoi, setLoaiLoi] = useState([]);
   const [bienPhap, setBienPhap] = useState([]);
+  const [dangXuat, setDangXuat] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await listPhanLoaiLoi({ ngay, search, page, limit: 20 });
-      setRows(res.data.rows || []); setTotal(res.data.total || 0);
+      const res = await listPhanLoaiLoi({ ngay, search, tinhTrang, page, limit: 20 });
+      setRows(res.data.rows || []); setTotal(res.data.total || 0); setDem(res.data.dem || {});
     } catch (e) { show(e.message || 'Không tải được danh sách', 'error'); }
     setLoading(false);
     // ⚠ deps là `show` (ổn định), KHÔNG để cả object useToast() vào — sẽ chạy vòng lặp vô hạn.
-  }, [ngay, search, page, show]);
+  }, [ngay, search, tinhTrang, page, show]);
 
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
 
@@ -94,8 +107,46 @@ export default function PhanLoaiLoiPage() {
     setDangLuu(false);
   };
 
+  // ⚠⚠ Màn này phân trang Ở SERVER (20 dòng/trang) ⇒ PHẢI tải hết mọi trang trước khi xuất, nếu không
+  //   file Excel chỉ có ĐÚNG TRANG ĐANG XEM mà không báo gì (đúng ca "Excel cụt ở 200 dòng" đã ghi §11.3).
+  //   `taiHetTrang` đọc được cả hình dạng `{rows,total}` của endpoint này.
+  // ⚠ Mã tem hiện tiền tố **16** = nhãn HÀNG LỖI dán túi sửa, khớp đúng cột trên bảng.
+  const doExcel = async () => {
+    setDangXuat(true);
+    try {
+      const { items, thieu, total } = await taiHetTrang((p) => listPhanLoaiLoi({ ngay, search, tinhTrang, ...p }));
+      if (thieu) show(`Chỉ tải được ${items.length}/${total} dòng — hãy thu hẹp bằng ngày hoặc ô tìm`, 'error');
+      await exportCheckpointExcel({
+        cols: [
+          { header: 'Giờ KCS', width: 18, center: true,
+            value: (r) => (r.tg_kcs ? new Date(r.tg_kcs).toLocaleString('vi-VN') : '') },
+          { header: 'Giờ phân loại', width: 20, center: true,
+            value: (r) => (r.created_date ? new Date(r.created_date).toLocaleString('vi-VN') : 'Chưa phân loại lỗi') },
+          ...cotTemChung((r) => temCode(r.ma_tem, 16)),
+          { header: 'SL in', width: 12, num: true, value: (r) => (r.so_luong == null ? null : Number(r.so_luong)) },
+          { header: 'Đạt', width: 10, num: true, value: (r) => Number(r.sl_kcs_dat) || 0 },
+          { header: 'Sửa', width: 10, num: true, value: (r) => Number(r.sl_kcs_sua) || 0 },
+          { header: 'Hủy', width: 10, num: true, value: (r) => Number(r.sl_kcs_huy) || 0 },
+          { header: 'Lỗi đã phân loại', width: 40, value: (r) => (r.cac_loi == null ? '' : String(r.cac_loi)) },
+          { header: 'Người nhập', width: 18, value: (r) => (r.nguoi == null ? '' : String(r.nguoi)) },
+        ],
+        rows: items,
+        title: 'Phân loại lỗi',
+        fileName: 'phan-loai-loi',
+        moTaLoc: moTaBoLoc({ 'ngày KCS': ngay || 'mọi ngày', 'tình trạng': TEN_TT[tinhTrang] || '', 'tìm kiếm': search }),
+      });
+    } catch (e) {
+      show(e.message || 'Xuất Excel thất bại', 'error');
+    } finally {
+      setDangXuat(false);
+    }
+  };
+
   const columns = [
-    { header: 'Giờ phân loại', render: (r) => fmtDateTime(r.created_date), width: 140 },
+    { key: 'tg_kcs', header: 'Giờ KCS', render: (r) => fmtDateTime(r.tg_kcs), width: 130 },
+    { key: 'created_date', header: 'Giờ phân loại', width: 150,
+      render: (r) => (r.created_date ? fmtDateTime(r.created_date)
+        : <Badge tone="warning">Chưa phân loại lỗi</Badge>) },
     {
       header: 'Khách hàng · Đơn hàng',
       render: (r) => (<><div className="text-ink">{r.ten_khach_hang || '—'}</div>
@@ -124,19 +175,24 @@ export default function PhanLoaiLoiPage() {
   return (
     <div>
       <Toolbar
-        title="Phân loại lỗi" subtitle="Chia SL hư của tem thành sửa / hủy theo từng loại lỗi và biện pháp xử lý"
+        title="Phân loại lỗi" subtitle="Tem đã KCS có hàng hư — chia SL hư thành sửa / hủy theo từng loại lỗi và biện pháp xử lý"
         search={search} onSearch={(v) => { setSearch(v); setPage(1); }}
         searchPlaceholder="Tìm mã tem / code phần / khách hàng..."
       >
         <input type="date" value={ngay} onChange={(e) => { setNgay(e.target.value); setPage(1); }}
           className="h-11 rounded-input border border-line bg-surface px-3 text-sm outline-none focus:border-primary" />
         {ngay && <Button variant="ghost" onClick={() => { setNgay(''); setPage(1); }}>Mọi ngày</Button>}
+        <Button chiXemOk variant="secondary" icon="download" onClick={doExcel}
+          loading={dangXuat} disabled={!total}>Excel ({total})</Button>
         <Button icon="plus" onClick={() => { setMoThem(true); setMaNhap(''); }}>Thêm</Button>
       </Toolbar>
 
+      <ChipTabs tabs={TT_TABS} value={tinhTrang} counts={dem}
+        onChange={(v) => { setTinhTrang(v); setPage(1); }} />
       <DataTable columns={columns} rows={rows} loading={loading} pageSize={0}
         onRowClick={(r) => traTem(r.ma_tem)}
-        emptyText={ngay ? 'Chưa có tem nào được phân loại lỗi trong ngày này' : 'Chưa có dữ liệu'} />
+        rowClassName={(r) => (r.da_phan_loai ? '' : 'bg-amber-50/60 dark:bg-amber-950/20')}
+        emptyText={ngay ? 'Không có tem nào KCS có hàng hư trong ngày này' : 'Chưa có dữ liệu'} />
       <Pagination page={page} total={total} totalPages={Math.ceil(total / 20)} onPage={setPage} />
 
       {/* ── Modal THÊM: quét mã vạch hoặc gõ mã ─────────────────────────── */}

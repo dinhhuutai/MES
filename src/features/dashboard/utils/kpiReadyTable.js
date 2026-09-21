@@ -35,6 +35,67 @@ export function gopCot(cot, rows) {
   return tyLe(tu, mau);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// CỘT THỜI GIAN CẠNH MỖI CỘT MỐC (20/09/2026, người dùng chốt "mốc cột này − mốc bước liền trước")
+//
+// Chuỗi mốc nguồn do BACKEND khai (`tg_tu` — xem `utils/kpiReady.js`), FE chỉ việc tính hiệu số ⇒
+// thêm/bớt cột hay đổi chuỗi nguồn KHÔNG phải sửa file này.
+// ⚠ Mốc nguồn trống hết ⇒ `null` (ô "—"), KHÔNG trả 0: "0 phút" và "không đo được" khác hẳn nhau.
+// ⚠⚠ Hiệu số ÂM ⇒ `null`. Ca có thật: khuôn/film được xác nhận từ ĐỢT VẢI TRƯỚC, còn mốc vào lại là
+//   đợt mới (READY đi theo đợt vải từ 16/09/2026) ⇒ trừ ra số âm. In số âm lên bảng KPI là vô nghĩa.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Đọc mốc của một dòng hiển thị: ưu tiên giá trị của ĐỢT VẢI (dòng đã tách), lùi về mức phần in.
+// ⚠ Dùng `hasOwnProperty` chứ không `d[k] ||`: đợt CHƯA test có `moc_test_run = null` — đó là câu trả
+//   lời THẬT của đợt đó, không được mượn mốc của đợt anh em (sẽ ra thời gian của hàng khác).
+export const mocCua = (row) => (k) => {
+  const d = row && row._dot;
+  if (d && Object.prototype.hasOwnProperty.call(d, k)) return d[k];
+  return row ? row[k] : null;
+};
+
+// Thời gian của MỘT cột mốc trên MỘT dòng → `{ phut, tu }` (`tu` = khóa mốc thật sự đã đo từ đó).
+// `lay` = hàm đọc mốc (mặc định: mức phần in).
+//
+// ⚠⚠ MỐC NGUỒN CHO RA SỐ ÂM THÌ **BỎ QUA, THỬ NGUỒN KẾ TIẾP** — không phải trả `null` ngay.
+//   Đo prod 20/09/2026: luật "chặt" làm **10/35** ô *Release 1* và **2/33** ô *Release 2* thành "—",
+//   đúng ở nhóm hàng đã release TRƯỚC khi QA xác nhận READY (`KTCankiemtra=0` đi thẳng Release 1 —
+//   chính là nhóm mà KPI 2 "Số lần thiếu sau Release" đang đếm). Lùi một nấc cho ra "từ lúc kỹ thuật
+//   xong / từ lúc có vải tới Release 1" — vẫn đo đúng một khoảng có thật, không bịa gì.
+// ⚠ Hết nguồn mà vẫn âm ⇒ `null` (ô "—"). Ca thật: HSKT được tạo TRƯỚC đợt vải đầu tiên (4/47 phần
+//   in) — không có bước nào trước nó để mà đo.
+// ⚠ Trả kèm `tu` để tooltip nói RÕ đang đo từ mốc nào: 2 dòng cạnh nhau có thể đo từ 2 gốc khác nhau,
+//   giấu đi là người đọc so nhầm.
+export function tgTinh(row, cot, lay) {
+  if (!cot || cot.nhom !== 'moc' || !cot.tg_tu || !cot.tg_tu.length) return { phut: null, tu: null };
+  const doc = lay || ((k) => row[k]);
+  const den = doc(cot.col);
+  if (!den) return { phut: null, tu: null };
+  for (let i = 0; i < cot.tg_tu.length; i += 1) {
+    const k = cot.tg_tu[i];
+    const tu = doc(k);
+    if (tu) {
+      const p = Math.round((new Date(den).getTime() - new Date(tu).getTime()) / 60000);
+      if (Number.isFinite(p) && p >= 0) return { phut: p, tu: k };
+    }
+  }
+  return { phut: null, tu: null };
+}
+
+export const tgPhut = (row, cot, lay) => tgTinh(row, cot, lay).phut;
+
+// Tổng thời gian của một cột trên NHIỀU dòng (chế độ gộp). Không dòng nào đo được ⇒ `null`.
+// ⚠ CỘNG chứ không trung bình (người dùng chốt "theo đơn thì tính tổng lại").
+export function tgTong(ds, cot, lay) {
+  let co = false;
+  let tong = 0;
+  (ds || []).forEach((r) => {
+    const v = tgPhut(r, cot, lay ? lay(r) : undefined);
+    if (v !== null) { co = true; tong += v; }
+  });
+  return co ? tong : null;
+}
+
 // Gộp danh sách phần in → 1 dòng / đơn hàng.
 // ⚠ Giữ THỨ TỰ GẶP ĐẦU TIÊN (backend đã ORDER BY khách → đơn → mã hàng → code phần), đừng sort lại:
 //   bảng phải khớp thứ tự người dùng nhìn thấy ở chế độ chi tiết.
@@ -131,6 +192,57 @@ export function dongPhanTram(rows, cot, tong) {
 // ⚠⚠ TUYỆT ĐỐI KHÔNG lặp lại giá trị mức phần in ở mọi dòng con: người đọc (và Excel) sẽ cộng dồn
 //   thành số sai — đúng bẫy đã ghi cho `sl_da_in`/`sl_da_giao` ở *Danh sách release*.
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CHẾ ĐỘ "THEO ĐƠN" CŨNG TÁCH DÒNG THEO ĐỢT VẢI (20/09/2026, người dùng chốt)
+//
+// 1 đơn nhận vải làm nhiều đợt ⇒ nhiều dòng, **ô thông tin đơn hợp nhất bằng `rowSpan`** — giống hệt
+// cách chế độ *Chi tiết* đang làm với phần in.
+//
+// ⚠⚠ KHÓA NHÓM LÀ **NGÀY VẢI VỀ**, không phải từng bản ghi `dot_vai_ve`: ở mức ĐƠN, "đợt" là một
+//   LẦN NHẬN VẢI cho cả đơn (đơn 12 phần in × 1 đợt mà tách theo bản ghi thì ra 12 dòng — đúng bằng
+//   chế độ Chi tiết, toggle mất hết ý nghĩa). Đây cũng chính là giá trị cột "Đợt vải" đang hiện.
+// ⚠ Mỗi phần tử mang theo NGUYÊN dòng phần in cha (`...p`) + `_dot` ⇒ `mocCua`/`tgPhut` đọc được cả
+//   mốc mức đợt (release_1/test_run/release_2) LẪN mốc mức phần in (qa_ready) để làm mẫu số.
+// ⚠ Đơn KHÔNG có đợt vải nào ⇒ trả `[]`, bên gọi vẽ đúng 1 dòng như cũ (đừng nuốt mất hàng).
+// ─────────────────────────────────────────────────────────────────────────────
+export function nhomDotTheoNgay(donRow) {
+  const ds = [];
+  (donRow._rows || []).forEach((p) => {
+    (p.dot_vai_list || []).forEach((d) => ds.push({ ...p, _dot: d }));
+  });
+  if (!ds.length) return [];
+  const map = new Map();
+  ds.forEach((x) => {
+    const k = x._dot.ngay_vai_ve ? String(x._dot.ngay_vai_ve).slice(0, 10) : '';
+    if (!map.has(k)) map.set(k, []);
+    map.get(k).push(x);
+  });
+  // Ngày trống ("chưa có ngày vải về") xuống CUỐI — cùng quy ước với popover ngày giao của dải Theo dõi.
+  return [...map.entries()]
+    .sort((a, b) => (a[0] ? 0 : 1) - (b[0] ? 0 : 1) || String(a[0]).localeCompare(String(b[0])))
+    .map(([ngay, arr]) => ({ ngay: ngay || null, ds: arr }));
+}
+
+// Giá trị của một cột TRÁI tách-theo-đợt trên MỘT nhóm ngày vải về.
+export function giaTriNhomDot(g, ma) {
+  const ds = (g.ds || []).map((x) => x._dot);
+  const som = (k) => {
+    const v = ds.map((d) => d[k]).filter(Boolean).sort();
+    return v.length ? v[0] : null;
+  };
+  if (ma === 'dot_vai') return g.ngay;
+  if (ma === 'slnv') return ds.reduce((s, d) => s + (Number(d.so_luong_vai_ve) || 0), 0);
+  if (ma === 'ngay_kh') return som('ngay_ke_hoach');
+  if (ma === 'han_giao') return som('han_giao_hang');
+  return null;
+}
+
+// Cột MỐC tách-theo-đợt trên một nhóm ⇒ "x/N" (bao nhiêu đợt trong nhóm đã qua bước đó).
+export function gopCotTheoNhomDot(cot, g) {
+  const ds = g.ds || [];
+  return { qua: ds.filter((x) => x._dot && x._dot[cot.col]).length, tong: ds.length };
+}
 
 export const COT_THEO_DOT = new Set(['vai', 'release_1', 'test_run', 'release_2']);
 

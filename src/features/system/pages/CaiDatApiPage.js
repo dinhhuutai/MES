@@ -20,7 +20,7 @@ import LichSuApiPanel from '../components/LichSuApiPanel';
 //   nhưng bấm vào ra 404 `NO_HISTORY` (đúng lỗi đã gặp 16/09/2026 với 5 API thêm về sau).
 const CO_LICH_SU = new Set([
   'ERP_BARCODE_TEM', 'ERP_BARCODE_TEM_17', 'ERP_BARCODE_TEM_13', 'ERP_GHI_IN_TEM',
-  'ERP_LAY_ID_PHIEU_GIAO', 'ERP_GUI_PHIEU_GIAO', 'ERP_GUI_PHAN_LOAI_LOI',
+  'ERP_LAY_ID_PHIEU_GIAO', 'ERP_GUI_PHIEU_GIAO', 'ERP_GUI_PHAN_LOAI_LOI', 'ERP_GUI_SUA_DAT',
 ]);
 
 // Công tắc gạt — dựng lại y hệt `HienThiPainPage` để 2 trang cấu hình nhìn như một.

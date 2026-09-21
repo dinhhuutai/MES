@@ -7,7 +7,9 @@ import Toast from '../../../components/common/Toast';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import TemJourneyPanel from '../../../components/common/TemJourneyPanel';
-import { getGiaoHang, confirmGiao } from '../../../services/deliveryService';
+import Modal from '../../../components/common/Modal';
+import { Field, Textarea } from '../../../components/common/controls';
+import { getGiaoHang, confirmGiao, guiLaiErpPhieuGiao, datGiaoHangTai } from '../../../services/deliveryService';
 import { getTemHanhTrinh } from '../../../services/qualityService';
 import { fmtNum, fmtDate, maTemNhan } from '../../../utils/format';
 import { printPhieuGiao } from '../utils/printPhieuGiao';
@@ -30,6 +32,9 @@ export default function GiaoHangPanel({ giaoHangId, onClose, onChanged }) {
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [journey, setJourney] = useState(null); // { temId, maTem }
+  // Modal hỏi "Giao hàng tại" trước khi in — `inGop` = kiểu in đang chờ (false/true), null = đóng.
+  const [inGop, setInGop] = useState(null);
+  const [giaoTai, setGiaoTai] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -59,12 +64,48 @@ export default function GiaoHangPanel({ giaoHangId, onClose, onChanged }) {
     }
   };
 
+  // Gửi LẠI phiếu sang ERP. Lượt gửi lúc xác nhận giao chạy NGẦM và không bao giờ ném lỗi ⇒ ERP hỏng
+  // thì không ai biết; nút này là đường đẩy lại sau khi ERP sửa xong (khỏi phải giao lại hàng).
+  const doGuiLaiErp = async () => {
+    setBusy(true);
+    try {
+      await guiLaiErpPhieuGiao(giaoHangId);
+      show('ERP đã nhận phiếu giao');
+    } catch (e) {
+      show(e.message || 'ERP không nhận được — xem Hệ thống → Cài đặt API → Lịch sử', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   // In phiếu — popup bị chặn thì `printPhieuGiao` NÉM lỗi, phải bắt lại để hiện Toast.
   // ⚠ Hàm ASYNC từ 08/09/2026 (hỏi mẫu đã gắn trước khi dựng) ⇒ phải `await`, nếu không lỗi rơi vào
   //   promise và try/catch đồng bộ không bắt được.
-  const doPrint = async (gop) => {
-    try { await printPhieuGiao(gh, { gop, nguoiIn }); }
-    catch (e) { show(e.message || 'Không mở được cửa sổ in', 'error'); }
+  // ⚠⚠ HỎI "Giao hàng tại" TRƯỚC KHI IN (20/09/2026) — cùng luật với tab *Phiếu giao* ở trang cha:
+  //   ô đổ SẴN giá trị đang lưu, sửa thì GHI ĐÈ vào phiếu rồi mới in. Lưu hỏng ⇒ DỪNG, không in tờ
+  //   mang địa điểm cũ trong khi người dùng vừa gõ địa điểm mới.
+  const moIn = (gop) => { setGiaoTai(gh?.giao_hang_tai || ''); setInGop(gop); };
+
+  const doPrint = async () => {
+    const cu = gh?.giao_hang_tai || '';
+    const moi = (giaoTai || '').trim();
+    setBusy(true);
+    try {
+      let phieu = gh;
+      if (moi !== cu) {
+        await datGiaoHangTai(giaoHangId, moi);
+        phieu = { ...gh, giao_hang_tai: moi };
+        setGh(phieu);
+        if (onChanged) onChanged();
+      }
+      const gop = inGop;
+      setInGop(null);
+      await printPhieuGiao(phieu, { gop, nguoiIn });
+    } catch (e) {
+      show(e.message || 'Không in được phiếu', 'error');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const daGiao = gh?.trang_thai === 'DA_GIAO';
@@ -79,8 +120,11 @@ export default function GiaoHangPanel({ giaoHangId, onClose, onChanged }) {
         gh && (
           <>
             {/* 2 KIỂU IN (người dùng chốt): chi tiết từng tem · gộp theo code phần. */}
-            <Button variant="ghost" icon="printer" onClick={() => doPrint(false)}>In chi tiết</Button>
-            <Button variant="ghost" icon="printer" onClick={() => doPrint(true)}>In gộp</Button>
+            <Button variant="ghost" icon="printer" onClick={() => moIn(false)}>In chi tiết</Button>
+            <Button variant="ghost" icon="printer" onClick={() => moIn(true)}>In gộp</Button>
+            {daGiao && canManage && (
+              <Button variant="secondary" icon="wifi" onClick={doGuiLaiErp} loading={busy}>Gửi lại ERP</Button>
+            )}
             {!daGiao && canManage && <Button onClick={doConfirm} loading={busy}>Xác nhận giao</Button>}
           </>
         )
@@ -118,6 +162,29 @@ export default function GiaoHangPanel({ giaoHangId, onClose, onChanged }) {
         <TemJourneyPanel temId={journey.temId} maTem={journey.maTem}
           fetcher={getTemHanhTrinh} onClose={() => setJourney(null)} />
       )}
+
+      {/* Hỏi "Giao hàng tại" trước khi in (ô đổ sẵn giá trị đang lưu của phiếu). */}
+      <Modal
+        open={inGop !== null}
+        onClose={() => setInGop(null)}
+        title={`In phiếu giao ${inGop ? '(gộp theo phần in)' : '(chi tiết)'}`}
+        footer={
+          <>
+            <Button chiXemOk variant="ghost" onClick={() => setInGop(null)}>Đóng</Button>
+            <Button icon="printer" loading={busy} onClick={doPrint}>In phiếu</Button>
+          </>
+        }
+      >
+        <div className="mb-3 rounded-control bg-surface-muted px-3 py-2 text-xs text-ink-soft">
+          Phiếu <b className="text-ink">{gh?.ma_phieu_giao}</b> · {gh?.tems?.length || 0} tem.
+          Sửa ô dưới rồi bấm in thì <b>nơi giao được ghi đè vào phiếu</b>.
+        </div>
+        <Field label="Giao hàng tại">
+          <Textarea rows={2} value={giaoTai} onChange={(e) => setGiaoTai(e.target.value)}
+            placeholder="Vd: Kho B — Lô A1, KCN Long An (để trống nếu không cần in địa điểm)" />
+        </Field>
+      </Modal>
+
       <Toast toast={toast} />
     </SidePanel>
   );

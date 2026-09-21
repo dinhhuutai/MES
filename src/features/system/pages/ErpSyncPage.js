@@ -11,6 +11,7 @@ import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import { syncPhieuNhanVai, syncHistory, syncRaw } from '../../../services/erpService';
 import { fmtNum } from '../../../utils/format';
+import CapNhatCodePhanModal from '../components/CapNhatCodePhanModal';
 
 const fmtDt = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '—');
 const TONE = { THANH_CONG: 'success', DANG_CHAY: 'warning', LOI: 'danger' };
@@ -35,6 +36,7 @@ export default function ErpSyncPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [capNhatOpen, setCapNhatOpen] = useState(false);
 
   // Panel dữ liệu gốc (chuỗi response nguyên văn)
   const [raw, setRaw] = useState(null); // { log, text, loading }
@@ -84,7 +86,9 @@ export default function ErpSyncPage() {
   const columns = [
     { key: 'tg_bd', header: 'Bắt đầu', render: (r) => fmtDt(r.tg_bd) },
     { key: 'tg_kt', header: 'Kết thúc', render: (r) => fmtDt(r.tg_kt) },
-    { key: 'tu_dong', header: 'Kiểu', render: (r) => r.tu_dong ? <Badge tone="info">Tự động</Badge> : <Badge tone="default">Thủ công</Badge> },
+    { key: 'tu_dong', header: 'Kiểu', render: (r) => (r.nguon === 'cap_nhat_code_phan'
+      ? <Badge tone="warning">Theo code phần</Badge>
+      : r.tu_dong ? <Badge tone="info">Tự động</Badge> : <Badge tone="default">Thủ công</Badge>) },
     { key: 'tong_ban_ghi', header: 'Tổng', className: 'text-right tabular-nums', render: (r) => fmtNum(r.tong_ban_ghi) },
     { key: 'so_moi', header: 'Mới', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_moi) },
     { key: 'so_cap_nhat', header: 'Cập nhật', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_cap_nhat) },
@@ -103,6 +107,7 @@ export default function ErpSyncPage() {
           {date && <button type="button" onClick={() => { setDate(''); setPage(1); }}
             className="text-ink-soft hover:text-danger" aria-label="Xóa lọc ngày"><Icon name="x" size={14} /></button>}
         </div>
+        {canSync && <Button variant="secondary" icon="search" onClick={() => setCapNhatOpen(true)}>Cập nhật theo code phần</Button>}
         {canSync && <Button icon="loader" loading={busy} onClick={doSync}>Đồng bộ ngay</Button>}
         <Badge tone="info">{meta.total} lần</Badge>
       </Toolbar>
@@ -138,6 +143,9 @@ export default function ErpSyncPage() {
           </div>
         )}
       </SidePanel>
+
+      <CapNhatCodePhanModal open={capNhatOpen} onClose={() => setCapNhatOpen(false)}
+        show={show} onDone={() => (page !== 1 ? setPage(1) : load())} />
 
       <Toast toast={toast} />
     </div>

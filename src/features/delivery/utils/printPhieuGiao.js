@@ -39,6 +39,23 @@ const slOqcDat = (t) => {
   return (t.nguon === 'SUA' || t.la_tem_sua) ? sua : Math.max(0, tong - sua);
 };
 
+// ─── HÀNG RCS (21/09/2026) ──────────────────────────────────────────────────
+// Mã hàng chứa chuỗi "RCS" (không phân biệt hoa–thường) ⇒ phiếu có thêm KLG (kg/pcs, NHẬP LÚC IN, lưu
+// `giao_hang_tem.klg` — mig 102) và Tổng TL (KG) = SL giao × KLG. Dòng không phải RCS ⇒ 2 ô để TRỐNG.
+// ⚠ 1 nguồn luật cho cả bố cục cứng, mẫu thiết kế và modal nhập KLG — đừng chép so khớp ra chỗ khác.
+export const CHUOI_RCS = 'RCS';
+export const laHangRcs = (maHang) => String(maHang || '').toUpperCase().includes(CHUOI_RCS);
+export const klgSo = (v) => {
+  const n = Number(String(v ?? '').replace(',', '.'));
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
+// Tổng TL (KG) của 1 tem/dòng — null khi không phải RCS hoặc chưa nhập KLG.
+const tlKg = (t) => {
+  const k = klgSo(t.klg);
+  return laHangRcs(t.ma_hang) && k != null ? Math.round((Number(t.so_luong_giao) || 0) * k * 1000) / 1000 : null;
+};
+const soKg = (n) => (n == null ? '' : Number(n).toLocaleString('vi-VN', { maximumFractionDigits: 3 }));
+
 // GỘP theo CODE PHẦN. Khóa gộp lấy cả mã hàng/màu/kích để 2 phần in trùng tên mà khác quy cách
 // không bị cộng nhầm vào nhau. Giữ THỨ TỰ gặp đầu tiên (đừng sort lại — phiếu in ra phải khớp
 // thứ tự người soạn nhìn trên màn hình).
@@ -52,6 +69,11 @@ export function gopTheoCodePhan(tems) {
       cu.sl_oqc_dat += slOqcDat(t);
       cu.so_tem += 1;
       if (t.nguon === 'SUA' || t.la_tem_sua) cu.co_sua = true;
+      // GC màu vải: mỗi tem nhập riêng lúc in ⇒ gộp DISTINCT, giữ thứ tự gặp (đừng sort — phiếu phải
+      // khớp thứ tự người soạn nhìn trên màn hình).
+      if (t.gc_mau_vai && !cu.gc_list.includes(t.gc_mau_vai)) cu.gc_list.push(t.gc_mau_vai);
+      const tl = tlKg(t);
+      if (tl != null) { cu.tong_tl_kg = (cu.tong_tl_kg || 0) + tl; cu.sl_co_klg += Number(t.so_luong_giao) || 0; }
     } else {
       m.set(k, {
         phan_list: t.phan_list, ma_hang: t.ma_hang, mau_vai: t.mau_vai,
@@ -61,11 +83,20 @@ export function gopTheoCodePhan(tems) {
         // Nhóm gộp theo CODE PHẦN nên mọi tem trong nhóm cùng một phần in ⇒ cùng đơn/khách; lấy của
         // tem đầu là đủ.
         ma_don_hang: t.ma_don_hang, ten_khach_hang: t.ten_khach_hang,
+        ten_day_du_khach: t.ten_day_du_khach,
         co_sua: t.nguon === 'SUA' || !!t.la_tem_sua,
+        gc_list: t.gc_mau_vai ? [t.gc_mau_vai] : [],
+        tong_tl_kg: tlKg(t),
+        sl_co_klg: tlKg(t) != null ? Number(t.so_luong_giao) || 0 : 0,
       });
     }
   });
-  return [...m.values()];
+  // KLG của nhóm GỘP = Tổng TL ÷ SL có KLG (các tem cùng code phần thường cùng KLG ⇒ ra đúng số đó;
+  // lệch nhau thì ra KLG bình quân gia quyền, Tổng TL vẫn đúng tuyệt đối).
+  return [...m.values()].map((g) => ({
+    ...g, gc_mau_vai: g.gc_list.join(', '),
+    klg: g.tong_tl_kg != null && g.sl_co_klg > 0 ? Math.round((g.tong_tl_kg / g.sl_co_klg) * 10000) / 10000 : null,
+  }));
 }
 
 const CSS = `
@@ -99,9 +130,20 @@ const CSS = `
 //   · mức DÒNG  → khối `lap` (mỗi phần tử = 1 dòng bảng chi tiết)
 // ⚠ Thêm trường mới vào `TRUONG_PHIEU`/`TRUONG_DONG_PHIEU` thì PHẢI thêm ở đây, nếu không ô trên
 //   phiếu ra RỖNG mà không báo lỗi gì (đúng bẫy đã ghi cho nhóm "Gia công" của mẫu tem).
+// Tên đầy đủ công ty khách (mig 101, nhập tay) — trống thì LÙI về mã khách ERP để ô không bao giờ
+// rỗng. Mức PHIẾU: phiếu không gắn đơn (gom nhiều đơn) mà mọi dòng cùng 1 khách thì lấy của dòng.
+const tenKhachDong = (t) => t?.ten_day_du_khach || t?.ten_khach_hang || '';
+function tenKhachPhieu(gh) {
+  if (gh.ten_day_du_khach) return gh.ten_day_du_khach;
+  const ds = [...new Set((gh.tems || []).map(tenKhachDong).filter(Boolean))];
+  if (!gh.ten_khach_hang && ds.length === 1) return ds[0];
+  return gh.ten_khach_hang || '';
+}
+
 function duLieuPhieu(gh, gop, soDong, nguoiIn = '') {
   const tems = gh.tems || [];
   return {
+    ten_day_du_khach: tenKhachPhieu(gh),
     ma_phieu_giao: gh.ma_phieu_giao || '',
     ngay_giao: gh.ngay_giao || gh.created_date || null,
     ngay_lap: gh.created_date || null,
@@ -121,7 +163,14 @@ function duLieuPhieu(gh, gop, soDong, nguoiIn = '') {
     so_tem: tems.length,
     so_dong: soDong,
     tong_sl: tems.reduce((s, t) => s + (Number(t.so_luong_giao) || 0), 0),
+    tong_tl_kg: tongTl(tems),
   };
+}
+
+// Σ Tổng TL (KG) các dòng RCS của phiếu — null (ô trống) khi phiếu không có hàng RCS nào có KLG.
+function tongTl(tems) {
+  const ds = (tems || []).map(tlKg).filter((x) => x != null);
+  return ds.length ? Math.round(ds.reduce((a, b) => a + b, 0) * 1000) / 1000 : null;
 }
 
 
@@ -138,7 +187,12 @@ function duLieuDong(gh, gop) {
       so_tem_gop: g.so_tem, co_sua: g.co_sua ? ' *' : '',
       so_luong_giao: Number(g.so_luong_giao) || 0,
       sl_oqc_dat: g.sl_oqc_dat || 0,
+      gc_mau_vai: g.gc_mau_vai || '',
+      la_rcs: laHangRcs(g.ma_hang) ? CHUOI_RCS : '',
+      klg: laHangRcs(g.ma_hang) ? g.klg : null,
+      tong_tl_kg: laHangRcs(g.ma_hang) ? g.tong_tl_kg : null,
       ma_don_hang: g.ma_don_hang || '', ten_khach_hang: g.ten_khach_hang || '',
+      ten_day_du_khach: g.ten_day_du_khach || g.ten_khach_hang || '',
       // ⚠ Kiểu GỘP dồn nhiều tem vào 1 dòng ⇒ ghi chú của từng tem không còn ứng với dòng nào.
       //   CỐ Ý để trống thay vì lấy ghi chú của tem đầu (in ra sẽ gây hiểu nhầm là của cả nhóm).
       ghi_chu: '',
@@ -155,7 +209,12 @@ function duLieuDong(gh, gop) {
     so_tem_gop: 1, co_sua: (t.nguon === 'SUA' || t.la_tem_sua) ? ' *' : '',
     so_luong_giao: Number(t.so_luong_giao) || 0,
     sl_oqc_dat: slOqcDat(t),
+    gc_mau_vai: t.gc_mau_vai || '',
+    la_rcs: laHangRcs(t.ma_hang) ? CHUOI_RCS : '',
+    klg: laHangRcs(t.ma_hang) ? klgSo(t.klg) : null,
+    tong_tl_kg: tlKg(t),
     ma_don_hang: t.ma_don_hang || '', ten_khach_hang: t.ten_khach_hang || '',
+    ten_day_du_khach: tenKhachDong(t),
     ghi_chu: t.ghi_chu || '',
   }));
 }
@@ -183,6 +242,12 @@ async function htmlTheoMau(gh, gop, nguoiIn) {
 function htmlCung(gh, gop, nguoiIn = '') {
   const tems = gh.tems || [];
   const tong = tems.reduce((s, t) => s + (Number(t.so_luong_giao) || 0), 0);
+  // ⚠ Chỉ thêm 2 cột KLG / Tổng TL (KG) khi phiếu CÓ hàng RCS — phiếu thường giữ nguyên bố cục cũ.
+  const coRcs = tems.some((t) => laHangRcs(t.ma_hang));
+  const tongTlKg = tongTl(tems);
+  const oRcs = (maHang, klg, tl) => (coRcs
+    ? `<td class="r">${laHangRcs(maHang) ? soKg(klg) : ''}</td><td class="r">${laHangRcs(maHang) ? soKg(tl) : ''}</td>` : '');
+  const thRcs = coRcs ? '<th class="r" style="width:52px">KLG</th><th class="r" style="width:70px">Tổng TL(KG)</th>' : '';
 
   const rows = gop
     ? gopTheoCodePhan(tems).map((g, i) => `<tr>
@@ -192,7 +257,7 @@ function htmlCung(gh, gop, nguoiIn = '') {
         <td class="wrap">${esc(g.mau_vai) || '—'}</td>
         <td class="wrap">${esc([g.kich_vai, g.kich_phim].filter(Boolean).join(' / ')) || '—'}</td>
         <td class="c">${g.so_tem}${g.co_sua ? ' *' : ''}</td>
-        <td class="r">${num(g.so_luong_giao)}</td></tr>`).join('')
+        <td class="r">${num(g.so_luong_giao)}</td>${oRcs(g.ma_hang, g.klg, g.tong_tl_kg)}</tr>`).join('')
     : tems.map((t, i) => `<tr>
         <td class="c">${i + 1}</td>
         <td class="wrap">${esc(maHien(t))}</td>
@@ -201,15 +266,15 @@ function htmlCung(gh, gop, nguoiIn = '') {
         <td class="wrap">${esc(t.mau_vai) || '—'}</td>
         <td class="wrap">${esc([t.kich_vai, t.kich_phim].filter(Boolean).join(' / ')) || '—'}</td>
         <td class="c">${t.nguon === 'SUA' || t.la_tem_sua ? 'Sửa' : 'KCS'}</td>
-        <td class="r">${num(t.so_luong_giao)}</td></tr>`).join('');
+        <td class="r">${num(t.so_luong_giao)}</td>${oRcs(t.ma_hang, klgSo(t.klg), tlKg(t))}</tr>`).join('');
 
   const head = gop
     ? `<tr><th class="c" style="width:26px">TT</th><th>Code phần</th><th style="width:96px">Mã hàng</th>
        <th style="width:74px">Màu vải</th><th style="width:92px">Kích vải / phim</th>
-       <th class="c" style="width:44px">Số tem</th><th class="r" style="width:66px">SL giao</th></tr>`
+       <th class="c" style="width:44px">Số tem</th><th class="r" style="width:66px">SL giao</th>${thRcs}</tr>`
     : `<tr><th class="c" style="width:26px">TT</th><th style="width:104px">Mã tem</th><th>Code phần</th>
        <th style="width:88px">Mã hàng</th><th style="width:66px">Màu vải</th><th style="width:86px">Kích vải / phim</th>
-       <th class="c" style="width:42px">Nguồn</th><th class="r" style="width:62px">SL giao</th></tr>`;
+       <th class="c" style="width:42px">Nguồn</th><th class="r" style="width:62px">SL giao</th>${thRcs}</tr>`;
 
   const soCot = gop ? 6 : 7;
   const html = `<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8">
@@ -223,7 +288,8 @@ function htmlCung(gh, gop, nguoiIn = '') {
       <div style="text-align:right;font-size:12px"><b>${esc(gh.ma_phieu_giao)}</b><br>${esc(ngay(gh.ngay_giao) || ngay(gh.created_date))}</div>
     </div>
     <div class="meta">
-      <div><b>Khách hàng</b>${esc(gh.ten_khach_hang) || '—'}</div>
+      <div style="grid-column:1/-1"><b>Khách hàng</b>${esc(tenKhachPhieu(gh)) || '—'}${
+        gh.ten_day_du_khach && gh.ten_khach_hang ? ` <span style="color:#6b7280">(${esc(gh.ten_khach_hang)})</span>` : ''}</div>
       <div><b>Đơn hàng</b>${esc(gh.ma_don_hang) || '—'}</div>
       <div><b>Số tem</b>${tems.length}</div>
       <div><b>Tổng SL giao</b>${num(tong)}</div>
@@ -233,8 +299,9 @@ function htmlCung(gh, gop, nguoiIn = '') {
       ${gh.giao_hang_tai ? `<div style="grid-column:1/-1"><b>Giao hàng tại</b>${esc(gh.giao_hang_tai)}</div>` : ''}
       ${gh.ghi_chu ? `<div style="grid-column:1/-1"><b>Ghi chú</b>${esc(gh.ghi_chu)}</div>` : ''}
     </div>
-    <table><thead>${head}</thead><tbody>${rows || `<tr><td colspan="${soCot + 1}" class="c">(Phiếu chưa có tem)</td></tr>`}</tbody>
-      <tfoot><tr><td colspan="${soCot}" class="r">TỔNG CỘNG</td><td class="r">${num(tong)}</td></tr></tfoot></table>
+    <table><thead>${head}</thead><tbody>${rows || `<tr><td colspan="${soCot + 1 + (coRcs ? 2 : 0)}" class="c">(Phiếu chưa có tem)</td></tr>`}</tbody>
+      <tfoot><tr><td colspan="${soCot}" class="r">TỔNG CỘNG</td><td class="r">${num(tong)}</td>${
+        coRcs ? `<td></td><td class="r">${soKg(tongTlKg)}</td>` : ''}</tr></tfoot></table>
     ${gop ? '<div class="ft">* = trong nhóm có hàng đã qua SỬA (tem 17)</div>' : ''}
     <div class="ky">
       <div>Người giao<span></span>(Ký, ghi rõ họ tên)</div>

@@ -5,6 +5,14 @@ export const createGiaoHang = (body) => client.post('/giao-hang', body);
 export const listGiaoHang = (params) => client.get('/giao-hang', { params });
 export const getGiaoHang = (id) => client.get(`/giao-hang/${id}`);
 export const confirmGiao = (id) => client.post(`/giao-hang/${id}/confirm`);
+// Gửi LẠI phiếu sang ERP khi lượt gửi ngầm lúc xác nhận giao bị trượt (ERP lỗi / API đang tắt).
+// ⚠ Chỉ dùng được với phiếu ĐÃ xác nhận giao — backend trả 409 `CHUA_GIAO` nếu không.
+export const guiLaiErpPhieuGiao = (id) => client.post(`/giao-hang/${id}/gui-lai-erp`);
+// Đổi "Giao hàng tại" của phiếu ĐÃ lập — modal hỏi trước khi IN LẠI; ghi đè vào phiếu (có audit).
+// KLG hàng RCS khi IN LẠI (mig 102). dong: [{ id (giao_hang_tem.id), klg }].
+export const datKlgPhieu = (id, dong) => client.patch(`/giao-hang/${id}/klg`, { dong });
+export const datGiaoHangTai = (id, giaoHangTai) =>
+  client.patch(`/giao-hang/${id}/giao-hang-tai`, { giaoHangTai });
 
 // Sidebar Lịch sử / Đã hoàn thành của màn *Danh sách tem giao* (khuôn chung các màn xác nhận).
 export const historyGiao = (date) => client.get('/giao-hang/history', { params: { date } });

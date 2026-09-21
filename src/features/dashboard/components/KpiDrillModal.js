@@ -128,7 +128,7 @@ export default function KpiDrillModal({ ma, rows, nguong = 2, onClose }) {
   };
 
   const xuat = () => exportPanelExcel({
-    title: `KPI READY — ${def.ten}`,
+    title: `Theo dõi PO — ${def.ten}`,
     subtitle: `${view.length} phần in${q ? ` · tìm "${q}"` : ''}`,
     fileName: `kpi-ready-${ma.toLowerCase()}`,
     rows: view,

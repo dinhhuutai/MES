@@ -80,7 +80,7 @@ export default function KpiDonHangPage() {
     try {
       const r = await saveDonHangKpi([...chon]);
       setBanDau(new Set(chon));
-      show(`Đã lưu — ${fmtNum(r.data.so_don)} đơn hàng đang lấy số liệu cho trang KPI READY`);
+      show(`Đã lưu — ${fmtNum(r.data.so_don)} đơn hàng đang lấy số liệu cho trang Theo dõi PO`);
       load();
     } catch (e) {
       // ⚠ Thiếu migration 093 thì backend trả 409 THIEU_MIGRATION — báo rõ chứ đừng nuốt.
@@ -93,8 +93,8 @@ export default function KpiDonHangPage() {
   return (
     <div>
       <Toolbar
-        title="Chọn đơn hàng (KPI READY)"
-        subtitle="Trang Dashboard → KPI READY chỉ lấy số liệu của những đơn hàng được tích ở đây."
+        title="Chọn đơn hàng (Theo dõi PO)"
+        subtitle="Trang Dashboard → Theo dõi PO chỉ lấy số liệu của những đơn hàng được tích ở đây."
         search={search} onSearch={setSearch}
         searchPlaceholder="Tìm mã đơn, PO, tên đơn, khách hàng...">
         <label className="flex items-center gap-2 rounded-control border border-line px-3 py-2 text-sm text-ink">

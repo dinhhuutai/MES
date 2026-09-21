@@ -80,8 +80,47 @@ export function tongCaoKhoi(khung) {
 // VÙNG LẶP: hàng 0 → `<thead>` (lặp mỗi trang), hàng 1 → nhân theo `dongs`.
 // ⚠ Dựng bằng cách gọi `renderKhung` cho MỘT khung 1-hàng mỗi lần, rồi bóc phần `<tr>…</tr>` ra —
 //   nhờ vậy mọi luật định dạng ô (viền, canh lề, tự co chữ, chiều cao mm) đi CHUNG một đường với tem.
-function khoiLap(khung, dongs) {
-  if (!khung || !khung.so_cot || !Array.isArray(khung.hang) || khung.hang.length < 2) return '';
+// ─── CỘT CÓ ĐIỀU KIỆN (21/09/2026) ─────────────────────────────────────────────
+// Ô TIÊU ĐỀ (hàng 0) của vùng lặp mang `hien_khi: { truong, chua }` ⇒ CẢ CỘT chỉ in ra khi có ÍT NHẤT
+// MỘT dòng mà giá trị `truong` chứa chuỗi `chua` (không phân biệt hoa–thường). Dùng cho hàng RCS:
+// cột KLG / Tổng TL (KG) chỉ hiện khi phiếu có mã hàng chứa "RCS".
+// Trả Set chỉ số CỘT bị ẩn (tính theo phạm vi ô tiêu đề đó chiếm — ô gộp ngang ẩn cả dải).
+export function cotAnTheoDieuKien(khung, dongs) {
+  const an = new Set();
+  Object.entries((khung && khung.o) || {}).forEach(([k, cell]) => {
+    const [r, c] = k.split(',').map(Number);
+    const hk = cell && cell.hien_khi;
+    if (r !== 0 || !hk || !hk.truong || !String(hk.chua || '').trim()) return;
+    const can = String(hk.chua).trim().toUpperCase();
+    const co = (dongs || []).some((d) => String((d && d[hk.truong]) ?? '').toUpperCase().includes(can));
+    if (!co) for (let j = c; j < c + Math.max(1, Number(cell.cs) || 1); j += 1) an.add(j);
+  });
+  return an;
+}
+
+// Bỏ các cột trong `an` khỏi khung: dời chỉ số ô, co `cs` của ô gộp ngang phủ qua cột bị bỏ, ô nằm
+// trọn trong vùng bị bỏ thì mất luôn. `cot` (bề rộng) bỏ theo — phần bề rộng trống chia cho cột còn lại.
+export function boCot(khung, an) {
+  if (!an || !an.size) return khung;
+  const n = Number(khung.so_cot);
+  const giu = Array.from({ length: n }, (_, i) => i).filter((i) => !an.has(i));
+  const moi = new Map(giu.map((c, i) => [c, i]));
+  const o = {};
+  Object.entries(khung.o || {}).forEach(([k, cell]) => {
+    const [r, c] = k.split(',').map(Number);
+    const cs = Math.max(1, Number(cell.cs) || 1);
+    const conLai = [];
+    for (let j = c; j < c + cs; j += 1) if (!an.has(j)) conLai.push(j);
+    if (!conLai.length) return;
+    o[`${r},${moi.get(conLai[0])}`] = { ...cell, cs: conLai.length };
+  });
+  return { ...khung, so_cot: giu.length, cot: giu.map((c) => (khung.cot || [])[c] || {}), o };
+}
+
+function khoiLap(khung0, dongs) {
+  if (!khung0 || !khung0.so_cot || !Array.isArray(khung0.hang) || khung0.hang.length < 2) return '';
+  const khung = boCot(khung0, cotAnTheoDieuKien(khung0, dongs));
+  if (!khung.so_cot) return '';
   const colgroup = `<colgroup>${Array.from({ length: Number(khung.so_cot) }, (_, i) => {
     const w = (khung.cot || [])[i] && (khung.cot || [])[i].rong_mm;
     return `<col${w ? ` style="width:${w}mm"` : ''}>`;

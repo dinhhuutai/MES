@@ -48,7 +48,26 @@ export const COT_LENH = [
   { header: 'Ngày SX kế hoạch', width: 15, type: 'date', center: true, value: (r) => r.ngay_ke_hoach },
 ];
 
-// cols: mảng cột (COT_DOT_VAI / COT_LENH, có thể nối thêm cột riêng của màn).
+// Bộ cột dùng chung cho danh sách theo TEM (KCS · Sửa · Giao hàng · Danh sách tem in · Phân loại lỗi).
+// ⚠ Đây là phần CHUNG — mỗi màn tự nối thêm cột riêng của nó (SL còn kiểm / SL cần sửa / SL còn giao…),
+//   đừng nhét cột đặc thù vào đây: 5 màn dùng chung thì cột thừa sẽ rỗng ở 4 màn kia.
+// ⚠ `Mã tem` nhận hàm lấy mã ở ngoài (`layMaTem`) vì mỗi màn hiện mã theo NHÃN NGƯỜI DÙNG ĐANG CẦM:
+//   Phân loại lỗi → `16…`, Giao hàng nguồn SỬA → `17…`, tem gia công → `13…` (xem `maTemNhan`).
+export const cotTemChung = (layMaTem = (r) => r.ma_tem) => [
+  { header: 'Mã tem', width: 16, value: (r) => txt(layMaTem(r)) },
+  { header: 'Khách hàng', width: 18, value: (r) => txt(r.ten_khach_hang || r.khach_list) },
+  { header: 'Đơn hàng', width: 18, value: (r) => txt(r.ma_don_hang || r.don_list) },
+  { header: 'Mã hàng', width: 18, value: (r) => txt(r.ma_hang) },
+  { header: 'Code phần', width: 24, value: (r) => txt(r.ma_phan || r.phan_list) },
+  { header: 'Màu vải', width: 18, value: (r) => txt(r.mau_vai) },
+  { header: 'Kích vải', width: 14, value: (r) => txt(r.kich_vai) },
+  { header: 'Kích phim', width: 14, value: (r) => txt(r.kich_phim) },
+  { header: 'Mã đợt SX', width: 16, value: (r) => txt(r.ma_lenh_san_xuat) },
+  { header: 'Chuyền', width: 16, value: (r) => txt(r.ten_chuyen || r.ma_chuyen) },
+  { header: 'Nhà gia công', width: 14, value: (r) => txt(r.nha_gia_cong) },
+];
+
+// cols: mảng cột (COT_DOT_VAI / COT_LENH / cotTemChung(), có thể nối thêm cột riêng của màn).
 // moTaLoc: chuỗi mô tả bộ lọc đang bật → in vào dòng phụ đề để người đọc biết file lọc theo gì.
 export default function exportCheckpointExcel({ cols, rows = [], title, fileName, moTaLoc }) {
   const ngay = new Date().toLocaleString('vi-VN');

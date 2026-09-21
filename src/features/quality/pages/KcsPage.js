@@ -28,6 +28,7 @@ import { listKcsCandidates, recordKcs, gopTem, kcsHistory, kcsDone, getTemHanhTr
 import { redryTem, getTemLabel } from '../../../services/productionService';
 import { printKcsGiaoTem } from '../../production/utils/printTemLabel';
 import { fmtNum, fmtDateTime, timTheoMaTem } from '../../../utils/format';
+import exportCheckpointExcel, { cotTemChung, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
 import useNow from '../../../hooks/useNow';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 
@@ -144,6 +145,30 @@ export default function KcsPage() {
       await printKcsGiaoTem({ ...res.data, so_luong: row.so_luong_kiem });
     } catch (e) { show(e.message || 'Không in được tem', 'error'); }
   };
+
+  // Xuất Excel ĐÚNG danh sách đang hiện (sau ô tìm + panel lọc + ô tích "bị trả về" + khoảng ngày in
+  // tem). Màn này tải-hết rồi lọc ở client nên `viewRows` đã là "mọi trang, vẫn theo bộ lọc".
+  const doExcel = () => exportCheckpointExcel({
+    cols: [
+      ...cotTemChung(),
+      { header: 'Người XN trạm trước', width: 20, value: (r) => (r.nguoi_truoc == null ? '' : String(r.nguoi_truoc)) },
+      { header: 'Giờ in tem', width: 18, center: true,
+        value: (r) => (r.ngay_in_tem ? new Date(r.ngay_in_tem).toLocaleString('vi-VN') : '') },
+      { header: 'SL in', width: 12, num: true, value: (r) => (r.so_luong == null ? null : Number(r.so_luong)) },
+      { header: 'Còn cần kiểm', width: 13, num: true, value: (r) => (r.con_kcs == null ? null : Number(r.con_kcs)) },
+      { header: 'Bị OQC trả về', width: 14, value: (r) => ((r.tra_ve || r.tra_ve_ly_do) ? 'Có' : '') },
+    ],
+    rows: viewRows,
+    title: 'KCS — tem chờ kiểm',
+    fileName: 'kcs-cho-kiem',
+    moTaLoc: moTaBoLoc({
+      'tìm kiếm': search,
+      'ngày in tem': [range.from, range.to].filter(Boolean).join(' → '),
+      'chỉ tem bị trả về': onlyReturned ? 'có' : '',
+      'ngày trả về': onlyReturned ? [traVeRange.from, traVeRange.to].filter(Boolean).join(' → ') : '',
+      ...filters,
+    }),
+  });
 
   const doneColumns = [
     { key: 'ma', header: 'Tem', className: 'whitespace-nowrap', render: (r) => <Badge tone="info">{r.ma || '—'}</Badge> },
@@ -313,6 +338,9 @@ export default function KcsPage() {
         <TraVeFilter checked={onlyReturned} onChecked={setOnlyReturned}
           range={traVeRange} onRange={setTraVeRange} label="Chỉ hiện tem bị trả về" />
         <NghenButton rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} onClick={() => setNghenOpen(true)} />
+        <Button chiXemOk variant="secondary" icon="download" onClick={doExcel} disabled={!viewRows.length}>
+          Excel ({viewRows.length})
+        </Button>
         <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="warning">{rows.length} tem chờ kiểm</Badge>
