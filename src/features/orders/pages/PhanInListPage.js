@@ -762,6 +762,9 @@ export default function PhanInListPage() {
                         <span>Loại: {dv.loai_dot_vai || '—'}</span>
                         <span>Ngày về: {fmtDate(dv.ngay_vai_ve)}</span>
                         <span>Hạn giao: {fmtDate(dv.han_giao_hang)}</span>
+                        {/* Giờ lên MES = lúc ERP đẩy đợt vải lên (`dot_vai_ve.created_date`) — cột ngày vải về
+                            là DATE nên không có giờ; mốc này thì có. */}
+                        <span className="col-span-2">Lên MES: {fmtDateTime(dv.tg_len_mes)}</span>
                       </div>
                     </div>
                   ))}
@@ -840,6 +843,7 @@ export default function PhanInListPage() {
                               <div key={d.ma_dot_vai} className="text-[11px] text-ink-soft">
                                 <b className="text-ink">{d.ma_dot_vai}</b> · vải về {fmtNum(d.so_luong_vai_ve)}
                                 {d.so_luong != null && d.so_luong !== d.so_luong_vai_ve ? ` · đưa vào SX ${fmtNum(d.so_luong)}` : ''}
+                                {d.tg_len_mes ? ` · lên MES ${fmtDateTime(d.tg_len_mes)}` : ''}
                               </div>
                             ))}
                           </div>
@@ -889,7 +893,7 @@ export default function PhanInListPage() {
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       <Badge tone="default">Đợt vải chờ release</Badge>
                       {pending.dot_vai?.length > 0 && (
-                        <span className="text-xs text-ink-soft">vải: {pending.dot_vai.map((d) => d.ma_dot_vai).join(', ')}</span>
+                        <span className="text-xs text-ink-soft">vải: {pending.dot_vai.map((d) => (d.tg_len_mes ? `${d.ma_dot_vai} (lên MES ${fmtDateTime(d.tg_len_mes)})` : d.ma_dot_vai)).join(', ')}</span>
                       )}
                     </div>
                     {pending.trams?.length ? (
@@ -919,7 +923,7 @@ export default function PhanInListPage() {
                               <span className="text-sm font-semibold text-ink">{j.ma_lenh_san_xuat}</span>
                               {j.giai_doan === 'EP_UI' && <Badge tone="warning">Ép ủi</Badge>}
                               {j.dot_vai?.length > 0 && (
-                                <span className="text-xs text-ink-soft">vải: {j.dot_vai.map((d) => d.ma_dot_vai).join(', ')}</span>
+                                <span className="text-xs text-ink-soft">vải: {j.dot_vai.map((d) => (d.tg_len_mes ? `${d.ma_dot_vai} (lên MES ${fmtDateTime(d.tg_len_mes)})` : d.ma_dot_vai)).join(', ')}</span>
                               )}
                             </div>
                             {j.trams.length ? (

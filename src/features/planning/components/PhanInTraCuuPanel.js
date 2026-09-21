@@ -3,11 +3,10 @@ import SidePanel from '../../../components/common/SidePanel';
 import Badge from '../../../components/common/Badge';
 import Spinner from '../../../components/common/Spinner';
 import Icon from '../../../components/common/Icon';
-import LoaiDotVaiBadge from './LoaiDotVaiBadge';
 import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import { getPhanIn } from '../../../services/orderService';
-import { fmtNum, fmtDate } from '../../../utils/format';
+import { fmtNum, fmtDate, fmtDateTime } from '../../../utils/format';
 import { hienDsMa } from '../../../utils/maPhanIn';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -153,7 +152,7 @@ export default function PhanInTraCuuPanel({ open, onClose, row }) {
                       {j.lenh_id === row.lenh_id && <Badge tone="success">dòng đang xem</Badge>}
                       {(j.dot_vai || []).map((d) => (
                         <span key={d.ma_dot_vai} className="text-xs text-ink-soft">
-                          {d.ma_dot_vai} · SL {fmtNum(d.so_luong)}
+                          {d.ma_dot_vai} · SL {fmtNum(d.so_luong)}{d.tg_len_mes ? ` · lên MES ${fmtDateTime(d.tg_len_mes)}` : ''}
                         </span>
                       ))}
                     </div>
@@ -162,19 +161,21 @@ export default function PhanInTraCuuPanel({ open, onClose, row }) {
                     </ul>
                   </div>
                 ))}
-                {(tl.pending || []).length > 0 && (
+                {/* ⚠ `pending` là OBJECT `{dot_vai, trams}` (orders.repository), KHÔNG phải mảng — bản cũ
+                    đọc `.length` trên object nên khối này chưa bao giờ hiện. */}
+                {(tl.pending?.dot_vai || []).length > 0 && (
                   <div className="rounded-card border border-dashed border-line p-3">
                     <div className="mb-1 text-sm font-medium text-ink-soft">Đợt vải chưa release</div>
-                    {(tl.pending || []).map((p, i) => (
+                    {(tl.pending?.dot_vai || []).map((p, i) => (
                       <div key={p.ma_dot_vai || i} className="flex flex-wrap items-center gap-2 text-xs text-ink-soft">
                         <span>{p.ma_dot_vai}</span>
-                        <LoaiDotVaiBadge value={p.loai_dot_vai} />
-                        <span>SL {fmtNum(p.so_luong_vai_ve)}</span>
+                        <span>SL {fmtNum(p.so_luong)}</span>
+                        {p.tg_len_mes && <span>lên MES {fmtDateTime(p.tg_len_mes)}</span>}
                       </div>
                     ))}
                   </div>
                 )}
-                {journeys.length === 0 && !tl.ready && (tl.pending || []).length === 0 && (
+                {journeys.length === 0 && !tl.ready && (tl.pending?.dot_vai || []).length === 0 && (
                   <p className="py-4 text-center text-sm text-ink-soft">Chưa có dữ liệu hành trình.</p>
                 )}
               </div>

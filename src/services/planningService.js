@@ -100,5 +100,7 @@ export const keHoachTamTheoDoi = (params) => client.get('/planning/ke-hoach-tam/
 // Hủy lệnh / hoàn tác release
 export const listCancelableLenh = (params) => client.get('/planning/huy-lenh/candidates', { params });
 export const cancelLenh = (lenhId, body) => client.post(`/planning/huy-lenh/${lenhId}`, body);
+// Lượt test của lệnh (chưa gỡ) — chọn lượt GIỮ khi hoàn tác về Test Run.
+export const listLanTestChoHuy = (lenhId) => client.get(`/planning/huy-lenh/${lenhId}/lan-test`);
 export const release2Done = (date) => client.get('/planning/release2/done', { params: { date } });
 export const replanDone = (date) => client.get('/planning/replan/done', { params: { date } });

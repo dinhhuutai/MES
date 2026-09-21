@@ -377,7 +377,8 @@ export default function ThoiGianTramPage() {
       <p className="mt-3 text-xs text-ink-soft">
         ⏳ = còn ở trạm (tính tới bây giờ) · chữ đỏ = quá SLA của trạm · “Tổng các trạm” cộng thời gian ở từng trạm
         (một phần in có thể ở 2 trạm cùng lúc nên tổng có thể lớn hơn “Vào đầu → rời cuối”).
-        Trạm READY đo ở mức phần in (khuôn/film/mực dùng chung mọi đợt vải) nên ở góc nhìn đợt vải được gắn cho mọi đợt của phần in đó.
+        Mọi trạm (kể cả READY) đo theo từng đợt vải; ở góc nhìn phần in, thời gian một trạm là tổng các khoảng
+        đợt vải/lệnh thật sự nằm ở trạm (không tính khoảng trống giữa đợt trước và đợt sau, không đếm đôi khi chồng nhau).
         {' '}Bấm mũi tên ở dòng trạm để sổ xuống <b>checklist</b> của trạm đó — cùng tập đơn vị và cùng mốc vào, chỉ khác mốc ra
         (lúc xác nhận chính checklist ấy); chưa xác nhận mà hàng đã rời trạm thì tính tới lúc rời, xác nhận từ trước khi vào thì tính 0 phút.
       </p>

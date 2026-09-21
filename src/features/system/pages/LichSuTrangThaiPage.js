@@ -15,12 +15,13 @@ import usePermissions from '../../../hooks/usePermissions';
 import { listConfirmHistory, cancelReadyItem, listReopenReadyCandidates, reopenReady } from '../../../services/readyService';
 import { searchPhanInForCancel, huyPhanIn, listDeletedPhanIn, moPhanIn,
   searchDotVaiForCancel, huyDotVai, listDeletedDotVai, moDotVai } from '../../../services/orderService';
-import { listCancelableLenh, cancelLenh, giaCongTemCancelable, huyGiaCongTem } from '../../../services/planningService';
+import { listCancelableLenh, cancelLenh, listLanTestChoHuy, giaCongTemCancelable, huyGiaCongTem } from '../../../services/planningService';
 import { listCancelableTem, cancelPrintTem, listCloseCandidates, closeProduction, listReopenCandidates, reopenProduction, listUndoStartCandidates, undoStartProduction } from '../../../services/productionService';
 import { listCancelKcs, cancelKcs, listCancelSua, cancelSua, listCancelOqc, cancelOqc,
   listTemSuaCancelable, listTemSuaDeleted, huyTemSua, moTemSua } from '../../../services/qualityService';
 import { listPhieuGiaoCancelable, huyPhieuGiao, listTemChoTich, boTichTemGiao } from '../../../services/deliveryService';
-import { fmtNum } from '../../../utils/format';
+import { fmtNum, fmtDateTime } from '../../../utils/format';
+import Spinner from '../../../components/common/Spinner';
 import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import { khopNhieu, chuanTuKhoa } from '../../../utils/timKiem';
 
@@ -142,6 +143,12 @@ function targetsFor(row) {
   return [REL1, READY];
 }
 
+const KQ_TEST = {
+  DAT: { tone: 'success', label: 'Đạt' },
+  CO_LOI: { tone: 'danger', label: 'Test lỗi' },
+  KHONG_DAT_CHO_IN: { tone: 'info', label: 'Không đạt (cho IN)' },
+};
+
 function LenhCancelSection({ show }) {
   const [rows, setRows] = useState([]);
   const [meta, setMeta] = useState({ page: 1, totalPages: 1, total: 0 });
@@ -156,6 +163,10 @@ function LenhCancelSection({ show }) {
   // tem. `choPhep` do SERVER trả (khỏi đoán từ danh sách permission ở FE).
   const [moRong, setMoRong] = useState(false);
   const [choPhep, setChoPhep] = useState(false);
+  // ĐÍCH TEST_RUN (22/09/2026): danh sách LƯỢT TEST của lệnh + tập id người dùng GIỮ LẠI. Lượt bị bỏ tích
+  // (vd bấm nhầm "Đạt") được gỡ — backend đánh `ket_qua='HUY'` + ghi vết, không xóa cứng.
+  const [lanTest, setLanTest] = useState(null); // null = chưa tải
+  const [giu, setGiu] = useState(new Set());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -174,6 +185,22 @@ function LenhCancelSection({ show }) {
 
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
 
+  const targetId = target?.id;
+  useEffect(() => {
+    if (!targetId || chon !== 'TEST_RUN') return undefined;
+    let huy = false;
+    setLanTest(null);
+    listLanTestChoHuy(targetId)
+      .then((res) => {
+        if (huy) return;
+        const ds = res.data || [];
+        setLanTest(ds);
+        setGiu(new Set(ds.map((x) => x.id))); // mặc định GIỮ hết — người dùng tự bỏ tích lượt nhầm
+      })
+      .catch((e) => { if (!huy) { setLanTest([]); show(e.message || 'Lỗi tải lượt test', 'error'); } });
+    return () => { huy = true; };
+  }, [targetId, chon, show]);
+
   const openRow = (r) => {
     const opts = targetsFor(r);
     setTargetRow(r);
@@ -189,10 +216,12 @@ function LenhCancelSection({ show }) {
     if (force && !lyDo.trim()) { show('Hủy tùy chọn phải nhập lý do', 'error'); return; }
     setBusy(true);
     try {
-      const res = await cancelLenh(target.id, { target: chon, lyDo: lyDo.trim() || null, force });
+      const boTestRunIds = chon === 'TEST_RUN' && lanTest ? lanTest.filter((x) => !giu.has(x.id)).map((x) => x.id) : [];
+      const res = await cancelLenh(target.id, { target: chon, lyDo: lyDo.trim() || null, force, boTestRunIds });
       const map = { READY: 'về READY kỹ thuật', RELEASE_1: 'về chờ release (Release 1)', TEST_RUN: 'về Test Run' };
       show(`Đã hủy lệnh ${target.ma_lenh_san_xuat} — ${map[res.data.target] || res.data.target}`
         + (res.data.so_tem_huy ? ` · hủy kèm ${res.data.so_tem_huy} tem` : '')
+        + (res.data.so_lan_test_go ? ` · gỡ ${res.data.so_lan_test_go} lượt test` : '')
         + (res.data.tu_set ? ' (set đã mở lại)' : ''));
       setTargetRow(null); setLyDo('');
       load();
@@ -307,6 +336,43 @@ function LenhCancelSection({ show }) {
               : 'Hủy lệnh → đợt vải về "chờ release" (giữ QC), có thể release lại.'}
           {target?.so_dot_vai > 1 && ' Set gom sẽ được mở lại.'}
         </div>
+        {chon === 'TEST_RUN' && (
+          <Field label="Lượt test giữ lại (bỏ tích lượt xác nhận nhầm)">
+            {lanTest === null ? (
+              <div className="flex items-center gap-2 py-2 text-xs text-ink-soft"><Spinner size={14} /> Đang tải lượt test…</div>
+            ) : lanTest.length === 0 ? (
+              <p className="text-xs text-ink-soft">Lệnh chưa có lượt test nào được ghi.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {lanTest.map((x) => {
+                  const kq = KQ_TEST[x.ket_qua] || { tone: 'default', label: x.ket_qua || '—' };
+                  const coGiu = giu.has(x.id);
+                  return (
+                    <label key={x.id} className={`flex cursor-pointer items-start gap-2 rounded-control border p-2 text-xs ${coGiu ? 'border-line' : 'border-rose-200 bg-rose-50/60'}`}>
+                      <input type="checkbox" className="mt-0.5" checked={coGiu}
+                        onChange={() => setGiu((prev) => { const n = new Set(prev); if (n.has(x.id)) n.delete(x.id); else n.add(x.id); return n; })} />
+                      <span className="flex-1">
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          <b className="text-ink">Lần {x.lan_test}</b>
+                          <Badge tone={kq.tone}>{kq.label}</Badge>
+                          {!coGiu && <span className="font-medium text-danger">sẽ gỡ</span>}
+                        </span>
+                        <span className="block text-ink-soft">
+                          {fmtDateTime(x.created_date)} · {x.nguoi || '—'}{x.so_luong ? ` · SL ${fmtNum(x.so_luong)}` : ''}
+                        </span>
+                        {x.ghi_chu && <span className="block text-ink-soft">{x.ghi_chu}</span>}
+                      </span>
+                    </label>
+                  );
+                })}
+                <p className="text-[11px] text-ink-soft">
+                  Xác nhận CNSP/QA của lệnh luôn được gỡ để lệnh hiện lại ở màn Test Run - QA. Lượt bỏ tích bị đánh dấu đã gỡ
+                  (không còn tính vào số lần test / cột "Lần test" ở Đã hoàn thành), vẫn tra được ở lịch sử.
+                </p>
+              </div>
+            )}
+          </Field>
+        )}
         {canForce(target) && (
           <div className="mb-3 rounded-control border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
             <b>Hủy tùy chọn</b> — lệnh đang ở <b>{TT[target.trang_thai]?.label || target.trang_thai}</b>

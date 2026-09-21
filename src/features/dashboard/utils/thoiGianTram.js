@@ -57,22 +57,47 @@ export function tongHopTheoTram(rows, tramDs) {
   }));
 }
 
+// Tổng độ dài HỢP các khoảng [vào, ra) (ms) — khoảng chồng nhau chỉ tính 1 lần, khoảng trống giữa
+// 2 khoảng KHÔNG tính.
+export function dodaiHop(khoang) {
+  const ds = khoang.filter(([a, b]) => Number.isFinite(a) && Number.isFinite(b) && b >= a)
+    .sort((x, y) => x[0] - y[0]);
+  let tong = 0;
+  let dau = null;
+  let cuoi = null;
+  ds.forEach(([a, b]) => {
+    if (dau === null) { dau = a; cuoi = b; return; }
+    if (a <= cuoi) { if (b > cuoi) cuoi = b; return; }
+    tong += cuoi - dau; dau = a; cuoi = b;
+  });
+  if (dau !== null) tong += cuoi - dau;
+  return tong;
+}
+
 // Gộp khoảng cho 1 nhóm đơn vị.
+// ⚠⚠ THỜI GIAN = ĐỘ DÀI HỢP CÁC KHOẢNG, KHÔNG PHẢI "vào sớm nhất → ra muộn nhất" (fix 22/09/2026).
+//   Bản cũ lấy mốc vào của ĐỢT 1 trừ mốc ra của ĐỢT 2 ⇒ phần in có đợt 1 release 01/09 và đợt 2 về
+//   15/09 bị tính ở Release 1 suốt 14 ngày dù không có gì nằm đó (người dùng báo "thời gian tồn sai").
+//   Hợp khoảng thì vẫn giữ luật cũ "không đếm đôi" khi 2 lệnh song song, mà bỏ được khoảng trống.
+// `tg_vao`/`tg_ra` hiển thị vẫn là mốc vào đầu / ra cuối (để tra cứu), còn `phut` là thời gian thật ở trạm.
 function gopKhoang(ds, bayGio) {
   let vao = null;
   let ra = null;
   let conO = false;
+  const khoang = [];
   ds.forEach((r) => {
     const v = new Date(r.tg_vao).getTime();
     if (vao === null || v < vao) vao = v;
+    let x = bayGio;
     if (!r.tg_ra) conO = true;
-    else { const x = new Date(r.tg_ra).getTime(); if (ra === null || x > ra) ra = x; }
+    else { x = new Date(r.tg_ra).getTime(); if (ra === null || x > ra) ra = x; }
+    khoang.push([v, x]);
   });
   const raCuoi = conO ? null : ra;
   return {
     tg_vao: vao === null ? null : new Date(vao).toISOString(),
     tg_ra: raCuoi === null ? null : new Date(raCuoi).toISOString(),
-    phut: vao === null ? null : phutGiua(vao, raCuoi, bayGio),
+    phut: vao === null ? null : Math.max(0, Math.round(dodaiHop(khoang) / 60000)),
     dang_o: conO,
     so_don_vi: ds.length,
   };
@@ -139,9 +164,8 @@ export function theoPhanIn(rows, tramDs, bayGio = Date.now()) {
 export const tachDot = (s) => String(s || '').split(',').map((x) => x.trim()).filter(Boolean);
 
 // Mức ĐỢT VẢI. Đơn vị theo LỆNH/TEM mang danh sách đợt vải ⇒ tính cho TỪNG đợt trong danh sách.
-// ⚠ 2 trạm READY đo ở mức PHẦN IN (khuôn/film/mực dùng chung mọi đợt vải — DATABASE.md §11.3) nên
-//   KHÔNG có đợt vải: gắn vào MỌI đợt vải của phần in đó đang xuất hiện trong tập, nếu phần in không
-//   có đợt nào trong tập thì đứng riêng 1 dòng "(mức phần in)".
+// ⚠ Từ 22/09/2026 2 trạm READY cũng đo theo ĐỢT VẢI (backend `NGUON_READY_DOT`) ⇒ mọi trạm đều có
+//   `ma_dot_vai`. Nhánh "gắn vào mọi đợt của phần in" bên dưới chỉ còn là lưới an toàn cho dòng thiếu mã.
 export function theoDotVai(rows, tramDs, bayGio = Date.now()) {
   const dotCuaPin = new Map();
   rows.forEach((r) => {
