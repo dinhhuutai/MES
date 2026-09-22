@@ -166,6 +166,9 @@ export default function KpiReadyPage() {
   const [loading, setLoading] = useState(true);
   // ⚠ MẶC ĐỊNH "Theo đơn" (tổng hợp) — người dùng chốt "Mới vào thì lấy theo toggle tổng".
   const [cheDo, setCheDo] = useState('DON');
+  // Ô tích "Tách theo đợt vải" — CHỈ có ở chế độ Theo đơn. Mặc định TẮT (người dùng chốt 22/09/2026):
+  // 1 đơn = đúng 1 dòng, bỏ cột "Đợt vải", các cột mốc là tổng x/N của cả đơn.
+  const [tachDotDon, setTachDotDon] = useState(false);
   const [search, setSearch] = useState('');
   const [range, setRange] = useState({ from: '', to: '' });
   const [loaiNgay, setLoaiNgay] = useState('TG_LEN_MES');
@@ -238,11 +241,14 @@ export default function KpiReadyPage() {
   );
 
   const gop = cheDo === 'DON';
-  // ⚠ Chế độ *Theo đơn* nay CŨNG tách dòng theo đợt vải ⇒ phải có cột "Đợt vải" để phân biệt các
-  //   dòng con (không có nó thì mấy dòng chỉ khác nhau ở con số, nhìn như dữ liệu lặp).
+  // Theo đơn + đã tích "Tách theo đợt vải" ⇒ 1 đơn → N dòng theo NGÀY VẢI VỀ.
+  const tachDon = gop && tachDotDon;
+  // ⚠ Khi tách thì phải có cột "Đợt vải" để phân biệt các dòng con (không có nó thì mấy dòng chỉ khác
+  //   nhau ở con số, nhìn như dữ liệu lặp). Không tách ⇒ bỏ hẳn cột đó, 1 đơn = 1 dòng tổng.
   const cotTrai = gop
     ? (() => {
         const ds = COT_TRAI.filter((c) => !BO_O_CHE_DO_DON.has(c.ma));
+        if (!tachDon) return [...ds, ...COT_DON];
         const i = ds.findIndex((c) => c.ma === 'slnv');
         return [...ds.slice(0, i), COT_DOT_VAI, ...ds.slice(i), ...COT_DON];
       })()
@@ -261,7 +267,7 @@ export default function KpiReadyPage() {
       // Theo đơn: 1 đơn → N dòng theo NGÀY VẢI VỀ, ô thông tin đơn hợp nhất bằng `rowSpan`.
       // ⚠ Đơn chưa có đợt vải nào vẫn ra ĐÚNG 1 dòng — bảng không được nuốt mất đơn.
       pageRows.forEach((r, i) => {
-        const nhom = nhomDotTheoNgay(r);
+        const nhom = tachDon ? nhomDotTheoNgay(r) : [];
         if (!nhom.length) { out.push({ ...r, _dau: true, _span: 1, _stt: base + i + 1 }); return; }
         nhom.forEach((g, j) => out.push({
           ...r, _id: `${r._id}#${j}`, _dau: j === 0, _span: nhom.length, _nhomDot: g, _stt: base + i + 1,
@@ -273,7 +279,7 @@ export default function KpiReadyPage() {
       tachTheoDotVai([r]).forEach((x) => out.push({ ...x, _stt: base + i + 1 }));
     });
     return out;
-  }, [pageRows, gop, page]);
+  }, [pageRows, gop, tachDon, page]);
   const kpi = data?.kpi;
   const dsDon = data?.don_hang || [];
 
@@ -288,7 +294,7 @@ export default function KpiReadyPage() {
       //   xuất ra và màn hình nói 2 chuyện khác nhau.
       const xuatRows = gop
         ? viewRows.flatMap((r) => {
-            const nhom = nhomDotTheoNgay(r);
+            const nhom = tachDon ? nhomDotTheoNgay(r) : [];
             if (!nhom.length) return [{ ...r, _dau: true }];
             return nhom.map((g, j) => ({ ...r, _dau: j === 0, _nhomDot: g }));
           })
@@ -355,7 +361,7 @@ export default function KpiReadyPage() {
       ];
       await exportPanelExcel({
         cols, rows: xuatRows, title: 'Theo dõi PO',
-        subtitle: `${gop ? 'Theo đơn hàng (tách dòng theo ngày vải về)' : 'Chi tiết theo code phần (tách dòng theo đợt vải)'}`
+        subtitle: `${gop ? (tachDon ? 'Theo đơn hàng (tách dòng theo ngày vải về)' : 'Theo đơn hàng (1 dòng / đơn)') :'Chi tiết theo code phần (tách dòng theo đợt vải)'}`
           + ` · ${xuatRows.length} dòng · ${viewRows.length} ${gop ? 'đơn hàng' : 'phần in'}`
           + ` · ${rows.length} phần in${range.from || range.to ? ` · ${range.from || '…'} → ${range.to || '…'}` : ''}`,
         fileName: `kpi-ready-${gop ? 'theo-don' : 'chi-tiet'}`,
@@ -444,6 +450,13 @@ export default function KpiReadyPage() {
                 ? 'bg-primary text-white' : 'text-ink-soft hover:text-ink'}`}>{label}</button>
           ))}
         </div>
+        {gop && (
+          <label className="inline-flex cursor-pointer select-none items-center gap-1.5 text-sm text-ink">
+            <input type="checkbox" className="h-4 w-4 accent-primary" checked={tachDotDon}
+              onChange={(e) => setTachDotDon(e.target.checked)} />
+            Tách theo đợt vải
+          </label>
+        )}
         <Select value={loaiNgay} onChange={(e) => setLoaiNgay(e.target.value)} className="!h-10 w-44">
           {(data?.loai_ngay || []).map((n) => <option key={n.ma} value={n.ma}>{n.ten}</option>)}
         </Select>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Modal from './Modal';
 import Button from './Button';
 import Badge from './Badge';
@@ -109,7 +110,17 @@ function ONut({ o, so, nhanKy, maTrang, ky, donVi, goiLoc, onMo, onMoNgayGiao, k
     const el = nutRef.current;
     if (!el) return;
     const r = el.getBoundingClientRect();
-    setViTri({ top: r.bottom + 6, left: r.left });
+    // ⚠⚠ KẸP VÀO TRONG MÀN HÌNH (fix 22/09/2026 — "hover vào thì modal bị che mất"): dải "Theo dõi"
+    //   nằm sát MÉP PHẢI nên neo theo `r.left` thì hộp rộng 288px tràn ra ngoài viewport, mất nửa hộp.
+    //   Ngang: dịch sang trái cho vừa; dọc: không đủ chỗ phía dưới thì lật lên TRÊN ô.
+    const W = 288;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const left = Math.max(8, Math.min(r.left, vw - W - 8));
+    const choDuoi = vh - r.bottom - 12;
+    const top = choDuoi >= 200 ? r.bottom + 6 : null;
+    const bottom = top === null ? vh - r.top + 6 : null;
+    setViTri({ top, bottom, left, maxH: Math.max(160, (top !== null ? choDuoi : r.top - 12)) });
     setHienNG(true);
     if (ds || dangTaiNG) return;
     setDangTaiNG(true);
@@ -131,6 +142,10 @@ function ONut({ o, so, nhanKy, maTrang, ky, donVi, goiLoc, onMo, onMoNgayGiao, k
   const laSl = !!so?.la_so_luong;
   const cot = laSl ? (so.don_vi === 'sl_dh' ? 'sl_dh' : 'sl_vai') : 'so_doi_tuong';
   const items = ds?.items || [];
+  // Dải ở breadcrumb ⇒ đưa hộp ra `document.body` (portal) để không bị bất kỳ stacking context /
+  // khung cha nào che. ⚠ Chip TRONG MODAL thì GIỮ tại chỗ: portal ra ngoài Dialog của Headless UI thì
+  // bấm vào hộp bị coi là "bấm ra ngoài" ⇒ modal tự đóng.
+  const boc = (node) => (kieu === 'chip' ? node : createPortal(node, document.body));
 
   return (
     <>
@@ -165,10 +180,13 @@ function ONut({ o, so, nhanKy, maTrang, ky, donVi, goiLoc, onMo, onMoNgayGiao, k
         )}
       </button>
 
-      {hienNG && viTri && (
+      {hienNG && viTri && boc(
         <div
-          className="fixed z-[60] max-h-[60vh] w-72 overflow-auto rounded-control border border-line bg-surface p-2 shadow-lg"
-          style={{ top: viTri.top, left: viTri.left }}
+          className="fixed z-[70] w-72 overflow-auto rounded-control border border-line bg-surface p-2 shadow-lg"
+          style={{
+            top: viTri.top ?? undefined, bottom: viTri.bottom ?? undefined, left: viTri.left,
+            maxHeight: Math.min(viTri.maxH, window.innerHeight * 0.6),
+          }}
           onMouseEnter={() => clearTimeout(timerRef.current)}
           onMouseLeave={roiNut}
         >

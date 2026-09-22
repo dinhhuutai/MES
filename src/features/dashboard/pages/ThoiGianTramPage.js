@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
 import Badge from '../../../components/common/Badge';
@@ -40,6 +40,9 @@ const DON_VI = { pin: 'Phần in', dot_vai: 'Đợt vải', lenh: 'Lệnh SX', t
 const GOC = [
   ['TRAM', 'Tổng hợp theo trạm'], ['PIN', 'Theo phần in'], ['DOT', 'Theo đợt vải'], ['CHI_TIET', 'Chi tiết từng đơn vị'],
 ];
+
+const MA_READY_KT = 'READY_KT';
+const THU_TU_KT = { FILM: 0, KHUON: 1, MUC: 2 };
 
 const phutTxt = (v) => (v === null || v === undefined ? '—' : fmtPhut(v));
 // Ô thời gian có tô màu theo SLA: đỏ = quá SLA, cam = còn ở trạm (đồng hồ vẫn chạy).
@@ -111,28 +114,69 @@ export default function ThoiGianTramPage() {
   // ─── Sổ xuống checklist của 1 trạm ───────────────────────────────────────
   // ⚠ Dùng CHÍNH `thongKe()` của dòng cha để tổng hợp ⇒ cha và con không thể dùng 2 công thức khác
   //   nhau (TB · trung vị · P90 · quá SLA). Khác duy nhất: SLA lấy của CHECKLIST, không của trạm.
-  const toggleCl = useCallback(async (maTram) => {
-    setMoRong((cu) => {
-      const s = new Set(cu);
-      if (s.has(maTram)) s.delete(maTram); else s.add(maTram);
-      return s;
-    });
+  // Tải checklist của 1 trạm vào cache `cl` (dùng chung cho sổ xuống ở bảng trạm VÀ cột con Film/Khuôn/
+  // Mực ở góc phần in / đợt vải). Trả `false` khi lỗi.
+  const taiCl = useCallback(async (maTram) => {
     const khoa = `${khoaLoc}|${maTram}`;
-    if (cl[khoa] || clDangTai[khoa]) return;
+    if (cl[khoa] || clDangTai[khoa]) return true;
     setClDangTai((c) => ({ ...c, [khoa]: true }));
     try {
       const r = await getThoiGianTramChecklist(maTram, {
         tuNgay: range.from || '', denNgay: range.to || '', loaiMoc, trangThai, timKiem: search, ...filters,
       });
       setCl((c) => ({ ...c, [khoa]: r.data }));
+      return true;
     } catch (e) {
       // ⚠ Nuốt lỗi + hiện toast: đây là phần THÊM, hỏng nó không được chặn bảng chính.
       show(e.message || 'Không tải được checklist của trạm', 'error');
-      setMoRong((cu) => { const s = new Set(cu); s.delete(maTram); return s; });
+      return false;
     } finally {
       setClDangTai((c) => ({ ...c, [khoa]: false }));
     }
   }, [khoaLoc, cl, clDangTai, range, loaiMoc, trangThai, search, filters, show]);
+
+  const toggleCl = useCallback(async (maTram) => {
+    setMoRong((cu) => {
+      const s = new Set(cu);
+      if (s.has(maTram)) s.delete(maTram); else s.add(maTram);
+      return s;
+    });
+    const ok = await taiCl(maTram);
+    if (!ok) setMoRong((cu) => { const s = new Set(cu); s.delete(maTram); return s; });
+  }, [taiCl]);
+
+  // ─── READY KỸ THUẬT TÁCH Film / Khuôn / Mực ở góc Theo phần in + Theo đợt vải (22/09/2026) ──────
+  // Cột READY_KT được bung thành 3 cột con (thời gian chờ đến lúc xác nhận TỪNG mục — cùng nguồn với
+  // dòng sổ xuống ở bảng trạm) + 1 cột "tổng" = chính cột READY_KT cũ. Gộp theo phần in / đợt vải bằng
+  // CHÍNH `theoPhanIn`/`theoDotVai` (khóa nhóm giống hệt) nên con và cha luôn khớp dòng.
+  const coReadyKt = tramCoDl.some((t) => t.ma === MA_READY_KT);
+  const canCotCon = (goc === 'PIN' || goc === 'DOT') && coReadyKt;
+  // ⚠ Nhớ khóa đã LỖI: `taiCl` đổi mỗi lần cache đổi ⇒ effect chạy lại; không nhớ thì lỗi mạng sẽ gọi
+  //   lại liên tục (kèm toast đỏ). Đổi bộ lọc (khóa mới) thì được thử lại.
+  const ktLoiRef = useRef(new Set());
+  useEffect(() => {
+    const khoa = `${khoaLoc}|${MA_READY_KT}`;
+    if (!canCotCon || ktLoiRef.current.has(khoa)) return;
+    taiCl(MA_READY_KT).then((ok) => { if (!ok) ktLoiRef.current.add(khoa); });
+  }, [canCotCon, taiCl, khoaLoc]);
+  const dlKt = cl[`${khoaLoc}|${MA_READY_KT}`];
+  // Checklist theo thứ tự Film → Khuôn → Mực (backend trả Khuôn trước).
+  const clKt = useMemo(() => {
+    const ds = dlKt?.checklist || [];
+    return [...ds].sort((a, b) => (THU_TU_KT[a.ma] ?? 9) - (THU_TU_KT[b.ma] ?? 9));
+  }, [dlKt]);
+  const conKt = useMemo(() => {
+    if (!canCotCon || !dlKt) return null;
+    // Chỉ lấy đơn vị còn nằm trong tập READY_KT đang xét (chip trạm / "chỉ quá SLA" đã lọc ở `rows`).
+    const khoaDv = (r) => `${r.phan_in_id}|${r.ma_dot_vai || ''}`;
+    const conLai = new Set(rows.filter((r) => r.ma_tram === MA_READY_KT).map(khoaDv));
+    const ds = dlKt.rows.filter((r) => conLai.has(khoaDv(r)))
+      .map((r) => ({ ...r, ma_tram: `${MA_READY_KT}:${r.ma_checkpoint}` }));
+    const tramCon = clKt.map((c) => ({ ma: `${MA_READY_KT}:${c.ma}`, sla_phut: c.sla_phut }));
+    const g = goc === 'PIN' ? theoPhanIn(ds, tramCon) : theoDotVai(ds, tramCon);
+    return new Map(g.map((x) => [x.key, x.tram]));
+  }, [canCotCon, dlKt, clKt, rows, goc]);
+  const ktDangTai = canCotCon && !dlKt && !!clDangTai[`${khoaLoc}|${MA_READY_KT}`];
 
   // Bảng "Tổng hợp theo trạm" ở dạng PHẲNG: dòng trạm + (nếu đang bung) các dòng checklist ngay dưới.
   // ⚠ CỐ Ý không dùng `subRows` của `DataTable`: prop đó dựng sẵn cho dữ liệu có SẴN + ô hợp nhất,
@@ -217,10 +261,31 @@ export default function ThoiGianTramPage() {
     ...(thuocDot ? [{ key: 'ma_dot_vai', header: 'Đợt vải', className: 'whitespace-nowrap',
       render: (r) => r.ma_dot_vai || <span className="text-ink-soft">(mức phần in)</span> }] : []),
     ...cotPinGoc.slice(1),
-    ...tramCoDl.map((t) => ({
-      key: `t_${t.ma}`, header: t.ten, className: 'text-right',
-      render: (r) => (r.tram[t.ma] ? <OPhut phut={r.tram[t.ma].phut} sla={t.sla_phut} dangO={r.tram[t.ma].dang_o} /> : <span className="text-ink-soft">·</span>),
-    })),
+    ...tramCoDl.flatMap((t) => {
+      const cotTram1 = {
+        key: `t_${t.ma}`, header: t.ma === MA_READY_KT ? `${t.ten} (tổng)` : t.ten, className: 'text-right',
+        render: (r) => (r.tram[t.ma] ? <OPhut phut={r.tram[t.ma].phut} sla={t.sla_phut} dangO={r.tram[t.ma].dang_o} /> : <span className="text-ink-soft">·</span>),
+      };
+      if (t.ma !== MA_READY_KT) return [cotTram1];
+      // READY Kỹ thuật: 3 cột con Film / Khuôn / Mực đứng TRƯỚC cột tổng.
+      if (!conKt) {
+        return [{ key: 't_kt_cho', header: 'Film / Khuôn / Mực', className: 'text-right',
+          render: () => <span className="text-ink-soft">{ktDangTai ? '…' : '·'}</span> }, cotTram1];
+      }
+      return [
+        ...clKt.map((c) => {
+          const ma = `${MA_READY_KT}:${c.ma}`;
+          return {
+            key: `t_${ma}`, header: `${c.ten} (READY KT)`, className: 'text-right',
+            render: (r) => {
+              const k = conKt.get(r.key)?.[ma];
+              return k ? <OPhut phut={k.phut} sla={c.sla_phut} dangO={k.dang_o} /> : <span className="text-ink-soft">·</span>;
+            },
+          };
+        }),
+        cotTram1,
+      ];
+    }),
     { key: 'tong_phut', header: 'Tổng các trạm', className: 'text-right font-semibold', render: (r) => phutTxt(r.tong_phut) },
     { key: 'dau_cuoi_phut', header: 'Vào đầu → rời cuối', className: 'text-right', render: (r) => (
       <OPhut phut={r.dau_cuoi_phut} dangO={r.dang_o} />
@@ -288,7 +353,15 @@ export default function ThoiGianTramPage() {
             ...(goc === 'DOT' ? [{ header: 'Đợt vải', value: (r) => r.ma_dot_vai || '(mức phần in)' }] : []),
             { header: 'Khách hàng', value: (r) => r.ten_khach_hang }, { header: 'Đơn hàng', value: (r) => r.ma_don_hang },
             { header: 'Mã hàng', value: (r) => r.ma_hang }, { header: 'Màu vải', value: (r) => r.mau_vai },
-            ...tramCoDl.map((t) => ({ header: t.ten, value: (r) => (r.tram[t.ma] ? r.tram[t.ma].phut : ''), num: true })),
+            ...tramCoDl.flatMap((t) => {
+              const c1 = { header: t.ma === MA_READY_KT ? `${t.ten} (tổng)` : t.ten,
+                value: (r) => (r.tram[t.ma] ? r.tram[t.ma].phut : ''), num: true };
+              if (t.ma !== MA_READY_KT || !conKt) return [c1];
+              return [...clKt.map((c) => {
+                const ma = `${MA_READY_KT}:${c.ma}`;
+                return { header: `${c.ten} (READY KT)`, value: (r) => { const k = conKt.get(r.key)?.[ma]; return k ? k.phut : ''; }, num: true };
+              }), c1];
+            }),
             { header: 'Tổng các trạm', value: (r) => r.tong_phut, num: true },
             { header: 'Vào đầu → rời cuối', value: (r) => p(r.dau_cuoi_phut), num: true },
             { header: 'Trạm quá SLA', value: (r) => r.so_tram_qua_sla, num: true },
