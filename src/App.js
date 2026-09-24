@@ -55,9 +55,7 @@ import DanhSachTemGiaCongPage from './features/planning/pages/DanhSachTemGiaCong
 import KeHoachTamPage from './features/planning/pages/KeHoachTamPage';
 import TestRunPage from './features/planning/pages/TestRunPage';
 import XacNhanChayPage from './features/production/pages/XacNhanChayPage';
-import TheoDoiChuyenPage from './features/production/pages/TheoDoiChuyenPage';
-import XePhoiPage from './features/production/pages/XePhoiPage';
-import DanhSachTemPage from './features/production/pages/DanhSachTemPage';
+import DanhMucSanXuatPage from './features/production/pages/DanhMucSanXuatPage';
 import ReadyQcPage from './features/quality/pages/ReadyQcPage';
 import KcsPage from './features/quality/pages/KcsPage';
 import SuaPage from './features/quality/pages/SuaPage';
@@ -65,9 +63,6 @@ import OqcPage from './features/quality/pages/OqcPage';
 import QcInlinePage from './features/quality/pages/QcInlinePage';
 import LoaiLoiPage from './features/quality/pages/LoaiLoiPage';
 import PhanLoaiLoiPage from './features/production/pages/PhanLoaiLoiPage';
-import BienPhapXuLyPage from './features/production/pages/BienPhapXuLyPage';
-import LyDoNgungChuyenPage from './features/production/pages/LyDoNgungChuyenPage';
-import LyDoBoSungPage from './features/production/pages/LyDoBoSungPage';
 import GiaoDacBietPage from './features/quality/pages/GiaoDacBietPage';
 import QcTraVePage from './features/quality/pages/QcTraVePage';
 import GiaoHangPage from './features/delivery/pages/GiaoHangPage';
@@ -98,17 +93,11 @@ const PAGES = {
   '/ke-hoach/ke-hoach-tam': <KeHoachTamPage />,
   '/chat-luong/test-run': <TestRunPage />,
   '/san-xuat/xac-nhan-chay': <XacNhanChayPage />,
-  '/san-xuat/theo-doi-chuyen': <TheoDoiChuyenPage />,
-  '/san-xuat/xe-phoi': <XePhoiPage />,
-  '/san-xuat/danh-sach-tem': <DanhSachTemPage />,
+  '/san-xuat/danh-muc': <DanhMucSanXuatPage />,
   '/san-xuat/kcs': <KcsPage />,
   '/san-xuat/sua': <SuaPage />,
   '/san-xuat/phan-loai-loi': <PhanLoaiLoiPage />,
   // Danh mục lỗi dùng CHUNG component với trang ở module Chất lượng — 1 nguồn, 2 lối vào.
-  '/san-xuat/danh-muc-loi': <LoaiLoiPage />,
-  '/san-xuat/bien-phap': <BienPhapXuLyPage />,
-  '/san-xuat/ly-do-ngung': <LyDoNgungChuyenPage />,
-  '/san-xuat/ly-do-bo-sung': <LyDoBoSungPage />,
   '/chat-luong/ready-qc': <ReadyQcPage />,
   '/chat-luong/qc-in-line': <QcInlinePage />,
   '/chat-luong/oqc': <OqcPage />,
@@ -155,6 +144,17 @@ const PAGES = {
   '/he-thong/tich-giao': <TichGiaoPage />,
 };
 
+// Route CŨ của module Sản xuất đã gộp trang (24/09/2026) — chuyển hướng để link/bookmark cũ vẫn vào được.
+const ROUTE_CU = {
+  '/san-xuat/theo-doi-chuyen': '/san-xuat/xac-nhan-chay?mo=theo-doi-chuyen',
+  '/san-xuat/xe-phoi': '/san-xuat/xac-nhan-chay?mo=xe-phoi',
+  '/san-xuat/danh-sach-tem': '/san-xuat/danh-muc?tab=tem',
+  '/san-xuat/danh-muc-loi': '/san-xuat/danh-muc?tab=loi',
+  '/san-xuat/bien-phap': '/san-xuat/danh-muc?tab=bien-phap',
+  '/san-xuat/ly-do-ngung': '/san-xuat/danh-muc?tab=ly-do-ngung',
+  '/san-xuat/ly-do-bo-sung': '/san-xuat/danh-muc?tab=ly-do-bo-sung',
+};
+
 const moduleRoutes = MODULES.flatMap((m) =>
   (m.children || []).map((c) => {
     const element = PAGES[c.route] || <PlaceholderPage title={c.ten} phase={`Module ${m.ten}`} />;
@@ -192,6 +192,7 @@ export default function App() {
 
         <Route element={<ModuleLayout />}>
           {moduleRoutes}
+          {Object.entries(ROUTE_CU).map(([tu, den]) => <Route key={tu} path={tu} element={<Navigate to={den} replace />} />)}
           {/* Route có tham số (không nằm trong menu) */}
           <Route path="/bao-cao/thiet-ke/:id"
             element={<RequirePermission anyOf={['BAOCAO_VIEW']}><ReportDesignerPage /></RequirePermission>} />

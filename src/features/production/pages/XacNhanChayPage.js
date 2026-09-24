@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import Toolbar from '../../../components/common/Toolbar';
@@ -26,6 +27,8 @@ import exportCheckpointExcel, { COT_LENH, moTaBoLoc } from '../../../utils/expor
 import ChipTabs from '../../../components/common/ChipTabs';
 import { LOAI_TABS, hopChipChuyen, nhanChip, demChip, locSiSoTheoChip } from '../../../utils/khuChuyen';
 import RunPanel from '../components/RunPanel';
+import TheoDoiChuyenPage from './TheoDoiChuyenPage';
+import XePhoiPage from './XePhoiPage';
 import { khop } from '../../../utils/timKiem';
 
 export default function XacNhanChayPage() {
@@ -36,6 +39,17 @@ export default function XacNhanChayPage() {
 
   const [candidates, setCandidates] = useState([]);
   const [nghenOpen, setNghenOpen] = useState(false); // modal "Danh sách nghẽn"
+  // ⚠ Theo dõi chuyền + Tình trạng xe phơi GỘP VÀO màn này (24/09/2026): 2 nút cạnh "Bộ lọc" mở modal
+  //   TOÀN MÀN HÌNH dựng NGUYÊN component trang cũ. Route cũ chuyển hướng về đây kèm `?mo=` (App.js).
+  const [params, setParams] = useSearchParams();
+  const [moTrang, setMoTrang] = useState(() => {
+    const m = params.get('mo');
+    return m === 'theo-doi-chuyen' || m === 'xe-phoi' ? m : null;
+  });
+  const dongTrang = () => {
+    setMoTrang(null);
+    if (params.get('mo')) setParams((p) => { const n = new URLSearchParams(p); n.delete('mo'); return n; }, { replace: true });
+  };
   const [running, setRunning] = useState([]);
   const [chuyen, setChuyen] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -334,6 +348,12 @@ export default function XacNhanChayPage() {
     <div>
       <Toolbar title="Xác nhận chạy" subtitle="Lệnh đã Release 2 — chọn chuyền thực tế & bắt đầu in"
         search={search} onSearch={setSearch} searchPlaceholder="Tìm code phần, mã hàng, màu/kích, đơn hàng...">
+        {can('PROD_MONITOR') && (
+          <Button chiXemOk variant="ghost" icon="activity" onClick={() => setMoTrang('theo-doi-chuyen')}>Theo dõi chuyền</Button>
+        )}
+        {can('XEPHOI') && (
+          <Button chiXemOk variant="ghost" icon="truck" onClick={() => setMoTrang('xe-phoi')}>Xe phơi</Button>
+        )}
         <Button chiXemOk variant={showFilter || hasFilter ? 'secondary' : 'ghost'} icon="filter" onClick={() => setShowFilter((v) => !v)}>
           Bộ lọc{hasFilter ? ' ●' : ''}
         </Button>
@@ -464,6 +484,14 @@ export default function XacNhanChayPage() {
       </Modal>
 
       {sel && <RunPanel lenhId={sel} onClose={() => setSel(null)} onChanged={load} />}
+      {/* Modal TOÀN MÀN HÌNH của 2 trang cũ — chỉ dựng component khi mở (2 trang có vòng tự làm mới 10–15s). */}
+      <Modal open={moTrang === 'theo-doi-chuyen'} onClose={dongTrang} size="full" canhTren={8} title="Theo dõi chuyền in">
+        {moTrang === 'theo-doi-chuyen' && <TheoDoiChuyenPage />}
+      </Modal>
+      <Modal open={moTrang === 'xe-phoi'} onClose={dongTrang} size="full" canhTren={8} title="Tình trạng xe phơi">
+        {moTrang === 'xe-phoi' && <XePhoiPage />}
+      </Modal>
+
       <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
         tenMan="Xác nhận chạy" rows={rowsNghen} trangThai={(r) => statusLenh(r.lenh_id)} tenFile="nghen-xac-nhan-chay" />
       <Toast toast={toast} />

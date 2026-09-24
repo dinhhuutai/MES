@@ -30,7 +30,11 @@ export function thongKe(ds, sla) {
   const roi = ds.filter((r) => r.tg_ra);
   const phutRoi = roi.map((r) => Number(r.phut)).filter(Number.isFinite);
   const tong = phut.reduce((s, v) => s + v, 0);
-  const quaSla = sla ? ds.filter((r) => Number(r.phut) > sla).length : null;
+  // ⚠ SLA từng DÒNG (backend gắn `sla_phut` — READY theo giờ lên MES, Test Run theo giờ SX kế hoạch,
+  //   24/09/2026) THẮNG SLA trạm; dòng không có thì dùng SLA trạm như cũ.
+  const slaDong = (r) => (r.sla_phut != null ? Number(r.sla_phut) : sla);
+  const coSla = !!sla || ds.some((r) => r.sla_phut != null);
+  const quaSla = coSla ? ds.filter((r) => { const x = slaDong(r); return x > 0 && Number(r.phut) > x; }).length : null;
   return {
     so_don_vi: ds.length,
     so_da_roi: roi.length,
@@ -44,7 +48,7 @@ export function thongKe(ds, sla) {
     min_phut: phut.length ? phut[0] : null,
     max_phut: phut.length ? phut[phut.length - 1] : null,
     qua_sla: quaSla,
-    pt_qua_sla: sla && ds.length ? Math.round((quaSla / ds.length) * 1000) / 10 : null,
+    pt_qua_sla: coSla && ds.length ? Math.round((quaSla / ds.length) * 1000) / 10 : null,
   };
 }
 
@@ -129,7 +133,9 @@ function gomTheoKhoa(dsRows, layKhoa, layThongTin, tramDs, bayGio) {
       const k = gopKhoang(ds, bayGio);
       tram[ma] = k;
       tong += k.phut || 0;
-      const sla = slaCua.get(ma);
+      // SLA của nhóm = SLA CHẶT NHẤT trong các dòng (luật theo giờ gắn theo từng dòng), thiếu thì SLA trạm.
+      const slaDs = ds.map((r) => r.sla_phut).filter((x) => x != null).map(Number);
+      const sla = slaDs.length ? Math.min(...slaDs) : slaCua.get(ma);
       if (sla && k.phut > sla) quaSla += 1;
       const v = new Date(k.tg_vao).getTime();
       if (vaoDau === null || v < vaoDau) vaoDau = v;

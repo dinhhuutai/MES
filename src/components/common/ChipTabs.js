@@ -6,7 +6,9 @@
 //   value  giá trị đang chọn
 //   counts { [v]: number } — số hiển thị trong ngoặc; thiếu khóa thì hiện 0
 //   onChange(v)
-export default function ChipTabs({ tabs = [], value = '', counts = {}, onChange }) {
+//   anSo   true ⇒ KHÔNG in số đếm (dùng làm toggle chuyển trang con — vd trang Danh mục & tem in).
+//          Mặc định false ⇒ mọi màn đang dùng giữ nguyên.
+export default function ChipTabs({ tabs = [], value = '', counts = {}, onChange, anSo = false }) {
   return (
     <div className="mb-4 flex flex-wrap gap-2">
       {tabs.map((t) => {
@@ -24,7 +26,7 @@ export default function ChipTabs({ tabs = [], value = '', counts = {}, onChange 
             }`}
           >
             {t.label}
-            <span className={`ml-1.5 text-xs ${active ? 'text-white/80' : 'text-ink-soft'}`}>({n})</span>
+            {!anSo && <span className={`ml-1.5 text-xs ${active ? 'text-white/80' : 'text-ink-soft'}`}>({n})</span>}
           </button>
         );
       })}

@@ -54,20 +54,16 @@ export const MODULES = [
     perm: 'PROD_MONITOR',
     mau: 'bg-emerald-50 text-emerald-600',
     children: [
+      // ⚠ Theo dõi chuyền + Tình trạng xe phơi GỘP VÀO màn này (24/09/2026): 2 nút mở modal toàn màn hình
+      //   ngay cạnh nút Bộ lọc. 2 route cũ chuyển hướng về đây (App.js `ROUTE_CU`).
       { ten: 'Xác nhận chạy', route: '/san-xuat/xac-nhan-chay', perm: 'PROD_RUN', siSo: 'SX_CHO_CHAY' },
-      { ten: 'Theo dõi chuyền', route: '/san-xuat/theo-doi-chuyen', perm: 'PROD_MONITOR' },
-      { ten: 'Tình trạng xe phơi', route: '/san-xuat/xe-phoi', perm: 'XEPHOI' },
-      // Tra cứu tem đã in — xem thông tin tem mà không phải in ra giấy (tem sản xuất 15/16).
-      { ten: 'Danh sách tem in', route: '/san-xuat/danh-sach-tem', perm: ['PROD_RUN', 'PROD_MONITOR'] },
       { ten: 'KCS', route: '/san-xuat/kcs', perm: 'KCS', siSo: 'SX_KCS' },
       { ten: 'Phân loại lỗi', route: '/san-xuat/phan-loai-loi', perm: ['PHAN_LOAI_LOI', 'KCS'] },
       { ten: 'Sửa', route: '/san-xuat/sua', perm: 'SUA', siSo: 'SX_SUA' },
-      // 2 trang DANH MỤC đặt cuối module (dưới Sửa) — là màn cấu hình, không phải màn thao tác
-      // hằng ngày. "Danh mục lỗi" dùng CHUNG component với trang bên Chất lượng: 1 nguồn, 2 lối vào.
-      { ten: 'Danh mục lỗi', route: '/san-xuat/danh-muc-loi', perm: 'LOI_MANAGE' },
-      { ten: 'Danh mục biện pháp xử lý', route: '/san-xuat/bien-phap', perm: 'BIEN_PHAP_MANAGE' },
-      { ten: 'Danh mục lý do ngừng chuyền', route: '/san-xuat/ly-do-ngung', perm: 'LY_DO_NGUNG_MANAGE' },
-      { ten: 'Danh mục lý do bổ sung', route: '/san-xuat/ly-do-bo-sung', perm: 'LY_DO_BO_SUNG_MANAGE' },
+      // Danh sách tem in + 4 danh mục GỘP THÀNH 1 TRANG có dải toggle (24/09/2026) — mỗi toggle hiện
+      // theo đúng quyền của trang cũ; `perm` ở đây = HỢP các quyền đó. Đặt cuối module (màn tra cứu/cấu hình).
+      { ten: 'Tem in & danh mục', route: '/san-xuat/danh-muc',
+        perm: ['PROD_RUN', 'PROD_MONITOR', 'LOI_MANAGE', 'BIEN_PHAP_MANAGE', 'LY_DO_NGUNG_MANAGE', 'LY_DO_BO_SUNG_MANAGE'] },
     ],
   },
   {
