@@ -42,3 +42,10 @@ export const confirmReadyQcBatch = (items) =>
 export const readyHistory = (date, scope) => client.get('/ready/history', { params: { date, scope } });
 // Danh sách phần in đã hoàn thành checkpoint READY theo ngày. scope: 'tech' | 'qc'.
 export const readyDone = (date, scope) => client.get('/ready/done', { params: { date, scope } });
+
+// ── Ghi chú phần in + phần in BẤT THƯỜNG (mig 103, 24/09/2026) ──
+export const getGhiChuPhanIn = (phanInId) => client.get(`/ready/${phanInId}/ghi-chu`);
+export const themGhiChuPhanIn = (phanInId, noiDung) => client.post(`/ready/${phanInId}/ghi-chu`, { noiDung });
+export const listBatThuong = (lichSu = false) => client.get('/ready/bat-thuong', { params: lichSu ? { lichSu: 1 } : {} });
+export const danhDauBatThuong = (phanInIds, noiDung) => client.post('/ready/bat-thuong', { phanInIds, noiDung });
+export const goBatThuong = (phanInIds) => client.post('/ready/bat-thuong/go', { phanInIds });

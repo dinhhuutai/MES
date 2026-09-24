@@ -27,6 +27,8 @@ import {
   confirmReadyItemsBatch, uncheckReadyItem, traCuuMaQuet,
 } from '../../../services/readyService';
 import ReadyPanel from '../components/ReadyPanel';
+import BatThuongModal from '../components/BatThuongModal';
+import { listBatThuong } from '../../../services/readyService';
 import LoaiDotVaiBadge from '../../planning/components/LoaiDotVaiBadge';
 import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
@@ -88,6 +90,17 @@ export default function ReadyPage() {
   const [bulk, setBulk] = useState(null); // { ma, value }
   const [bulkSaving, setBulkSaving] = useState(false);
   const [histOpen, setHistOpen] = useState(false);
+  // PHẦN IN BẤT THƯỜNG (mig 103): modal + map phần in đang bị đánh dấu ⇒ badge ở cột Code phần.
+  const [btOpen, setBtOpen] = useState(false);
+  const [btMap, setBtMap] = useState(() => new Map());
+  const taiBatThuong = useCallback(async () => {
+    try {
+      const res = await listBatThuong();
+      setBtMap(new Map((res.data.items || []).map((d) => [d.phan_in_id, d.noi_dung])));
+    } catch { /* phần thêm — lỗi thì bỏ qua, không chặn màn READY */ }
+  }, []);
+  useEffect(() => { taiBatThuong(); }, [taiBatThuong]);
+  useSocketReload(['ready:bat-thuong'], taiBatThuong, 600);
   const [doneOpen, setDoneOpen] = useState(false);
   const [onlyReturned, setOnlyReturned] = useState(false); // lọc phần bị QC trả về
   // Khoảng NGÀY TRẢ VỀ (chỉ dùng khi `onlyReturned`) — rỗng = mọi ngày. Luật ở `utils/traVeNgay`.
@@ -268,6 +281,9 @@ export default function ReadyPage() {
     { key: 'ma_phan', header: 'Code phần', className: 'font-medium text-ink', render: (r) => (
       <div>
         <div>{r.ma_phan || '—'}</div>
+        {btMap.has(r.id) && (
+          <span title={btMap.get(r.id)} className="mt-1 inline-block"><Badge tone="danger"><Icon name="alert-triangle" size={12} className="mr-1" />Bất thường</Badge></span>
+        )}
         {r.gom_set_list && <Badge tone="info" className="mt-1" title="Gom set: phần in này được gom in chung với các phần in KHÁC (cùng màu). ≠ Gộp đợt (cùng phần in, khác đợt)."><Icon name="git-branch" size={12} className="mr-1" />Gom set {r.gom_set_list}</Badge>}
         {(r.tra_ve || r.tra_ve_ly_do) && <div className="mt-1"><TraVeBadge data={r.tra_ve || r.tra_ve_ly_do} label="Bị QC trả về" nguon="QC" /></div>}
         {r.tra_ve_kh && <div className="mt-1"><TraVeBadge data={r.tra_ve_kh} label="Kế hoạch trả về" nguon="Kế hoạch (Release 1)" /></div>}
@@ -340,6 +356,9 @@ export default function ReadyPage() {
         <NghenButton rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} onClick={() => setNghenOpen(true)} />
         <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
+        <Button chiXemOk variant={btMap.size ? 'secondary' : 'ghost'} icon="alert-triangle" onClick={() => setBtOpen(true)}>
+          Bất thường{btMap.size ? ` (${btMap.size})` : ''}
+        </Button>
         {/* Đang lọc ngày trả về → nói rõ đang thấy bao nhiêu trên tổng số phần bị trả về. */}
         {onlyReturned
           ? <Badge tone="danger">{viewRows.length}/{tongTraVe} bị trả về</Badge>
@@ -363,6 +382,8 @@ export default function ReadyPage() {
         <ReadyPanel phanInId={sel.id} dotVaiIds={sel.dotVaiIds} loaiDotVai={sel.loai}
           onClose={() => setSel(null)} onChanged={load} />
       )}
+
+      <BatThuongModal open={btOpen} onClose={() => setBtOpen(false)} rows={rows} onToast={show} onChanged={taiBatThuong} />
 
       <Modal
         open={!!bulk}

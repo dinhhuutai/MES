@@ -61,7 +61,7 @@ export default function ReadyQcPage() {
 
   const [rows, setRows] = useState([]);
   const [nghenOpen, setNghenOpen] = useState(false); // modal "Danh sách nghẽn"
-  const [meta, setMeta] = useState({ total: 0 });
+  const [, setMeta] = useState({ total: 0 }); // total server — badge nay đếm hàng đợi QC ở `choQc`
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   // ⚠ ĐÃ BỎ state `page` + thanh `Pagination` phân trang SERVER: trang tải-hết rồi để `DataTable` tự
@@ -94,6 +94,11 @@ export default function ReadyQcPage() {
   // ⚠ GOM TẠI CHỖ, KHÔNG đẩy set lên đầu bảng: đẩy lên đầu thì trang 1 toàn phần in chưa đủ mục
   // (không có checkbox chọn) ⇒ trông như "mất cột checkbox". Giữ nguyên thứ tự cũ, chỉ kéo các
   // thành viên còn lại của set lên ngay sau thành viên ĐẦU TIÊN xuất hiện.
+  // Hàng đợi QC thật: đợt KT đã xong (xem badge ở Toolbar).
+  const choQc = useMemo(() => {
+    const xong = rows.filter((r) => r.tech_done === true);
+    return { dot: xong.length, pin: new Set(xong.map((r) => r.id)).size };
+  }, [rows]);
   const viewRows = useMemo(() => {
     const bySet = new Map();
     filtered.forEach((r) => {
@@ -389,7 +394,10 @@ export default function ReadyQcPage() {
         <NghenButton rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} onClick={() => setNghenOpen(true)} />
         <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
-        <Badge tone="warning">{rows.length} đợt · {meta.total} phần in chờ QC</Badge>
+        {/* ⚠ "Chờ QC" = đợt KỸ THUẬT ĐÃ XÁC NHẬN HẾT checklist (`tech_done` theo đợt) — gương ô "Tồn cuối"
+            của dải Theo dõi (`siSoTram DV.READY_QC`). Bảng vẫn hiện CẢ đợt KT chưa xong (chốt 23/09) nên
+            KHÔNG đếm `rows.length` (24/09/2026: badge ghi 68 trong khi hàng đợi QC thật nhỏ hơn nhiều). */}
+        <Badge tone="warning">{choQc.dot} đợt · {choQc.pin} phần in chờ QC</Badge>
       </Toolbar>
 
       <FieldFilters fields={FILTER_FIELDS} values={filters} onField={(k, v) => setFilters((f) => ({ ...f, [k]: v }))} onClear={() => setFilters({})} open={showFilters} />

@@ -10,6 +10,7 @@ import usePermissions from '../../../hooks/usePermissions';
 import useNow from '../../../hooks/useNow';
 import { evalSla, SLA_BADGE, fmtDur } from '../../../utils/sla';
 import { getReadyDetail, confirmReadyItem, confirmReadyItemsBatch } from '../../../services/readyService';
+import GhiChuPhanIn from './GhiChuPhanIn';
 
 // 3 mục kỹ thuật + quyền tương ứng. Thứ tự hiển thị: FILM → KHUÔN → MỰC (HSKT đã bỏ).
 // KHÔNG còn chọn giá trị (mới/cũ/gia công) — chỉ cần XÁC NHẬN là xong (đã bỏ ràng buộc Film-trước-Khuôn).
@@ -235,6 +236,9 @@ export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, onClose, o
               <Icon name="shield-check" size={14} /> QC thực hiện tại Module Chất lượng → QC chuẩn bị kỹ thuật.
             </p>
           </div>
+
+          {/* Ghi chú + lịch sử ghi chú (mig 103) — ở CUỐI panel theo yêu cầu. */}
+          <GhiChuPhanIn phanInId={phanInId} onToast={show} />
         </div>
       )}
       <Toast toast={toast} />

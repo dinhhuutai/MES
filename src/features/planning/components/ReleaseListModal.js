@@ -69,7 +69,10 @@ function OChu({ v, rong = '12rem', className = '' }) {
 // ⚠⚠ POPOVER PHẢI `position: fixed` + đo `getBoundingClientRect`, KHÔNG dùng `absolute`: vùng bảng là
 //   khối `overflow-auto` nên hộp `absolute` sẽ bị **CẮT CỤT** ngay mép bảng (và `<thead>` còn đang
 //   `sticky` nữa). Đo toạ độ thật rồi vẽ `fixed` là cách duy nhất thoát khỏi khung cắt đó.
-function ThDangO({ th, dong, tong }) {
+// ⚠ LỌC CỘT "ĐANG Ở" (24/09/2026): mỗi dòng trong hộp thành Ô TÍCH chọn checkpoint (`chon` = mảng mã
+//   giai đoạn, rỗng = không lọc). Số trong hộp tính trên tập CHƯA áp lọc cột này — áp vào thì các
+//   checkpoint chưa tích biến mất, không chọn thêm được nữa.
+function ThDangO({ th, dong, tong, chon = [], onChon }) {
   const [ghim, setGhim] = useState(false);      // bấm = GHIM mở (để rê chuột xuống đọc / cuộn danh sách)
   const [hover, setHover] = useState(false);    // rê chuột = xem nhanh
   // ⚠ Bấm để ĐÓNG trong khi con trỏ vẫn nằm trên header thì `hover` còn true ⇒ hộp KHÔNG chịu đóng,
@@ -106,7 +109,7 @@ function ThDangO({ th, dong, tong }) {
         onMouseLeave={() => { setHover(false); setChanHover(false); }}
         title="Xem số phần in ở từng checkpoint"
         className="inline-flex items-center gap-1 font-semibold text-ink-soft underline decoration-dotted underline-offset-4 hover:text-primary">
-        Đang ở
+        Đang ở{chon.length > 0 && <span className="ml-0.5 rounded-full bg-primary px-1.5 text-[10px] font-bold text-white no-underline">{chon.length}</span>}
         <Icon name="chevron-down" size={13} className={hien ? 'rotate-180 transition-transform' : 'transition-transform'} />
       </button>
       {hien && viTri && (
@@ -118,12 +121,19 @@ function ThDangO({ th, dong, tong }) {
           ) : (
             <>
               <div className="max-h-[46vh] space-y-1 overflow-auto">
-                {dong.map((d) => (
-                  <div key={d.ma} className="flex items-baseline justify-between gap-3 text-xs">
-                    <span className="min-w-0 break-words text-ink-soft">{d.ten}</span>
-                    <b className="shrink-0 tabular-nums text-ink">{fmtNum(d.so)}</b>
-                  </div>
-                ))}
+                {dong.map((d) => {
+                  const tich = chon.includes(d.ma);
+                  return (
+                    <label key={d.ma} className="flex cursor-pointer items-baseline justify-between gap-3 rounded px-1 py-0.5 text-xs hover:bg-surface-muted">
+                      <span className="flex min-w-0 items-baseline gap-1.5">
+                        <input type="checkbox" className="translate-y-0.5" checked={tich}
+                          onChange={() => onChon && onChon(tich ? chon.filter((x) => x !== d.ma) : [...chon, d.ma])} />
+                        <span className={`break-words ${tich ? 'font-semibold text-ink' : 'text-ink-soft'}`}>{d.ten}</span>
+                      </span>
+                      <b className="shrink-0 tabular-nums text-ink">{fmtNum(d.so)}</b>
+                    </label>
+                  );
+                })}
               </div>
               {/* Tổng ở đây = "Tổng phần" trên đầu modal (cùng cách đếm DISTINCT phần in) ⇒ 2 con số
                   tự kiểm chéo nhau, lệch là biết có chỗ sai ngay. */}
@@ -133,8 +143,11 @@ function ThDangO({ th, dong, tong }) {
               </div>
             </>
           )}
-          <div className="mt-1.5 text-[11px] leading-snug text-ink-soft">
-            Đếm theo phần in (1 phần in release nhiều lần vẫn tính 1).
+          <div className="mt-1.5 flex items-start justify-between gap-2 text-[11px] leading-snug text-ink-soft">
+            <span>Tích để lọc bảng theo checkpoint. Đếm theo phần in (1 phần in release nhiều lần vẫn tính 1).</span>
+            {chon.length > 0 && (
+              <button type="button" className="shrink-0 font-semibold text-primary hover:underline" onClick={() => onChon && onChon([])}>Bỏ lọc</button>
+            )}
           </div>
         </div>
       )}
@@ -154,6 +167,7 @@ export default function ReleaseListModal({ open, onClose }) {
   const [q, setQ] = useState('');            // o tim 1-o
   const [filters, setFilters] = useState({}); // panel loc tung truong
   const [moLoc, setMoLoc] = useState(false);
+  const [locDangO, setLocDangO] = useState([]); // lọc cột "Đang ở" — mảng mã giai đoạn, rỗng = không lọc
   // CHE DO NGAY: 'KE_HOACH' (ngay hang len chuyen - de in phieu release) | 'RELEASE' (ngay bam
   // Release 1). Dung 'RELEASE' thi chip "Tat ca" khop dung voi sidebar "Da hoan thanh" cua Release 1.
   const [mode, setMode] = useState('KE_HOACH');
@@ -182,18 +196,22 @@ export default function ReleaseListModal({ open, onClose }) {
   const chipItems = useMemo(() => items.filter((r) => hopChipChuyen(r, chip)), [items, chip]);
   // ⚠ `gopTheoLenh` gắn `_stt`/`_dau`/`_span` để STT đếm theo ĐỢT SX và ô mức lệnh hợp nhất bằng
   //   rowSpan. Phải gọi SAU khi lọc — span tính trên tập ĐANG HIỂN THỊ (xem ghi chú trong helper).
-  const viewItems = useMemo(
-    () => gopTheoLenh(filterRows(chipItems, filters, FILTER_FIELDS).filter((r) => khopNhieu(oTimCols(r), q))),
+  const hopDangO = useCallback(
+    (r) => !locDangO.length || locDangO.includes(r.giai_doan_hien_tai || '_KHAC'), [locDangO]);
+  // Tập TRƯỚC khi áp lọc cột "Đang ở" — nguồn số đếm của hộp chọn checkpoint.
+  const truocDangO = useMemo(
+    () => filterRows(chipItems, filters, FILTER_FIELDS).filter((r) => khopNhieu(oTimCols(r), q)),
     [chipItems, filters, q]
   );
+  const viewItems = useMemo(() => gopTheoLenh(truocDangO.filter(hopDangO)), [truocDangO, hopDangO]);
   // So dem tren chip tinh tren tap DA qua o tim + bo loc (chip chi la 1 chieu loc khac) => bam chip
   // nao cung thay dung so dong se hien ra.
   const counts = useMemo(
-    () => demChip(filterRows(items, filters, FILTER_FIELDS).filter((r) => khopNhieu(oTimCols(r), q))),
-    [items, filters, q]
+    () => demChip(filterRows(items, filters, FILTER_FIELDS).filter((r) => khopNhieu(oTimCols(r), q)).filter(hopDangO)),
+    [items, filters, q, hopDangO]
   );
   const soLoc = Object.values(filters).filter((v) => (v || '').trim()).length + (q.trim() ? 1 : 0);
-  const dangLoc = !!chip || soLoc > 0;
+  const dangLoc = !!chip || soLoc > 0 || locDangO.length > 0;
   // Cac so tong phai tinh LAI theo tap DANG XEM, khong dung `meta` cua server: neu khong thi bam chip
   // loc con 3 dong ma van hien "Tong phan 49" - hai con so da nhau ngay tren cung mot man.
   const metaXem = useMemo(() => {
@@ -211,7 +229,7 @@ export default function ReleaseListModal({ open, onClose }) {
   }, [meta, dangLoc, viewItems]);
 
   // Số phần in ở từng checkpoint — tính trên tập ĐANG XEM để khớp với bảng + "Tổng phần" ở đầu modal.
-  const bangGiaiDoan = useMemo(() => demGiaiDoan(viewItems), [viewItems]);
+  const bangGiaiDoan = useMemo(() => demGiaiDoan(truocDangO), [truocDangO]);
 
   const th = 'px-2 py-2 text-xs font-semibold text-ink-soft whitespace-nowrap';
   // `align-top` để hàng có ô xuống dòng vẫn thẳng lối (và ô hợp nhất rowSpan bám đỉnh khối đợt SX).
@@ -308,7 +326,7 @@ export default function ReleaseListModal({ open, onClose }) {
               {/* ĐANG Ở — giai đoạn HIỆN TẠI của phần in (backend tính bằng cùng `dominantStageScalar`
                   với dashboard). Cột này để đối chiếu "release N phần, giờ chúng nằm đâu";
                   hover/bấm vào header ra luôn số phần in của TỪNG checkpoint. */}
-              <ThDangO th={th} dong={bangGiaiDoan.dong} tong={bangGiaiDoan.tong} />
+              <ThDangO th={th} dong={bangGiaiDoan.dong} tong={bangGiaiDoan.tong} chon={locDangO} onChon={setLocDangO} />
               <th className={`${th} text-left`}>Màu vải</th>
               <th className={`${th} text-left`}>Kích vải</th>
               <th className={`${th} text-left`}>Kích phim</th>
