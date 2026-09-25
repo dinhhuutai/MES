@@ -80,6 +80,7 @@ export default function ReadyPage() {
   const location = useLocation();
   const [rows, setRows] = useState([]);
   const [nghenOpen, setNghenOpen] = useState(false); // modal "Danh sách nghẽn"
+  const [canhBaoOpen, setCanhBaoOpen] = useState(false); // modal "Danh sách cảnh báo" (hàng vàng — 25/09/2026)
   const [traVeOpen, setTraVeOpen] = useState(false); // modal "Danh sách trả về" (25/09/2026)
   const [meta, setMeta] = useState({ total: 0 });
   const [loading, setLoading] = useState(true);
@@ -356,6 +357,8 @@ export default function ReadyPage() {
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
         <Button chiXemOk variant="secondary" icon="file-spreadsheet" loading={exporting} onClick={doExport}>Excel ({viewRows.length})</Button>
         <NghenButton rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} onClick={() => setNghenOpen(true)} />
+        {/* Cảnh báo = hàng VÀNG (SLA theo hạn giao: còn 2 ngày mà chưa xác nhận đủ) — cùng vị từ với bảng. */}
+        <NghenButton loai="SAP_NGHEN" rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} onClick={() => setCanhBaoOpen(true)} />
         <TraVeListButton onClick={() => setTraVeOpen(true)} />
         <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
@@ -525,6 +528,8 @@ export default function ReadyPage() {
         tenMan="Chuẩn bị kỹ thuật — READY" loais={TRA_VE_THEO_MAN.KT_READY} tenFile="tra-ve-ready" />
       <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
         tenMan="Chuẩn bị kỹ thuật — READY" rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} tenFile="nghen-ready" />
+      <NghenListModal loai="SAP_NGHEN" open={canhBaoOpen} onClose={() => setCanhBaoOpen(false)}
+        tenMan="Chuẩn bị kỹ thuật — READY" rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} tenFile="canh-bao-ready" />
       <Toast toast={toast} />
     </div>
   );
