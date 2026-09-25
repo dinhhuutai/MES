@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
+import TraVeGnModal from '../../../components/common/TraVeGnModal';
+import TraVeListModal, { TraVeListButton, TRA_VE_THEO_MAN } from '../../../components/common/TraVeListModal';
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
@@ -61,6 +63,8 @@ export default function ReadyQcPage() {
 
   const [rows, setRows] = useState([]);
   const [nghenOpen, setNghenOpen] = useState(false); // modal "Danh sách nghẽn"
+  const [traVeOpen, setTraVeOpen] = useState(false); // modal "Danh sách trả về" (25/09/2026)
+  const [gnOpen, setGnOpen] = useState(false); // modal "Trả về Giao nhận" (25/09/2026)
   const [, setMeta] = useState({ total: 0 }); // total server — badge nay đếm hàng đợi QC ở `choQc`
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -392,6 +396,7 @@ export default function ReadyQcPage() {
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
         <Button chiXemOk variant="secondary" icon="file-spreadsheet" loading={exporting} onClick={doExport}>Excel ({filtered.length})</Button>
         <NghenButton rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} onClick={() => setNghenOpen(true)} />
+        <TraVeListButton onClick={() => setTraVeOpen(true)} />
         <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         {/* ⚠ "Chờ QC" = đợt KỸ THUẬT ĐÃ XÁC NHẬN HẾT checklist (`tech_done` theo đợt) — gương ô "Tồn cuối"
@@ -422,9 +427,16 @@ export default function ReadyQcPage() {
                 Trả về kỹ thuật ({returnChecklists.size})
               </Button>
             ) : (
-              <Button onClick={doConfirm} loading={saving} disabled={!canQC || loadingDetail || !techDone}>
-                QC xác nhận
-              </Button>
+              <>
+                {/* Thông tin phần in SAI (màu, kích phim, SLĐH…) ⇒ trả về Giao nhận sửa, phần in rời READY. */}
+                {canQC && (
+                  <Button variant="secondary" icon="undo" className="text-danger" onClick={() => setGnOpen(true)}
+                    disabled={loadingDetail}>Trả về GN</Button>
+                )}
+                <Button onClick={doConfirm} loading={saving} disabled={!canQC || loadingDetail || !techDone}>
+                  QC xác nhận
+                </Button>
+              </>
             )}
           </>
         }
@@ -537,6 +549,11 @@ export default function ReadyQcPage() {
         title="Phần in đã QC (READY hoàn thành)" maHeader="Phần in"
         fetcher={(date) => readyDone(date, 'qc')} />
 
+      <TraVeListModal open={traVeOpen} onClose={() => setTraVeOpen(false)}
+        tenMan="QC chuẩn bị kỹ thuật" loais={TRA_VE_THEO_MAN.CL_QC_READY} tenFile="tra-ve-qc-ready" />
+      <TraVeGnModal open={gnOpen} onClose={() => setGnOpen(false)} nguon="QC" onToast={show}
+        phanIn={editing ? { id: editing.id, ma_phan: editing.ma_phan } : null}
+        onDone={() => { setEditing(null); load(); }} />
       <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
         tenMan="QC chuẩn bị kỹ thuật" rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} tenFile="nghen-qc-ready" />
       <Toast toast={toast} />

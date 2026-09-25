@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
+import TraVeListModal, { TraVeListButton, TRA_VE_THEO_MAN } from '../../../components/common/TraVeListModal';
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import taiHetTrang, { LIMIT_TAI_LON } from '../../../utils/taiHetTrang';
 import Toolbar from '../../../components/common/Toolbar';
@@ -93,6 +94,7 @@ export default function TestRunPage() {
 
   const [rows, setRows] = useState([]);
   const [nghenOpen, setNghenOpen] = useState(false); // modal "Danh sách nghẽn"
+  const [traVeOpen, setTraVeOpen] = useState(false); // modal "Danh sách trả về" (25/09/2026)
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [sel, setSel] = useState(null);
@@ -319,6 +321,7 @@ export default function TestRunPage() {
           Excel ({filtered.length})
         </Button>
         <NghenButton rows={rows} trangThai={(r) => statusLenh(r.id)} onClick={() => setNghenOpen(true)} />
+        <TraVeListButton onClick={() => setTraVeOpen(true)} />
         <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         {/* ⚠ PHẦN IN đứng TRƯỚC vì đó là đơn vị của màn này (và của dải "Theo dõi"); số lệnh để trong
@@ -383,6 +386,8 @@ export default function TestRunPage() {
         title="Lệnh đã QA xác nhận" maHeader="Lệnh" fetcher={testQaDone} showChuyen
         extraColumns={testRunColumns} extraExcelColumns={testRunExcelColumns} />
 
+      <TraVeListModal open={traVeOpen} onClose={() => setTraVeOpen(false)}
+        tenMan="Test Run - QA" loais={TRA_VE_THEO_MAN.CL_TEST_RUN} tenFile="tra-ve-test-run" />
       <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
         tenMan="Test Run - QA" rows={rows} trangThai={(r) => statusLenh(r.id)} tenFile="nghen-test-run" />
       <Toast toast={toast} />

@@ -146,7 +146,12 @@ export default function UsersPage() {
         </div>
       </div>
     ) },
-    { key: 'ten_phong_ban', header: 'Phòng ban', render: (r) => r.ten_phong_ban || '—' },
+    { key: 'ten_phong_ban', header: 'Phòng ban', render: (r) => (
+      <div>
+        {r.ten_phong_ban || '—'}
+        {r.ten_to && <div className="text-xs text-ink-soft">Tổ: {r.ten_to}</div>}
+      </div>
+    ) },
     { key: 'roles', header: 'Vai trò', render: (r) => (
       <div className="flex flex-wrap gap-1">
         {(r.roles || []).length ? r.roles.map((x) => <Badge key={x} tone="info">{x}</Badge>) : <span className="text-ink-soft">—</span>}

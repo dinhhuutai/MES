@@ -83,6 +83,9 @@ export default function NghenListModal({
         subtitle: `${ds.length} mục quá SLA · xuất ${new Date().toLocaleString('vi-VN')}`
           + (tim.trim() ? ` · tìm "${tim.trim()}"` : ''),
         fileName: tenFile,
+        // ⚠⚠ BẮT BUỘC truyền `rows` — thiếu là `exportPanelExcel` lấy mặc định [] ⇒ file chỉ có tiêu đề,
+        //   KHÔNG báo lỗi gì (lỗi thật 25/09/2026: Excel của cả 12 màn nghẽn đều rỗng).
+        rows: ds,
         cols: [
           ...cols.map((c) => ({
             header: c.header,

@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
+import TraVeListModal, { TraVeListButton, TRA_VE_THEO_MAN } from '../../../components/common/TraVeListModal';
 import useNghenMap from '../../../hooks/useNghenMap';
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import Toolbar from '../../../components/common/Toolbar';
@@ -86,6 +87,7 @@ export default function GiaCongPage() {
 
   const [rows, setRows] = useState([]);
   const [nghenOpen, setNghenOpen] = useState(false); // modal "Danh sách nghẽn"
+  const [traVeOpen, setTraVeOpen] = useState(false); // modal "Danh sách trả về" (25/09/2026)
   // Nguồn nghẽn dùng CHUNG với các màn Kế hoạch khác (dashboard `flowRows`).
   // ⚠ Hàng gia công KHÔNG tính SLA ở OQC (§5) nhưng vẫn có SLA ở chặng gia công — bản đồ này lo đúng.
   const { statusLenh } = useNghenMap();
@@ -356,6 +358,7 @@ export default function GiaCongPage() {
           {activeCount ? `${filtered.length}/` : ''}{rowsPhan.length} code phần · {meta.total || rows.length} lệnh
         </Badge>
         <NghenButton rows={rows} trangThai={(r) => statusLenh(r.id)} onClick={() => setNghenOpen(true)} />
+        <TraVeListButton onClick={() => setTraVeOpen(true)} />
       </Toolbar>
 
       <FieldFilters fields={FILTER_FIELDS} values={filters}
@@ -465,6 +468,8 @@ export default function GiaCongPage() {
 
       <GiaCongHistoryPanel open={histOpen} onClose={() => setHistOpen(false)} onPrint={printVe} />
 
+      <TraVeListModal open={traVeOpen} onClose={() => setTraVeOpen(false)}
+        tenMan="Gia công" loais={TRA_VE_THEO_MAN.KH_GIA_CONG} tenFile="tra-ve-gia-cong" />
       <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
         tenMan="Gia công" rows={rows} trangThai={(r) => statusLenh(r.id)} tenFile="nghen-gia-cong" />
       <Toast toast={toast} />

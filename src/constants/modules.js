@@ -11,6 +11,7 @@ export const MODULES = [
     mau: 'bg-blue-50 text-blue-600',
     children: [
       { ten: 'Danh sách phần in vải về', route: '/don-hang/phan-in', perm: 'ORDER_VIEW' },
+      { ten: 'Phần in chờ sửa thông tin', route: '/don-hang/cho-sua-thong-tin', perm: ['GN_SUA_THONG_TIN', 'ORDER_VIEW', 'READY_VIEW', 'READY_QC'] },
     ],
   },
   {
@@ -153,6 +154,7 @@ export const MODULES = [
     mau: 'bg-slate-100 text-slate-600',
     children: [
       { ten: 'Người dùng', route: '/he-thong/nguoi-dung', perm: 'USER_VIEW' },
+      { ten: 'Phòng ban & tổ', route: '/he-thong/phong-ban', perm: 'USER_VIEW' },
       { ten: 'Vai trò', route: '/he-thong/vai-tro', perm: 'ROLE_VIEW' },
       { ten: 'Permission', route: '/he-thong/permission', perm: 'PERM_VIEW' },
       { ten: 'Module', route: '/he-thong/module', perm: 'MODULE_VIEW' },

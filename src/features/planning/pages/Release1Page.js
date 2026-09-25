@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
+import TraVeListModal, { TraVeListButton, TRA_VE_THEO_MAN } from '../../../components/common/TraVeListModal';
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import taiHetTrang, { LIMIT_TAI_LON } from '../../../utils/taiHetTrang';
 import Toolbar from '../../../components/common/Toolbar';
@@ -109,6 +110,7 @@ export default function Release1Page() {
   const { toast, show } = useToast();
   const [rows, setRows] = useState([]);
   const [nghenOpen, setNghenOpen] = useState(false); // modal "Danh sách nghẽn"
+  const [dsTraVeOpen, setDsTraVeOpen] = useState(false); // modal "Danh sách trả về" (25/09/2026)
   const [meta, setMeta] = useState({ page: 1, totalPages: 1, total: 0 });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -362,6 +364,7 @@ export default function Release1Page() {
         <Button chiXemOk variant="secondary" icon="download" onClick={doExcel}
           disabled={!viewRowsGom.length}>Excel</Button>
         <NghenButton rows={rows} trangThai={(r) => statusDot(r.dot_vai_id)} onClick={() => setNghenOpen(true)} />
+        <TraVeListButton onClick={() => setDsTraVeOpen(true)} />
         <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="info">{activeCount || loaiPain ? `${viewRowsGom.length}/` : ''}{meta.total} đợt vải</Badge>
@@ -624,6 +627,8 @@ export default function Release1Page() {
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
         title="Lệnh đã Release 1" maHeader="Lệnh" fetcher={release1Done} />
       <ReleaseListModal open={releaseListOpen} onClose={() => setReleaseListOpen(false)} />
+      <TraVeListModal open={dsTraVeOpen} onClose={() => setDsTraVeOpen(false)}
+        tenMan="Release 1" loais={TRA_VE_THEO_MAN.KH_RELEASE1} tenFile="tra-ve-release-1" />
       <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
         tenMan="Release 1" rows={rows} trangThai={(r) => statusDot(r.dot_vai_id)} tenFile="nghen-release-1" />
       <Toast toast={toast} />

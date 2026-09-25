@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
+import TraVeListModal, { TraVeListButton, TRA_VE_THEO_MAN } from '../../../components/common/TraVeListModal';
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import { useLocation } from 'react-router-dom';
 import Toolbar from '../../../components/common/Toolbar';
@@ -79,6 +80,7 @@ export default function ReadyPage() {
   const location = useLocation();
   const [rows, setRows] = useState([]);
   const [nghenOpen, setNghenOpen] = useState(false); // modal "Danh sách nghẽn"
+  const [traVeOpen, setTraVeOpen] = useState(false); // modal "Danh sách trả về" (25/09/2026)
   const [meta, setMeta] = useState({ total: 0 });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState(() => new URLSearchParams(location.search).get('q') || '');
@@ -354,6 +356,7 @@ export default function ReadyPage() {
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
         <Button chiXemOk variant="secondary" icon="file-spreadsheet" loading={exporting} onClick={doExport}>Excel ({viewRows.length})</Button>
         <NghenButton rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} onClick={() => setNghenOpen(true)} />
+        <TraVeListButton onClick={() => setTraVeOpen(true)} />
         <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Button chiXemOk variant={btMap.size ? 'secondary' : 'ghost'} icon="alert-triangle" onClick={() => setBtOpen(true)}>
@@ -380,7 +383,7 @@ export default function ReadyPage() {
 
       {sel && (
         <ReadyPanel phanInId={sel.id} dotVaiIds={sel.dotVaiIds} loaiDotVai={sel.loai}
-          onClose={() => setSel(null)} onChanged={load} />
+          onClose={() => setSel(null)} onChanged={load} onToast={show} />
       )}
 
       <BatThuongModal open={btOpen} onClose={() => setBtOpen(false)} rows={rows} onToast={show} onChanged={taiBatThuong} />
@@ -518,6 +521,8 @@ export default function ReadyPage() {
         title="Phần in đã hoàn tất kỹ thuật (3 mục)" maHeader="Phần in"
         fetcher={(date) => readyDone(date, 'tech')} showPhuongAnIn />
 
+      <TraVeListModal open={traVeOpen} onClose={() => setTraVeOpen(false)}
+        tenMan="Chuẩn bị kỹ thuật — READY" loais={TRA_VE_THEO_MAN.KT_READY} tenFile="tra-ve-ready" />
       <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
         tenMan="Chuẩn bị kỹ thuật — READY" rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} tenFile="nghen-ready" />
       <Toast toast={toast} />

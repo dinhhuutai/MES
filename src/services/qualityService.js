@@ -59,3 +59,7 @@ export const listGiaoDacBiet = (params) => client.get('/quality/giao-dac-biet/al
 export const createGiaoDacBiet = (body) => client.post('/quality/giao-dac-biet', body);
 export const updateGiaoDacBiet = (id, body) => client.patch(`/quality/giao-dac-biet/${id}`, body);
 export const toggleGiaoDacBiet = (id, active) => client.patch(`/quality/giao-dac-biet/${id}/active`, { active });
+
+// Danh sách TRẢ VỀ theo loại (modal "Danh sách trả về" ở từng màn). `loai` = chuỗi ngăn bằng dấu phẩy,
+// vd 'READY,RELEASE1,TEST_RUN_KT'. tuNgay/denNgay = khoảng NGÀY TRẢ VỀ (để trống = mọi ngày).
+export const listTraVe = (params) => client.get('/quality/tra-ve/danh-sach', { params });

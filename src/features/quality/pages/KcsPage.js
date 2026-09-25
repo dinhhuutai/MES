@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
+import TraVeListModal, { TraVeListButton, TRA_VE_THEO_MAN } from '../../../components/common/TraVeListModal';
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import Toolbar from '../../../components/common/Toolbar';
 import OwnerHint from '../../../components/common/OwnerHint';
@@ -55,6 +56,7 @@ export default function KcsPage() {
 
   const [rows, setRows] = useState([]);
   const [nghenOpen, setNghenOpen] = useState(false); // modal "Danh sách nghẽn"
+  const [traVeOpen, setTraVeOpen] = useState(false); // modal "Danh sách trả về" (25/09/2026)
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState({});
@@ -338,6 +340,7 @@ export default function KcsPage() {
         <TraVeFilter checked={onlyReturned} onChecked={setOnlyReturned}
           range={traVeRange} onRange={setTraVeRange} label="Chỉ hiện tem bị trả về" />
         <NghenButton rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} onClick={() => setNghenOpen(true)} />
+        <TraVeListButton onClick={() => setTraVeOpen(true)} />
         <Button chiXemOk variant="secondary" icon="download" onClick={doExcel} disabled={!viewRows.length}>
           Excel ({viewRows.length})
         </Button>
@@ -537,6 +540,8 @@ export default function KcsPage() {
 
       <QrScanner open={scanOpen} onClose={() => setScanOpen(false)} onResult={onScan} />
 
+      <TraVeListModal open={traVeOpen} onClose={() => setTraVeOpen(false)}
+        tenMan="KCS" loais={TRA_VE_THEO_MAN.SX_KCS} tenFile="tra-ve-kcs" />
       <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
         tenMan="KCS" rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} tenFile="nghen-kcs" />
       <Toast toast={toast} />

@@ -11,6 +11,7 @@ import useNow from '../../../hooks/useNow';
 import { evalSla, SLA_BADGE, fmtDur } from '../../../utils/sla';
 import { getReadyDetail, confirmReadyItem, confirmReadyItemsBatch } from '../../../services/readyService';
 import GhiChuPhanIn from './GhiChuPhanIn';
+import TraVeGnModal from '../../../components/common/TraVeGnModal';
 
 // 3 mục kỹ thuật + quyền tương ứng. Thứ tự hiển thị: FILM → KHUÔN → MỰC (HSKT đã bỏ).
 // KHÔNG còn chọn giá trị (mới/cũ/gia công) — chỉ cần XÁC NHẬN là xong (đã bỏ ràng buộc Film-trước-Khuôn).
@@ -46,7 +47,7 @@ function ReturnNote({ info, nguon }) {
 
 // `dotVaiIds` + `loaiDotVai` (mig 098): panel mở từ 1 DÒNG LOẠI ĐỢT VẢI của phần in chờ ≥2 loại ⇒
 // trạng thái + nút xác nhận đều theo NHÓM đó (không truyền = như cũ, mức phần in).
-export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, onClose, onChanged }) {
+export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, onClose, onChanged, onToast }) {
   const { can } = usePermissions();
   const { toast, show } = useToast();
   const now = useNow(1000);
@@ -54,6 +55,9 @@ export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, onClose, o
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(null); // ma đang submit
+  const [gnOpen, setGnOpen] = useState(false); // modal "Trả về Giao nhận" (25/09/2026)
+  // Ai xác nhận được ÍT NHẤT 1 mục kỹ thuật thì được trả phần in về GN (thông tin sai thì không làm được).
+  const coQuyenTraGn = ITEMS.some((it) => can(it.perm));
 
   const byMa = (detail?.checkpoints || []).reduce((acc, c) => ({ ...acc, [c.ma_checkpoint]: c }), {});
   const state = detail?.state || {};
@@ -172,6 +176,14 @@ export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, onClose, o
       onClose={onClose}
       title={detail?.phan_in ? `READY — ${detail.phan_in.ma_phan}${detail.nhom_loai ? ` · ${detail.nhom_loai.ten}` : ''}` : 'Chuẩn bị kỹ thuật'}
       subtitle={detail?.phan_in ? `${detail.phan_in.ten_khach_hang} · ${detail.phan_in.mau_vai}` : ''}
+      footer={detail?.phan_in && coQuyenTraGn ? (
+        <>
+          <Button chiXemOk variant="ghost" onClick={onClose}>Đóng</Button>
+          <Button variant="secondary" icon="undo" className="text-danger" onClick={() => setGnOpen(true)}>
+            Trả về GN
+          </Button>
+        </>
+      ) : undefined}
     >
       {loading || !detail ? (
         <div className="py-10 text-center text-ink-soft">Đang tải...</div>
@@ -242,6 +254,10 @@ export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, onClose, o
         </div>
       )}
       <Toast toast={toast} />
+      {/* Trả về Giao nhận sửa thông tin — gửi xong phần in rời READY ⇒ đóng panel + tải lại bảng. */}
+      <TraVeGnModal open={gnOpen} onClose={() => setGnOpen(false)} nguon="KT" onToast={onToast || show}
+        phanIn={detail?.phan_in ? { id: phanInId, ma_phan: detail.phan_in.ma_phan } : null}
+        onDone={() => { onChanged?.(); onClose?.(); }} />
     </SidePanel>
   );
 }

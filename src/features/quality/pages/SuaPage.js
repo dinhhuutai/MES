@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
+import TraVeListModal, { TraVeListButton, TRA_VE_THEO_MAN } from '../../../components/common/TraVeListModal';
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import Toolbar from '../../../components/common/Toolbar';
 import Modal from '../../../components/common/Modal';
@@ -57,6 +58,7 @@ export default function SuaPage() {
 
   const [rows, setRows] = useState([]);
   const [nghenOpen, setNghenOpen] = useState(false); // modal "Danh sách nghẽn"
+  const [traVeOpen, setTraVeOpen] = useState(false); // modal "Danh sách trả về" (25/09/2026)
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState({});
@@ -324,6 +326,7 @@ export default function SuaPage() {
         <Button chiXemOk variant={showFilters || activeFilters.length ? 'secondary' : 'ghost'} icon="filter"
           onClick={() => setShowFilters((v) => !v)}>Bộ lọc{activeFilters.length ? ` (${activeFilters.length})` : ''}</Button>
         <NghenButton rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} onClick={() => setNghenOpen(true)} />
+        <TraVeListButton onClick={() => setTraVeOpen(true)} />
         <Button chiXemOk variant="secondary" icon="download" onClick={doExcel} disabled={!rows.length}>
           Excel ({rows.length})
         </Button>
@@ -510,6 +513,8 @@ export default function SuaPage() {
 
       <QrScanner open={scanOpen} onClose={() => setScanOpen(false)} onResult={onScan} />
 
+      <TraVeListModal open={traVeOpen} onClose={() => setTraVeOpen(false)}
+        tenMan="Sửa" loais={TRA_VE_THEO_MAN.SX_SUA} tenFile="tra-ve-sua" />
       <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
         tenMan="Sửa" rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} tenFile="nghen-sua" />
       <Toast toast={toast} />

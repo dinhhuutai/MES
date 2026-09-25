@@ -12,6 +12,7 @@ import HomePortal from './features/home/pages/HomePortal';
 import ProfilePage from './features/profile/pages/ProfilePage';
 import PlaceholderPage from './features/common/PlaceholderPage';
 import UsersPage from './features/system/pages/UsersPage';
+import PhongBanPage from './features/system/pages/PhongBanPage';
 import RolesPage from './features/system/pages/RolesPage';
 import PermissionsPage from './features/system/pages/PermissionsPage';
 import ModulesPage from './features/system/pages/ModulesPage';
@@ -42,6 +43,7 @@ import TichGiaoPage from './features/system/pages/TichGiaoPage';
 import ManualEntryPage from './features/system/pages/ManualEntryPage';
 import VaiVeUpdatePage from './features/system/pages/VaiVeUpdatePage';
 import PhanInListPage from './features/orders/pages/PhanInListPage';
+import SuaThongTinPage from './features/orders/pages/SuaThongTinPage';
 import ReadyPage from './features/technical-ready/pages/ReadyPage';
 import HoSoKyThuatPage from './features/technical-ready/pages/HoSoKyThuatPage';
 import GomSetPage from './features/technical-ready/pages/GomSetPage';
@@ -80,6 +82,7 @@ import { MODULES } from './constants/modules';
 // Màn hình đã hiện thực. Route khác dùng PlaceholderPage.
 const PAGES = {
   '/don-hang/phan-in': <PhanInListPage />,
+  '/don-hang/cho-sua-thong-tin': <SuaThongTinPage />,
   '/ky-thuat/ready': <ReadyPage />,
   '/ky-thuat/ho-so-ky-thuat': <HoSoKyThuatPage />,
   '/ky-thuat/gom-set': <GomSetPage />,
@@ -113,6 +116,7 @@ const PAGES = {
   '/bao-cao': <MyReportsPage />,
   '/bao-cao/phong-ban': <ReportByDeptPage />,
   '/he-thong/nguoi-dung': <UsersPage />,
+  '/he-thong/phong-ban': <PhongBanPage />,
   '/he-thong/vai-tro': <RolesPage />,
   '/he-thong/permission': <PermissionsPage />,
   '/he-thong/module': <ModulesPage />,
