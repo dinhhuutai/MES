@@ -9,4 +9,9 @@ export const listSuaThongTin = (params) => client.get('/sua-thong-tin', { params
 export const chiTietSuaThongTin = (phanInId) => client.get(`/sua-thong-tin/${phanInId}`);
 export const suaPhanInGn = (id, patch) => client.patch(`/sua-thong-tin/phan-in/${id}`, patch);
 export const suaDotVaiGn = (id, patch) => client.patch(`/sua-thong-tin/dot-vai/${id}`, patch);
+// Kéo thông tin đã sửa từ ERP (/ds-phan-in-sua-thong-tin) — job 5 phút tự chạy; nút bấm tay chỉ GN.
+export const erpTrangThaiGn = () => client.get('/sua-thong-tin/erp/trang-thai');
+export const erpDongBoGn = () => client.post('/sua-thong-tin/erp/dong-bo');
 export const xacNhanLaiGn = (phanInId, body) => client.post(`/sua-thong-tin/${phanInId}/xac-nhan`, body);
+// Xác nhận lại NHIỀU phần in cùng lúc (tích checkbox đầu bảng). body: { phanInIds: [], ghiChu }
+export const xacNhanLaiNhieuGn = (body) => client.post('/sua-thong-tin/xac-nhan', body);

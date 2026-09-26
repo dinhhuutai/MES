@@ -5,6 +5,7 @@ import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import SidePanel from '../../../components/common/SidePanel';
 import Toast from '../../../components/common/Toast';
+import Modal from '../../../components/common/Modal';
 import ChipTabs from '../../../components/common/ChipTabs';
 import DateRangePicker from '../../../components/common/DateRangePicker';
 import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
@@ -18,7 +19,7 @@ import usePermissions from '../../../hooks/usePermissions';
 import useSocketReload from '../../../hooks/useSocketReload';
 import { fmtDate, fmtDateTime, fmtNum, ngayLocalISO } from '../../../utils/format';
 import {
-  listSuaThongTin, chiTietSuaThongTin, suaPhanInGn, suaDotVaiGn, xacNhanLaiGn,
+  listSuaThongTin, chiTietSuaThongTin, suaPhanInGn, suaDotVaiGn, xacNhanLaiGn, xacNhanLaiNhieuGn, erpTrangThaiGn, erpDongBoGn,
 } from '../../../services/suaThongTinService';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -105,6 +106,18 @@ export default function SuaThongTinPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [sel, setSel] = useState(null); // dòng đang mở
   const [xuat, setXuat] = useState(false);
+  // Chọn nhiều để XÁC NHẬN LẠI cùng lúc (26/09/2026 — thay cột "Xác nhận lại" cũ). Khóa theo PHẦN IN.
+  const [chon, setChon] = useState(() => new Set());
+  const [moXn, setMoXn] = useState(false);
+  const [ghiChuXn, setGhiChuXn] = useState('');
+  const [dangXn, setDangXn] = useState(false);
+  // Trạng thái lượt kéo dữ liệu đã sửa từ ERP (/ds-phan-in-sua-thong-tin, job 5 phút — 25/09/2026).
+  const [erpTT, setErpTT] = useState(null);
+  const [dongBo, setDongBo] = useState(false);
+  const taiErpTT = useCallback(async () => {
+    try { const r = await erpTrangThaiGn(); setErpTT(r.data || null); } catch { /* phần phụ — lỗi thì bỏ qua */ }
+  }, []);
+  useEffect(() => { taiErpTT(); const t = setInterval(taiErpTT, 60000); return () => clearInterval(t); }, [taiErpTT]);
 
   const load = useCallback(async (ngam = false) => {
     if (!ngam) setLoading(true);
@@ -117,16 +130,70 @@ export default function SuaThongTinPage() {
   }, [search, trangThai, ngay.from, ngay.to, show]);
 
   useEffect(() => { const t = setTimeout(() => load(), 250); return () => clearTimeout(t); }, [load]);
-  useSocketReload(['gn:updated'], () => load(true));
+  useSocketReload(['gn:updated'], () => { load(true); taiErpTT(); });
+
+  const layTuErp = async () => {
+    setDongBo(true);
+    try {
+      const r = await erpDongBoGn();
+      const d = r.data || {};
+      if (d.bo_qua) show(d.bo_qua, 'info');
+      else show(`Đã lấy từ ERP: ${d.co_tren_erp || 0}/${d.so_cho || 0} phần in có trên ERP · cập nhật ${d.so_cap_nhat || 0}`);
+      await Promise.all([load(true), taiErpTT()]);
+    } catch (e) { show(e.message || 'Không lấy được dữ liệu từ ERP', 'error'); } finally { setDongBo(false); }
+  };
 
   const viewRows = useMemo(() => filterRows(rows, filters, FILTER_FIELDS), [rows, filters]);
   const soCho = rows.filter((r) => !r.da_xu_ly).length;
+  // Chỉ dòng CÒN CHỜ mới chọn được; "chọn tất cả" chỉ ôm dòng đang hiện (sau lọc).
+  const choDuoc = useMemo(() => [...new Set(viewRows.filter((r) => !r.da_xu_ly).map((r) => r.phan_in_id))], [viewRows]);
+  // Dọn lựa chọn khi dòng không còn chờ (máy khác đã xác nhận, hoặc đổi bộ lọc).
+  useEffect(() => {
+    setChon((cu) => {
+      const con = new Set(rows.filter((r) => !r.da_xu_ly).map((r) => r.phan_in_id));
+      const moi = new Set([...cu].filter((id) => con.has(id)));
+      return moi.size === cu.size ? cu : moi;
+    });
+  }, [rows]);
+  const tatCaDaChon = choDuoc.length > 0 && choDuoc.every((id) => chon.has(id));
+  const doiChon = (id) => setChon((cu) => { const s = new Set(cu); if (s.has(id)) s.delete(id); else s.add(id); return s; });
+  const chonTatCa = () => setChon((cu) => {
+    const s = new Set(cu);
+    if (tatCaDaChon) choDuoc.forEach((id) => s.delete(id)); else choDuoc.forEach((id) => s.add(id));
+    return s;
+  });
+
+  const xacNhanNhieu = async () => {
+    setDangXn(true);
+    try {
+      const r = await xacNhanLaiNhieuGn({ phanInIds: [...chon], ghiChu: ghiChuXn });
+      const d = r.data || {};
+      if ((d.loi || []).length) show(`Đã xác nhận ${d.so_ok} · ${d.loi.length} lỗi: ${d.loi[0].loi}`, 'error');
+      else show(`Đã xác nhận ${d.so_ok} phần in — quay lại READY`);
+      setChon(new Set()); setMoXn(false); setGhiChuXn('');
+      await load(true);
+    } catch (e) { show(e.message || 'Xác nhận thất bại', 'error'); } finally { setDangXn(false); }
+  };
 
   const columns = [
+    ...(coQuyenSua ? [{
+      key: 'sel', className: 'w-10', selection: true,
+      header: <input type="checkbox" checked={tatCaDaChon} disabled={!choDuoc.length} onChange={chonTatCa} aria-label="Chọn tất cả" />,
+      render: (r) => (r.da_xu_ly ? null : (
+        <input type="checkbox" checked={chon.has(r.phan_in_id)} onClick={(e) => e.stopPropagation()}
+          onChange={() => doiChon(r.phan_in_id)} aria-label="Chọn phần in" />
+      )),
+    }] : []),
     {
       key: 'da_xu_ly', header: 'Tình trạng',
+      // Bỏ cột "Xác nhận lại" (26/09) — ai/lúc nào xác nhận hiện gọn dưới badge của dòng đã xử lý.
       render: (r) => (r.da_xu_ly
-        ? <Badge tone="success" className="whitespace-nowrap">Đã xác nhận lại</Badge>
+        ? (
+          <div>
+            <Badge tone="success" className="whitespace-nowrap">Đã xác nhận lại</Badge>
+            <div className="mt-0.5 whitespace-nowrap text-[11px] text-ink-soft">{r.nguoi_xu_ly || '—'} · {fmtDateTime(r.tg_xu_ly)}</div>
+          </div>
+        )
         : <Badge tone="danger" className="whitespace-nowrap">Chờ sửa</Badge>),
     },
     { key: 'tg_tra_ve', header: 'Trả về lúc', render: (r) => <span className="whitespace-nowrap text-xs">{fmtDateTime(r.tg_tra_ve)}</span> },
@@ -163,12 +230,6 @@ export default function SuaThongTinPage() {
       ),
     },
     { key: 'nguoi_tra_ve', header: 'Người trả về', render: (r) => <span className="whitespace-nowrap text-xs">{r.nguoi_tra_ve || '—'}</span> },
-    {
-      key: 'xn', header: 'Xác nhận lại',
-      render: (r) => (r.da_xu_ly
-        ? <div className="text-xs"><div>{r.nguoi_xu_ly || '—'}</div><div className="text-ink-soft">{fmtDateTime(r.tg_xu_ly)}</div></div>
-        : <span className="text-ink-soft">—</span>),
-    },
   ];
 
   const doXuat = async () => {
@@ -218,7 +279,14 @@ export default function SuaThongTinPage() {
         <Button chiXemOk variant="secondary" icon="file-spreadsheet" loading={xuat} disabled={!viewRows.length} onClick={doXuat}>
           Excel ({viewRows.length})
         </Button>
+        {coQuyenSua && (
+          <Button variant="secondary" icon="rotate-cw" loading={dongBo} onClick={layTuErp}>Lấy từ ERP</Button>
+        )}
+        {coQuyenSua && (
+          <Button icon="check" disabled={!chon.size} onClick={() => setMoXn(true)}>Xác nhận lại ({chon.size})</Button>
+        )}
       </Toolbar>
+      <ErpTrangThai tt={erpTT} />
 
       <ChipTabs value={trangThai} onChange={setTrangThai} anSo
         tabs={[{ v: 'CHO', label: 'Đang chờ sửa' }, { v: 'DA', label: 'Đã xác nhận lại' }, { v: '', label: 'Tất cả' }]} />
@@ -233,7 +301,67 @@ export default function SuaThongTinPage() {
         <SuaThongTinPanel phanInId={sel.phan_in_id} coQuyenSua={coQuyenSua} onToast={show}
           onClose={() => setSel(null)} onChanged={() => load(true)} />
       )}
+      <Modal open={moXn} onClose={() => !dangXn && setMoXn(false)} title={`Xác nhận lại ${chon.size} phần in`} size="md"
+        footer={(
+          <>
+            <Button chiXemOk variant="ghost" onClick={() => setMoXn(false)} disabled={dangXn}>Hủy</Button>
+            <Button icon="check" loading={dangXn} onClick={xacNhanNhieu}>Xác nhận — trả lại READY</Button>
+          </>
+        )}>
+        <p className="mb-3 text-sm text-ink-soft">
+          Các phần in đã chọn sẽ rời trang này và <b className="text-ink">quay lại màn READY</b>. Chỉ xác nhận khi thông tin
+          đã được sửa đúng (trên ERP hoặc ngay trên trang này).
+        </p>
+        <div className="mb-3 max-h-40 overflow-auto rounded-control border border-line px-3 py-2 text-xs">
+          {rows.filter((r) => !r.da_xu_ly && chon.has(r.phan_in_id)).map((r) => (
+            <div key={r.id}><b>{r.ma_phan}</b> · {r.checklist_list}</div>
+          ))}
+        </div>
+        <Field label="Ghi chú khi xác nhận (tùy chọn — áp cho mọi phần in đã chọn)">
+          <Textarea rows={2} value={ghiChuXn} onChange={(e) => setGhiChuXn(e.target.value)} placeholder="Đã sửa gì, theo xác nhận của ai..." />
+        </Field>
+      </Modal>
       <Toast toast={toast} />
+    </div>
+  );
+}
+
+// Dòng trạng thái lượt kéo ERP gần nhất. Khai MỨC MODULE (trang chạy useNow — bẫy §9).
+const TEN_TRUONG = {
+  mau_vai: 'màu vải', kich_vai: 'kích vải', kich_phim: 'kích phim', so_luong_don_hang: 'SLĐH', tinh_chat_in: 'tính chất in',
+  khach: 'khách', don_hang: 'đơn hàng', ma_hang: 'mã hàng', barcode: 'mã vạch', thoi_gian_cho_kho_phut: 'chờ khô',
+  han_giao_hang: 'hạn giao', ngay_vai_ve: 'ngày vải về', so_luong_vai_ve: 'SL vải về', nha_gia_cong: 'nhà gia công',
+  loai_dot_vai_id: 'loại đợt vải',
+};
+function ErpTrangThai({ tt }) {
+  const l = tt?.lan_cuoi;
+  if (!tt) return null;
+  return (
+    <div className="mb-3 rounded-control border border-line bg-surface px-3 py-2 text-xs text-ink-soft">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="font-semibold text-ink">Đồng bộ ERP (5 phút/lần):</span>
+        {!l && <span>chưa chạy lượt nào kể từ khi khởi động máy chủ</span>}
+        {l && <span>lần cuối {fmtDateTime(l.tg)}{l.tu_dong ? ' (tự động)' : ' (bấm tay)'}</span>}
+        {l?.loi_chung && <span className="text-danger">Lỗi: {l.loi_chung}</span>}
+        {l?.bo_qua && <span>{l.bo_qua}</span>}
+        {l && l.so_cho != null && !l.bo_qua && !l.loi_chung && (
+          <span>
+            hỏi {l.so_hoi ?? l.so_cho}/{l.so_cho} phần in trả về hôm nay (tối đa {tt.toi_da_moi_luot || 100}/lượt)
+            {l.con_lai_luot_sau > 0 ? ` · còn ${l.con_lai_luot_sau} để lượt sau` : ''}
+            {' · '}{l.co_tren_erp} có dữ liệu trên ERP · <b className="text-ink">cập nhật {l.so_cap_nhat}</b>
+          </span>
+        )}
+      </div>
+      {(l?.chi_tiet || []).length > 0 && (
+        <ul className="mt-1 space-y-0.5">
+          {l.chi_tiet.slice(0, 8).map((c) => (
+            <li key={c.ma_phan}>
+              <b className="text-ink">{c.ma_phan}</b>: {[...c.phan_in, ...c.dot_vai].map((k) => TEN_TRUONG[k] || k).join(', ') || '—'}
+              {c.ghi_chu && <span className="text-warning"> · {c.ghi_chu}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
