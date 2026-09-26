@@ -15,7 +15,10 @@ import ReportChart, { chartData } from '../components/ReportChart';
 import ReportDesignerModal from '../components/ReportDesignerModal';
 import exportReportExcel from '../utils/exportReportExcel';
 import { listMyReports, createReport, deleteReport, renderReport } from '../../../services/baoCaoService';
-import { fmtDate, fmtDateTime } from '../../../utils/format';
+import { fmtDate, fmtDateTime, ngayLocalISO } from '../../../utils/format';
+
+// Giá trị ngày đang lưu trong báo cáo ('HOM_NAY' | 'YYYY-MM-DD') → ngày hiện trên ô chọn.
+const ngayMacDinh = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? v : ngayLocalISO(new Date()));
 
 export default function MyReportsPage() {
   const [thietKe, setThietKe] = useState(null);   // id báo cáo đang mở trong trình thiết kế
@@ -31,6 +34,11 @@ export default function MyReportsPage() {
   const [confirm, setConfirm] = useState(null);
   const [viewing, setViewing] = useState(null);   // { ten, content } — xem nhanh khỏi cần vào trình thiết kế
   const [busyId, setBusyId] = useState(null);     // id báo cáo đang render (Xem trước / Excel)
+  // Ngày chọn NGOÀI danh sách cho báo cáo có khối danh sách THEO NGÀY (26/09/2026) — chỉ áp cho lượt
+  // Xem trước / Excel, KHÔNG lưu vào báo cáo. Chưa chọn ⇒ dùng ngày đang đặt trong báo cáo.
+  const [ngayChon, setNgayChon] = useState({});
+  const ngayCua = (r) => ngayChon[r.id] || ngayMacDinh(r.loc_ngay);
+  const bodyRender = (r) => (r.co_loc_ngay ? { ngay: ngayCua(r) } : {});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -60,8 +68,8 @@ export default function MyReportsPage() {
   const doPreview = async (r) => {
     setBusyId(r.id);
     try {
-      const res = await renderReport(r.id, {});
-      setViewing({ ten: r.ten_bao_cao, content: res.data });
+      const res = await renderReport(r.id, bodyRender(r));
+      setViewing({ ten: r.co_loc_ngay ? `${r.ten_bao_cao} · ngày ${fmtDate(ngayCua(r))}` : r.ten_bao_cao, content: res.data });
     } catch (e) { show(e.message || 'Xem trước lỗi', 'error'); }
     finally { setBusyId(null); }
   };
@@ -69,8 +77,9 @@ export default function MyReportsPage() {
   const doExcel = async (r) => {
     setBusyId(r.id);
     try {
-      const res = await renderReport(r.id, {});
-      await exportReportExcel(res.data, `${r.ma_bao_cao || 'bao-cao'}-${r.ten_bao_cao}`.slice(0, 80));
+      const res = await renderReport(r.id, bodyRender(r));
+      const hauTo = r.co_loc_ngay ? `-${ngayCua(r)}` : '';
+      await exportReportExcel(res.data, `${`${r.ma_bao_cao || 'bao-cao'}-${r.ten_bao_cao}`.slice(0, 70)}${hauTo}`);
     } catch (e) { show(e.message || 'Tải Excel thất bại', 'error'); }
     finally { setBusyId(null); }
   };
@@ -80,6 +89,13 @@ export default function MyReportsPage() {
     { key: 'ten_bao_cao', header: 'Tên báo cáo', className: 'font-medium text-ink' },
     { key: 'mo_ta', header: 'Mô tả', render: (r) => r.mo_ta || '—' },
     { key: 'updated_date', header: 'Cập nhật', render: (r) => fmtDate(r.updated_date || r.created_date) },
+    // Chỉ báo cáo có khối danh sách THEO NGÀY mới có ô chọn — chọn ngày rồi bấm Xem trước / Excel ngay tại đây.
+    { key: 'ngay_loc', header: 'Ngày', render: (r) => (r.co_loc_ngay ? (
+      <input type="date" value={ngayCua(r)} title="Ngày lấy số liệu cho khối danh sách theo ngày (không lưu vào báo cáo)"
+        className="h-8 rounded-control border border-line bg-surface px-2 text-base md:text-sm text-ink"
+        onClick={(e) => e.stopPropagation()}
+        onChange={(e) => { const v = e.target.value; if (v) setNgayChon((m) => ({ ...m, [r.id]: v })); }} />
+    ) : <span className="text-ink-soft">—</span>) },
     { key: 'actions', header: '', className: 'text-right', render: (r) => (
       <div className="flex justify-end gap-1.5">
         {/* Xem nhanh + Excel: đứng TRƯỚC Mở/Xóa — số liệu lấy realtime, khỏi vào trình thiết kế. */}
