@@ -3,10 +3,14 @@ import { getNghenMap } from '../services/dashboardService';
 import useSocketReload from './useSocketReload';
 
 // Bản đồ nghẽn/sắp nghẽn theo đợt vải + phần in (nguồn: dashboard flowRows) để tô màu hàng ở các trang xác nhận.
-// Trả { map, statusDot(id), statusPhan(id) } — status: 'NGHEN' | 'SAP_NGHEN' | undefined.
+// Trả { map, statusDot(id), statusPhan(id), statusLenh(id), tgDot(id), tgLenh(id), tgPhan(id) } —
+// status: 'NGHEN' | 'SAP_NGHEN' | undefined; tg*: { phut, sla } (26/09/2026 — cho "nghẽn bao lâu").
+const TRONG = { dot_vai: {}, phan_in: {}, lenh: {}, tg: { dot_vai: {}, phan_in: {}, lenh: {} } };
+const doiTg = (a) => (Array.isArray(a) ? { phut: a[0], sla: a[1] } : null);
+
 export default function useNghenMap() {
-  const [map, setMap] = useState({ dot_vai: {}, phan_in: {}, lenh: {} });
-  const load = useCallback(() => { getNghenMap().then((r) => setMap(r.data || { dot_vai: {}, phan_in: {}, lenh: {} })).catch(() => {}); }, []);
+  const [map, setMap] = useState(TRONG);
+  const load = useCallback(() => { getNghenMap().then((r) => setMap(r.data || TRONG)).catch(() => {}); }, []);
   useEffect(() => { load(); }, [load]);
   // ⚠ Sự kiện GỘP làm 1: backend bắn cả cụm cho mỗi thao tác, mà hook này đang được dùng ở 7 trang
   // (Release 1/2, Test Run, Replan, Xác nhận chạy, QC in-line, Test Run CNSP) ⇒ trước đây mỗi hành
@@ -21,5 +25,8 @@ export default function useNghenMap() {
     statusDot: (id) => map.dot_vai?.[id],
     statusPhan: (id) => map.phan_in?.[id],
     statusLenh: (id) => map.lenh?.[id],
+    tgDot: (id) => doiTg(map.tg?.dot_vai?.[id]),
+    tgPhan: (id) => doiTg(map.tg?.phan_in?.[id]),
+    tgLenh: (id) => doiTg(map.tg?.lenh?.[id]),
   };
 }

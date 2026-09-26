@@ -24,7 +24,8 @@ const ketQuaBadge = (kq) => {
 };
 
 // Panel QA xác nhận Test Run cho 1 lệnh: nhập số lượng test, ghi nhận test lỗi (kèm lý do), xác nhận đạt.
-export default function TestRunPanel({ lenhId, onClose, onChanged }) {
+// `truocXacNhan()` (26/09/2026) — Promise<bool>: trang hỏi LÝ DO NGHẼN nếu lệnh đang quá SLA (mig 106).
+export default function TestRunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
   const { can } = usePermissions();
   const { toast, show } = useToast();
   const canQA = can('TESTRUN_QA');
@@ -109,6 +110,7 @@ export default function TestRunPanel({ lenhId, onClose, onChanged }) {
   // Xác nhận đạt → QA xác nhận đạt = tính 1 LẦN TEST (đạt), kèm số lượng nếu nhập → qua checkpoint tiếp theo.
   const doPass = async () => {
     if (!nguoiTest.trim()) { show('Bắt buộc nhập người test khi xác nhận đạt', 'error'); return; }
+    if (truocXacNhan && !(await truocXacNhan())) return; // quá SLA ⇒ lý do nghẽn (mig 106)
     setBusy('pass');
     try {
       await confirmQA(lenhId, {
@@ -148,6 +150,7 @@ export default function TestRunPanel({ lenhId, onClose, onChanged }) {
   // Xác nhận In Không Đạt → đi y như xác nhận đạt (qua bước tiếp theo), lần test ghi "Không đạt (owner cho IN)".
   const doInKhongDat = async () => {
     if (ikdOwners.size === 0) { show('Chọn ít nhất 1 owner cho IN', 'error'); return; }
+    if (truocXacNhan && !(await truocXacNhan())) return;
     setBusy('ikd');
     try {
       await confirmQA(lenhId, {
@@ -171,6 +174,7 @@ export default function TestRunPanel({ lenhId, onClose, onChanged }) {
 
   // Không test run → bỏ Test Run, duyệt thẳng Release 2 (đợt SX vào chờ sản xuất).
   const doSkip = async () => {
+    if (truocXacNhan && !(await truocXacNhan())) return;
     setBusy('skip');
     try {
       await skipTestRun(lenhId);

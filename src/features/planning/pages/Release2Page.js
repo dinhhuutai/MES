@@ -18,6 +18,8 @@ import useToast from '../../../hooks/useToast';
 import useSocketReload from '../../../hooks/useSocketReload';
 import usePermissions from '../../../hooks/usePermissions';
 import useNghenMap from '../../../hooks/useNghenMap';
+import useLyDoNghen from '../../../hooks/useLyDoNghen';
+import { KHOA_LENH } from '../../../utils/nghen';
 import { slaRowClass } from '../../../utils/sla';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
@@ -54,7 +56,10 @@ function Info({ label, value }) {
 export default function Release2Page() {
   const { can } = usePermissions();
   const { toast, show } = useToast();
-  const { statusLenh } = useNghenMap();
+  const { statusLenh, tgLenh } = useNghenMap();
+  const { hoiLyDoNghen, lyDoNghenModal } = useLyDoNghen({
+    maTrang: 'KH_RELEASE2', trangThai: (r) => statusLenh(r.id), khoa: KHOA_LENH, thoiGian: (r) => tgLenh(r.id),
+  });
   const canApprove = can('RELEASE2');
 
   const [rows, setRows] = useState([]);
@@ -144,6 +149,8 @@ export default function Release2Page() {
   const toggleAll = () => setSelected(() => (allChecked ? new Set() : new Set(filtered.map((r) => r.id))));
 
   const doApprove = async () => {
+    // Lệnh quá SLA ⇒ nhập lý do nghẽn trước khi duyệt (mig 106).
+    if (!(await hoiLyDoNghen(confirm.batch ? rows.filter((r) => selected.has(r.id)) : [confirm]))) return;
     setBusy(true);
     try {
       if (confirm.batch) {
@@ -236,7 +243,11 @@ export default function Release2Page() {
         <Button chiXemOk variant="secondary" icon="download" onClick={doExcel} disabled={!filtered.length}>
           Excel ({filtered.length})
         </Button>
-        <NghenButton rows={rows} trangThai={(r) => statusLenh(r.id)} onClick={() => setNghenOpen(true)} />
+        {/* Chip "Tất cả" ⇒ ẨN nút Nghẽn (26/09/2026); chọn loại chuyền/khu mới hiện, đếm đúng chip đó. */}
+        {loai && (
+          <NghenButton rows={rows.filter((r) => hopChip(r, loai))} trangThai={(r) => statusLenh(r.id)}
+            onClick={() => setNghenOpen(true)} />
+        )}
         <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="info">{filtered.length} chờ duyệt</Badge>
@@ -330,7 +341,10 @@ export default function Release2Page() {
         title="Lệnh đã Release 2" maHeader="Lệnh" fetcher={release2Done} />
 
       <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
-        tenMan="Release 2" rows={rows} trangThai={(r) => statusLenh(r.id)} tenFile="nghen-release-2" />
+        tenMan="Release 2" rows={rows} trangThai={(r) => statusLenh(r.id)} tenFile="nghen-release-2"
+        maTrang="KH_RELEASE2" khoa={KHOA_LENH} thoiGian={(r) => tgLenh(r.id)}
+        chipTabs={LOAI_TABS} chipMacDinh={loai} hopChip={hopChip} />
+      {lyDoNghenModal}
       <Toast toast={toast} />
     </div>
   );

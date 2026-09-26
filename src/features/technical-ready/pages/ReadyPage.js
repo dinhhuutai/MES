@@ -37,6 +37,11 @@ import PhuongAnInCell from '../../../components/common/PhuongAnInCell';
 import { fmtDateTime, fmtDate } from '../../../utils/format';
 import { khuonRequired } from '../constants';
 import exportReadyExcel from '../utils/exportReadyExcel';
+import useLyDoNghen from '../../../hooks/useLyDoNghen';
+import { trangThaiSla } from '../../../utils/nghen';
+
+// Khóa lý do nghẽn (mig 106) — màn này đếm theo PHẦN IN (`r.id` = phan_in_id).
+const KHOA_NGHEN = (r) => ({ phan_in_id: r.id, ma: r.ma_phan });
 
 const FILTER_FIELDS = [
   { key: 'codePhan', label: 'Code phần', col: 'ma_phan' }, { key: 'khach', label: 'Khách hàng', col: 'ten_khach_hang' },
@@ -123,6 +128,7 @@ export default function ReadyPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const [counts, setCounts] = useState({ khuon: 0, film: 0, muc: 0 }); // chưa xác nhận từng mục (toàn hệ thống)
+  const { hoiLyDoNghen, lyDoNghenModal } = useLyDoNghen({ maTrang: 'KT_READY', trangThai: trangThaiSla, khoa: KHOA_NGHEN });
 
   // ⚠⚠ ĐANG Ở SẴN TRANG NÀY MÀ BẤM THÔNG BÁO thì component KHÔNG mount lại (cùng route, chỉ đổi
   //   query) ⇒ lazy initializer của `useState` ở trên KHÔNG chạy lần nữa và ô tìm đứng im. Phải có
@@ -241,6 +247,8 @@ export default function ReadyPage() {
   };
 
   const doBulk = async () => {
+    // Mục đang NGHẼN (quá SLA) ⇒ bắt nhập lý do trước khi xác nhận (mig 106).
+    if (!(await hoiLyDoNghen(rows.filter((r) => selected.has(r._key))))) return;
     setBulkSaving(true);
     try {
       const chon = rows.filter((r) => selected.has(r._key));
@@ -386,6 +394,7 @@ export default function ReadyPage() {
 
       {sel && (
         <ReadyPanel phanInId={sel.id} dotVaiIds={sel.dotVaiIds} loaiDotVai={sel.loai}
+          truocXacNhan={() => hoiLyDoNghen(rows.filter((x) => x.id === sel.id))}
           onClose={() => setSel(null)} onChanged={load} onToast={show} />
       )}
 
@@ -484,6 +493,7 @@ export default function ReadyPage() {
         onScanAction={async (r) => {
           const items = [...scanSel];
           if (items.length === 0) throw new Error('Chọn mục cần xác nhận');
+          if (!(await hoiLyDoNghen(rows.filter((x) => x.id === r.id)))) throw new Error('Chưa nhập lý do nghẽn — chưa xác nhận');
           const st = scanItemsRef.current[r.id] || (scanItemsRef.current[r.id] = []);
           // ⚠⚠⚠ QUÉT 1 LẦN = XÁC NHẬN **MỌI ĐỢT VẢI ĐANG CHỜ** của phần in đó (người dùng chốt
           //   16/09/2026). Máy quét chỉ đọc được code phần / mã vạch phần in — KHÔNG nói được là đợt
@@ -527,7 +537,9 @@ export default function ReadyPage() {
       <TraVeListModal open={traVeOpen} onClose={() => setTraVeOpen(false)}
         tenMan="Chuẩn bị kỹ thuật — READY" loais={TRA_VE_THEO_MAN.KT_READY} tenFile="tra-ve-ready" />
       <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
-        tenMan="Chuẩn bị kỹ thuật — READY" rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} tenFile="nghen-ready" />
+        tenMan="Chuẩn bị kỹ thuật — READY" rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} tenFile="nghen-ready"
+        maTrang="KT_READY" khoa={KHOA_NGHEN} />
+      {lyDoNghenModal}
       <NghenListModal loai="SAP_NGHEN" open={canhBaoOpen} onClose={() => setCanhBaoOpen(false)}
         tenMan="Chuẩn bị kỹ thuật — READY" rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} tenFile="canh-bao-ready" />
       <Toast toast={toast} />

@@ -10,6 +10,8 @@ export const laySiSo = (maTrang, params) => client.get(`/si-so/${maTrang}`, { pa
 // BẢNG THEO DÕI 10 CHECKPOINT (Dashboard → Tổng quan). `params`: { tu, den }.
 // ⚠ Backend cache 30s (10 query nặng, ~2,5s lượt chạy thật) — đừng gọi trong vòng lặp render.
 export const layBangTheoDoi = (params) => client.get('/si-so/bang-theo-doi', { params });
+// Danh sách phần in của 1 dòng bảng theo dõi (bấm dòng ở Dashboard — 26/09/2026). params: { tu, den }.
+export const layBangTheoDoiChiTiet = (ma, params) => client.get(`/si-so/bang-theo-doi/${ma}`, { params });
 
 // `o`: ton_dau | nhan | lam_duoc | ton_cuoi. `limit: 0` = lấy HẾT (dùng cho xuất Excel).
 export const laySiSoChiTiet = (maTrang, o, params) => client.get(`/si-so/${maTrang}/${o}`, { params });

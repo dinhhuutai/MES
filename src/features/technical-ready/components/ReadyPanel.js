@@ -47,7 +47,9 @@ function ReturnNote({ info, nguon }) {
 
 // `dotVaiIds` + `loaiDotVai` (mig 098): panel mở từ 1 DÒNG LOẠI ĐỢT VẢI của phần in chờ ≥2 loại ⇒
 // trạng thái + nút xác nhận đều theo NHÓM đó (không truyền = như cũ, mức phần in).
-export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, onClose, onChanged, onToast }) {
+// `truocXacNhan()` (26/09/2026) — trả Promise<bool>: trang hỏi LÝ DO NGHẼN nếu phần in đang quá SLA
+// (mig 106); false ⇒ người dùng bấm Hủy, KHÔNG xác nhận. Không truyền ⇒ như cũ.
+export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, onClose, onChanged, onToast, truocXacNhan }) {
   const { can } = usePermissions();
   const { toast, show } = useToast();
   const now = useNow(1000);
@@ -91,6 +93,7 @@ export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, onClose, o
   useEffect(() => { load(); }, [load]);
 
   const doConfirm = async (item) => {
+    if (truocXacNhan && !(await truocXacNhan())) return;
     setBusy(item.ma);
     try {
       await confirmReadyItem(phanInId, item.ma, undefined, dotVaiIds);
@@ -108,6 +111,7 @@ export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, onClose, o
   const eligible = state.qc_done ? [] : items.filter((it) => !state[`${it.ma.toLowerCase()}_done`] && can(it.perm));
 
   const doConfirmAll = async () => {
+    if (truocXacNhan && !(await truocXacNhan())) return;
     setBusy('__ALL__');
     try {
       await confirmReadyItemsBatch(phanInId, eligible.map((it) => ({ ma: it.ma })), dotVaiIds);

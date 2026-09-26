@@ -19,6 +19,8 @@ import useNow from '../../../hooks/useNow';
 import useSocketReload from '../../../hooks/useSocketReload';
 import taiHetTrang, { LIMIT_TAI_LON } from '../../../utils/taiHetTrang';
 import { evalSla, slaRowClass } from '../../../utils/sla';
+import useLyDoNghen from '../../../hooks/useLyDoNghen';
+import { trangThaiSla } from '../../../utils/nghen';
 import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
 import { Field, Textarea } from '../../../components/common/controls';
@@ -31,6 +33,9 @@ import exportReadyQcExcel from '../utils/exportReadyQcExcel';
 import { khuonRequired } from '../../technical-ready/constants';
 
 // Thứ tự hiển thị: FILM → KHUÔN → MỰC (HSKT đã bỏ khỏi checklist READY).
+// Khóa lý do nghẽn (mig 106): mỗi dòng = 1 đợt vải của phần in (`r.id` = phan_in_id).
+const KHOA_NGHEN = (r) => ({ phan_in_id: r.id, dot_vai_ve_id: (r.dot_vai_ids || []).length === 1 ? r.dot_vai_ids[0] : null, ma: r.ma_phan });
+
 const TECH_ITEMS = [
   { ma: 'FILM', label: 'Film' },
   { ma: 'KHUON', label: 'Khuôn' },
@@ -89,6 +94,7 @@ export default function ReadyQcPage() {
   useSiSoLoc({ timKiem: search, ...filters });
   const [showFilters, setShowFilters] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
+  const { hoiLyDoNghen, lyDoNghenModal } = useLyDoNghen({ maTrang: 'CL_QC_READY', trangThai: trangThaiSla, khoa: KHOA_NGHEN });
   const activeCount = Object.values(filters).filter(Boolean).length;
   const filtered = useMemo(() => filterRows(rows, filters, FILTER_FIELDS), [rows, filters]);
 
@@ -218,6 +224,7 @@ export default function ReadyQcPage() {
   };
 
   const doConfirm = async () => {
+    if (!(await hoiLyDoNghen([editing]))) return; // quá SLA ⇒ nhập lý do nghẽn (mig 106)
     setSaving(true);
     try {
       await confirmReadyQC(editing.id, editing.dot_vai_ids);
@@ -273,6 +280,7 @@ export default function ReadyQcPage() {
   };
 
   const doBatch = async () => {
+    if (!(await hoiLyDoNghen(rows.filter((r) => selected.has(r._key))))) return;
     setBatching(true);
     try {
       const items = rows.filter((r) => selected.has(r._key))
@@ -555,7 +563,9 @@ export default function ReadyQcPage() {
         phanIn={editing ? { id: editing.id, ma_phan: editing.ma_phan } : null}
         onDone={() => { setEditing(null); load(); }} />
       <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
-        tenMan="QC chuẩn bị kỹ thuật" rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} tenFile="nghen-qc-ready" />
+        tenMan="QC chuẩn bị kỹ thuật" rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} tenFile="nghen-qc-ready"
+        maTrang="CL_QC_READY" khoa={KHOA_NGHEN} />
+      {lyDoNghenModal}
       <Toast toast={toast} />
     </div>
   );

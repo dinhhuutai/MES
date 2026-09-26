@@ -29,6 +29,7 @@ import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
 import useToast from '../../../hooks/useToast';
 import useSocketReload from '../../../hooks/useSocketReload';
 import useNghenMap from '../../../hooks/useNghenMap';
+import useLyDoNghen from '../../../hooks/useLyDoNghen';
 import { slaRowClass } from '../../../utils/sla';
 import {
   listRelease1Candidates, createRelease1, listChuyen, release1History,
@@ -54,6 +55,9 @@ function SelectAllCheckbox({ checked, indeterminate, onChange }) {
       className="h-4 w-4 rounded border-line text-primary focus:ring-primary" />
   );
 }
+
+// Khóa lý do nghẽn (mig 106) — màn đếm theo ĐỢT VẢI.
+const KHOA_NGHEN = (r) => ({ phan_in_id: r.phan_in_id, dot_vai_ve_id: r.dot_vai_id, ma: r.ma_phan });
 
 const TH = 'sticky top-0 z-20 bg-surface-muted px-4 py-3 text-xs font-semibold uppercase tracking-wide text-ink-soft';
 const TD = 'px-4 py-3 align-middle';
@@ -117,7 +121,10 @@ export default function Release1Page() {
   // ⚠ ĐÃ BỎ state `page` (phân trang SERVER): trang này tải-hết rồi phân trang ở CLIENT bằng `cpage`.
   //   Gửi `page` lên API chỉ tổ nhảy sang lô 200 dòng khác; đổi từ khóa tìm kiếm thì `cpage` đã tự
   //   về 1 nhờ effect theo `viewRowsGom.length`.
-  const { statusDot } = useNghenMap();
+  const { statusDot, tgDot } = useNghenMap();
+  const { hoiLyDoNghen, lyDoNghenModal } = useLyDoNghen({
+    maTrang: 'KH_RELEASE1', trangThai: (r) => statusDot(r.dot_vai_id), khoa: KHOA_NGHEN, thoiGian: (r) => tgDot(r.dot_vai_id),
+  });
   const [selected, setSelected] = useState({});      // dot_vai_id -> row
   const [loaiPain, setLoaiPain] = useState('');      // chip lọc theo phương án in ('' = tất cả)
   const [chuyen, setChuyen] = useState([]);
@@ -275,6 +282,8 @@ export default function Release1Page() {
 
   // Release 1 phần in lẻ (từ side panel chi tiết)
   const submitRelease = async (dotVaiIds) => {
+    // Đợt vải quá SLA ⇒ nhập lý do nghẽn trước khi release (mig 106).
+    if (!(await hoiLyDoNghen(rows.filter((r) => dotVaiIds.includes(r.dot_vai_id))))) return;
     setSaving(true);
     try {
       // Giờ BD/KT (HH:MM) ghép với ngày kế hoạch → timestamp, y hệt màn Tạo đợt sản xuất.
@@ -324,6 +333,7 @@ export default function Release1Page() {
   // Release gộp: MỖI ĐỢT VẢI → 1 lệnh riêng (kể cả đợt thuộc gom set — chốt 15/08/2026).
   // Đợt chưa Ready thì backend tự lưu Kế hoạch tạm thay vì tạo lệnh (`createRelease1` tách 2 nhánh).
   const doReleaseAll = async () => {
+    if (!(await hoiLyDoNghen(looseList))) return; // mig 106
     setSaving(true);
     try {
       const mkTsR = (gio) => (relForm.ngayKeHoach && gio ? `${relForm.ngayKeHoach}T${gio}:00` : null);
@@ -630,7 +640,9 @@ export default function Release1Page() {
       <TraVeListModal open={dsTraVeOpen} onClose={() => setDsTraVeOpen(false)}
         tenMan="Release 1" loais={TRA_VE_THEO_MAN.KH_RELEASE1} tenFile="tra-ve-release-1" />
       <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
-        tenMan="Release 1" rows={rows} trangThai={(r) => statusDot(r.dot_vai_id)} tenFile="nghen-release-1" />
+        tenMan="Release 1" rows={rows} trangThai={(r) => statusDot(r.dot_vai_id)} tenFile="nghen-release-1"
+        maTrang="KH_RELEASE1" khoa={KHOA_NGHEN} thoiGian={(r) => tgDot(r.dot_vai_id)} />
+      {lyDoNghenModal}
       <Toast toast={toast} />
     </div>
   );

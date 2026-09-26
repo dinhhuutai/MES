@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
 import useNghenMap from '../../../hooks/useNghenMap';
+import useLyDoNghen from '../../../hooks/useLyDoNghen';
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import Toolbar from '../../../components/common/Toolbar';
 import KeHoachTamListModal from '../components/KeHoachTamListModal';
@@ -45,6 +46,9 @@ const FILTER_FIELDS = [
   { key: 'nhaGiaCong', label: 'Nhà gia công', col: 'nha_gia_cong' },
 ];
 
+// Khóa lý do nghẽn (mig 106) — màn đếm theo ĐỢT VẢI.
+const KHOA_NGHEN = (r) => ({ phan_in_id: r.phan_in_id, dot_vai_ve_id: r.dot_vai_ve_id, ma: r.ma_phan });
+
 // timestamptz → 'YYYY-MM-DD' cho ô <input type="date"> (ngày local).
 const toDateInput = (t) => {
   if (!t) return '';
@@ -71,7 +75,10 @@ export default function KeHoachTamPage() {
   const [nghenOpen, setNghenOpen] = useState(false); // modal "Danh sách nghẽn"
   // Nguồn nghẽn dùng CHUNG với các màn Kế hoạch khác (dashboard `flowRows`) — cùng một bản đồ nên
   // danh sách nghẽn ở đây không bao giờ lệch với Release 1/2.
-  const { statusDot } = useNghenMap();
+  const { statusDot, tgDot } = useNghenMap();
+  const { hoiLyDoNghen, lyDoNghenModal } = useLyDoNghen({
+    maTrang: 'KH_TAM', trangThai: (r) => statusDot(r.dot_vai_ve_id), khoa: KHOA_NGHEN, thoiGian: (r) => tgDot(r.dot_vai_ve_id),
+  });
   const [meta, setMeta] = useState({ total: 0 });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -200,6 +207,8 @@ export default function KeHoachTamPage() {
 
   const doConfirm = async () => {
     if (!confirm) return;
+    // Đợt vải quá SLA ⇒ nhập lý do nghẽn trước khi xác nhận (mig 106).
+    if (!(await hoiLyDoNghen(rows.filter((r) => confirm.ids.includes(r.id))))) return;
     setSaving(true);
     let okCount = 0; let donCount = 0; let failCount = 0; let firstErr = ''; let lenhDaCo = '';
     for (const id of confirm.ids) {
@@ -445,7 +454,9 @@ export default function KeHoachTamPage() {
         title="Kế hoạch tạm đã xác nhận Release 1" maHeader="Lệnh" showChuyen fetcher={keHoachTamDone} />
 
       <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
-        tenMan="Kế hoạch tạm" rows={rows} trangThai={(r) => statusDot(r.dot_vai_ve_id)} tenFile="nghen-ke-hoach-tam" />
+        tenMan="Kế hoạch tạm" rows={rows} trangThai={(r) => statusDot(r.dot_vai_ve_id)} tenFile="nghen-ke-hoach-tam"
+        maTrang="KH_TAM" khoa={KHOA_NGHEN} thoiGian={(r) => tgDot(r.dot_vai_ve_id)} />
+      {lyDoNghenModal}
       <Toast toast={toast} />
     </div>
   );

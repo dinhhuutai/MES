@@ -16,3 +16,5 @@ export const thuKetNoiApi = (ma) => client.post(`/cai-dat-api/thu/${ma}`);
 //                  chi_tiet:{gui,nhan,...}, nguoi }], meta }`.
 // ⚠ `id_mes` là khóa đối soát MES ↔ ERP — `search` tìm theo IDMES hoặc mã tem.
 export const lichSuApi = (ma, params) => client.get(`/cai-dat-api/lich-su/${ma}`, { params });
+// Gửi lại 1 dòng lịch sử sang ERP (5 API đẩy) — dùng lại IDMES cũ, phiếu giao phải có ID ERP.
+export const guiLaiApi = (ma, auditId) => client.post(`/cai-dat-api/lich-su/${ma}/${auditId}/gui-lai`);

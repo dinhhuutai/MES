@@ -466,7 +466,9 @@ function PrintSetModal({ open, onClose, rows, onPrintRow, busy, meta, setMeta, g
   );
 }
 
-export default function RunPanel({ lenhId, onClose, onChanged }) {
+// `truocXacNhan()` (26/09/2026) — Promise<bool>: trang hỏi LÝ DO NGHẼN khi "Chạy hoàn tất" một lệnh
+// đang quá SLA (mig 106). Không truyền ⇒ như cũ.
+export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
   const { can } = usePermissions();
   const { toast, show } = useToast();
   const canRun = can('PROD_RUN');
@@ -690,6 +692,7 @@ export default function RunPanel({ lenhId, onClose, onChanged }) {
   };
 
   const doFinish = async () => {
+    if (truocXacNhan && !(await truocXacNhan())) return; // quá SLA ⇒ lý do nghẽn (mig 106)
     setBusy(true);
     try {
       await finishRun(phieu.id);

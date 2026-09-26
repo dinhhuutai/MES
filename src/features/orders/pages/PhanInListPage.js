@@ -13,6 +13,7 @@ import Icon from '../../../components/common/Icon';
 import Spinner from '../../../components/common/Spinner';
 import DateRangePicker from '../../../components/common/DateRangePicker';
 import KcsBreakdown from '../../../components/common/KcsBreakdown';
+import TraVeGnNote from '../../../components/common/TraVeGnNote';
 import useToast from '../../../hooks/useToast';
 import { listVaiVe, getPhanIn, setChoKho } from '../../../services/orderService';
 import exportPhanInVaiVeExcel from '../utils/exportPhanInVaiVeExcel';
@@ -796,6 +797,7 @@ export default function PhanInListPage() {
               <h3 className="mb-3 text-xs font-bold uppercase tracking-wide text-ink-soft">
                 Hành trình theo đợt sản xuất
               </h3>
+              <TraVeGnNote list={detail.timeline?.tra_ve_gn} />
               {(() => {
                 const tl = detail.timeline || {};
                 const ready = tl.ready;

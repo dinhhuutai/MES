@@ -18,6 +18,8 @@ import useToast from '../../../hooks/useToast';
 import useSocketReload from '../../../hooks/useSocketReload';
 import usePermissions from '../../../hooks/usePermissions';
 import useNghenMap from '../../../hooks/useNghenMap';
+import useLyDoNghen from '../../../hooks/useLyDoNghen';
+import { KHOA_LENH } from '../../../utils/nghen';
 import { slaRowClass } from '../../../utils/sla';
 import { listTestRunCandidates, testRunHistory, confirmQABatch, testQaDone } from '../../../services/planningService';
 import TestRunPanel, { KQ_IN_KHONG_DAT } from '../components/TestRunPanel';
@@ -29,7 +31,8 @@ import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import TraVeBadge from '../../../components/common/TraVeBadge';
 import DateRangePicker from '../../../components/common/DateRangePicker';
 import { fmtDate, trongKhoangNgay } from '../../../utils/format';
-import { LOAI_TABS_TACH_ROBOT, hopChipChuyen as hopChip, nhanChip, demChip, locSiSoTheoChip } from '../../../utils/khuChuyen';import ChipTabs from '../../../components/common/ChipTabs';
+import { LOAI_TABS_TACH_ROBOT, hopChipChuyen as hopChip, nhanChip, demChip, locSiSoTheoChip } from '../../../utils/khuChuyen';
+import ChipTabs from '../../../components/common/ChipTabs';
 import exportCheckpointExcel, { COT_LENH, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
 
 // Chip lọc theo LOẠI CHUYỀN + KHU của chuyền Bàn — nguồn chung `utils/khuChuyen.js`
@@ -89,7 +92,10 @@ const testRunExcelColumns = (rows) => Array.from({ length: maxTests(rows) }, (_,
 export default function TestRunPage() {
   const { can } = usePermissions();
   const { toast, show } = useToast();
-  const { statusLenh } = useNghenMap();
+  const { statusLenh, tgLenh } = useNghenMap();
+  const { hoiLyDoNghen, lyDoNghenModal } = useLyDoNghen({
+    maTrang: 'CL_TEST_RUN', trangThai: (r) => statusLenh(r.id), khoa: KHOA_LENH, thoiGian: (r) => tgLenh(r.id),
+  });
   const canQA = can('TESTRUN_QA');
 
   const [rows, setRows] = useState([]);
@@ -221,6 +227,7 @@ export default function TestRunPage() {
 
   const doBatch = async () => {
     if (!nguoiTestBatch.trim()) { show('Bắt buộc nhập người test khi QA xác nhận đạt', 'error'); return; }
+    if (!(await hoiLyDoNghen(rows.filter((r) => selected.has(r.id))))) return; // mig 106
     setBatching(true);
     try {
       const res = await confirmQABatch([...selected], { nguoiTest: nguoiTestBatch.trim() });
@@ -320,7 +327,11 @@ export default function TestRunPage() {
         <Button chiXemOk variant="secondary" icon="download" onClick={doExcel} disabled={!filtered.length}>
           Excel ({filtered.length})
         </Button>
-        <NghenButton rows={rows} trangThai={(r) => statusLenh(r.id)} onClick={() => setNghenOpen(true)} />
+        {/* Chip "Tất cả" ⇒ ẨN nút Nghẽn (26/09/2026); chọn loại chuyền/khu mới hiện, đếm đúng chip đó. */}
+        {loai && (
+          <NghenButton rows={rows.filter((r) => hopChip(r, loai, TACH_ROBOT))} trangThai={(r) => statusLenh(r.id)}
+            onClick={() => setNghenOpen(true)} />
+        )}
         <TraVeListButton onClick={() => setTraVeOpen(true)} />
         <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
@@ -342,7 +353,8 @@ export default function TestRunPage() {
         rowClassName={(r) => `${slaRowClass(statusLenh(r.id))} ${laGomSet(r) ? 'border-l-[3px] border-l-primary' : ''}`}
         emptyText="Không có lệnh nào đang Test Run" />
 
-      {sel && <TestRunPanel lenhId={sel} onClose={() => setSel(null)} onChanged={load} />}
+      {sel && <TestRunPanel lenhId={sel} onClose={() => setSel(null)} onChanged={load}
+        truocXacNhan={() => hoiLyDoNghen(rows.filter((r) => r.id === sel))} />}
 
       {/* ĐỦ `rows` (không phải `selRows`) — quét lệnh đang hiện trên bảng cũng khớp; lệnh không chọn
           được thì `canSelect` nói rõ lý do thay vì báo "Không thấy". */}
@@ -389,7 +401,10 @@ export default function TestRunPage() {
       <TraVeListModal open={traVeOpen} onClose={() => setTraVeOpen(false)}
         tenMan="Test Run - QA" loais={TRA_VE_THEO_MAN.CL_TEST_RUN} tenFile="tra-ve-test-run" />
       <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
-        tenMan="Test Run - QA" rows={rows} trangThai={(r) => statusLenh(r.id)} tenFile="nghen-test-run" />
+        tenMan="Test Run - QA" rows={rows} trangThai={(r) => statusLenh(r.id)} tenFile="nghen-test-run"
+        maTrang="CL_TEST_RUN" khoa={KHOA_LENH} thoiGian={(r) => tgLenh(r.id)}
+        chipTabs={LOAI_TABS_TACH_ROBOT} chipMacDinh={loai} hopChip={(r, v) => hopChip(r, v, TACH_ROBOT)} />
+      {lyDoNghenModal}
       <Toast toast={toast} />
     </div>
   );

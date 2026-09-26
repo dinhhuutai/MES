@@ -4,6 +4,7 @@ import Badge from '../../../components/common/Badge';
 import Spinner from '../../../components/common/Spinner';
 import DateRangePicker from '../../../components/common/DateRangePicker';
 import { layBangTheoDoi } from '../../../services/siSoService';
+import BangTheoDoiModal from './BangTheoDoiModal';
 import { fmtNum } from '../../../utils/format';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -83,17 +84,24 @@ export default function BangTheoDoi() {
     };
   }, [rows]);
 
-  const oPhanSl = (o, key) => (
-    <>
-      <td className={`${TD} ${o.phan ? 'font-medium text-ink' : 'text-ink-soft'}`}>{fmtNum(o.phan)}</td>
-      <td className={`${TD} ${o.sl ? '' : 'text-ink-soft'}`}>{fmtNum(o.sl)}</td>
-      {key !== 'ton_dau' && key !== 'nhan' && (
-        <td className={`${TD} ${key === 'nghen' ? '' : 'text-ink-soft'}`}>
-          <Pt v={o.pt} canhBao={key === 'nghen'} />
-        </td>
-      )}
-    </>
-  );
+  // Bấm 1 cụm của 1 dòng ⇒ mở danh sách phần in đã chọn sẵn toggle đó (26/09/2026). `dong` null =
+  // dòng Tổng (không bấm được — cộng dọc lượt việc, không có danh sách phần in riêng).
+  const [mo, setMo] = useState(null); // { dong, o }
+  const oPhanSl = (o, key, dong = null) => {
+    const bam = dong ? (e) => { e.stopPropagation(); setMo({ dong, o: key }); } : undefined;
+    const cls = dong ? 'cursor-pointer hover:bg-primary-wash' : '';
+    return (
+      <>
+        <td onClick={bam} className={`${TD} ${cls} ${o.phan ? 'font-medium text-ink' : 'text-ink-soft'}`}>{fmtNum(o.phan)}</td>
+        <td onClick={bam} className={`${TD} ${cls} ${o.sl ? '' : 'text-ink-soft'}`}>{fmtNum(o.sl)}</td>
+        {key !== 'ton_dau' && key !== 'nhan' && (
+          <td onClick={bam} className={`${TD} ${cls} ${key === 'nghen' ? '' : 'text-ink-soft'}`}>
+            <Pt v={o.pt} canhBao={key === 'nghen'} />
+          </td>
+        )}
+      </>
+    );
+  };
 
   return (
     <div className="card mb-5 overflow-hidden">
@@ -142,17 +150,19 @@ export default function BangTheoDoi() {
             </thead>
             <tbody>
               {rows.map((r, i) => (
-                <tr key={r.ma} className="hover:bg-surface-muted/60">
+                <tr key={r.ma} className="cursor-pointer hover:bg-surface-muted/60"
+                  title="Bấm để xem danh sách phần in"
+                  onClick={() => setMo({ dong: r, o: r.nghen.phan > 0 ? 'nghen' : 'ton_cuoi' })}>
                   <td className={`${TD} text-center text-ink-soft`}>{i + 1}</td>
-                  <td className="border border-line px-2 py-1 text-xs font-semibold text-ink">
+                  <td className="border border-line px-2 py-1 text-xs font-semibold text-primary underline-offset-2 hover:underline">
                     {r.ten}
                     {!r.can && <span className="ml-1 text-danger" title="4 ô không cân — xem lại dữ liệu mốc">⚠</span>}
                   </td>
-                  {oPhanSl(r.ton_dau, 'ton_dau')}
-                  {oPhanSl(r.nhan, 'nhan')}
-                  {oPhanSl(r.xong, 'xong')}
-                  {oPhanSl(r.ton_cuoi, 'ton_cuoi')}
-                  {oPhanSl(r.nghen, 'nghen')}
+                  {oPhanSl(r.ton_dau, 'ton_dau', r)}
+                  {oPhanSl(r.nhan, 'nhan', r)}
+                  {oPhanSl(r.xong, 'xong', r)}
+                  {oPhanSl(r.ton_cuoi, 'ton_cuoi', r)}
+                  {oPhanSl(r.nghen, 'nghen', r)}
                   <td className="border border-line px-2 py-1 text-[11px] leading-snug text-ink-soft">
                     <span title={r.ghi_chu || ''}>
                       SL = {r.don_vi_sl}
@@ -189,8 +199,10 @@ export default function BangTheoDoi() {
 
       <p className="border-t border-line px-3 py-1.5 text-[11px] text-ink-soft">
         Xong% · Tồn cuối% chia (Tồn đầu + Nhận) — cộng lại = 100% · Nghẽn% chia Tồn cuối (nghẽn = đang tồn &amp; quá SLA của trạm).
-        Số liệu làm mới tối đa mỗi 30 giây.
+        Số liệu làm mới tối đa mỗi 30 giây. Bấm 1 dòng / 1 ô để xem danh sách phần in (nghẽn bao lâu, lý do, owner).
       </p>
+      <BangTheoDoiModal open={!!mo} onClose={() => setMo(null)} dong={mo?.dong} oMacDinh={mo?.o || ''}
+        range={{ from: range.from || homNayVN(), to: range.to || range.from || homNayVN() }} />
     </div>
   );
 }

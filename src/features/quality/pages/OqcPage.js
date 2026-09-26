@@ -22,6 +22,8 @@ import useToast from '../../../hooks/useToast';
 import useSocketReload from '../../../hooks/useSocketReload';
 import useNow from '../../../hooks/useNow';
 import { evalSla, slaRowClass } from '../../../utils/sla';
+import useLyDoNghen from '../../../hooks/useLyDoNghen';
+import { trangThaiSla } from '../../../utils/nghen';
 import usePermissions from '../../../hooks/usePermissions';
 import { listOqcCandidates, recordOqc, oqcHistory, oqcDone, returnOqcToKcs } from '../../../services/qualityService';
 import { listUserOptions } from '../../../services/userService';
@@ -52,6 +54,7 @@ export default function OqcPage() {
 
   const [rows, setRows] = useState([]);
   const [nghenOpen, setNghenOpen] = useState(false); // modal "Danh sách nghẽn"
+  const { hoiLyDoNghen, lyDoNghenModal } = useLyDoNghen({ maTrang: 'CL_OQC', trangThai: trangThaiSla });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [range, setRange] = useState(() => ({ from: '', to: '' }));
@@ -171,6 +174,7 @@ export default function OqcPage() {
   };
 
   const save = async () => {
+    if (!(await hoiLyDoNghen([editing]))) return; // tem quá SLA ⇒ nhập lý do nghẽn (mig 106)
     setSaving(true);
     try {
       const r = await recordOqc(editing.tem_id, { ...form, nguon: editing.nguon });
@@ -384,7 +388,9 @@ export default function OqcPage() {
       <QrScanner open={scanOpen} onClose={() => setScanOpen(false)} onResult={onScan} cheDoMacDinh="barcode" />
 
       <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
-        tenMan="OQC" rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} tenFile="nghen-oqc" />
+        tenMan="OQC" rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} tenFile="nghen-oqc"
+        maTrang="CL_OQC" />
+      {lyDoNghenModal}
       <Toast toast={toast} />
     </div>
   );

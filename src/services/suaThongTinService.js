@@ -14,4 +14,8 @@ export const erpTrangThaiGn = () => client.get('/sua-thong-tin/erp/trang-thai');
 export const erpDongBoGn = () => client.post('/sua-thong-tin/erp/dong-bo');
 export const xacNhanLaiGn = (phanInId, body) => client.post(`/sua-thong-tin/${phanInId}/xac-nhan`, body);
 // Xác nhận lại NHIỀU phần in cùng lúc (tích checkbox đầu bảng). body: { phanInIds: [], ghiChu }
-export const xacNhanLaiNhieuGn = (body) => client.post('/sua-thong-tin/xac-nhan', body);
+// GN hủy MỌI đợt vải chưa release — không in nữa (26/09/2026). Có đợt mới từ ERP thì phần in tự hiện lại.
+export const huyDotVaiGn = (phanInId, body) => client.post(`/sua-thong-tin/${phanInId}/huy-dot-vai`, body);
+// Hủy vải NHIỀU phần in (tích checkbox đầu bảng). body: { phanInIds, lyDo } ⇒ { so_ok, so_dot_huy, so_an, loi }.
+export const huyDotVaiNhieuGn = (body) => client.post('/sua-thong-tin/huy-dot-vai', body);
+export const xacNhanLaiNhieuGn =(body) => client.post('/sua-thong-tin/xac-nhan', body);

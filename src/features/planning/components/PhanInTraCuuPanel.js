@@ -5,6 +5,7 @@ import Spinner from '../../../components/common/Spinner';
 import Icon from '../../../components/common/Icon';
 import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
+import TraVeGnNote from '../../../components/common/TraVeGnNote';
 import { getPhanIn } from '../../../services/orderService';
 import { fmtNum, fmtDate, fmtDateTime } from '../../../utils/format';
 import { hienDsMa } from '../../../utils/maPhanIn';
@@ -132,6 +133,7 @@ export default function PhanInTraCuuPanel({ open, onClose, row }) {
             <h4 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-ink">
               <Icon name="history" size={15} /> Hành trình phần in
             </h4>
+            {!loading && !loi && <TraVeGnNote list={tl.tra_ve_gn} />}
             {loading ? (
               <div className="flex justify-center py-8"><Spinner size={24} /></div>
             ) : loi ? (

@@ -7,7 +7,14 @@ import Button from '../../../components/common/Button';
 import Icon from '../../../components/common/Icon';
 import Spinner from '../../../components/common/Spinner';
 import { inputClass } from '../../../components/common/controls';
-import { lichSuApi } from '../../../services/caiDatApiService';
+import Toast from '../../../components/common/Toast';
+import useToast from '../../../hooks/useToast';
+import usePermissions from '../../../hooks/usePermissions';
+import { lichSuApi, guiLaiApi } from '../../../services/caiDatApiService';
+
+// 5 API ĐẨY dữ liệu có nút "Gửi lại ERP" từng dòng (gương backend `caidatapi/guiLai.js` MA_GUI_LAI).
+// API XIN SỐ (mã tem, ID phiếu giao) KHÔNG có — gọi lại là tiêu thêm 1 số của ERP.
+const CO_GUI_LAI = new Set(['ERP_GHI_IN_TEM', 'ERP_GUI_PHIEU_GIAO', 'ERP_GUI_PHAN_LOAI_LOI', 'ERP_GUI_SUA_DAT', 'ERP_GUI_KIEM_PHAM']);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LỊCH SỬ GỌI API ERP — dựng theo đúng khuôn màn *Đồng bộ ERP* (bảng + lọc ngày + phân trang +
@@ -61,6 +68,10 @@ export default function LichSuApiPanel({ open, onClose, ma, ten, laGhiInTem }) {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [chon, setChon] = useState(null); // dòng đang mở chi tiết
+  const [dangGui, setDangGui] = useState(null); // id dòng đang gửi lại
+  const { toast, show } = useToast();
+  const { can } = usePermissions();
+  const guiLaiDuoc = CO_GUI_LAI.has(ma) && can('WORKFLOW_MANAGE');
 
   const load = useCallback(async () => {
     if (!open || !ma) return;
@@ -77,6 +88,15 @@ export default function LichSuApiPanel({ open, onClose, ma, ten, laGhiInTem }) {
 
   // Mở panel cho API khác / đóng rồi mở lại ⇒ về trang 1, bỏ chi tiết đang xem.
   useEffect(() => { if (open) { setPage(1); setChon(null); } }, [open, ma]);
+
+  const guiLai = async (r) => {
+    setDangGui(r.id);
+    try {
+      const res = await guiLaiApi(ma, r.id);
+      const d = res.data || {};
+      show(d.ma_phieu_giao ? `Đã gửi lại phiếu ${d.ma_phieu_giao} sang ERP${d.doi_ma ? ' (đã xin ID mới từ ERP)' : ''}` : 'Đã gửi lại sang ERP');
+    } catch (e) { show(e.message || 'Gửi lại thất bại', 'error'); } finally { setDangGui(null); load(); }
+  };
 
   const columns = [
     { key: 'thoi_gian', header: 'Thời gian', render: (r) => fmtDt(r.thoi_gian) },
@@ -141,6 +161,16 @@ export default function LichSuApiPanel({ open, onClose, ma, ten, laGhiInTem }) {
         ? <span className="line-clamp-2 text-xs text-danger" title={r.loi}>{r.loi}</span>
         : <span className="text-ink-soft">—</span>),
     },
+    ...(guiLaiDuoc ? [{
+      key: 'gui_lai', header: '', className: 'text-right',
+      render: (r) => (
+        <Button variant={r.thanh_cong ? 'ghost' : 'secondary'} icon="rotate-cw" className="whitespace-nowrap px-2.5 py-1 text-xs"
+          loading={dangGui === r.id} disabled={!!dangGui}
+          onClick={(e) => { e.stopPropagation(); guiLai(r); }}>
+          Gửi lại ERP
+        </Button>
+      ),
+    }] : []),
   ];
 
   return (
@@ -233,6 +263,7 @@ export default function LichSuApiPanel({ open, onClose, ma, ten, laGhiInTem }) {
 
         {loading && !rows.length && <div className="flex justify-center py-8"><Spinner size={24} /></div>}
       </div>
+    <Toast toast={toast} />
     </SidePanel>
   );
 }

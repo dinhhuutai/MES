@@ -32,6 +32,8 @@ import { fmtNum, fmtDateTime, timTheoMaTem } from '../../../utils/format';
 import exportCheckpointExcel, { cotTemChung, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
 import useNow from '../../../hooks/useNow';
 import { evalSla, slaRowClass } from '../../../utils/sla';
+import useLyDoNghen from '../../../hooks/useLyDoNghen';
+import { trangThaiSla } from '../../../utils/nghen';
 
 // ⚠ ĐÃ BỎ 2 Ô `soLuongSua` (Quyết định sửa) + `soLuongHuy` (Số lượng hủy) — chốt 04/09/2026:
 //   KCS chỉ chốt ĐẠT/HƯ, việc chia HƯ thành sửa–hủy làm ở trang *Sản xuất › Phân loại lỗi* (mig 075,
@@ -66,6 +68,7 @@ export default function KcsPage() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
+  const { hoiLyDoNghen, lyDoNghenModal } = useLyDoNghen({ maTrang: 'SX_KCS', trangThai: trangThaiSla });
   const [histOpen, setHistOpen] = useState(false);
   const [doneOpen, setDoneOpen] = useState(false);
   const [redry, setRedry] = useState(null); // tem đang phơi lại
@@ -256,6 +259,7 @@ export default function KcsPage() {
   const save = async () => {
     // Chốt chặn thật ở backend (422 LECH_CAN_DOI); đây chỉ để khỏi bắn request chắc chắn hỏng.
     if (!canDoi.can) { show('Chênh lệch phải bằng 0 mới lưu được', 'error'); return; }
+    if (!(await hoiLyDoNghen([editing]))) return; // tem quá SLA ⇒ nhập lý do nghẽn (mig 106)
     setSaving(true);
     try {
       const r = await recordKcs(editing.tem_id, form);
@@ -543,7 +547,9 @@ export default function KcsPage() {
       <TraVeListModal open={traVeOpen} onClose={() => setTraVeOpen(false)}
         tenMan="KCS" loais={TRA_VE_THEO_MAN.SX_KCS} tenFile="tra-ve-kcs" />
       <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
-        tenMan="KCS" rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} tenFile="nghen-kcs" />
+        tenMan="KCS" rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} tenFile="nghen-kcs"
+        maTrang="SX_KCS" />
+      {lyDoNghenModal}
       <Toast toast={toast} />
     </div>
   );

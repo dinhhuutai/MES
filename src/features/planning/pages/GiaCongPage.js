@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
 import TraVeListModal, { TraVeListButton, TRA_VE_THEO_MAN } from '../../../components/common/TraVeListModal';
 import useNghenMap from '../../../hooks/useNghenMap';
+import useLyDoNghen from '../../../hooks/useLyDoNghen';
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
@@ -79,6 +80,12 @@ const buildVeLabel = (r) => ({
 // Tối đa số CODE PHẦN in được trong 1 lượt — tờ decal 110×80mm chỉ có 2 khung tem.
 const TOI_DA_PHAN = 2;
 
+// Khóa lý do nghẽn (mig 106): hàng lệnh (`id`) hoặc hàng code phần đã làm phẳng (`lenh_id`).
+const KHOA_GIA_CONG = (r) => ({
+  lenh_san_xuat_id: r.lenh_id || r.id, phan_in_id: r.phan_in_id || null,
+  dot_vai_ve_id: r.dot_vai_ve_id || null, ma: r.ma_phan || r.ma_lenh_san_xuat || null,
+});
+
 // Màn "Gia công" (Kế hoạch): lệnh đã Release 1 lên chuyền gia công đang chờ nhận lại → bấm "Chuyển OQC".
 export default function GiaCongPage() {
   const { can } = usePermissions();
@@ -90,7 +97,11 @@ export default function GiaCongPage() {
   const [traVeOpen, setTraVeOpen] = useState(false); // modal "Danh sách trả về" (25/09/2026)
   // Nguồn nghẽn dùng CHUNG với các màn Kế hoạch khác (dashboard `flowRows`).
   // ⚠ Hàng gia công KHÔNG tính SLA ở OQC (§5) nhưng vẫn có SLA ở chặng gia công — bản đồ này lo đúng.
-  const { statusLenh } = useNghenMap();
+  const { statusLenh, tgLenh } = useNghenMap();
+  const { hoiLyDoNghen, lyDoNghenModal } = useLyDoNghen({
+    maTrang: 'KH_GIA_CONG', trangThai: (r) => statusLenh(r.lenh_id || r.id), khoa: KHOA_GIA_CONG,
+    thoiGian: (r) => tgLenh(r.lenh_id || r.id),
+  });
   const [meta, setMeta] = useState({ total: 0 });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -207,6 +218,8 @@ export default function GiaCongPage() {
         show(`${p.ma_phan}: đạt ${dat} + hủy ${huy} vượt phần còn lại (${fmtNum(p.con_lai)})`, 'error'); return;
       }
     }
+    // Lệnh quá SLA ⇒ nhập lý do nghẽn trước khi nhận hàng (mig 106).
+    if (!(await hoiLyDoNghen(chon))) return;
     setSaving(true);
     try {
       // ⚠⚠ Tick được 2 dòng của 2 LỆNH KHÁC NHAU ⇒ phải gom theo lệnh và gọi service TỪNG LỆNH
@@ -471,7 +484,9 @@ export default function GiaCongPage() {
       <TraVeListModal open={traVeOpen} onClose={() => setTraVeOpen(false)}
         tenMan="Gia công" loais={TRA_VE_THEO_MAN.KH_GIA_CONG} tenFile="tra-ve-gia-cong" />
       <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
-        tenMan="Gia công" rows={rows} trangThai={(r) => statusLenh(r.id)} tenFile="nghen-gia-cong" />
+        tenMan="Gia công" rows={rows} trangThai={(r) => statusLenh(r.id)} tenFile="nghen-gia-cong"
+        maTrang="KH_GIA_CONG" khoa={KHOA_GIA_CONG} thoiGian={(r) => tgLenh(r.id)} />
+      {lyDoNghenModal}
       <Toast toast={toast} />
     </div>
   );

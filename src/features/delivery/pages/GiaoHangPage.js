@@ -16,6 +16,8 @@ import useSocketReload from '../../../hooks/useSocketReload';
 import usePermissions from '../../../hooks/usePermissions';
 import useNow from '../../../hooks/useNow';
 import { evalSla, slaRowClass } from '../../../utils/sla';
+import useLyDoNghen from '../../../hooks/useLyDoNghen';
+import { trangThaiSla } from '../../../utils/nghen';
 import {
   listTemSanSang, createGiaoHang, listGiaoHang, getGiaoHang,
   listTemChoTich, tichTemGiao, traCuuTemTich, historyGiao, doneGiao, datGiaoHangTai, datKlgPhieu,
@@ -93,6 +95,7 @@ export default function GiaoHangPage() {
 
   const [tab, setTab] = useState('tem');           // 'tem' = tem chờ giao · 'phieu' = danh sách phiếu
   const [nghenOpen, setNghenOpen] = useState(false);
+  const { hoiLyDoNghen, lyDoNghenModal } = useLyDoNghen({ maTrang: 'GH_TEM', trangThai: trangThaiSla });
   const [tems, setTems] = useState([]);
   const [choTich, setChoTich] = useState([]);      // tem đang ở *Chờ GN tích* — nguồn của modal quét
   const [phieus, setPhieus] = useState([]);
@@ -202,6 +205,8 @@ export default function GiaoHangPage() {
   // ─── IN PHIẾU = TẠO PHIẾU + XÁC NHẬN GIAO + IN ────────────────────────────────────────────
   // `gop`: false = in CHI TIẾT (1 dòng/tem) · true = in GỘP theo code phần.
   const doInPhieu = async (gop, giaoHangTai = '') => {
+    // Tem quá SLA ⇒ nhập lý do nghẽn trước khi xác nhận giao (mig 106).
+    if (!(await hoiLyDoNghen(selectedList.map((x) => x.row)))) return;
     setCreating(true);
     try {
       const items = selectedList.map((x) => ({
@@ -615,7 +620,9 @@ export default function GiaoHangPage() {
 
       <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
         tenMan="Giao hàng" rows={displayRows} tenFile="nghen-giao-hang"
-        trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} />
+        trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status}
+        maTrang="GH_TEM" />
+      {lyDoNghenModal}
       {/* ⚠⚠ Bấm "In phiếu" KHÔNG in ngay mà hỏi "Giao hàng tại" trước — địa điểm này được LƯU VÀO
           PHIẾU (mig 099) nên phải nhập TRƯỚC khi tạo, không vá vào sau được.
           Bỏ trống vẫn in bình thường (ô trên phiếu để trống) — đây là thông tin thêm, không chặn

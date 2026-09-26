@@ -24,6 +24,8 @@ import useToast from '../../../hooks/useToast';
 import useSocketReload from '../../../hooks/useSocketReload';
 import useNow from '../../../hooks/useNow';
 import { evalSla, slaRowClass } from '../../../utils/sla';
+import useLyDoNghen from '../../../hooks/useLyDoNghen';
+import { trangThaiSla } from '../../../utils/nghen';
 import usePermissions from '../../../hooks/usePermissions';
 import { listSuaCandidates, recordSua, suaHistory, suaDone, luuNguoiSua, guiLaiErpSua } from '../../../services/qualityService';
 import { getTemLabel } from '../../../services/productionService';
@@ -58,6 +60,7 @@ export default function SuaPage() {
 
   const [rows, setRows] = useState([]);
   const [nghenOpen, setNghenOpen] = useState(false); // modal "Danh sách nghẽn"
+  const { hoiLyDoNghen, lyDoNghenModal } = useLyDoNghen({ maTrang: 'SX_SUA', trangThai: trangThaiSla });
   const [traVeOpen, setTraVeOpen] = useState(false); // modal "Danh sách trả về" (25/09/2026)
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -241,6 +244,7 @@ export default function SuaPage() {
   useSocketReload(['quality:updated'], () => load(true));
 
   const save = async () => {
+    if (!(await hoiLyDoNghen([editing]))) return; // tem quá SLA ⇒ nhập lý do nghẽn (mig 106)
     setSaving(true);
     try {
       const r = await recordSua(editing.tem_id, form);
@@ -516,7 +520,9 @@ export default function SuaPage() {
       <TraVeListModal open={traVeOpen} onClose={() => setTraVeOpen(false)}
         tenMan="Sửa" loais={TRA_VE_THEO_MAN.SX_SUA} tenFile="tra-ve-sua" />
       <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
-        tenMan="Sửa" rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} tenFile="nghen-sua" />
+        tenMan="Sửa" rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} tenFile="nghen-sua"
+        maTrang="SX_SUA" />
+      {lyDoNghenModal}
       <Toast toast={toast} />
     </div>
   );

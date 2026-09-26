@@ -34,15 +34,22 @@ export default function TraVeGnModal({ open, onClose, phanIn, nguon = 'KT', onDo
   }, [open]);
 
   // Lọc theo ô tìm, gom theo nhóm (giữ thứ tự khai ở backend).
+  // ⚠ Nhóm "Khác" của danh mục (vd "Hủy vải không in") GỘP vào CHUNG khối "Khác" với ô gõ tự do bên
+  //   dưới — tách ra thì màn hiện 2 tiêu đề "Khác" (người dùng báo 26/09/2026).
+  const NHOM_KHAC = 'Khác';
+  const locTim = useMemo(
+    () => danhMuc.filter((x) => !tim.trim() || khop(`${x.ten} ${x.nhom}`, tim)), [danhMuc, tim]);
   const nhom = useMemo(() => {
     const m = new Map();
-    danhMuc.filter((x) => !tim.trim() || khop(`${x.ten} ${x.nhom}`, tim)).forEach((x) => {
+    locTim.filter((x) => x.nhom !== NHOM_KHAC).forEach((x) => {
       if (!m.has(x.nhom)) m.set(x.nhom, []);
       m.get(x.nhom).push(x);
     });
     return [...m.entries()];
-  }, [danhMuc, tim]);
-  const hienKhac = !tim.trim() || khop('khác khac', tim);
+  }, [locTim]);
+  const khacDanhMuc = useMemo(() => locTim.filter((x) => x.nhom === NHOM_KHAC), [locTim]);
+  const hienOKhac = !tim.trim() || khop('khác khac thông tin khác', tim);
+  const hienKhac = hienOKhac || khacDanhMuc.length > 0;
 
   const bat = (ma) => setChon((s) => { const n = new Set(s); if (n.has(ma)) n.delete(ma); else n.add(ma); return n; });
   const hopLe = chon.size > 0 || (coKhac && khac.trim());
@@ -102,11 +109,22 @@ export default function TraVeGnModal({ open, onClose, phanIn, nguon = 'KT', onDo
           {hienKhac && (
             <div>
               <div className="mb-1 text-xs font-bold uppercase tracking-wide text-ink-soft">Khác</div>
-              <label className={`flex cursor-pointer items-center gap-2 rounded-control border px-3 py-2 text-sm ${
-                coKhac ? 'border-danger bg-rose-50 dark:bg-rose-950/30' : 'border-line hover:bg-surface-muted'}`}>
-                <input type="checkbox" checked={coKhac} onChange={(e) => setCoKhac(e.target.checked)} />
-                <span>Thông tin khác (ghi rõ bên dưới)</span>
-              </label>
+              <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
+                {khacDanhMuc.map((x) => (
+                  <label key={x.ma} className={`flex cursor-pointer items-center gap-2 rounded-control border px-3 py-2 text-sm ${
+                    chon.has(x.ma) ? 'border-danger bg-rose-50 dark:bg-rose-950/30' : 'border-line hover:bg-surface-muted'}`}>
+                    <input type="checkbox" checked={chon.has(x.ma)} onChange={() => bat(x.ma)} />
+                    <span>{x.ten}</span>
+                  </label>
+                ))}
+                {hienOKhac && (
+                  <label className={`flex cursor-pointer items-center gap-2 rounded-control border px-3 py-2 text-sm ${
+                    coKhac ? 'border-danger bg-rose-50 dark:bg-rose-950/30' : 'border-line hover:bg-surface-muted'}`}>
+                    <input type="checkbox" checked={coKhac} onChange={(e) => setCoKhac(e.target.checked)} />
+                    <span>Thông tin khác (ghi rõ bên dưới)</span>
+                  </label>
+                )}
+              </div>
               {coKhac && (
                 <Textarea className="mt-2" rows={2} value={khac} onChange={(e) => setKhac(e.target.value)}
                   placeholder="Ghi rõ thông tin nào sai, đúng phải là gì..." autoFocus />

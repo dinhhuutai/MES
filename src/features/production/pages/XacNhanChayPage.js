@@ -17,6 +17,7 @@ import usePermissions from '../../../hooks/usePermissions';
 import useSocketReload from '../../../hooks/useSocketReload';
 import taiHetTrang, { LIMIT_TAI_LON } from '../../../utils/taiHetTrang';
 import useNghenMap from '../../../hooks/useNghenMap';
+import useLyDoNghen from '../../../hooks/useLyDoNghen';
 import { slaRowClass } from '../../../utils/sla';
 import {
   listProductionCandidates, startProduction, getMonitor, listChuyen, traVeKyThuatSanXuat,
@@ -34,7 +35,11 @@ import { khop } from '../../../utils/timKiem';
 export default function XacNhanChayPage() {
   const { can } = usePermissions();
   const { toast, show } = useToast();
-  const { statusLenh } = useNghenMap();
+  const { statusLenh, tgLenh } = useNghenMap();
+  // Khóa lý do mặc định (`utils/nghen.khoaMacDinh`) đọc `lenh_id` của 2 bảng — khớp màn này.
+  const { hoiLyDoNghen, lyDoNghenModal } = useLyDoNghen({
+    maTrang: 'SX_CHO_CHAY', trangThai: (r) => statusLenh(r.lenh_id), thoiGian: (r) => tgLenh(r.lenh_id),
+  });
   const canRun = can('PROD_RUN');
 
   const [candidates, setCandidates] = useState([]);
@@ -235,6 +240,7 @@ export default function XacNhanChayPage() {
   const openConfirm = (lenh) => { setConfirmRun(lenh); setRunChuyenId(lenh.chuyen_id || ''); };
 
   const doStart = async () => {
+    if (!(await hoiLyDoNghen([confirmRun]))) return; // quá SLA ⇒ lý do nghẽn (mig 106)
     setBusy(true);
     try {
       await startProduction(confirmRun.id, runChuyenId || null);
@@ -359,7 +365,11 @@ export default function XacNhanChayPage() {
         </Button>
         {/* ⚠ Gộp CẢ 2 bảng "Đang chạy" + "Chờ chạy" — màn này điều hành cả hai, tách ra thì người
             dùng phải mở 2 danh sách nghẽn cho cùng một việc. */}
-        <NghenButton rows={rowsNghen} trangThai={(r) => statusLenh(r.lenh_id)} onClick={() => setNghenOpen(true)} />
+        {/* Chip "Tất cả" ⇒ ẨN nút Nghẽn (26/09/2026); chọn loại chuyền/khu mới hiện, đếm đúng chip đó. */}
+        {loai && (
+          <NghenButton rows={locTheoChip(rowsNghen)} trangThai={(r) => statusLenh(r.lenh_id)}
+            onClick={() => setNghenOpen(true)} />
+        )}
       </Toolbar>
 
       {showFilter && (
@@ -483,7 +493,8 @@ export default function XacNhanChayPage() {
         )}
       </Modal>
 
-      {sel && <RunPanel lenhId={sel} onClose={() => setSel(null)} onChanged={load} />}
+      {sel && <RunPanel lenhId={sel} onClose={() => setSel(null)} onChanged={load}
+        truocXacNhan={() => hoiLyDoNghen(rowsNghen.filter((r) => r.lenh_id === sel))} />}
       {/* Modal TOÀN MÀN HÌNH của 2 trang cũ — chỉ dựng component khi mở (2 trang có vòng tự làm mới 10–15s). */}
       <Modal open={moTrang === 'theo-doi-chuyen'} onClose={dongTrang} size="full" canhTren={8} title="Theo dõi chuyền in">
         {moTrang === 'theo-doi-chuyen' && <TheoDoiChuyenPage />}
@@ -493,7 +504,10 @@ export default function XacNhanChayPage() {
       </Modal>
 
       <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
-        tenMan="Xác nhận chạy" rows={rowsNghen} trangThai={(r) => statusLenh(r.lenh_id)} tenFile="nghen-xac-nhan-chay" />
+        tenMan="Xác nhận chạy" rows={rowsNghen} trangThai={(r) => statusLenh(r.lenh_id)} tenFile="nghen-xac-nhan-chay"
+        maTrang="SX_CHO_CHAY" thoiGian={(r) => tgLenh(r.lenh_id)}
+        chipTabs={LOAI_TABS} chipMacDinh={loai} hopChip={hopChipChuyen} />
+      {lyDoNghenModal}
       <Toast toast={toast} />
     </div>
   );

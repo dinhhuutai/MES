@@ -1,4 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import useLyDoNghen from '../../hooks/useLyDoNghen';
+import useChiXem from '../../hooks/useChiXem';
+import ChipTabs from './ChipTabs';
+import { listLyDoNghen } from '../../services/lyDoNghenService';
+import { doNghen, dungMapLyDo, timLyDo, khoaMacDinh } from '../../utils/nghen';
 import Modal from './Modal';
 import Button from './Button';
 import Badge from './Badge';
@@ -9,7 +14,7 @@ import useNow from '../../hooks/useNow';
 import exportPanelExcel from './exportPanelExcel';
 import { fmtDur } from '../../utils/sla';
 import { khop } from '../../utils/timKiem';
-import { fmtDate } from '../../utils/format';
+import { fmtDate, fmtDateTime } from '../../utils/format';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // "DANH SÁCH NGHẼN" — modal dùng chung cho 12 màn xác nhận (màn nào có dải "Theo dõi" thì có nút).
@@ -62,36 +67,83 @@ const oGiaTri = (r, c) => {
 
 export default function NghenListModal({
   open, onClose, tenMan = '', rows = [], trangThai, cols = COT_MAC_DINH, tenFile = 'danh-sach-nghen', loai = 'NGHEN',
+  // 26/09/2026 — "nghẽn bao lâu + lý do nghẽn":
+  //   · `maTrang` (mã màn, vd KT_READY) — có thì tải + ghi LÝ DO NGHẼN (mig 106).
+  //   · `khoa(r)`  — khóa đối tượng để khớp lý do (mặc định đọc tên trường chung, `utils/nghen`).
+  //   · `thoiGian(r)` — {phut, sla} cho họ `useNghenMap` (hàng không mang `tg_vao`/`sla_phut`).
+  maTrang = '', khoa = khoaMacDinh, thoiGian,
+  // 26/09/2026 — màn có dải chip LOẠI CHUYỀN / KHU (Test Run · Release 2 · Xác nhận chạy): modal có
+  //   CÙNG dải chip, mở ra đã chọn sẵn chip trang đang đứng (`chipMacDinh`). `hopChip(r, v)` = đúng
+  //   vị từ lọc chip của trang. Không truyền `chipTabs` ⇒ không có dải chip (màn khác y như cũ).
+  chipTabs = null, chipMacDinh = '', hopChip,
 }) {
+  const [chip, setChip] = useState(chipMacDinh);
+  useEffect(() => { if (open) setChip(chipMacDinh); }, [open, chipMacDinh]);
   const L = LOAI[loai] || LOAI.NGHEN;
   const laCanhBao = loai === 'SAP_NGHEN';
+  const coLyDo = !!maTrang && !laCanhBao;
+  const chiXem = useChiXem();
   const { toast, show } = useToast();
   const now = useNow(30000); // đồng hồ chậm: bảng này không cần nhảy từng giây
   const [tim, setTim] = useState('');
   const [xuat, setXuat] = useState(false);
+  const [lyDoMap, setLyDoMap] = useState(() => new Map());
+  const taiLyDo = useCallback(async () => {
+    if (!coLyDo) return;
+    try {
+      const r = await listLyDoNghen({ maTrang });
+      setLyDoMap(dungMapLyDo(r.data?.items || []));
+    } catch { /* phần thêm — lỗi thì bảng vẫn hiện, chỉ thiếu cột lý do */ }
+  }, [coLyDo, maTrang]);
+  useEffect(() => { if (open) taiLyDo(); }, [open, taiLyDo]);
+  const { hoiLyDoNghen, lyDoNghenModal } = useLyDoNghen({ maTrang, trangThai, khoa, thoiGian });
+  const ghiLyDo = async (r) => {
+    const ok = await hoiLyDoNghen([r], { batBuoc: true, hanhDong: 'GHI_TAY', lyDoMacDinh: r._lyDo?.ly_do || '' });
+    if (ok) { show('Đã lưu lý do nghẽn'); taiLyDo(); }
+  };
 
-  // Hàng NGHẼN + số phút đã ở / quá hạn (chỉ tính được khi hàng mang `tg_vao` + `sla_phut`).
-  // ⚠ Họ `useNghenMap` KHÔNG có 2 trường này ⇒ 2 cột thời gian tự ẩn thay vì hiện "—" cả cột.
+  // Hàng NGHẼN + số phút đã ở / quá hạn (luật chung `utils/nghen.doNghen`): hàng mang `tg_vao` +
+  // `sla_phut` tự tính; họ `useNghenMap` lấy qua `thoiGian(r)`. Không có dữ kiện ⇒ cột thời gian ẩn.
   const dsNghen = useMemo(() => {
     const ds = (rows || []).filter((r) => trangThai && trangThai(r) === loai);
     const tinh = ds.map((r) => {
-      const sla = Number(r.sla_phut) || 0;
-      const phut = r.tg_vao ? Math.floor((now - new Date(r.tg_vao).getTime()) / 60000) : null;
-      return { ...r, _phut: phut, _qua: phut != null && sla > 0 ? phut - sla : null };
+      const d = doNghen(r, thoiGian, now);
+      return {
+        ...r, _phut: d ? d.phut : null, _qua: d ? d.qua : null, _sla: d ? d.sla : null, _batDau: d ? d.batDau : null,
+        _lyDo: coLyDo ? timLyDo(lyDoMap, khoa(r)) : null,
+      };
     });
     // Nghẽn: quá hạn NẶNG NHẤT lên đầu · Cảnh báo: SẮP tới hạn nhất (còn ít phút nhất) lên đầu.
     return laCanhBao
       ? tinh.sort((a, b) => (b._qua ?? -Infinity) - (a._qua ?? -Infinity))
       : tinh.sort((a, b) => (b._qua ?? -1) - (a._qua ?? -1));
-  }, [rows, trangThai, now, loai, laCanhBao]);
+    // ⚠ `thoiGian`/`khoa` là hàm nội tuyến của trang (đổi mỗi render) — CỐ Ý không đưa vào deps; bảng
+    //   vẫn tính lại theo `now` (30s) + `rows`, đủ tươi. Đưa vào deps là tính lại mỗi lần cha render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, trangThai, now, loai, laCanhBao, lyDoMap, coLyDo]);
 
   const coThoiGian = dsNghen.some((r) => r._phut != null);
 
+  // Dải chip loại chuyền/khu: số trên chip = số mục nghẽn của chip đó (trước ô tìm).
+  const coChip = !!(chipTabs && hopChip);
+  const demChipNghen = useMemo(() => {
+    if (!coChip) return {};
+    const m = {};
+    chipTabs.forEach((t) => { m[t.v] = t.v ? dsNghen.filter((r) => hopChip(r, t.v)).length : dsNghen.length; });
+    return m;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dsNghen, coChip, chipTabs]);
+  const dsTheoChip = useMemo(
+    () => (coChip && chip ? dsNghen.filter((r) => hopChip(r, chip)) : dsNghen),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [dsNghen, coChip, chip]
+  );
+
   // Ô tìm quét mọi cột đang hiện — tìm KHÔNG DẤU (utils/timKiem).
   const ds = useMemo(() => {
-    if (!tim.trim()) return dsNghen;
-    return dsNghen.filter((r) => cols.some((c) => khop(oGiaTri(r, c), tim)));
-  }, [dsNghen, tim, cols]);
+    if (!tim.trim()) return dsTheoChip;
+    return dsTheoChip.filter((r) => cols.some((c) => khop(oGiaTri(r, c), tim)));
+  }, [dsTheoChip, tim, cols]);
 
   const doXuat = async () => {
     setXuat(true);
@@ -112,10 +164,15 @@ export default function NghenListModal({
           })),
           ...(coThoiGian ? [
             { header: 'Đã ở (phút)', num: true, value: (r) => r._phut },
-            { header: 'SLA (phút)', num: true, value: (r) => Number(r.sla_phut) || null },
+            { header: 'SLA (phút)', num: true, value: (r) => r._sla || null },
+            ...(laCanhBao ? [] : [{ header: 'Nghẽn từ', width: 18, value: (r) => (r._batDau ? fmtDateTime(r._batDau) : '') }]),
             laCanhBao
               ? { header: 'Còn lại tới đỏ (phút)', num: true, value: (r) => (r._qua != null ? -r._qua : null) }
-              : { header: 'Quá hạn (phút)', num: true, value: (r) => r._qua, red: () => true },
+              : { header: 'Nghẽn bao lâu (phút)', num: true, value: (r) => r._qua, red: () => true },
+          ] : []),
+          ...(coLyDo ? [
+            { header: 'Lý do nghẽn', width: 40, value: (r) => r._lyDo?.ly_do || '' },
+            { header: 'Người ghi lý do', width: 20, value: (r) => r._lyDo?.nguoi || '' },
           ] : []),
         ],
       });
@@ -134,8 +191,8 @@ export default function NghenListModal({
           <div className="shrink-0 space-y-3 pb-3">
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone={L.tone}>{ds.length} mục đang {L.ten}</Badge>
-              {tim.trim() && dsNghen.length !== ds.length && (
-                <span className="text-xs text-ink-soft">({dsNghen.length} tổng, đang tìm)</span>
+              {tim.trim() && dsTheoChip.length !== ds.length && (
+                <span className="text-xs text-ink-soft">({dsTheoChip.length} tổng, đang tìm)</span>
               )}
               <div className="ml-auto flex items-center gap-2">
                 <div className="relative">
@@ -153,6 +210,11 @@ export default function NghenListModal({
               </div>
             </div>
             <p className="text-xs text-ink-soft">{L.moTa}</p>
+            {coChip && (
+              <div className="-mb-4">
+                <ChipTabs tabs={chipTabs} value={chip} counts={demChipNghen} onChange={setChip} />
+              </div>
+            )}
           </div>
 
           {/* ⚠ `min-h-0` BẮT BUỘC: thiếu là bảng dài đẩy phồng ra ngoài modal thay vì cuộn trong. */}
@@ -169,9 +231,11 @@ export default function NghenListModal({
                     <>
                       <th className="whitespace-nowrap px-2 py-2 text-right text-xs font-semibold text-ink-soft">Đã ở</th>
                       <th className="whitespace-nowrap px-2 py-2 text-right text-xs font-semibold text-ink-soft">SLA</th>
-                      <th className="whitespace-nowrap px-2 py-2 text-right text-xs font-semibold text-ink-soft">{laCanhBao ? 'Còn lại' : 'Quá hạn'}</th>
+                      {!laCanhBao && <th className="whitespace-nowrap px-2 py-2 text-left text-xs font-semibold text-ink-soft">Nghẽn từ</th>}
+                      <th className="whitespace-nowrap px-2 py-2 text-right text-xs font-semibold text-ink-soft">{laCanhBao ? 'Còn lại' : 'Nghẽn bao lâu'}</th>
                     </>
                   )}
+                  {coLyDo && <th className="whitespace-nowrap px-2 py-2 text-left text-xs font-semibold text-ink-soft">Lý do nghẽn</th>}
                 </tr>
               </thead>
               <tbody>
@@ -188,22 +252,39 @@ export default function NghenListModal({
                       <>
                         <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums">{fmtDur(r._phut)}</td>
                         <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-ink-soft">
-                          {r.sla_phut ? fmtDur(Number(r.sla_phut)) : '—'}
+                          {r._sla ? fmtDur(r._sla) : '—'}
                         </td>
+                        {!laCanhBao && (
+                          <td className="whitespace-nowrap px-2 py-1.5 text-xs">{r._batDau ? fmtDateTime(r._batDau) : '—'}</td>
+                        )}
                         <td className={`whitespace-nowrap px-2 py-1.5 text-right font-semibold tabular-nums ${laCanhBao ? 'text-warning' : 'text-danger'}`}>
                           {r._qua == null ? '—' : laCanhBao ? fmtDur(Math.max(0, -r._qua)) : `+${fmtDur(r._qua)}`}
                         </td>
                       </>
                     )}
+                    {coLyDo && (
+                      <td className="min-w-[14rem] px-2 py-1.5 text-xs">
+                        {r._lyDo ? (
+                          <div>
+                            <div className="text-ink">{r._lyDo.ly_do}</div>
+                            <div className="text-[11px] text-ink-soft">{r._lyDo.nguoi || '—'} · {fmtDateTime(r._lyDo.created_date)}</div>
+                          </div>
+                        ) : <span className="text-ink-soft">Chưa có</span>}
+                        <button type="button" className="mt-0.5 text-[11px] font-semibold text-primary hover:underline disabled:opacity-40"
+                          disabled={chiXem} onClick={() => ghiLyDo(r)}>
+                          {r._lyDo ? 'Sửa lý do' : '+ Ghi lý do'}
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
                 {!ds.length && (
                   <tr>
-                    <td colSpan={cols.length + 1 + (coThoiGian ? 3 : 0)}
+                    <td colSpan={cols.length + 1 + (coThoiGian ? (laCanhBao ? 3 : 4) : 0) + (coLyDo ? 1 : 0)}
                       className="px-3 py-10 text-center text-sm text-ink-soft">
-                      {dsNghen.length
+                      {dsTheoChip.length
                         ? 'Không có mục nào khớp từ khóa tìm.'
-                        : L.rong}
+                        : dsNghen.length ? `Không có mục ${L.ten} ở loại chuyền / khu này.` : L.rong}
                     </td>
                   </tr>
                 )}
@@ -212,6 +293,7 @@ export default function NghenListModal({
           </div>
         </div>
       </Modal>
+      {lyDoNghenModal}
       <Toast toast={toast} />
     </>
   );
