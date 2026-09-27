@@ -38,6 +38,8 @@ const DATA_XEM_TRUOC = {
   // lần đó nằm ở đâu trong tổng đơn (release 1200 · đã nhận 504 · còn 696).
   so_luong_release: 1200, da_chuyen: 504, con_lai: 696,
   so_luong_vai_ve: 860, tg_nhan: new Date().toISOString(), nguoi_nhan: 'Đỗ Thị Kế Hoạch',
+  sl_dat: 480, so_luong_huy: 24, sl_nhan_lan_nay: 504,
+  sl_release_phan: 600, da_chuyen_phan: 504, con_lai_phan: 96,
 };
 
 export default function ThietKeTemPage() {

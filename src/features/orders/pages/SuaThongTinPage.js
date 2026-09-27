@@ -180,17 +180,26 @@ export default function SuaThongTinPage() {
 
   // HỦY VẢI HÀNG LOẠT (26/09/2026) — cùng bộ chọn với "Xác nhận lại". Mỗi phần in chạy riêng ở backend:
   // phần in không hủy được (mọi đợt đã release…) báo trong `loi`, các phần còn lại vẫn được hủy.
+  // ⚠⚠ CHỈ phần in có lý do "Hủy vải không in" mới hủy được (27/09/2026). Bộ chọn dùng CHUNG với
+  //   "Xác nhận lại" nên tách tập hủy được ở đây; backend vẫn chặn lại (409 KHONG_CO_LY_DO_HUY).
+  const chonHuyDuoc = useMemo(
+    () => [...new Set(rows.filter((r) => !r.da_xu_ly && r.co_ly_do_huy && chon.has(r.phan_in_id)).map((r) => r.phan_in_id))],
+    [rows, chon]);
   const huyNhieu = async () => {
     if (!lyDoHuyN.trim()) { show('Nhập lý do hủy đợt vải', 'error'); return; }
+    if (!chonHuyDuoc.length) { show('Không có phần in nào có lý do hủy vải', 'error'); return; }
     setDangHuyN(true);
     try {
-      const r = await huyDotVaiNhieuGn({ phanInIds: [...chon], lyDo: lyDoHuyN.trim() });
+      const r = await huyDotVaiNhieuGn({ phanInIds: chonHuyDuoc, lyDo: lyDoHuyN.trim() });
       const d = r.data || {};
-      const tom = `Đã hủy vải ${d.so_ok} phần in (${d.so_dot_huy} đợt vải)${d.so_an ? ` · ${d.so_an} phần in đã ẩn — có đợt mới từ ERP sẽ tự hiện lại` : ''}`;
+      const tom = `Đã hủy vải ${d.so_ok} phần in (${d.so_dot_huy} đợt vải)${d.so_an ? ` · ${d.so_an} phần in đã ẩn — có đợt mới từ ERP sẽ tự hiện lại` : ''}`
+        + (d.erp ? (d.erp.ok ? ` · Đã báo ERP (ID ${d.erp.id_ket_noi})`
+          : d.erp.bo_qua ? ' · API báo ERP đang TẮT'
+            : ` · ⚠ Báo ERP lỗi — gửi lại ở Cài đặt API › Lịch sử (${d.erp.error || ''})`) : '');
       if ((d.loi || []).length) {
         const ma = (id) => rows.find((x) => x.phan_in_id === id)?.ma_phan || id;
         show(`${tom} · ${d.loi.length} lỗi: ${ma(d.loi[0].phan_in_id)} — ${d.loi[0].loi}`, 'error');
-      } else show(tom);
+      } else show(tom, d.erp && !d.erp.ok && !d.erp.bo_qua ? 'error' : 'success');
       setChon(new Set()); setMoHuyN(false); setLyDoHuyN('');
       await load(true);
     } catch (e) { show(e.message || 'Hủy vải thất bại', 'error'); } finally { setDangHuyN(false); }
@@ -217,7 +226,13 @@ export default function SuaThongTinPage() {
             <div className="mt-0.5 whitespace-nowrap text-[11px] text-ink-soft">{r.nguoi_xu_ly || '—'} · {fmtDateTime(r.tg_xu_ly)}</div>
           </div>
         )
-        : <Badge tone="danger" className="whitespace-nowrap">Chờ sửa</Badge>),
+        : (
+          <div className="flex flex-col items-start gap-0.5">
+            <Badge tone="danger" className="whitespace-nowrap">Chờ sửa</Badge>
+            {/* Chỉ dòng có lý do "Hủy vải không in" mới hủy được (27/09/2026). */}
+            {r.co_ly_do_huy && <Badge tone="warning" className="whitespace-nowrap">Đề nghị hủy vải</Badge>}
+          </div>
+        )),
     },
     { key: 'tg_tra_ve', header: 'Trả về lúc', render: (r) => <span className="whitespace-nowrap text-xs">{fmtDateTime(r.tg_tra_ve)}</span> },
     {
@@ -306,8 +321,10 @@ export default function SuaThongTinPage() {
           <Button variant="secondary" icon="rotate-cw" loading={dongBo} onClick={layTuErp}>Lấy từ ERP</Button>
         )}
         {coQuyenSua && (
-          <Button variant="danger" icon="trash-2" disabled={!chon.size} onClick={() => { setLyDoHuyN(''); setMoHuyN(true); }}>
-            Hủy vải ({chon.size})
+          <Button variant="danger" icon="trash-2" disabled={!chonHuyDuoc.length}
+            title={chon.size && !chonHuyDuoc.length ? 'Các phần in đã chọn không có lý do "Hủy vải không in" — không hủy được' : ''}
+            onClick={() => { setLyDoHuyN(''); setMoHuyN(true); }}>
+            Hủy vải ({chonHuyDuoc.length})
           </Button>
         )}
         {coQuyenSua && (
@@ -349,11 +366,13 @@ export default function SuaThongTinPage() {
           <Textarea rows={2} value={ghiChuXn} onChange={(e) => setGhiChuXn(e.target.value)} placeholder="Đã sửa gì, theo xác nhận của ai..." />
         </Field>
       </Modal>
-      <Modal open={moHuyN} onClose={() => !dangHuyN && setMoHuyN(false)} title={`Hủy vải ${chon.size} phần in — không in nữa`} size="md"
+      <Modal open={moHuyN} onClose={() => !dangHuyN && setMoHuyN(false)} title={`Hủy vải ${chonHuyDuoc.length} phần in — không in nữa`} size="md"
         footer={(
           <>
             <Button chiXemOk variant="ghost" onClick={() => setMoHuyN(false)} disabled={dangHuyN}>Đóng</Button>
-            <Button variant="danger" icon="trash-2" loading={dangHuyN} onClick={huyNhieu}>Hủy vải {chon.size} phần in</Button>
+            <Button variant="danger" icon="trash-2" loading={dangHuyN} disabled={!chonHuyDuoc.length} onClick={huyNhieu}>
+              Hủy vải {chonHuyDuoc.length} phần in
+            </Button>
           </>
         )}>
         <p className="mb-3 text-sm text-ink-soft">
@@ -361,9 +380,15 @@ export default function SuaThongTinPage() {
           <b className="text-ink"> ẩn khỏi mọi màn</b>; khi ERP đẩy về <b className="text-ink">đợt vải mới</b> phần in tự hiện lại.
           Đợt đã release giữ nguyên (phải hủy lệnh trước).
         </p>
+        <p className="mb-2 text-xs text-ink-soft">
+          Danh sách code phần được hủy sẽ gửi sang ERP (<b className="text-ink">/gui-ds-huy-vai</b>) trong 1 lượt.
+        </p>
         <div className="mb-3 max-h-40 overflow-auto rounded-control border border-line px-3 py-2 text-xs">
           {rows.filter((r) => !r.da_xu_ly && chon.has(r.phan_in_id)).map((r) => (
-            <div key={r.id}><b>{r.ma_phan}</b> · {r.checklist_list}</div>
+            <div key={r.id} className={r.co_ly_do_huy ? '' : 'text-ink-soft line-through'}>
+              <b>{r.ma_phan}</b> · {r.checklist_list}
+              {!r.co_ly_do_huy && <span className="ml-1 no-underline text-danger">(không có lý do hủy — bỏ qua)</span>}
+            </div>
           ))}
         </div>
         <Field label="Lý do (bắt buộc — áp cho mọi phần in đã chọn)">
@@ -495,9 +520,14 @@ function SuaThongTinPanel({ phanInId, coQuyenSua, onToast, onClose, onChanged })
     try {
       const r = await huyDotVaiGn(phanInId, { lyDo: lyDoHuy.trim() });
       const d = r.data || {};
+      const erpLoi = d.erp && !d.erp.ok && !d.erp.bo_qua;
       onToast?.(`Đã hủy ${d.so_dot_huy} đợt vải — ${ct.phan_in.ma_phan} không in nữa`
         + (d.so_dot_da_release ? ` (còn ${d.so_dot_da_release} đợt đã release, không hủy)` : '')
-        + (d.phan_in_an ? '. Phần in đã ẩn — có đợt vải mới từ ERP sẽ tự hiện lại' : ''));
+        + (d.phan_in_an ? '. Phần in đã ẩn — có đợt vải mới từ ERP sẽ tự hiện lại' : '')
+        + (d.erp ? (d.erp.ok ? ` · Đã báo ERP (ID ${d.erp.id_ket_noi})`
+          : d.erp.bo_qua ? ' · API báo ERP đang TẮT'
+            : ` · ⚠ Báo ERP lỗi — gửi lại ở Cài đặt API › Lịch sử (${d.erp.error || ''})`) : ''),
+        erpLoi ? 'error' : 'success');
       setMoHuy(false);
       onChanged?.(); onClose?.();
     } catch (e) { onToast?.(e.message || 'Hủy đợt vải thất bại', 'error'); } finally { setDangLuu(''); }
@@ -542,8 +572,9 @@ function SuaThongTinPanel({ phanInId, coQuyenSua, onToast, onClose, onChanged })
         <>
           <Button chiXemOk variant="ghost" onClick={onClose}>Đóng</Button>
           {suaDuoc && (
-            <Button variant="danger" icon="trash-2" disabled={!dotHuyDuoc.length}
-              title={dotHuyDuoc.length ? '' : 'Mọi đợt vải đã release — hủy lệnh sản xuất trước'}
+            <Button variant="danger" icon="trash-2" disabled={!dotHuyDuoc.length || !ct?.co_ly_do_huy}
+              title={!ct?.co_ly_do_huy ? 'Lượt trả về không có lý do "Hủy vải không in" — chỉ được sửa rồi xác nhận lại'
+                : dotHuyDuoc.length ? '' : 'Mọi đợt vải đã release — hủy lệnh sản xuất trước'}
               onClick={() => { setLyDoHuy(''); setMoHuy(true); }}>
               Hủy đợt vải (không in)
             </Button>

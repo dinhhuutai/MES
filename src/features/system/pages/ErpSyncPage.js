@@ -85,6 +85,17 @@ export default function ErpSyncPage() {
 
   const columns = [
     { key: 'tg_bd', header: 'Bắt đầu', render: (r) => fmtDt(r.tg_bd) },
+    // ID KẾT NỐI (27/09/2026) = mã lượt đồng bộ; MES gửi kèm query `IDKetNoi` lên ERP nên tra được cả 2 bên.
+    {
+      key: 'id', header: 'ID kết nối',
+      render: (r) => (
+        <button type="button" title={`${r.id} — bấm để copy`}
+          className="font-mono text-xs text-primary hover:underline"
+          onClick={(e) => { e.stopPropagation(); try { navigator.clipboard.writeText(r.id); show('Đã copy ID kết nối'); } catch { /* bỏ qua */ } }}>
+          {String(r.id).slice(0, 8)}
+        </button>
+      ),
+    },
     { key: 'tg_kt', header: 'Kết thúc', render: (r) => fmtDt(r.tg_kt) },
     { key: 'tu_dong', header: 'Kiểu', render: (r) => (r.nguon === 'cap_nhat_code_phan'
       ? <Badge tone="warning">Theo code phần</Badge>

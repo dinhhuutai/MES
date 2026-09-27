@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useSelector } from 'react-redux';
 import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
 import TraVeListModal, { TraVeListButton, TRA_VE_THEO_MAN } from '../../../components/common/TraVeListModal';
 import useNghenMap from '../../../hooks/useNghenMap';
@@ -75,6 +76,17 @@ const buildVeLabel = (r) => ({
   con_lai: r.con_lai,
   tg_nhan: r.tg || null,
   nguoi_nhan: r.nguoi || '',
+  // ─ số NHẬP lúc nhận hàng (27/09/2026) — `so_luong` ở trên = SL ĐẠT của lượt ─
+  // ⚠ Trước đây `so_luong_huy` đã khai ở Thiết kế tem nhưng KHÔNG được truyền ở đây ⇒ in ra rỗng.
+  sl_dat: r.so_luong_lan_nay != null ? r.so_luong_lan_nay : null,
+  so_luong_huy: r.so_luong_huy != null ? r.so_luong_huy : null,
+  sl_nhan_lan_nay: r.so_luong_lan_nay != null
+    ? Number(r.so_luong_lan_nay) + (Number(r.so_luong_huy) || 0) : null,
+  // Theo CODE PHẦN của tem (sau lượt nhận). Dòng lịch sử có sẵn 3 khóa `_phan`; dòng vừa nhận thì
+  // bên gọi tự tính sẵn; dòng cũ (trước mig 095) không có ⇒ null, không bịa số.
+  sl_release_phan: r.sl_release_phan ?? null,
+  da_chuyen_phan: r.da_chuyen_phan ?? null,
+  con_lai_phan: r.con_lai_phan ?? null,
 });
 
 // Tối đa số CODE PHẦN in được trong 1 lượt — tờ decal 110×80mm chỉ có 2 khung tem.
@@ -91,6 +103,8 @@ export default function GiaCongPage() {
   const { can } = usePermissions();
   const { toast, show } = useToast();
   const canDo = can('RELEASE1') || can('RELEASE2');
+  // Người đang bấm nhận hàng — trường `nguoi_nhan` trên tem vừa in.
+  const nguoiNhan = useSelector((s) => s.auth.user?.ho_ten || s.auth.user?.ten_dang_nhap || '');
 
   const [rows, setRows] = useState([]);
   const [nghenOpen, setNghenOpen] = useState(false); // modal "Danh sách nghẽn"
@@ -240,10 +254,20 @@ export default function GiaCongPage() {
             so_luong_huy: Math.trunc(Number(p.huy || 0)),
           })));
           // ⚠ Mã tem lấy từ PHẢN HỒI (ERP cấp), KHÔNG tự suy — mỗi tem 13 là một mã riêng.
+          const bayGio = new Date().toISOString();
           for (const t of (res.data?.tems || [])) {
             const p = ds.find((x) => x.ma_phan === t.ma_phan) || {};
+            // Dòng code phần (đã làm phẳng) mang `so_luong_release`/`da_chuyen`/`con_lai` CỦA CODE PHẦN,
+            // là số TRƯỚC lượt nhận ⇒ cộng/trừ lượt vừa nhận để tem ghi số SAU khi nhận.
+            const lan = (Number(t.so_luong) || 0) + (Number(t.so_luong_huy) || 0);
             nhan.push(buildVeLabel({
               ...p, ma_tem: t.ma_tem, so_luong_lan_nay: t.so_luong, so_luong_huy: t.so_luong_huy,
+              sl_release_phan: p.so_luong_release,
+              da_chuyen_phan: p.da_chuyen != null ? Number(p.da_chuyen) + lan : null,
+              con_lai_phan: p.con_lai != null ? Number(p.con_lai) - lan : null,
+              da_chuyen: p.da_chuyen != null ? Number(p.da_chuyen) + lan : null,
+              con_lai: p.con_lai != null ? Number(p.con_lai) - lan : null,
+              tg: bayGio, nguoi: nguoiNhan,
             }));
           }
         } catch (e) {
