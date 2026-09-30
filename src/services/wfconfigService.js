@@ -6,6 +6,10 @@ export const createVersion = (b) => client.post('/wf/versions', b);
 export const updateVersion = (id, b) => client.patch(`/wf/versions/${id}`, b);
 export const setHienHanh = (id) => client.post(`/wf/versions/${id}/hien-hanh`);
 
+// Luật SLA theo giờ (mig 109) — khối ghi chú + sửa ở trang Checkpoint & Checklist
+export const listSlaTheoGio = () => client.get('/wf/sla-theo-gio');
+export const saveSlaTheoGio = (ma, b) => client.put(`/wf/sla-theo-gio/${ma}`, b);
+
 // Trams
 export const listTrams = (versionId) => client.get('/wf/trams', { params: { versionId } });
 export const tramOptions = (versionId) => client.get('/wf/tram-options', { params: { versionId } });

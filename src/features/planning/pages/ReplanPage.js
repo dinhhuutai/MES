@@ -20,14 +20,21 @@ import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
-import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
-import { codesCuaLenh, laGomSet } from '../utils/phanInLenh';
-import taiHetTrang, { LIMIT_TAI_LON } from '../../../utils/taiHetTrang';
-import { listReplanCandidates, replan, getReplanDetail, replanBatch, listChuyen, planHistory, replanDone } from '../../../services/planningService';
-import { fmtNum, fmtDate } from '../../../utils/format';
+import FieldFilters, { FilterToggle } from '../../../components/common/FieldFilters';
+import Pagination from '../../../components/common/Pagination';
+import DateRangePicker from '../../../components/common/DateRangePicker';
+import { laGomSet } from '../utils/phanInLenh';
+import { listReplanCandidates, listReplanIds, listReplanMaQuet, replan, getReplanDetail, replanBatch, listChuyen, planHistory, replanDone } from '../../../services/planningService';
+import { fmtNum, fmtDate, ngayLocalISO } from '../../../utils/format';
 
-// Lọc nhiều trường (client-side, kết hợp AND) — trang tải-hết (limit 500) nên lọc đủ mọi dòng.
-// `col` = tên thuộc tính trên hàng do `listReplanCandidates` trả về.
+// ⚠⚠ LỌC + PHÂN TRANG Ở SERVER (30/09/2026): prod có ~6.000 lệnh ở màn này (xưởng chưa bấm Xác nhận chạy
+//   nên lệnh RELEASE_2 dồn lại) — bản cũ tải HẾT về trình duyệt (3 lượt × ~2 MB) nên xoay rất lâu.
+//   Nay mỗi lần chỉ lấy 1 trang `PAGE` lệnh; bộ lọc từng trường gửi lên server dạng `f_<key>`
+//   (khóa phải khớp `REPLAN_LOC` ở `planning.controller` + `replanWhere` ở repository).
+// ⚠ Mặc định chỉ hiện lệnh có NGÀY SX KẾ HOẠCH TỪ HÔM QUA trở đi (người dùng chốt "1 ngày"); bấm "Xóa"
+//   ở ô ngày để xem mọi lệnh. Lệnh chưa có ngày kế hoạch luôn hiện.
+const PAGE = 20;
+const homQua = () => { const d = new Date(); d.setDate(d.getDate() - 1); return ngayLocalISO(d); };
 const FILTER_FIELDS = [
   { key: 'maLenh', label: 'Mã đợt SX', col: 'ma_lenh_san_xuat' },
   { key: 'codePhan', label: 'Code phần', col: 'ma_phan' },
@@ -86,7 +93,10 @@ export default function ReplanPage() {
   const [filters, setFilters] = useState({});
   const [showFilters, setShowFilters] = useState(false);
   const activeCount = Object.values(filters).filter(Boolean).length;
-  const filtered = useMemo(() => filterRows(rows, filters, FILTER_FIELDS), [rows, filters]);
+  const [page, setPage] = useState(1);
+  const [ngay, setNgay] = useState(() => ({ from: homQua(), to: '' }));
+  // Chuỗi khóa ổn định của bộ lọc (đưa vào deps thay cho object — tránh vòng tải lại vô hạn).
+  const locKey = JSON.stringify(filters);
 
   const [detail, setDetail] = useState(null);
   // `dsDot` = đợt vải của lệnh đang mở + SL release đang giữ + trần được nâng (tải khi mở panel).
@@ -109,30 +119,46 @@ export default function ReplanPage() {
   const [batchOpen, setBatchOpen] = useState(false);
   const [batchForm, setBatchForm] = useState({ chuyenId: '', ngayKeHoach: '', gioBd: '', gioKt: '', lyDo: '' });
   const [scanOpen, setScanOpen] = useState(false);
+  const [scanRows, setScanRows] = useState([]);
+  const [chonHetBusy, setChonHetBusy] = useState(false);
+
+  // Tham số lọc gửi server — dùng chung cho trang dữ liệu + "Chọn tất cả N lệnh".
+  const locParams = useCallback(() => ({
+    search,
+    tuNgay: ngay.from || undefined,
+    denNgay: ngay.to || undefined,
+    ...Object.fromEntries(Object.entries(JSON.parse(locKey)).filter(([, v]) => v).map(([k, v]) => [`f_${k}`, v])),
+  }), [search, ngay.from, ngay.to, locKey]);
+
+  // Đổi tìm kiếm / bộ lọc / ngày ⇒ về trang 1 và BỎ lựa chọn (lệnh đã chọn có thể không còn trong tập lọc).
+  useEffect(() => { setPage(1); setSelected(new Set()); }, [search, ngay.from, ngay.to, locKey]);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      // TẢI HẾT MỌI TRANG để lọc/quét ở client khớp đủ dòng; DataTable tự phân trang 20/trang.
-      // ⚠ KHÔNG truyền `limit: 500` — `getPaging` cắt còn 200, mà prod đang có ~760 lệnh ở màn này
-      //   ⇒ bộ lọc sẽ chỉ soi được 200 dòng đầu và im lặng bỏ sót phần còn lại.
-      const { items, total, thieu } = await taiHetTrang((p) => listReplanCandidates({ search, ...p }), { limit: LIMIT_TAI_LON });
-      setRows(items);
-      setMeta({ page: 1, totalPages: 1, total });
-      if (thieu && !silent) show(`Mới tải được ${items.length}/${total} lệnh — hãy thu hẹp tìm kiếm`, 'error');
-      if (!silent) setSelected(new Set());
+      const res = await listReplanCandidates({ ...locParams(), page, limit: PAGE });
+      setRows(res.data.items || []);
+      setMeta(res.data.meta || { page, totalPages: 1, total: 0 });
     } catch (e) {
       if (!silent) show(e.message || 'Lỗi tải', 'error');
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [search, show]);
+  }, [locParams, page, show]);
 
   useEffect(() => { listChuyen().then((r) => setChuyen(r.data)).catch(() => {}); }, []);
+  // Gõ tìm / lọc ⇒ chờ 300ms mới gọi (không bắn 1 request mỗi phím).
   useEffect(() => {
-    const t = setTimeout(load, 250);
+    const t = setTimeout(load, 300);
     return () => clearTimeout(t);
   }, [load]);
+
+  // Modal quét: tải danh sách GỌN mọi lệnh trong khoảng ngày đang lọc (quét được cả lệnh ở trang khác).
+  const moQuet = async () => {
+    setScanOpen(true);
+    try { setScanRows((await listReplanMaQuet({ tuNgay: ngay.from || undefined, denNgay: ngay.to || undefined })).data || []); }
+    catch (e) { show(e.message || 'Không tải được danh sách để quét', 'error'); }
+  };
 
   // Tự tải lại khi trạm khác xác nhận (tránh màn để lâu → dữ liệu cũ).
   // Bỏ qua khi đang tick dở để không mất lựa chọn — `load` xóa danh sách đã chọn.
@@ -172,10 +198,21 @@ export default function ReplanPage() {
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
-  // "Chọn tất cả" theo tập ĐANG HIỆN (đã lọc) — tick xong mà lệnh ngoài bộ lọc cũng bị chọn thì
-  // người dùng không kiểm soát được mình đang lập lại kế hoạch cho những lệnh nào.
-  const allChecked = filtered.length > 0 && filtered.every((r) => selected.has(r.id));
-  const toggleAll = () => setSelected(() => (allChecked ? new Set() : new Set(filtered.map((r) => r.id))));
+  // Ô tích đầu bảng = chọn/bỏ các lệnh của TRANG ĐANG XEM (giữ lựa chọn ở trang khác).
+  // Muốn chọn MỌI lệnh khớp bộ lọc thì bấm "Chọn tất cả N lệnh" (lấy ID từ server) — không bao giờ
+  // chọn lệnh NGOÀI bộ lọc, để người dùng biết mình đang lập lại kế hoạch cho những lệnh nào.
+  const allChecked = rows.length > 0 && rows.every((r) => selected.has(r.id));
+  const toggleAll = () => setSelected((s) => {
+    const next = new Set(s);
+    rows.forEach((r) => (allChecked ? next.delete(r.id) : next.add(r.id)));
+    return next;
+  });
+  const chonHet = async () => {
+    setChonHetBusy(true);
+    try { setSelected(new Set((await listReplanIds(locParams())).data || [])); }
+    catch (e) { show(e.message || 'Không lấy được danh sách lệnh', 'error'); }
+    finally { setChonHetBusy(false); }
+  };
 
   const openBatch = () => {
     setBatchForm({ chuyenId: '', ngayKeHoach: '', gioBd: '', gioKt: '', lyDo: '' });
@@ -198,6 +235,7 @@ export default function ReplanPage() {
       show(failedCount ? `Đã lập lại ${okCount} lệnh, ${failedCount} lỗi` : `Đã lập lại kế hoạch ${okCount} lệnh`,
         failedCount ? 'error' : 'success');
       setBatchOpen(false);
+      setSelected(new Set());
       load();
     } catch (e) {
       show(e.message || 'Lập lại kế hoạch thất bại', 'error');
@@ -299,8 +337,11 @@ export default function ReplanPage() {
       <Toolbar title="Lập kế hoạch lại" subtitle="Lệnh đang Test Run hoặc đã Release 2 (chưa bắt đầu sản xuất) — đổi chuyền / ngày sản xuất kèm lý do"
         search={search} onSearch={setSearch}
         searchPlaceholder="Tìm mã lệnh, code phần, mã hàng, màu/kích...">
+        <div title="Ngày SX kế hoạch — mặc định từ hôm qua; bấm Xóa để xem mọi lệnh">
+          <DateRangePicker value={ngay} onChange={setNgay} placeholder="Mọi ngày SX kế hoạch" />
+        </div>
         {canReplan && (
-          <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét QR code phần</Button>
+          <Button variant="secondary" icon="scan-line" onClick={moQuet}>Quét QR code phần</Button>
         )}
         {canReplan && selected.size > 0 && (
           <Button onClick={openBatch}>Lập lại kế hoạch ({selected.size})</Button>
@@ -308,7 +349,7 @@ export default function ReplanPage() {
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
         <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
-        <Badge tone="info">{activeCount ? `${filtered.length}/` : ''}{meta.total} lệnh</Badge>
+        <Badge tone="info">{meta.total} lệnh</Badge>
       </Toolbar>
 
       <FieldFilters fields={FILTER_FIELDS} values={filters}
@@ -317,10 +358,22 @@ export default function ReplanPage() {
 
       {/* Khối gom set: tách dòng theo phần in + VIỀN TRÁI xanh như màn Release 1.
           ⚠ Dùng `border-l`, KHÔNG đổi nền — nền đang dành cho màu cảnh báo SLA nghẽn. */}
-      <DataTable columns={columns} rows={filtered} loading={loading} onRowClick={openDetail} sttStart={0}
+      {canReplan && allChecked && meta.total > rows.length && selected.size < meta.total && (
+        <div className="mb-2 flex flex-wrap items-center gap-2 rounded-control bg-primary-wash px-3 py-2 text-sm text-primary">
+          <span>Đã chọn {selected.size} lệnh.</span>
+          <Button variant="ghost" className="px-2 py-1" loading={chonHetBusy} onClick={chonHet}>
+            Chọn tất cả {meta.total} lệnh khớp bộ lọc
+          </Button>
+        </div>
+      )}
+      <DataTable columns={columns} rows={rows} loading={loading} onRowClick={openDetail}
+        sttStart={(page - 1) * PAGE} pageSize={0}
         subRows={subRows}
         rowClassName={(r) => `${slaRowClass(statusLenh(r.id))} ${laGomSet(r) ? 'border-l-[3px] border-l-primary' : ''}`}
-        emptyText="Không có lệnh nào để lập lại kế hoạch" />
+        emptyText={ngay.from || ngay.to
+          ? 'Không có lệnh nào trong khoảng ngày SX kế hoạch này — bấm ô ngày › Xóa để xem mọi lệnh'
+          : 'Không có lệnh nào để lập lại kế hoạch'} />
+      <Pagination page={page} totalPages={meta.totalPages || 1} total={meta.total} onPage={setPage} />
 
       <SidePanel
         open={!!detail}
@@ -465,9 +518,10 @@ export default function ReplanPage() {
         onClose={() => setScanOpen(false)}
         title="Quét QR code phần — Lập lại kế hoạch"
         help="Quét QR code phần để chọn các lệnh của phần in đó. Quét nhiều rồi bấm Lập lại kế hoạch cho tất cả cùng lúc."
-        rows={rows}
+        rows={scanRows}
         getId={(r) => r.id}
-        getCodes={codesCuaLenh}
+        getCodes={(r) => (r.ma_phan_ds && r.ma_phan_ds.length ? r.ma_phan_ds : [r.ma_phan]).filter(Boolean)}
+        onNotFound={() => (ngay.from || ngay.to ? 'Chỉ tìm trong khoảng ngày SX kế hoạch đang lọc — bỏ lọc ngày để quét mọi lệnh' : null)}
         matchMultiple
         isSelected={(r) => selected.has(r.id)}
         onToggle={(r) => toggleOne(r.id)}

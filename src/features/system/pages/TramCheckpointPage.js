@@ -11,6 +11,7 @@ import usePermissions from '../../../hooks/usePermissions';
 import useVersions from '../../../hooks/useVersions';
 import { listTrams, createTram, updateTram, setTramActive } from '../../../services/wfconfigService';
 import CheckpointPanel from '../components/CheckpointPanel';
+import SlaTheoGioPanel from '../components/SlaTheoGioPanel';
 
 const empty = { maTram: '', tenTram: '', thuTu: '', thoiGianQuyDinhPhut: '', canhBaoTruocPhut: '' };
 
@@ -95,6 +96,8 @@ export default function TramCheckpointPage() {
       </div>
 
       <DataTable columns={columns} rows={rows} loading={loading} emptyText="Phiên bản chưa có checkpoint" />
+
+      <SlaTheoGioPanel canManage={canManage} show={show} />
 
       <Modal open={open} onClose={() => setOpen(false)} title={editing ? 'Sửa checkpoint' : 'Thêm checkpoint'}
         footer={<>

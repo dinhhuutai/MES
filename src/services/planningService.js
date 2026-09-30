@@ -56,6 +56,9 @@ export const approveRelease2Batch = (lenhIds) => client.post('/planning/release2
 
 // Lập kế hoạch lại + lịch sử kế hoạch (Release 2 + lập lại)
 export const listReplanCandidates = (params) => client.get('/planning/replan/candidates', { params });
+// Lọc + phân trang ở server (30/09/2026): mọi ID khớp bộ lọc ("Chọn tất cả N lệnh") · danh sách gọn cho modal quét.
+export const listReplanIds = (params) => client.get('/planning/replan/ids', { params });
+export const listReplanMaQuet = (params) => client.get('/planning/replan/ma-quet', { params });
 export const replan = (id, body) => client.post(`/planning/replan/${id}`, body);
 // Chi tiết kế hoạch hiện tại + danh sách đợt vải kèm SL release (để panel đổ sẵn mọi ô).
 export const getReplanDetail = (id) => client.get(`/planning/replan/${id}`);
