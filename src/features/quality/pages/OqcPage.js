@@ -116,9 +116,21 @@ export default function OqcPage() {
     setEditing(row);
     setReturnMode(false);
     setReturnReason('');
-    const con = row.con_src ?? row.con_oqc ?? row.so_luong ?? '';
-    setForm({ soLuongKiem: String(con), soLuongDat: String(con), ketQua: 'DAT', ownerChoGiaoId: '', lyDoChoGiao: '' });
+    // ⚠ Ô SL = SỐ BỐC MẪU người kiểm tự nhập (30/09/2026) — KHÔNG điền sẵn cả lô như trước.
+    setForm({ soLuongKiem: '', soLuongDat: '', ketQua: 'DAT', ownerChoGiaoId: '', lyDoChoGiao: '' });
   };
+
+  // ⚠⚠ LUẬT OQC (người dùng chốt 30/09/2026): chỉ nhập SL BỐC MẪU; "Đạt" = ĐẠT HẾT mẫu (SL đạt = SL
+  //   bốc mẫu). Nhập SL đạt NHỎ HƠN mẫu (vd bốc 50 đạt 20) ⇒ TỰ nhảy sang "Không đạt"; nhập lại bằng mẫu
+  //   ⇒ về "Đạt". Backend chặn "Đạt" khi đạt < mẫu (422 `DAT_THIEU`).
+  const doiBocMau = (v) => setForm((f) => ({ ...f, soLuongKiem: v, soLuongDat: f.ketQua === 'DAT' ? v : f.soLuongDat }));
+  const doiSlDat = (v) => setForm((f) => {
+    const mau = f.soLuongKiem;
+    let ketQua = f.ketQua;
+    if (v !== '' && mau !== '') ketQua = Number(v) < Number(mau) ? 'KHONG_DAT' : 'DAT';
+    return { ...f, soLuongDat: v, ketQua };
+  });
+  const chonDat = () => setForm((f) => ({ ...f, ketQua: 'DAT', soLuongDat: f.soLuongKiem }));
 
   // Tách mỗi tem thành tối đa 2 dòng theo NGUỒN: KCS-đạt (tem 15-) & Sửa-đạt (tem 17-).
   const displayRows = rows.flatMap((r) => {
@@ -174,6 +186,13 @@ export default function OqcPage() {
   };
 
   const save = async () => {
+    const mau = Number(form.soLuongKiem);
+    const lo = Number(editing?.con_src ?? editing?.con_oqc) || 0;
+    if (!form.soLuongKiem || !(mau > 0)) { show('Nhập SL bốc mẫu', 'error'); return; }
+    if (lo && mau > lo) { show(`SL bốc mẫu (${mau}) vượt SL chờ OQC của lô (${lo})`, 'error'); return; }
+    if (form.ketQua === 'KHONG_DAT' && (form.soLuongDat === '' || Number(form.soLuongDat) > mau)) {
+      show('Nhập SL đạt trong mẫu (không vượt SL bốc mẫu)', 'error'); return;
+    }
     if (!(await hoiLyDoNghen([editing]))) return; // tem quá SLA ⇒ nhập lý do nghẽn (mig 106)
     setSaving(true);
     try {
@@ -276,17 +295,17 @@ export default function OqcPage() {
           Kiểm <b>bốc mẫu</b>: chọn <b>Đạt</b> → <b>toàn bộ {fmtNum(editing?.con_src ?? editing?.con_oqc)} pcs</b> của lô qua giao. Chọn <b>Không đạt</b> → cả lô không đạt.
         </div>
         <div className="grid grid-cols-2 gap-x-4">
-          <Field label="SL bốc mẫu" hint="Số lấy mẫu ra kiểm (SL đạt tự nhảy theo)">
-            <Input type="number" min="0" value={form.soLuongKiem}
-              onChange={(e) => setForm({ ...form, soLuongKiem: e.target.value, soLuongDat: e.target.value })} />
+          <Field label="SL bốc mẫu" required hint="Số lấy mẫu ra kiểm">
+            <Input type="number" min="1" value={form.soLuongKiem} autoFocus
+              onChange={(e) => doiBocMau(e.target.value)} />
           </Field>
-          <Field label="SL đạt trong mẫu" hint="≤ SL bốc mẫu">
-            <Input type="number" min="0" value={form.soLuongDat} onChange={(e) => setForm({ ...form, soLuongDat: e.target.value })} />
+          <Field label="SL đạt trong mẫu" hint="Đạt = đạt hết mẫu; nhỏ hơn mẫu ⇒ tự chuyển Không đạt">
+            <Input type="number" min="0" value={form.soLuongDat} onChange={(e) => doiSlDat(e.target.value)} />
           </Field>
         </div>
         <Field label="Kết quả">
           <div className="flex gap-2">
-            <button type="button" onClick={() => setForm({ ...form, ketQua: 'DAT' })}
+            <button type="button" onClick={chonDat}
               className={`flex-1 rounded-control border px-4 py-2.5 text-sm font-semibold transition ${
                 form.ketQua === 'DAT' ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-line text-ink-soft'
               }`}>Đạt</button>
