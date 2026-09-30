@@ -213,6 +213,31 @@ export const findModuleByPath = (pathname) =>
 // Quyền của 1 mục menu (chuỗi hoặc mảng) → mảng.
 const permList = (p) => (Array.isArray(p) ? p : (p ? [p] : []));
 
+// ─── QUYỀN "XEM MODULE HỆ THỐNG" (30/09/2026) ─────────────────────────────────────────────
+// `HE_THONG_XEM` = vào ĐƯỢC mọi trang của module Hệ thống nhưng CHỈ XEM. Gắn tự động vào quyền của
+// module + từng trang con ở đây ⇒ menu, route guard, Home Portal tự nhận, khỏi khai tay 30 trang.
+// `permGoc` giữ quyền thật của trang: người có quyền thật vẫn thao tác bình thường, người chỉ vào được
+// nhờ `HE_THONG_XEM` thì `useChiXem` trả true ⇒ mọi nút ghi tự khóa. Chốt chặn thật ở backend `rbac`.
+// ⚠ Thêm trang mới vào module Hệ thống là TỰ có quyền này — không cần sửa gì thêm.
+export const QUYEN_XEM_HE_THONG = 'HE_THONG_XEM';
+{
+  const ht = MODULES.find((m) => m.ma === 'HE_THONG');
+  if (ht) {
+    ht.perm = [...permList(ht.perm), QUYEN_XEM_HE_THONG];
+    ht.children.forEach((c) => { c.permGoc = permList(c.perm); c.perm = [...c.permGoc, QUYEN_XEM_HE_THONG]; });
+  }
+}
+
+// Trang Hệ thống đang mở có phải CHỈ XEM với người này không (vào được nhờ `HE_THONG_XEM` mà thiếu quyền thật).
+export function chiXemHeThong(pathname, perms = []) {
+  if (!perms.includes(QUYEN_XEM_HE_THONG) || perms.includes('*')) return false;
+  const ht = MODULES.find((m) => m.ma === 'HE_THONG');
+  if (!ht || !(pathname === ht.base || pathname.startsWith(`${ht.base}/`))) return false;
+  const trang = ht.children.find((c) => pathname === c.route || pathname.startsWith(`${c.route}/`));
+  const goc = trang ? trang.permGoc : [];
+  return !goc.some((p) => perms.includes(p));
+}
+
 // CÓ ĐƯỢC VÀO MODULE KHÔNG = có quyền cấp module **HOẶC** vào được ÍT NHẤT 1 trang con.
 // ⚠ Trước đây Home Portal chỉ xét `m.perm` cấp module, nên vd module "Hệ thống" đòi `USER_VIEW`:
 // người chỉ được cấp 1 quyền lẻ (vd `LENH_CANCEL_ANY` để hủy lệnh) KHÔNG thấy module đâu mà vào,

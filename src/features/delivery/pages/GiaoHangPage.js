@@ -91,7 +91,8 @@ export default function GiaoHangPage() {
   const canManage = can('DELIVERY_MANAGE');
   // Người BẤM IN (in lại phiếu của người khác thì đây mới là người cầm tờ giấy) — trường `nguoi_in`
   // của mẫu phiếu. ⚠ Lấy ở TRANG rồi truyền xuống: `printPhieuGiao` là util, không đọc redux store.
-  const nguoiIn = useSelector((s) => s.auth.user?.ho_ten || s.auth.user?.ten_dang_nhap || '');
+  // ⚠ User trong store là camelCase (`auth.service.toPublicUser`: hoTen/tenDangNhap) — đọc `ho_ten` là luôn rỗng.
+  const nguoiIn = useSelector((s) => s.auth.user?.hoTen || s.auth.user?.tenDangNhap || '');
 
   const [tab, setTab] = useState('tem');           // 'tem' = tem chờ giao · 'phieu' = danh sách phiếu
   const [nghenOpen, setNghenOpen] = useState(false);

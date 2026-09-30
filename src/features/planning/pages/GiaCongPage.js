@@ -104,7 +104,8 @@ export default function GiaCongPage() {
   const { toast, show } = useToast();
   const canDo = can('RELEASE1') || can('RELEASE2');
   // Người đang bấm nhận hàng — trường `nguoi_nhan` trên tem vừa in.
-  const nguoiNhan = useSelector((s) => s.auth.user?.ho_ten || s.auth.user?.ten_dang_nhap || '');
+  // ⚠ User trong store là camelCase (hoTen/tenDangNhap) — đọc `ho_ten` là luôn rỗng.
+  const nguoiNhan = useSelector((s) => s.auth.user?.hoTen || s.auth.user?.tenDangNhap || '');
 
   const [rows, setRows] = useState([]);
   const [nghenOpen, setNghenOpen] = useState(false); // modal "Danh sách nghẽn"

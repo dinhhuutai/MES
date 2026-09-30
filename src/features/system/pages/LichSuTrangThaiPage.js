@@ -12,6 +12,7 @@ import Toast from '../../../components/common/Toast';
 import { Field, Textarea } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
+import { QUYEN_XEM_HE_THONG } from '../../../constants/modules';
 import { listConfirmHistory, cancelReadyItem, listReopenReadyCandidates, reopenReady } from '../../../services/readyService';
 import { searchPhanInForCancel, huyPhanIn, listDeletedPhanIn, moPhanIn,
   searchDotVaiForCancel, huyDotVai, listDeletedDotVai, moDotVai } from '../../../services/orderService';
@@ -2031,7 +2032,9 @@ function TichGiaoCancelSection({ show }) {
 }
 
 export default function LichSuTrangThaiPage() {
-  const { can } = usePermissions();
+  const { can: canGoc } = usePermissions();
+  // Quyền "xem module Hệ thống" (30/09/2026) thấy ĐỦ mọi tab — nút thao tác tự khóa qua `useChiXem`.
+  const can = (...p) => canGoc(...p) || canGoc(QUYEN_XEM_HE_THONG);
   const { toast, show } = useToast();
 
   const tabs = [

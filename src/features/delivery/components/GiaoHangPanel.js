@@ -26,7 +26,8 @@ export default function GiaoHangPanel({ giaoHangId, onClose, onChanged }) {
   const { toast, show } = useToast();
   const canManage = can('DELIVERY_MANAGE');
   // Người BẤM IN — trường `nguoi_in` của mẫu phiếu (khác `nguoi_tao` là người LẬP phiếu).
-  const nguoiIn = useSelector((s) => s.auth.user?.ho_ten || s.auth.user?.ten_dang_nhap || '');
+  // ⚠ User trong store là camelCase (hoTen/tenDangNhap) — đọc `ho_ten` là luôn rỗng.
+  const nguoiIn = useSelector((s) => s.auth.user?.hoTen || s.auth.user?.tenDangNhap || '');
 
   const [gh, setGh] = useState(null);
   const [loading, setLoading] = useState(false);
