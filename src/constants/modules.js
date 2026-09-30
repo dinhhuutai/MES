@@ -167,12 +167,18 @@ export const MODULES = [
       // luôn từ trang "Owner checkpoint/checklist" ngay trên — KHÔNG có bảng owner riêng.
       { ten: 'Chọn đơn hàng (KPI)', route: '/he-thong/kpi-don-hang', perm: 'KPI_DON_HANG_MANAGE' },
       { ten: 'Trạng thái', route: '/he-thong/trang-thai', perm: 'STATUS_VIEW' },
-      // ⚠ `TICH_GIAO` phải có trong danh sách: bán hàng chỉ được cấp quyền đó (KHÔNG có
-      //   `DELIVERY_MANAGE`) mà vẫn cần vào tab "Hủy tích tem giao" để gỡ tem tích nhầm.
-      { ten: 'Hủy lệnh xác nhận', route: '/he-thong/lich-su-trang-thai', perm: ['READY_CANCEL', 'RELEASE1', 'RELEASE2', 'PROD_RUN', 'KCS', 'SUA', 'OQC', 'LENH_CANCEL_ANY', 'DELIVERY_MANAGE', 'TICH_GIAO'] },
-      // Chốt chặn "bán hàng tích tem" (mig 092) — đặt ở Hệ thống theo yêu cầu người dùng: người tích
-      // là BÁN HÀNG, không thuộc tổ giao hàng. Tem chưa tích thì màn Giao hàng KHÔNG hiện.
-      { ten: 'Chờ GN tích', route: '/he-thong/tich-giao', perm: ['TICH_GIAO', 'DELIVERY_MANAGE'] },
+      // ⚠⚠ KHÓA quyền giao hàng/giao nhận khỏi module Hệ thống (30/09/2026, người dùng chốt):
+      //   `DELIVERY_MANAGE` / `TICH_GIAO` KHÔNG còn mở trang nào ở đây ⇒ vai trò GH/GIAO_NHAN không thấy
+      //   module Hệ thống. Tổ giao vẫn tích tem ngay ở màn Giao hàng (modal Tích tem); tab "Hủy phiếu giao"
+      //   / "Hủy tích tem giao" chỉ còn cho người vào được trang này bằng quyền khác (vẫn cần DELIVERY_MANAGE
+      //   / TICH_GIAO để thấy tab). Đừng thêm lại 2 quyền này vào `perm` các trang Hệ thống.
+      // ⚠ KH/QA/SX (quyền công đoạn `permXem`) vào được nhưng CHỈ XEM (30/09/2026): muốn hủy phải có
+      //   `HUY_XAC_NHAN` (mig 108, backend đòi thêm ở mọi lệnh hủy/mở theo công đoạn) hoặc quyền hủy riêng.
+      { ten: 'Hủy lệnh xác nhận', route: '/he-thong/lich-su-trang-thai', perm: ['READY_CANCEL', 'LENH_CANCEL_ANY', 'HUY_XAC_NHAN'],
+        permXem: ['RELEASE1', 'RELEASE2', 'PROD_RUN', 'KCS', 'SUA', 'OQC'] },
+      // Chốt chặn "bán hàng tích tem" (mig 092). Tem chưa tích thì màn Giao hàng KHÔNG hiện.
+      // Quyền trang = WORKFLOW_VIEW (quản trị); tổ giao tích ở màn Giao hàng. API `/giao-hang/tich/*` giữ nguyên.
+      { ten: 'Chờ GN tích', route: '/he-thong/tich-giao', perm: 'WORKFLOW_VIEW' },
       { ten: 'Đồng bộ ERP', route: '/he-thong/erp-sync', perm: 'ERP_SYNC' },
       { ten: 'Nhập tay đơn → đợt vải', route: '/he-thong/nhap-tay', perm: 'ERP_SYNC' },
       { ten: 'Cập nhật SL nhận vải / release', route: '/he-thong/cap-nhat-vai', perm: 'ERP_SYNC' },
@@ -196,8 +202,8 @@ export const MODULES = [
       // Danh mục TỔ IN (mig 084) — mã tổ gửi thẳng lên ERP qua `@pToin` mỗi lần in tem.
       { ten: 'Danh mục tổ in', route: '/he-thong/to-in', perm: 'TO_IN_MANAGE' },
       // Khách hàng (mig 099) — địa chỉ + địa chỉ giao mặc định để in lên PHIẾU GIAO.
-      // ⚠ Mở thêm cho `DELIVERY_MANAGE`: tổ giao hàng cần tra địa chỉ (backend chỉ cho họ ĐỌC).
-      { ten: 'Khách hàng', route: '/he-thong/khach-hang', perm: ['KHACH_HANG_MANAGE', 'DELIVERY_MANAGE'] },
+      // Backend vẫn cho `DELIVERY_MANAGE` ĐỌC (in phiếu giao lấy địa chỉ) nhưng trang không mở cho họ nữa.
+      { ten: 'Khách hàng', route: '/he-thong/khach-hang', perm: 'KHACH_HANG_MANAGE' },
       { ten: 'Người dùng online', route: '/he-thong/online', perm: 'PRESENCE_VIEW' },
       // Phiên đăng nhập theo THIẾT BỊ (mig 081): xem 1 tài khoản đang đăng nhập ở những máy nào và
       // đăng xuất máy không dùng nữa. Xem chỉ cần PRESENCE_VIEW; đăng xuất người KHÁC cần PHIEN_MANAGE.
@@ -220,6 +226,9 @@ const permList = (p) => (Array.isArray(p) ? p : (p ? [p] : []));
 // nhờ `HE_THONG_XEM` thì `useChiXem` trả true ⇒ mọi nút ghi tự khóa. Chốt chặn thật ở backend `rbac`.
 // ⚠ Thêm trang mới vào module Hệ thống là TỰ có quyền này — không cần sửa gì thêm.
 export const QUYEN_XEM_HE_THONG = 'HE_THONG_XEM';
+// Quyền THỰC HIỆN hủy ở trang Hủy lệnh xác nhận (mig 108) — gương BE `middlewares/rbac.QUYEN_HUY_XAC_NHAN`.
+export const QUYEN_HUY_XAC_NHAN = 'HUY_XAC_NHAN';
+// `permXem` của 1 trang Hệ thống = quyền cho VÀO XEM trang đó (như `HE_THONG_XEM` nhưng chỉ trang ấy).
 
 // ─── DANH MỤC SIDEBAR CỦA MODULE HỆ THỐNG (30/09/2026) ────────────────────────────────────
 // 30 trang ⇒ Sidebar gom theo danh mục, bấm tiêu đề để mở/đóng (`components/layout/Sidebar.js`).
@@ -250,18 +259,21 @@ export const NHOM_HE_THONG = [
     ht.nhom = NHOM_HE_THONG;
     ht.children.forEach((c) => {
       c.permGoc = permList(c.perm);
-      c.perm = [...c.permGoc, QUYEN_XEM_HE_THONG];
+      c.perm = [...c.permGoc, ...permList(c.permXem), QUYEN_XEM_HE_THONG];
       c.nhom = (NHOM_HE_THONG.find((n) => n.routes.includes(c.route)) || {}).ma || 'KHAC';
     });
   }
 }
 
-// Trang Hệ thống đang mở có phải CHỈ XEM với người này không (vào được nhờ `HE_THONG_XEM` mà thiếu quyền thật).
+// Trang Hệ thống đang mở có phải CHỈ XEM với người này không (vào được nhờ `HE_THONG_XEM` hoặc `permXem`
+// của trang mà thiếu quyền thật).
 export function chiXemHeThong(pathname, perms = []) {
-  if (!perms.includes(QUYEN_XEM_HE_THONG) || perms.includes('*')) return false;
+  if (perms.includes('*')) return false;
   const ht = MODULES.find((m) => m.ma === 'HE_THONG');
   if (!ht || !(pathname === ht.base || pathname.startsWith(`${ht.base}/`))) return false;
   const trang = ht.children.find((c) => pathname === c.route || pathname.startsWith(`${c.route}/`));
+  const vaoXem = perms.includes(QUYEN_XEM_HE_THONG) || permList(trang?.permXem).some((p) => perms.includes(p));
+  if (!vaoXem) return false;
   const goc = trang ? trang.permGoc : [];
   return !goc.some((p) => perms.includes(p));
 }
