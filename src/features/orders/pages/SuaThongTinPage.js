@@ -19,7 +19,7 @@ import usePermissions from '../../../hooks/usePermissions';
 import useSocketReload from '../../../hooks/useSocketReload';
 import { fmtDate, fmtDateTime, fmtNum, ngayLocalISO } from '../../../utils/format';
 import {
-  listSuaThongTin, chiTietSuaThongTin, suaPhanInGn, suaDotVaiGn, xacNhanLaiGn, xacNhanLaiNhieuGn, erpTrangThaiGn, erpDongBoGn, huyDotVaiGn, huyDotVaiNhieuGn,
+  listSuaThongTin, chiTietSuaThongTin, suaPhanInGn, suaDotVaiGn, xacNhanLaiGn, xacNhanLaiNhieuGn, erpDongBoGn, huyDotVaiGn, huyDotVaiNhieuGn,
 } from '../../../services/suaThongTinService';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -114,13 +114,8 @@ export default function SuaThongTinPage() {
   const [moHuyN, setMoHuyN] = useState(false);
   const [lyDoHuyN, setLyDoHuyN] = useState('');
   const [dangHuyN, setDangHuyN] = useState(false);
-  // Trạng thái lượt kéo dữ liệu đã sửa từ ERP (/ds-phan-in-sua-thong-tin, job 5 phút — 25/09/2026).
-  const [erpTT, setErpTT] = useState(null);
+  // ⚠ Khung trạng thái lượt kéo ERP đã gỡ (30/09/2026 — bỏ chữ hướng dẫn); kết quả bấm tay báo bằng toast.
   const [dongBo, setDongBo] = useState(false);
-  const taiErpTT = useCallback(async () => {
-    try { const r = await erpTrangThaiGn(); setErpTT(r.data || null); } catch { /* phần phụ — lỗi thì bỏ qua */ }
-  }, []);
-  useEffect(() => { taiErpTT(); const t = setInterval(taiErpTT, 60000); return () => clearInterval(t); }, [taiErpTT]);
 
   const load = useCallback(async (ngam = false) => {
     if (!ngam) setLoading(true);
@@ -133,7 +128,7 @@ export default function SuaThongTinPage() {
   }, [search, trangThai, ngay.from, ngay.to, show]);
 
   useEffect(() => { const t = setTimeout(() => load(), 250); return () => clearTimeout(t); }, [load]);
-  useSocketReload(['gn:updated'], () => { load(true); taiErpTT(); });
+  useSocketReload(['gn:updated'], () => { load(true); });
 
   const layTuErp = async () => {
     setDongBo(true);
@@ -142,7 +137,7 @@ export default function SuaThongTinPage() {
       const d = r.data || {};
       if (d.bo_qua) show(d.bo_qua, 'info');
       else show(`Đã lấy từ ERP: ${d.co_tren_erp || 0}/${d.so_cho || 0} phần in có trên ERP · cập nhật ${d.so_cap_nhat || 0}`);
-      await Promise.all([load(true), taiErpTT()]);
+      await load(true);
     } catch (e) { show(e.message || 'Không lấy được dữ liệu từ ERP', 'error'); } finally { setDongBo(false); }
   };
 
@@ -331,7 +326,6 @@ export default function SuaThongTinPage() {
           <Button icon="check" disabled={!chon.size} onClick={() => setMoXn(true)}>Xác nhận lại ({chon.size})</Button>
         )}
       </Toolbar>
-      <ErpTrangThai tt={erpTT} />
 
       <ChipTabs value={trangThai} onChange={setTrangThai} anSo
         tabs={[{ v: 'CHO', label: 'Đang chờ sửa' }, { v: 'DA', label: 'Đã xác nhận lại' }, { v: '', label: 'Tất cả' }]} />
@@ -396,46 +390,6 @@ export default function SuaThongTinPage() {
         </Field>
       </Modal>
       <Toast toast={toast} />
-    </div>
-  );
-}
-
-// Dòng trạng thái lượt kéo ERP gần nhất. Khai MỨC MODULE (trang chạy useNow — bẫy §9).
-const TEN_TRUONG = {
-  mau_vai: 'màu vải', kich_vai: 'kích vải', kich_phim: 'kích phim', so_luong_don_hang: 'SLĐH', tinh_chat_in: 'tính chất in',
-  khach: 'khách', don_hang: 'đơn hàng', ma_hang: 'mã hàng', barcode: 'mã vạch', thoi_gian_cho_kho_phut: 'chờ khô',
-  han_giao_hang: 'hạn giao', ngay_vai_ve: 'ngày vải về', so_luong_vai_ve: 'SL vải về', nha_gia_cong: 'nhà gia công',
-  loai_dot_vai_id: 'loại đợt vải',
-};
-function ErpTrangThai({ tt }) {
-  const l = tt?.lan_cuoi;
-  if (!tt) return null;
-  return (
-    <div className="mb-3 rounded-control border border-line bg-surface px-3 py-2 text-xs text-ink-soft">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span className="font-semibold text-ink">Đồng bộ ERP (5 phút/lần):</span>
-        {!l && <span>chưa chạy lượt nào kể từ khi khởi động máy chủ</span>}
-        {l && <span>lần cuối {fmtDateTime(l.tg)}{l.tu_dong ? ' (tự động)' : ' (bấm tay)'}</span>}
-        {l?.loi_chung && <span className="text-danger">Lỗi: {l.loi_chung}</span>}
-        {l?.bo_qua && <span>{l.bo_qua}</span>}
-        {l && l.so_cho != null && !l.bo_qua && !l.loi_chung && (
-          <span>
-            hỏi {l.so_hoi ?? l.so_cho}/{l.so_cho} phần in trả về hôm nay (tối đa {tt.toi_da_moi_luot || 100}/lượt)
-            {l.con_lai_luot_sau > 0 ? ` · còn ${l.con_lai_luot_sau} để lượt sau` : ''}
-            {' · '}{l.co_tren_erp} có dữ liệu trên ERP · <b className="text-ink">cập nhật {l.so_cap_nhat}</b>
-          </span>
-        )}
-      </div>
-      {(l?.chi_tiet || []).length > 0 && (
-        <ul className="mt-1 space-y-0.5">
-          {l.chi_tiet.slice(0, 8).map((c) => (
-            <li key={c.ma_phan}>
-              <b className="text-ink">{c.ma_phan}</b>: {[...c.phan_in, ...c.dot_vai].map((k) => TEN_TRUONG[k] || k).join(', ') || '—'}
-              {c.ghi_chu && <span className="text-warning"> · {c.ghi_chu}</span>}
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
   );
 }

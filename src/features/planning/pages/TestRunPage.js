@@ -55,10 +55,13 @@ const maxTests = (rows) => rows.reduce((m, r) => Math.max(m, (r.tests || []).len
 const testAt = (r, i) => (r.tests || [])[i];
 // "Xác nhận In Không Đạt" → "Không đạt (<owner> cho IN)", chữ XANH NƯỚC BIỂN ĐẬM (web lẫn Excel).
 const laInKhongDat = (t) => !!t && t.ket_qua === KQ_IN_KHONG_DAT;
+// Không đạt ⇒ luôn nêu LỖI GÌ (ghi chú của lần test) + AI CHO IN (lần "In không đạt") — 30/09/2026.
 const testText = (t) => {
   if (t.ket_qua === 'DAT') return 'Đạt';
-  if (laInKhongDat(t)) return `Không đạt (${t.owner_cho_in || '—'} cho IN)`;
-  return (t.ghi_chu || '').trim() || 'Không đạt';
+  const loi = (t.ghi_chu || '').trim();
+  const dau = loi ? `Không đạt: ${loi}` : 'Không đạt (không ghi lỗi)';
+  if (laInKhongDat(t)) return `${dau} · ${t.owner_cho_in || '—'} cho IN`;
+  return dau;
 };
 
 const testRunColumns = (rows) => Array.from({ length: maxTests(rows) }, (_, i) => ({
@@ -69,9 +72,7 @@ const testRunColumns = (rows) => Array.from({ length: maxTests(rows) }, (_, i) =
     if (!t) return <span className="text-ink-soft">—</span>;
     if (laInKhongDat(t)) {
       return (
-        <span className="font-semibold text-blue-900 dark:text-blue-300" title={t.ghi_chu ? `Lý do: ${t.ghi_chu}` : undefined}>
-          {testText(t)}
-        </span>
+        <span className="font-semibold text-blue-900 dark:text-blue-300">{testText(t)}</span>
       );
     }
     return t.ket_qua === 'DAT'

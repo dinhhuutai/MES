@@ -4,12 +4,13 @@ import Icon from './Icon';
 // ⚠ Khối "sĩ số checkpoint" ĐÃ RỜI KHỎI ĐÂY (16/08/2026) — nay render ở hàng breadcrumb của
 //   `layout/ModuleLayout.js`, khai bằng khóa `siSo` trong `constants/modules.js`. Đừng thêm lại
 //   prop `siSo` vào Toolbar, sẽ thành 2 dải sĩ số trên cùng 1 màn.
-export default function Toolbar({ title, subtitle, search, onSearch, searchPlaceholder = 'Tìm kiếm...', children }) {
+// ⚠ `subtitle` (dòng mô tả / hướng dẫn dưới tiêu đề) CỐ Ý KHÔNG RENDER nữa (người dùng chốt 30/09/2026:
+//   bỏ mọi chữ hướng dẫn). Prop vẫn nhận để ~80 trang đang truyền không phải sửa; muốn hiện lại thì mở dòng dưới.
+export default function Toolbar({ title, search, onSearch, searchPlaceholder = 'Tìm kiếm...', children }) {
   return (
     <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div>
         <h1 className="text-xl font-bold text-ink">{title}</h1>
-        {subtitle && <p className="mt-0.5 text-sm text-ink-soft">{subtitle}</p>}
       </div>
       <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
         <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
