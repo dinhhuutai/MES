@@ -220,11 +220,39 @@ const permList = (p) => (Array.isArray(p) ? p : (p ? [p] : []));
 // nhờ `HE_THONG_XEM` thì `useChiXem` trả true ⇒ mọi nút ghi tự khóa. Chốt chặn thật ở backend `rbac`.
 // ⚠ Thêm trang mới vào module Hệ thống là TỰ có quyền này — không cần sửa gì thêm.
 export const QUYEN_XEM_HE_THONG = 'HE_THONG_XEM';
+
+// ─── DANH MỤC SIDEBAR CỦA MODULE HỆ THỐNG (30/09/2026) ────────────────────────────────────
+// 30 trang ⇒ Sidebar gom theo danh mục, bấm tiêu đề để mở/đóng (`components/layout/Sidebar.js`).
+// Gán theo ROUTE ở đây cho 1 chỗ duy nhất; thứ tự trang TRONG danh mục = thứ tự khai ở `children`.
+// ⚠ Thêm trang mới vào Hệ thống mà quên khai route vào đây ⇒ trang rơi vào danh mục "Khác" (vẫn hiện).
+export const NHOM_HE_THONG = [
+  { ma: 'NGUOI_DUNG', ten: 'Người dùng & phân quyền', icon: 'users', routes: [
+    '/he-thong/nguoi-dung', '/he-thong/phong-ban', '/he-thong/vai-tro', '/he-thong/permission', '/he-thong/module',
+    '/he-thong/online', '/he-thong/phien-dang-nhap', '/he-thong/nhat-ky'] },
+  { ma: 'QUY_TRINH', ten: 'Quy trình & checkpoint', icon: 'git-branch', routes: [
+    '/he-thong/workflow-version', '/he-thong/chuyen', '/he-thong/tram-checkpoint', '/he-thong/dieu-kien',
+    '/he-thong/owner', '/he-thong/trang-thai', '/he-thong/hien-thi-pain'] },
+  { ma: 'DU_LIEU', ten: 'Dữ liệu & ERP', icon: 'database', routes: [
+    '/he-thong/erp-sync', '/he-thong/nhap-tay', '/he-thong/cap-nhat-vai', '/he-thong/quan-tri-phan-in',
+    '/he-thong/khach-hang', '/he-thong/kpi-don-hang'] },
+  { ma: 'THAO_TAC', ten: 'Hủy / tích tem', icon: 'history', routes: [
+    '/he-thong/lich-su-trang-thai', '/he-thong/tich-giao'] },
+  { ma: 'MAU_IN', ten: 'Mẫu in & danh mục', icon: 'printer', routes: [
+    '/he-thong/mau-form', '/he-thong/thiet-ke-tem', '/he-thong/thiet-ke-phieu', '/he-thong/to-in'] },
+  { ma: 'CAI_DAT', ten: 'Cài đặt', icon: 'settings', routes: [
+    '/he-thong/cai-dat-api', '/he-thong/cai-dat-tinh-nang', '/he-thong/cai-dat-thong-bao'] },
+];
+
 {
   const ht = MODULES.find((m) => m.ma === 'HE_THONG');
   if (ht) {
     ht.perm = [...permList(ht.perm), QUYEN_XEM_HE_THONG];
-    ht.children.forEach((c) => { c.permGoc = permList(c.perm); c.perm = [...c.permGoc, QUYEN_XEM_HE_THONG]; });
+    ht.nhom = NHOM_HE_THONG;
+    ht.children.forEach((c) => {
+      c.permGoc = permList(c.perm);
+      c.perm = [...c.permGoc, QUYEN_XEM_HE_THONG];
+      c.nhom = (NHOM_HE_THONG.find((n) => n.routes.includes(c.route)) || {}).ma || 'KHAC';
+    });
   }
 }
 
