@@ -21,13 +21,20 @@ import usePermissions from '../../../hooks/usePermissions';
 import TraVeBadge from '../../../components/common/TraVeBadge';
 import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
 import { laGomSet } from '../utils/phanInLenh';
-import taiHetTrang, { LIMIT_TAI_LON } from '../../../utils/taiHetTrang';
+import Pagination from '../../../components/common/Pagination';
+import DateRangePicker from '../../../components/common/DateRangePicker';
 import { listGiaCong, giaCongNhanTheoPhan, giaCongTraLai } from '../../../services/planningService';
 import { printGiaCongVeTem } from '../../production/utils/printTemLabel';
 import { fmtNum, fmtDate } from '../../../utils/format';
 
-// Lọc nhiều trường (client-side, kết hợp AND) — trang tải-hết (limit 500) nên lọc đủ mọi dòng.
+// ⚠⚠ LỌC + PHÂN TRANG Ở SERVER (01/10/2026 — cùng cách màn Lập kế hoạch lại): prod ~1.300 lệnh gia công,
+//   bản tải-hết ~1,9 MB / 2–4 s. Mỗi lần lấy 1 trang `PAGE` LỆNH (mỗi lệnh tách 1 dòng / code phần như cũ);
+//   bộ lọc gửi lên server dạng `f_<key>` (khóa khớp `REPLAN_LOC` controller) — server chọn LỆNH có ít nhất
+//   1 code phần khớp, rồi `filterRows` ở client lọc tiếp ĐÚNG DÒNG code phần trong trang (giữ hành vi cũ).
+// ⚠ KHÔNG mặc định lọc ngày như Lập kế hoạch lại: hàng gia công về sau nhiều ngày — lệnh kế hoạch tuần
+//   trước vẫn đang chờ nhận, lọc "từ hôm qua" là giấu mất việc thật. Ô ngày có sẵn, để trống = mọi lệnh.
 // `col` = tên thuộc tính trên hàng do `listGiaCong` trả về.
+const PAGE = 20;
 const FILTER_FIELDS = [
   { key: 'maLenh', label: 'Mã đợt SX', col: 'ma_lenh_san_xuat' },
   { key: 'codePhan', label: 'Code phần', col: 'ma_phan' },
@@ -120,7 +127,11 @@ export default function GiaCongPage() {
   const [meta, setMeta] = useState({ total: 0 });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState(() => new Set());
+  const [page, setPage] = useState(1);
+  const [ngay, setNgay] = useState({ from: '', to: '' });
+  // Map `_key` → DÒNG đã tích (giữ cả dữ liệu dòng): đã phân trang nên dòng tích ở trang khác không còn
+  // trong `rows` lúc bấm "In tem" — phải tự giữ bản sao.
+  const [selected, setSelected] = useState(() => new Map());
   // { ds: [dòng code phần đã tick, kèm ô nhập `qty` (đạt) + `huy`] } — IN TEM = nhận hàng
   const [inTem, setInTem] = useState(null);
   const [traLai, setTraLai] = useState(null); // { row, ghiChu } — trả hàng bị OQC trả về cho nhà gia công
@@ -157,25 +168,31 @@ export default function GiaCongPage() {
     catch (e) { show(e.message || 'In tem thất bại', 'error'); }
   };
 
+  // Chuỗi khóa ổn định của bộ lọc (đưa vào deps thay cho object — tránh vòng tải lại vô hạn).
+  const locKey = JSON.stringify(filters);
+  // Đổi tìm / lọc / ngày ⇒ về trang 1 + bỏ lựa chọn.
+  useEffect(() => { setPage(1); setSelected(new Map()); }, [search, ngay.from, ngay.to, locKey]);
+
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      // TẢI HẾT MỌI TRANG — bộ lọc chạy ở client nên phải có đủ dòng mới lọc đúng.
-      // ⚠ `getPaging` cắt `limit` còn 200; danh sách ≤200 dòng thì vòng lặp chỉ tốn 1 lời gọi.
-      const { items, total, thieu } = await taiHetTrang((p) => listGiaCong({ search, ...p }), { limit: LIMIT_TAI_LON });
-      setRows(items);
-      setMeta({ total });
-      if (thieu && !silent) show(`Mới tải được ${items.length}/${total} lệnh — hãy thu hẹp tìm kiếm`, 'error');
-      if (!silent) setSelected(new Set());
+      const res = await listGiaCong({
+        search, page, limit: PAGE,
+        tuNgay: ngay.from || undefined, denNgay: ngay.to || undefined,
+        ...Object.fromEntries(Object.entries(JSON.parse(locKey)).filter(([, v]) => v).map(([k, v]) => [`f_${k}`, v])),
+      });
+      setRows(res.data.items || []);
+      setMeta(res.data.meta || { page, totalPages: 1, total: 0 });
     } catch (e) {
       if (!silent) show(e.message || 'Lỗi tải', 'error');
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [search, show]);
+  }, [search, page, ngay.from, ngay.to, locKey, show]);
 
+  // Gõ tìm / lọc ⇒ chờ 300ms mới gọi (không bắn 1 request mỗi phím).
   useEffect(() => {
-    const t = setTimeout(load, 250);
+    const t = setTimeout(load, 300);
     return () => clearTimeout(t);
   }, [load]);
 
@@ -189,11 +206,11 @@ export default function GiaCongPage() {
   // ⚠ Không có "chọn tất cả": trần 2 dòng nên nút đó vô nghĩa.
   const chonDuoc = (r) => !r.cho_tra_lai && Number(r.con_lai) > 0;
   const toggleOne = (r) => setSelected((s) => {
-    const next = new Set(s);
+    const next = new Map(s);
     if (next.has(r._key)) next.delete(r._key);
     else {
       if (next.size >= TOI_DA_PHAN) return s; // chạm trần: ô còn lại đã bị khóa sẵn
-      next.add(r._key);
+      next.set(r._key, r);
     }
     return next;
   });
@@ -207,7 +224,7 @@ export default function GiaCongPage() {
   // Tick ≤2 dòng code phần trên bảng rồi bấm "In tem (N)" → modal nhập **SL đạt + SL hủy** từng dòng.
   // ⚠ TỐI ĐA 2 vì tờ decal chỉ có 2 khung tem — cùng ràng buộc với modal In tem của trang Sửa.
   const openInTem = () => {
-    const ds = filtered.filter((r) => selected.has(r._key))
+    const ds = [...selected.values()]
       .map((p) => ({ ...p, qty: String(Number(p.con_lai) || 0), huy: '' }));
     if (!ds.length) { show('Tích ít nhất 1 code phần để in tem', 'error'); return; }
     setInTem({ ds });
@@ -276,7 +293,7 @@ export default function GiaCongPage() {
         }
       }
       setInTem(null);
-      setSelected(new Set());
+      setSelected(new Map());
       if (loi.length) show(`Nhận hàng lỗi — ${loi.join(' · ')}`, 'error');
       else show(`Đã nhận ${nhan.length} code phần`);
       // In SAU khi đã báo kết quả: popup bị chặn thì hàng vẫn được ghi nhận, chỉ thiếu bước in
@@ -386,15 +403,16 @@ export default function GiaCongPage() {
       <Toolbar title="Gia công" subtitle="Lệnh đã release lên chuyền gia công — nhận lại hàng (có thể NHIỀU LẦN) rồi chuyển sang kiểm OQC; đủ số lượng thì lệnh mới rời màn này"
         search={search} onSearch={setSearch}
         searchPlaceholder="Tìm mã lệnh, code phần, mã hàng, màu/kích...">
+        <div title="Ngày SX kế hoạch — để trống = mọi lệnh">
+          <DateRangePicker value={ngay} onChange={setNgay} placeholder="Mọi ngày SX kế hoạch" />
+        </div>
         {/* ⚠ IN TEM = NHẬN HÀNG: tick ≤2 code phần trên bảng rồi bấm đây để nhập SL đạt/hủy và in. */}
         {canDo && selected.size > 0 && (
           <Button icon="printer" onClick={openInTem}>In tem ({selected.size})</Button>
         )}
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
         <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử chuyển</Button>
-        <Badge tone="info">
-          {activeCount ? `${filtered.length}/` : ''}{rowsPhan.length} code phần · {meta.total || rows.length} lệnh
-        </Badge>
+        <Badge tone="info">{fmtNum(meta.total || 0)} lệnh</Badge>
         <NghenButton rows={rows} trangThai={(r) => statusLenh(r.id)} onClick={() => setNghenOpen(true)} />
         <TraVeListButton onClick={() => setTraVeOpen(true)} />
       </Toolbar>
@@ -405,9 +423,10 @@ export default function GiaCongPage() {
 
       {/* ⚠ 1 DÒNG / CODE PHẦN (KHÔNG `subRows`) — `rowKey="_key"` vì nhiều dòng chung `id` lệnh.
           Dòng của lệnh gom set vẫn có VIỀN TRÁI xanh để nhìn ra chúng cùng một đợt SX. */}
-      <DataTable columns={columns} rows={filtered} loading={loading} sttStart={0} rowKey="_key"
+      <DataTable columns={columns} rows={filtered} loading={loading} sttStart={0} rowKey="_key" pageSize={0}
         rowClassName={(r) => (laGomSet(r) ? 'border-l-[3px] border-l-primary' : '')}
-        emptyText={activeCount ? 'Không có code phần nào khớp bộ lọc' : 'Không có hàng gia công nào đang chờ nhận về'} />
+        emptyText={activeCount || ngay.from || ngay.to ? 'Không có code phần nào khớp bộ lọc' : 'Không có hàng gia công nào đang chờ nhận về'} />
+      <Pagination page={page} totalPages={meta.totalPages || 1} total={meta.total} onPage={setPage} />
 
       {/* IN TEM = NHẬN HÀNG, theo TỪNG CODE PHẦN — tick tối đa 2 dòng + nhập SL rồi in tờ 2 tem. */}
       <Modal open={!!inTem} onClose={() => setInTem(null)} title="In tem hàng về — nhận theo từng code phần" size="lg">
