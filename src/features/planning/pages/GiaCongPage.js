@@ -64,6 +64,7 @@ const buildVeLabel = (r) => ({
   so_luong_don_hang: r.so_luong_don_hang,
   ten_khach_hang: r.ten_khach_hang,
   ma_don_hang: r.ma_don_hang,
+  bo_phan_bh: r.bo_phan_bh || '', // ERP `bophanbh` (01/10/2026) — BE trả ở cả dòng lệnh, code phần, lịch sử
   ma_hang: r.ma_hang,
   ma_phan: r.ma_phan,
   mau_vai: r.mau_vai,
