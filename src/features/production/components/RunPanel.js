@@ -65,11 +65,16 @@ const homNayLocal = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
-const META_MAC_DINH = () => ({ ngayCa: '', gioBd: '', gioKt: '', btpTruoc: false, btpCuoi: false, gcMauVai: '', ngayCt: homNayLocal() });
+const META_MAC_DINH = () => ({ ngayCa: '', gioBd: '', gioKt: '', btpTruoc: false, btpCuoi: false, gcMauVai: '', ngayCt: homNayLocal(), _suaGioKt: false });
+const gioHienTai = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+// ⚠⚠ "ĐẾN GIỜ" CHẠY THEO ĐỒNG HỒ tới khi người dùng TỰ SỬA (30/09/2026): bản cũ điền giờ LÚC MỞ SIDEBAR rồi
+//   đứng yên ⇒ để sidebar mở lâu rồi bấm In là gửi ERP giờ kết thúc cũ. Cờ `_suaGioKt` bật khi người dùng
+//   chọn giờ ở ô đó; chưa bật ⇒ vòng 20s + lúc bấm In đều cập nhật về giờ hiện tại (ô hiện gì = gửi nấy).
+const metaGuiDi =(m) => (m._suaGioKt ? m : { ...m, gioKt: gioHienTai() });
 
 // `anGcMauVai`: lệnh GOM SET nhập GC màu vải RIÊNG từng dòng trong bảng → ẩn ô chung ở đây cho khỏi lẫn.
 function TemMetaFields({ meta, setMeta, goiY, anGcMauVai = false }) {
-  const set = (k, v) => setMeta((m) => ({ ...m, [k]: v }));
+  const set = (k, v) => setMeta((m) => ({ ...m, [k]: v, ...(k === 'gioKt' ? { _suaGioKt: true } : {}) }));
   const chk = 'h-4 w-4 rounded border-line text-primary focus:ring-primary/30';
   const khacGoiY = goiY?.ngay_ca && meta.ngayCa && meta.ngayCa !== goiY.ngay_ca;
   return (
@@ -546,6 +551,11 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
   }, [lenhId, show]);
 
   useEffect(() => { load(); }, [load]);
+  // "Đến giờ" chưa bị người dùng sửa ⇒ nhích theo đồng hồ (xem `metaGuiDi`).
+  useEffect(() => {
+    const t = setInterval(() => setTemMeta((m) => (m._suaGioKt || m.gioKt === gioHienTai() ? m : metaGuiDi(m))), 20000);
+    return () => clearInterval(t);
+  }, []);
   // Tài khoản cho ô "Ca trưởng" (dùng /users/options — chỉ cần đăng nhập, không đòi USER_VIEW).
   useEffect(() => {
     listUserOptions({ limit: 500 })
@@ -584,7 +594,7 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
   const doPrint = async () => {
     setBusy(true);
     try {
-      const res = await printTem(phieu.id, Number(soLuong), temMeta);
+      const res = await printTem(phieu.id, Number(soLuong), metaGuiDi(temMeta));
       show(chiLuu
         ? `Đã lưu ${fmtNum(soLuong)} (BTP trước — không in tem) — tự đưa vào xe phơi, đang đếm ngược`
         : `Đã in tem ${fmtNum(soLuong)} — tự đưa vào xe phơi, đang đếm ngược`);
@@ -607,7 +617,7 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
   const doPrintRow = async (item) => {
     setBusy(true);
     try {
-      const res = await printTemBatch(phieu.id, [item], temMeta);
+      const res = await printTemBatch(phieu.id, [item], metaGuiDi(temMeta));
       const t = (res.data?.tems_in || [])[0];
       if (t) {
         show(chiLuu
