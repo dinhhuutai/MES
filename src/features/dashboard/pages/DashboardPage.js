@@ -3,6 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelL
 import Icon from '../../../components/common/Icon';
 import Badge from '../../../components/common/Badge';
 import Toast from '../../../components/common/Toast';
+import Spinner from '../../../components/common/Spinner';
 import SidePanel from '../../../components/common/SidePanel';
 import KcsBreakdown from '../../../components/common/KcsBreakdown';
 import BangTheoDoi from '../components/BangTheoDoi';
@@ -26,15 +27,19 @@ const STATION_BUCKETS = [
 const NUM_LABEL = { fontSize: 11, fill: '#374151', fontWeight: 600 };
 const AXIS_TICK = { fontSize: 11, fill: '#6b7280' };
 
-// Card chứa 1 biểu đồ.
-function ChartCard({ title, children }) {
+// Card chứa 1 biểu đồ. `dangTai` = dữ liệu của RIÊNG card này chưa về ⇒ giữ khung + spinner (trang
+// hiện dần từng phần, 01/10/2026 — không còn chờ đủ mọi API mới vẽ).
+function ChartCard({ title, children, dangTai = false }) {
   return (
     <div className="card p-5">
       <h3 className="mb-4 text-sm font-semibold text-ink">{title}</h3>
-      {children}
+      {dangTai ? <div className="flex h-[300px] items-center justify-center"><Spinner size={22} /></div> : children}
     </div>
   );
 }
+
+// Ô số đang chờ dữ liệu — vạch nhấp nháy thay vì số 0 (0 thật và "chưa tải" phải nhìn khác nhau).
+const SoCho = () => <span className="inline-block h-6 w-10 animate-pulse rounded bg-surface-muted align-middle" />;
 
 // Biểu đồ cột 1 chuỗi (có số trên đầu cột). data: [{name, value, color?}].
 function SingleBar({ data, height = 300, color = '#0058be', unit = '', angle = -20 }) {
@@ -323,9 +328,12 @@ function PhanInRow({ p, tone, onClick }) {
 }
 
 // Panel chi tiết 1 giai đoạn (bấm ô Tổng quan / Chi tiết giai đoạn).
+// `bang2` ở đây là bản ĐẦY ĐỦ (có `phan_ins`) — tải lười khi mở panel; null = đang tải.
 function StageDetailPanel({ stage, bang2, hoanThanhDetail, chartDetail, onClose }) {
   const [phanIn, setPhanIn] = useState(null);
+  const dangTaiDs = !bang2;
   const collect = (groups) => (groups || []).filter((g) => stage.trams?.includes(g.ma_tram)).flatMap((g) => g.phan_ins || []);
+  // (danh sách nghẽn/sắp nghẽn chỉ có ở bản đầy đủ — `dangTaiDs` thì hiện spinner thay vì "không có")
   const nghen = collect(bang2?.nhom_nghen);
   const sap = collect(bang2?.nhom_sap);
   const homNay = (hoanThanhDetail || []).filter((r) => stage.hn?.includes(r.nhom));
@@ -379,6 +387,7 @@ function StageDetailPanel({ stage, bang2, hoanThanhDetail, chartDetail, onClose 
               ]} />
             </div>
           )}
+          {dangTaiDs && <div className="flex justify-center py-6"><Spinner size={20} /></div>}
           {nghen.length > 0 && (
             <div>
               <div className="mb-1.5 text-xs font-bold uppercase tracking-wide text-danger">Đang nghẽn ({nghen.length})</div>
@@ -397,7 +406,7 @@ function StageDetailPanel({ stage, bang2, hoanThanhDetail, chartDetail, onClose 
               <ConfirmList rows={homNay} onPick={setPhanIn} />
             </div>
           )}
-          {empty && !isOqc && !isReady && <p className="text-sm text-ink-soft">Giai đoạn này chưa có phần in nghẽn/sắp nghẽn hay xác nhận hôm nay.</p>}
+          {empty && !dangTaiDs && !isOqc && !isReady && <p className="text-sm text-ink-soft">Giai đoạn này chưa có phần in nghẽn/sắp nghẽn hay xác nhận hôm nay.</p>}
         </div>
       )}
     </SidePanel>
@@ -410,7 +419,7 @@ function Bang2Panel({ kind, data, hoanThanhDetail, onClose }) {
   const [htGroup, setHtGroup] = useState(null);
   const [phanIn, setPhanIn] = useState(null);
   const isHT = kind === 'hoan_thanh';
-  const groups = kind === 'NGHEN' ? data.nhom_nghen : kind === 'SAP_NGHEN' ? data.nhom_sap : [];
+  const groups = (kind === 'NGHEN' ? data?.nhom_nghen : kind === 'SAP_NGHEN' ? data?.nhom_sap : []) || [];
   const rowTone = kind === 'NGHEN' ? 'bg-rose-50 dark:bg-rose-950/30' : 'bg-amber-50 dark:bg-amber-950/30';
   const baseTitle = isHT ? 'Hoàn thành hôm nay' : kind === 'NGHEN' ? 'Phần in nghẽn' : 'Phần in sắp nghẽn';
 
@@ -420,6 +429,15 @@ function Bang2Panel({ kind, data, hoanThanhDetail, onClose }) {
   else if (htGroup) { title = htGroup; back = () => setHtGroup(null); }
 
   const htItems = htGroup ? (hoanThanhDetail || []).filter((r) => r.nhom === htGroup) : [];
+
+  // `data` = bản ĐẦY ĐỦ của /bang-2 (tải lười khi mở panel) — chưa về thì chờ, đừng vẽ "không có".
+  if (!data) {
+    return (
+      <SidePanel open onClose={onClose} title={baseTitle} width="max-w-2xl">
+        <div className="flex justify-center py-10"><Spinner size={22} /></div>
+      </SidePanel>
+    );
+  }
 
   return (
     <SidePanel open onClose={onClose} title={title} width="max-w-2xl" subtitle={back ? undefined : baseTitle}>
@@ -448,7 +466,7 @@ function Bang2Panel({ kind, data, hoanThanhDetail, onClose }) {
         : group ? (
           <div>
             <div className="space-y-1.5">
-              {group.phan_ins.map((p) => (
+              {(group.phan_ins || []).map((p) => (
                 <PhanInRow key={p.phan_in_id} p={p} tone={rowTone} onClick={() => setPhanIn({ id: p.phan_in_id, ma_phan: p.ma_phan })} />
               ))}
             </div>
@@ -514,6 +532,15 @@ function TreHanPanel({ data, initKind, initTram, onClose }) {
     </button>
   );
 
+  // `data` = `tre_han` của bản ĐẦY ĐỦ /dieu-phoi (tải lười khi mở panel) — chưa về thì chờ.
+  if (!data) {
+    return (
+      <SidePanel open onClose={onClose} title={title} width="max-w-2xl">
+        <div className="flex justify-center py-10"><Spinner size={22} /></div>
+      </SidePanel>
+    );
+  }
+
   return (
     <SidePanel open onClose={onClose} title={title} width="max-w-2xl"
       subtitle={back ? undefined : 'Theo trạm đang kẹt — ưu tiên đẩy hàng'}>
@@ -562,6 +589,14 @@ const SLA_TEXT = { NGHEN: 'Nghẽn', SAP_NGHEN: 'Sắp nghẽn', OK: 'Đúng SLA
 function CheckpointDrillPanel({ drill, flow, tramToBucket, bucketOrder, bucketOwners, onClose }) {
   if (!drill) return null;
   const { name, seg } = drill;
+  // `flow` (~4 MB) tải LƯỜI khi mở panel này (01/10/2026) ⇒ null = đang tải.
+  if (flow == null) {
+    return (
+      <SidePanel open onClose={onClose} title={name} width="max-w-2xl">
+        <div className="flex justify-center py-10"><Spinner size={22} /></div>
+      </SidePanel>
+    );
+  }
   const bIdx = bucketOrder[name] ?? 99;
   const cpOwner = (bucketOwners || {})[name] || {}; // owner mức checkpoint (gộp bucket)
   const reason = (r) => {
@@ -632,34 +667,60 @@ export default function DashboardPage() {
   const [htDetail, setHtDetail] = useState([]);
   const [chartDetail, setChartDetail] = useState(null); // OQC + READY breakdown
   const [dieuPhoi, setDieuPhoi] = useState(null); // trễ hạn + chờ duyệt + chuyền
-  const [flow, setFlow] = useState([]);           // dòng chảy per đợt vải (drill checkpoint)
+  const [flow, setFlow] = useState(null);         // dòng chảy per đợt vải (drill checkpoint) — tải LƯỜI
   const [owners, setOwners] = useState(null);     // owner theo trạm/checklist (Hệ thống > Owner)
   const [drill, setDrill] = useState(null);       // chip toàn cục
   const [treHan, setTreHan] = useState(null);     // panel trễ hạn giao
   const [stageDetail, setStageDetail] = useState(null); // ô giai đoạn
   const [cpDrill, setCpDrill] = useState(null);   // drill "Tiến độ phần in theo checkpoint" (kẹt gì/ai xử lý)
-  const [loading, setLoading] = useState(true);
+  // Khóa nguồn ĐÃ có kết quả (thành công HAY lỗi) — phần nào có dữ liệu thì vẽ phần đó.
+  const [daTai, setDaTai] = useState({});
 
-  const load = useCallback(async () => {
-    const [sc, act, b2, ht, cd, dp, fl, ow] = await Promise.allSettled([
-      getStageCounts(), getActivity(), getBang2(), getHoanThanhHomNay(), getChartDetail(), getDieuPhoi(), getFlow({}), getFlowOwners(),
-    ]);
-    if (sc.status === 'fulfilled') setStages(sc.value.data);
-    else show(sc.reason?.message || 'Lỗi tải giai đoạn', 'error');
-    if (act.status === 'fulfilled') setActivity(act.value.data);
-    if (b2.status === 'fulfilled') setBang2(b2.value.data);
-    if (ht.status === 'fulfilled') setHtDetail(ht.value.data);
-    if (cd.status === 'fulfilled') setChartDetail(cd.value.data);
-    if (dp.status === 'fulfilled') setDieuPhoi(dp.value.data);
-    if (fl.status === 'fulfilled') setFlow(fl.value.data || []);
-    if (ow.status === 'fulfilled') setOwners(ow.value.data || null);
-    setLoading(false);
+  // ⚠⚠ HIỆN DẦN TỪNG PHẦN (01/10/2026). Bản cũ `await Promise.allSettled(8 API)` rồi mới bỏ màn
+  //   "Đang tải..." ⇒ trang trắng tới khi API CHẬM NHẤT xong (đo prod: stage-counts 8–13 s, trong khi
+  //   activity/owners < 1 s). Nay mỗi nguồn tự `set` khi về; khối nào thiếu dữ liệu thì giữ khung chờ.
+  // ⚠ Lỗi một nguồn vẫn đánh dấu `daTai` (không để spinner quay mãi); dữ liệu cũ giữ nguyên khi tải lại.
+  // ⚠ `flow` (~4 MB, đo prod) KHÔNG còn tải ở đây — chỉ panel drill checkpoint cần, tải khi mở (`moCpDrill`).
+  const load = useCallback(() => {
+    const chay = (k, fn, set) => fn()
+      .then((r) => set(r.data))
+      .catch((e) => { if (k === 'stages') show(e.message || 'Lỗi tải giai đoạn', 'error'); })
+      .finally(() => setDaTai((s) => (s[k] ? s : { ...s, [k]: true })));
+    chay('stages', getStageCounts, setStages);
+    chay('activity', getActivity, (d) => setActivity(d || []));
+    // Bản GỌN (chỉ số đếm) — danh sách phần in (~1 MB mỗi API trên prod) tải khi mở panel drill.
+    chay('bang2', () => getBang2({ gon: 1 }), setBang2);
+    chay('ht', getHoanThanhHomNay, (d) => setHtDetail(d || []));
+    chay('chart', getChartDetail, setChartDetail);
+    chay('dieuPhoi', () => getDieuPhoi({ gon: 1 }), setDieuPhoi);
+    chay('owners', getFlowOwners, (d) => setOwners(d || null));
   }, [show]);
 
   useEffect(() => { load(); }, [load]);
-  // ⚠ Gộp sự kiện: `load` bắn 8 request song song rồi thay toàn bộ state ⇒ mọi biểu đồ vẽ lại.
-  // Backend emit `dashboard:refresh` theo cụm nên không gộp là vẽ lại 2-3 lần cho 1 thao tác.
+  // ⚠ Gộp sự kiện: backend emit `dashboard:refresh` theo cụm nên không gộp là tải lại 2-3 lần cho 1 thao tác.
   useSocketReload(['dashboard:refresh'], load, 600);
+
+  // Mở drill checkpoint ⇒ tải `flow` lúc đó (luôn lấy bản mới; bản cũ vẫn hiện trong lúc chờ).
+  const moCpDrill = useCallback((x) => {
+    setCpDrill(x);
+    getFlow({}).then((r) => setFlow(r.data || [])).catch(() => setFlow((f) => f || []));
+  }, []);
+  // Bản ĐẦY ĐỦ của /bang-2 · /dieu-phoi (có danh sách phần in) — tải mỗi lần mở panel drill.
+  // ⚠ Lỗi ⇒ lùi về object rỗng đúng hình (không để panel quay spinner mãi).
+  const [bang2Day, setBang2Day] = useState(null);
+  const [dieuPhoiDay, setDieuPhoiDay] = useState(null);
+  const taiBang2Day = useCallback(() => {
+    getBang2().then((r) => setBang2Day(r.data))
+      .catch(() => setBang2Day((b) => b || { nhom_nghen: [], nhom_sap: [], nhom_hoan_thanh: [] }));
+  }, []);
+  const taiDieuPhoiDay = useCallback(() => {
+    getDieuPhoi().then((r) => setDieuPhoiDay(r.data))
+      .catch(() => setDieuPhoiDay((d) => d || { tre_han: { qua_han: 0, sap_han: 0, by_tram: [] } }));
+  }, []);
+  const moDrill = useCallback((k) => { setDrill(k); taiBang2Day(); }, [taiBang2Day]);
+  const moStageDetail = useCallback((x) => { setStageDetail(x); taiBang2Day(); }, [taiBang2Day]);
+  const moTreHan = useCallback((x) => { setTreHan(x); taiDieuPhoiDay(); }, [taiDieuPhoiDay]);
+  const co = (k) => !!daTai[k];
 
   const nghenByTram = useMemo(() => Object.fromEntries((bang2?.nhom_nghen || []).map((g) => [g.ma_tram, g.count])), [bang2]);
   const sapByTram = useMemo(() => Object.fromEntries((bang2?.nhom_sap || []).map((g) => [g.ma_tram, g.count])), [bang2]);
@@ -795,8 +856,6 @@ export default function DashboardPage() {
     name: g.ten_tram || g.ma_tram, ma_tram: g.ma_tram, qua_han: g.qua_han, sap_han: g.sap_han,
   })), [dieuPhoi]);
 
-  if (loading) return <div className="py-10 text-center text-ink-soft">Đang tải...</div>;
-
   const sumBy = (arr, map) => (arr || []).reduce((a, k) => a + (map[k] || 0), 0);
   // ✓ hôm nay = số PHẦN IN distinct đã xác nhận trong giai đoạn (không cộng dồn từng lượt checklist).
   const homNayDistinct = (hn) => {
@@ -808,7 +867,11 @@ export default function DashboardPage() {
   };
   const cellMetrics = (c) => ({ nghen: sumBy(c.trams, nghenByTram), sap: sumBy(c.trams, sapByTram), homNay: homNayDistinct(c.hn) });
   const sumSub = (subs, field) => (subs || []).reduce((a, k) => a + (stages?.stages?.[k]?.[field] || 0), 0);
-  const openStage = (c) => setStageDetail({ label: c.label, trams: c.trams, hn: c.hn });
+  const openStage = (c) => moStageDetail({ label: c.label, trams: c.trams, hn: c.hn });
+  // Nguồn mà từng nhóm biểu đồ cần đủ mới vẽ (vẽ thiếu nguồn là ra số sai — vd "đúng SLA" phình to
+  // khi chưa có số nghẽn).
+  const coNhipDo = co('stages') && co('chart') && co('ht');
+  const coTienDo = coNhipDo && co('bang2');
 
   return (
     <div>
@@ -848,17 +911,20 @@ export default function DashboardPage() {
         };
         return (
           <div className="mb-5 flex flex-wrap gap-2.5">
-            <KpiCard tone="rose" icon="🔴" label="Trễ hạn giao" value={fmtNum(dieuPhoi?.tre_han?.qua_han || 0)}
-              sub="đã quá hạn, chưa giao" onClick={() => setTreHan({ kind: 'qua' })} />
-            <KpiCard tone="amber" icon="🟡" label="Sắp đến hạn" value={fmtNum(dieuPhoi?.tre_han?.sap_han || 0)}
-              sub="hôm nay & ngày mai" onClick={() => setTreHan({ kind: 'sap' })} />
-            <KpiCard tone="rose" icon="⚠" label="Nghẽn (quá SLA)" value={fmtNum(bang2?.nghen || 0)} onClick={() => setDrill('NGHEN')} />
-            <KpiCard tone="amber" icon="⏳" label="Sắp nghẽn" value={fmtNum(bang2?.sap_nghen || 0)} onClick={() => setDrill('SAP_NGHEN')} />
-            <KpiCard tone="violet" icon="📝" label="Chờ duyệt / xử lý" value={fmtNum(choDuyet)}
+            <KpiCard tone="rose" icon="🔴" label="Trễ hạn giao" value={co('dieuPhoi') ? fmtNum(dieuPhoi?.tre_han?.qua_han || 0) : <SoCho />}
+              sub="đã quá hạn, chưa giao" onClick={dieuPhoi ? () => moTreHan({ kind: 'qua' }) : undefined} />
+            <KpiCard tone="amber" icon="🟡" label="Sắp đến hạn" value={co('dieuPhoi') ? fmtNum(dieuPhoi?.tre_han?.sap_han || 0) : <SoCho />}
+              sub="hôm nay & ngày mai" onClick={dieuPhoi ? () => moTreHan({ kind: 'sap' }) : undefined} />
+            <KpiCard tone="rose" icon="⚠" label="Nghẽn (quá SLA)" value={co('bang2') ? fmtNum(bang2?.nghen || 0) : <SoCho />}
+              onClick={bang2 ? () => moDrill('NGHEN') : undefined} />
+            <KpiCard tone="amber" icon="⏳" label="Sắp nghẽn" value={co('bang2') ? fmtNum(bang2?.sap_nghen || 0) : <SoCho />}
+              onClick={bang2 ? () => moDrill('SAP_NGHEN') : undefined} />
+            <KpiCard tone="violet" icon="📝" label="Chờ duyệt / xử lý" value={co('stages') && co('dieuPhoi') ? fmtNum(choDuyet) : <SoCho />}
               sub={`Release 2: ${fmtNum(release2)} · QC trả về: ${fmtNum(cd.qc_tra_ve || 0)} · OQC lỗi: ${fmtNum(cd.oqc_khong_dat || 0)}`} />
-            <KpiCard tone="sky" icon="🏭" label="Chuyền đang chạy" value={`${fmtNum(ch.dang_chay || 0)}/${fmtNum(ch.tong || 0)}`}
+            <KpiCard tone="sky" icon="🏭" label="Chuyền đang chạy" value={co('dieuPhoi') ? `${fmtNum(ch.dang_chay || 0)}/${fmtNum(ch.tong || 0)}` : <SoCho />}
               sub={`Rảnh: ${fmtNum(ch.ranh || 0)} chuyền`} />
-            <KpiCard tone="emerald" icon="✅" label="Hoàn tất hôm nay" value={fmtNum(bang2?.hoan_thanh_hom_nay || 0)} onClick={() => setDrill('hoan_thanh')} />
+            <KpiCard tone="emerald" icon="✅" label="Hoàn tất hôm nay" value={co('bang2') ? fmtNum(bang2?.hoan_thanh_hom_nay || 0) : <SoCho />}
+              onClick={bang2 ? () => moDrill('hoan_thanh') : undefined} />
           </div>
         );
       })()}
@@ -877,14 +943,14 @@ export default function DashboardPage() {
           if (c.type === 'total') {
             return (
               <div key={c.key} className="card p-3 text-center">
-                <div className="text-2xl font-bold text-ink tabular-nums">{fmtNum(stages?.totals?.[c.key] || 0)}</div>
+                <div className="text-2xl font-bold text-ink tabular-nums">{co('stages') ? fmtNum(stages?.totals?.[c.key] || 0) : <SoCho />}</div>
                 <div className="text-xs text-ink-soft">{c.label}</div>
               </div>
             );
           }
           return (
             <button key={c.label} type="button" onClick={() => openStage(c)} className="card p-3 text-center transition hover:shadow-card-hover">
-              <div className="text-2xl font-bold text-primary tabular-nums">{fmtNum(sumSub(c.sub, 'phan_in'))}</div>
+              <div className="text-2xl font-bold text-primary tabular-nums">{co('stages') ? fmtNum(sumSub(c.sub, 'phan_in')) : <SoCho />}</div>
               <div className="text-xs font-medium text-ink">{c.label}</div>
               {c.pcs ? <div className="text-[11px] text-ink-soft">{fmtNum(sumSub(c.sub, 'pcs'))} pcs</div> : null}
               <CellBadges {...cellMetrics(c)} />
@@ -908,7 +974,7 @@ export default function DashboardPage() {
           const showTem = st.so_tem != null;
           return (
             <button key={c.key} type="button" onClick={() => openStage(c)} className="card p-3 text-center transition hover:shadow-card-hover">
-              <div className="text-2xl font-bold text-primary tabular-nums">{fmtNum(st.phan_in)}</div>
+              <div className="text-2xl font-bold text-primary tabular-nums">{co('stages') ? fmtNum(st.phan_in) : <SoCho />}</div>
               <div className="text-xs font-medium text-ink">{c.label}</div>
               <div className="text-[11px] text-ink-soft">
                 {fmtNum(st.ma)} mã{showTem ? ` · ${fmtNum(st.so_tem)} tem` : ''}{st.pcs ? ` · ${fmtNum(st.pcs)} pcs` : ''}
@@ -921,7 +987,8 @@ export default function DashboardPage() {
 
       {/* ===== CHI TIẾT 2 CHECKPOINT: READY & SẢN XUẤT — mỗi mục 3 cột Tổng/Đã xong/Nghẽn (đường vàng = tổng phần in) ===== */}
       <div className="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <ChartCard title={`Chi tiết READY (Film / Khuôn / Mực) · đường vàng = tổng phần in (${fmtNum(tongPhanIn)})`}>
+        <ChartCard title={`Chi tiết READY (Film / Khuôn / Mực) · đường vàng = tổng phần in (${fmtNum(tongPhanIn)})`}
+          dangTai={!co('chart') || !co('bang2') || !co('stages')}>
           <GroupBar data={readySubData} unit="phần in" height={320}
             refLine={{ value: tongPhanIn, label: `Tổng ${fmtNum(tongPhanIn)}` }}
             series={[
@@ -931,7 +998,8 @@ export default function DashboardPage() {
             ]} />
         </ChartCard>
 
-        <ChartCard title={`Chi tiết Sản xuất (Chờ SX / Sản xuất / KCS / Sửa) · đường vàng = tổng phần in (${fmtNum(tongPhanIn)})`}>
+        <ChartCard title={`Chi tiết Sản xuất (Chờ SX / Sản xuất / KCS / Sửa) · đường vàng = tổng phần in (${fmtNum(tongPhanIn)})`}
+          dangTai={!co('stages') || !co('bang2')}>
           <GroupBar data={sanXuatSubData} unit="phần in" height={320}
             refLine={{ value: tongPhanIn, label: `Tổng ${fmtNum(tongPhanIn)}` }}
             series={[
@@ -944,9 +1012,10 @@ export default function DashboardPage() {
 
       {/* ===== BẢNG ĐIỀU PHỐI — 4 biểu đồ hành động (2/hàng); Hoạt động gần đây cuối cùng ===== */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <ChartCard title="Tiến độ phần in theo checkpoint  ·  Tổng = Đã đi qua + Đúng SLA + Sắp nghẽn + Nghẽn (bấm mảng để xem chi tiết)">
+        <ChartCard title="Tiến độ phần in theo checkpoint  ·  Tổng = Đã đi qua + Đúng SLA + Sắp nghẽn + Nghẽn (bấm mảng để xem chi tiết)"
+          dangTai={!coTienDo}>
           <StackedBar data={checkpointProgressData} unit="phần in" height={340}
-            onBarClick={(d, seg) => setCpDrill({ name: d?.name, seg })}
+            onBarClick={(d, seg) => moCpDrill({ name: d?.name, seg })}
             series={[
               { key: 'da_xong', label: 'Đã đi qua', color: '#94a3b8' },
               { key: 'dung_sla', label: 'Đang xử lý (đúng SLA)', color: '#22c55e', labelFill: '#052e16' },
@@ -960,10 +1029,11 @@ export default function DashboardPage() {
         </ChartCard>
 
         {/* Biểu đồ CŨ (cột nhóm) — giữ lại theo yêu cầu; bấm cột mở StageDetailPanel. */}
-        <ChartCard title={`Tiến độ phần in theo checkpoint (cột nhóm)  ·  đường vàng = tổng phần in (${fmtNum(tongPhanIn)})`}>
+        <ChartCard title={`Tiến độ phần in theo checkpoint (cột nhóm)  ·  đường vàng = tổng phần in (${fmtNum(tongPhanIn)})`}
+          dangTai={!coTienDo}>
           <GroupBar data={checkpointProgressData} unit="phần in" height={340}
             refLine={{ value: tongPhanIn, label: `Tổng ${fmtNum(tongPhanIn)}` }}
-            onBarClick={(d) => { const b = STATION_BUCKETS.find((x) => x.label === d?.name); if (b) setStageDetail({ label: b.label, trams: b.trams, hn: [] }); }}
+            onBarClick={(d) => { const b = STATION_BUCKETS.find((x) => x.label === d?.name); if (b) moStageDetail({ label: b.label, trams: b.trams, hn: [] }); }}
             series={[
               { key: 'tong', label: 'Tổng (đã xong + đang ở)', color: '#94a3b8' },
               { key: 'da_xong', label: 'Đã xong', color: '#22c55e' },
@@ -971,45 +1041,46 @@ export default function DashboardPage() {
             ]} />
         </ChartCard>
 
-        <ChartCard title={`Phần in đã xong theo checkpoint  ·  đường vàng = tổng phần in (${fmtNum(tongPhanIn)})`}>
+        <ChartCard title={`Phần in đã xong theo checkpoint  ·  đường vàng = tổng phần in (${fmtNum(tongPhanIn)})`}
+          dangTai={!coTienDo}>
           <SingleBarRef data={checkpointProgressData.map((d) => ({ name: d.name, value: d.da_xong }))}
             refValue={tongPhanIn} unit="phần in" />
         </ChartCard>
 
-        <ChartCard title="Nghẽn & Sắp nghẽn theo trạm  ·  bấm cột để xem chi tiết">
-          <GroupBar data={nghenSapData} unit="phần in" onBarClick={() => setDrill('NGHEN')} series={[
+        <ChartCard title="Nghẽn & Sắp nghẽn theo trạm  ·  bấm cột để xem chi tiết" dangTai={!co('bang2')}>
+          <GroupBar data={nghenSapData} unit="phần in" onBarClick={() => moDrill('NGHEN')} series={[
             { key: 'nghen', label: 'Nghẽn (quá SLA)', color: '#ef4444' },
             { key: 'sap', label: 'Sắp nghẽn', color: '#f59e0b' },
           ]} />
         </ChartCard>
 
-        <ChartCard title="Trễ hạn giao theo trạm đang kẹt  ·  bấm cột để xem đơn">
+        <ChartCard title="Trễ hạn giao theo trạm đang kẹt  ·  bấm cột để xem đơn" dangTai={!co('dieuPhoi')}>
           <GroupBar data={treHanData} unit="phần in"
-            onBarClick={(d) => setTreHan({ kind: 'qua', maTram: d?.ma_tram })} series={[
+            onBarClick={(d) => moTreHan({ kind: 'qua', maTram: d?.ma_tram })} series={[
               { key: 'qua_han', label: 'Đã trễ hạn', color: '#e11d48' },
               { key: 'sap_han', label: 'Sắp đến hạn', color: '#f59e0b' },
             ]} />
         </ChartCard>
 
-        <ChartCard title="Tải sản xuất — phần in đang ở từng khâu">
+        <ChartCard title="Tải sản xuất — phần in đang ở từng khâu" dangTai={!co('stages')}>
           <SingleBar data={wipData} unit="phần in" angle={0} />
         </ChartCard>
 
-        <ChartCard title="Nhịp độ hôm nay theo trạm">
+        <ChartCard title="Nhịp độ hôm nay theo trạm" dangTai={!coNhipDo}>
           <GroupBar data={confirmStationData} unit="phần in" series={[
             { key: 'hom_nay', label: 'Hoàn tất hôm nay', color: '#22c55e' },
             { key: 'chua_giao', label: 'Đã qua, chưa giao', color: '#0058be' },
           ]} />
         </ChartCard>
 
-        <ChartCard title="Đang ở trạm vs Đã chuyển đi hôm nay">
+        <ChartCard title="Đang ở trạm vs Đã chuyển đi hôm nay" dangTai={!coNhipDo}>
           <GroupBar data={confirmStationData} unit="phần in" series={[
             { key: 'dang_o', label: 'Đang ở trạm', color: '#0058be' },
             { key: 'hom_nay', label: 'Đã chuyển đi hôm nay', color: '#22c55e' },
           ]} />
         </ChartCard>
 
-        <ChartCard title="Hoạt động gần đây">
+        <ChartCard title="Hoạt động gần đây" dangTai={!co('activity')}>
           <div className="max-h-[420px] space-y-3 overflow-y-auto pr-1">
             {activity.length === 0 && <p className="text-sm text-ink-soft">Chưa có hoạt động.</p>}
             {activity.map((a) => (
@@ -1025,9 +1096,10 @@ export default function DashboardPage() {
         </ChartCard>
       </div>
 
-      {drill && bang2 && <Bang2Panel kind={drill} data={bang2} hoanThanhDetail={htDetail} onClose={() => setDrill(null)} />}
-      {stageDetail && <StageDetailPanel stage={stageDetail} bang2={bang2} hoanThanhDetail={htDetail} chartDetail={chartDetail} onClose={() => setStageDetail(null)} />}
-      {treHan && dieuPhoi && <TreHanPanel data={dieuPhoi.tre_han} initKind={treHan.kind} initTram={treHan.maTram} onClose={() => setTreHan(null)} />}
+      {/* Panel drill đọc bản ĐẦY ĐỦ (`*Day`, tải lười khi mở) — null thì panel tự hiện spinner. */}
+      {drill && <Bang2Panel kind={drill} data={bang2Day} hoanThanhDetail={htDetail} onClose={() => setDrill(null)} />}
+      {stageDetail && <StageDetailPanel stage={stageDetail} bang2={bang2Day} hoanThanhDetail={htDetail} chartDetail={chartDetail} onClose={() => setStageDetail(null)} />}
+      {treHan && <TreHanPanel data={dieuPhoiDay?.tre_han} initKind={treHan.kind} initTram={treHan.maTram} onClose={() => setTreHan(null)} />}
       {cpDrill && <CheckpointDrillPanel drill={cpDrill} flow={flow} tramToBucket={tramToBucket} bucketOrder={bucketOrder} bucketOwners={bucketOwners} onClose={() => setCpDrill(null)} />}
       <Toast toast={toast} />
     </div>

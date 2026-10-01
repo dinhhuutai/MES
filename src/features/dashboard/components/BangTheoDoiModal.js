@@ -26,10 +26,17 @@ const TABS = [
   { v: 'xong', label: 'Xong' },
   { v: 'ton_cuoi', label: 'Tồn cuối' },
   { v: 'nghen', label: 'Nghẽn' },
+  // 01/10/2026 — "Kết quả xử lý" của cụm Nghẽn: Nghẽn = đã xác nhận + chưa xác nhận.
+  { v: 'nghen_xong', label: 'Nghẽn · đã xác nhận' },
+  { v: 'nghen_chua', label: 'Nghẽn · chưa xác nhận' },
 ];
-const CO = { ton_dau: 'o_ton_dau', nhan: 'o_nhan', xong: 'o_xong', ton_cuoi: 'o_ton_cuoi', nghen: 'o_nghen' };
+const CO = {
+  ton_dau: 'o_ton_dau', nhan: 'o_nhan', xong: 'o_xong', ton_cuoi: 'o_ton_cuoi', nghen: 'o_nghen',
+  nghen_xong: 'o_nghen_xong', nghen_chua: 'o_nghen_chua',
+};
 
 const trangThai = (r) => {
+  if (r.o_nghen_xong) return { ten: 'Nghẽn · đã xác nhận', tone: 'warning' };
   if (r.o_nghen) return { ten: 'Nghẽn', tone: 'danger' };
   if (r.o_ton_cuoi) return { ten: 'Đang tồn (trong hạn)', tone: 'warning' };
   if (r.o_xong) return { ten: 'Đã xong', tone: 'success' };
@@ -93,7 +100,7 @@ export default function BangTheoDoiModal({ open, onClose, dong, range, oMacDinh 
         r.ma_lenh_san_xuat, r.ma_tem, r.ten_chuyen, lyDoCua(r)?.ly_do].filter(Boolean).join(' '), tim));
     }
     // Nghẽn lâu nhất lên đầu ở toggle Nghẽn; còn lại giữ thứ tự backend (vào trạm mới nhất trước).
-    if (o === 'nghen') x = [...x].sort((a, b) => (b.phut_nghen || 0) - (a.phut_nghen || 0));
+    if (o.startsWith('nghen')) x = [...x].sort((a, b) => (b.phut_nghen || 0) - (a.phut_nghen || 0));
     return x;
   }, [items, o, tim, lyDoCua]);
 
@@ -111,7 +118,7 @@ export default function BangTheoDoiModal({ open, onClose, dong, range, oMacDinh 
         fileName: `bang-theo-doi-${(ma || '').toLowerCase()}`,
         rows: ds,
         cols: [
-          { header: 'Trạng thái', width: 18, value: (r) => trangThai(r).ten, red: (r) => !!r.o_nghen },
+          { header: 'Trạng thái', width: 22, value: (r) => trangThai(r).ten, red: (r) => !!r.o_nghen_chua },
           { header: 'Khách hàng', value: (r) => r.ten_khach_hang },
           { header: 'Đơn hàng', value: (r) => r.ma_don_hang },
           { header: 'Mã hàng', value: (r) => r.ma_hang },
@@ -183,7 +190,7 @@ export default function BangTheoDoiModal({ open, onClose, dong, range, oMacDinh 
                   const tt = trangThai(r);
                   const ld = lyDoCua(r);
                   return (
-                    <tr key={`${r.id}-${i}`} className={`border-t border-line ${r.o_nghen ? 'bg-rose-50/60 dark:bg-rose-950/20' : ''}`}>
+                    <tr key={`${r.id}-${i}`} className={`border-t border-line ${r.o_nghen_chua ? 'bg-rose-50/60 dark:bg-rose-950/20' : ''}`}>
                       <td className={`${TD} tabular-nums text-ink-soft`}>{i + 1}</td>
                       <td className={TD}>
                         <Badge tone={tt.tone} className="whitespace-nowrap">{tt.ten}</Badge>
@@ -214,7 +221,7 @@ export default function BangTheoDoiModal({ open, onClose, dong, range, oMacDinh 
                             <div className="text-ink">{ld.ly_do}</div>
                             <div className="text-[10px] text-ink-soft">{ld.nguoi || '—'} · {fmtDateTime(ld.created_date)}</div>
                           </>
-                        ) : <span className="text-ink-soft">{r.o_nghen ? 'Chưa có lý do' : '—'}</span>}
+                        ) : <span className="text-ink-soft">{r.o_nghen_chua ? 'Chưa có lý do' : '—'}</span>}
                       </td>
                       <td className={`${TD} min-w-[9rem]`}>
                         <div className="text-ink">{ctn}</div>

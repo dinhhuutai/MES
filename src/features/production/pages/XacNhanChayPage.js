@@ -255,11 +255,10 @@ export default function XacNhanChayPage() {
         <Button chiXemOk variant={showFilter || hasFilter ? 'secondary' : 'ghost'} icon="filter" onClick={() => setShowFilter((v) => !v)}>
           Bộ lọc{hasFilter ? ' ●' : ''}
         </Button>
-        {/* Nghẽn gộp Đang chạy + Chờ chạy. Chip "Tất cả" ⇒ ẨN nút (26/09/2026). */}
-        {loai && (
-          <NghenButton rows={locTheoChip(rowsNghen)} trangThai={(r) => statusLenh(r.lenh_id)}
-            onClick={() => setNghenOpen(true)} />
-        )}
+        {/* Nghẽn gộp Đang chạy + Chờ chạy. Hiện ở MỌI chip (01/10/2026 — gỡ luật ẩn ở "Tất cả" của 26/09);
+            đếm đúng chip đang đứng, modal mở sẵn chip đó. */}
+        <NghenButton rows={locTheoChip(rowsNghen)} trangThai={(r) => statusLenh(r.lenh_id)}
+          onClick={() => setNghenOpen(true)} />
       </Toolbar>
 
       {showFilter && <LocLenhPanel loc={filters} setLoc={setFilters} chuyen={chuyen} />}

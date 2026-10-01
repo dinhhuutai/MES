@@ -243,11 +243,10 @@ export default function Release2Page() {
         <Button chiXemOk variant="secondary" icon="download" onClick={doExcel} disabled={!filtered.length}>
           Excel ({filtered.length})
         </Button>
-        {/* Chip "Tất cả" ⇒ ẨN nút Nghẽn (26/09/2026); chọn loại chuyền/khu mới hiện, đếm đúng chip đó. */}
-        {loai && (
-          <NghenButton rows={rows.filter((r) => hopChip(r, loai))} trangThai={(r) => statusLenh(r.id)}
-            onClick={() => setNghenOpen(true)} />
-        )}
+        {/* Nút Nghẽn hiện ở MỌI chip (01/10/2026 — gỡ luật ẩn ở "Tất cả" của 26/09); đếm đúng chip đang
+            đứng, modal mở sẵn chip đó (`chipMacDinh`). Chip '' ⇒ `hopChip` trả true ⇒ đếm mọi lệnh. */}
+        <NghenButton rows={rows.filter((r) => hopChip(r, loai))} trangThai={(r) => statusLenh(r.id)}
+          onClick={() => setNghenOpen(true)} />
         <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="info">{filtered.length} chờ duyệt</Badge>

@@ -4,8 +4,10 @@ export const getSummary = () => client.get('/dashboard/summary');
 export const getActivity = () => client.get('/dashboard/activity');
 export const getStageCounts = () => client.get('/dashboard/stage-counts');
 export const getChartDetail = () => client.get('/dashboard/chart-detail');
-export const getDieuPhoi = () => client.get('/dashboard/dieu-phoi');
-export const getBang2 = () => client.get('/dashboard/bang-2');
+// `{ gon: 1 }` = chỉ số đếm (không kèm danh sách phần in, ~vài KB thay vì ~1 MB) — Dashboard dùng lúc
+// mở trang; bản đầy đủ chỉ tải khi mở panel drill.
+export const getDieuPhoi = (params) => client.get('/dashboard/dieu-phoi', { params });
+export const getBang2 = (params) => client.get('/dashboard/bang-2', { params });
 export const getNghenMap = () => client.get('/dashboard/nghen-map');
 export const getHoanThanhHomNay = () => client.get('/dashboard/hoan-thanh-hom-nay');
 

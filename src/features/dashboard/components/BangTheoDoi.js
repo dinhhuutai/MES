@@ -79,7 +79,9 @@ export default function BangTheoDoi() {
       ton_cuoi: { phan: c('ton_cuoi', 'phan'), sl: c('ton_cuoi', 'sl'), pt: pt(c('ton_cuoi', 'phan'), vao) },
       nghen: {
         phan: c('nghen', 'phan'), sl: c('nghen', 'sl'),
-        pt: pt(c('nghen', 'phan'), c('ton_cuoi', 'phan')),
+        pt: pt(c('nghen', 'phan'), vao),
+        gio: Math.round(c('nghen', 'gio') * 10) / 10,
+        xong: c('nghen', 'xong'), chua: c('nghen', 'chua'),
       },
     };
   }, [rows]);
@@ -99,6 +101,26 @@ export default function BangTheoDoi() {
             <Pt v={o.pt} canhBao={key === 'nghen'} />
           </td>
         )}
+        {key === 'nghen' && oNghenThem(o, dong)}
+      </>
+    );
+  };
+  // 3 cột thêm của cụm Nghẽn (01/10/2026): Thời gian nghẽn (giờ) · Kết quả xử lý Xong / Chưa (phần).
+  // Bấm Xong/Chưa ⇒ modal mở đúng toggle "Nghẽn – đã / chưa xác nhận".
+  const oNghenThem = (o, dong) => {
+    const bam = (k) => (dong ? (e) => { e.stopPropagation(); setMo({ dong, o: k }); } : undefined);
+    const cls = dong ? 'cursor-pointer hover:bg-primary-wash' : '';
+    return (
+      <>
+        <td onClick={bam('nghen')} className={`${TD} ${cls} ${o.gio ? 'font-medium text-danger' : 'text-ink-soft'}`}>
+          {fmtNum(o.gio || 0)}
+        </td>
+        <td onClick={bam('nghen_xong')} className={`${TD} ${cls} ${o.xong ? 'font-medium text-success' : 'text-ink-soft'}`}>
+          {fmtNum(o.xong || 0)}
+        </td>
+        <td onClick={bam('nghen_chua')} className={`${TD} ${cls} ${o.chua ? 'font-semibold text-danger' : 'text-ink-soft'}`}>
+          {fmtNum(o.chua || 0)}
+        </td>
       </>
     );
   };
@@ -131,21 +153,30 @@ export default function BangTheoDoi() {
         <div className="overflow-x-auto">
           <table className="w-full border-collapse">
             <thead className="bg-surface-muted text-ink">
+              {/* 3 tầng: cụm Nghẽn tách HIỆN TRẠNG (Phần · SL · % · Giờ) và KẾT QUẢ XỬ LÝ (Xong · Chưa)
+                  như tờ giấy xưởng; các cụm khác gộp 2 tầng trên bằng rowSpan. */}
               <tr>
-                <th rowSpan={2} className={TH1}>STT</th>
-                <th rowSpan={2} className={`${TH1} text-left`}>Check point</th>
-                <th colSpan={2} className={TH1}>Tồn đầu</th>
-                <th colSpan={2} className={TH1}>Nhận</th>
-                <th colSpan={3} className={TH1}>Xong</th>
-                <th colSpan={3} className={TH1}>Tồn cuối</th>
-                <th colSpan={3} className={TH1}>Nghẽn</th>
-                <th rowSpan={2} className={`${TH1} text-left`}>Ghi chú</th>
+                <th rowSpan={3} className={TH1}>STT</th>
+                <th rowSpan={3} className={`${TH1} text-left`}>Check point</th>
+                <th rowSpan={2} colSpan={2} className={TH1}>Tồn đầu</th>
+                <th rowSpan={2} colSpan={2} className={TH1}>Nhận</th>
+                <th rowSpan={2} colSpan={3} className={TH1}>Xong</th>
+                <th rowSpan={2} colSpan={3} className={TH1}>Tồn cuối</th>
+                <th colSpan={6} className={TH1}>Nghẽn</th>
+                <th rowSpan={3} className={`${TH1} text-left`}>Ghi chú</th>
+              </tr>
+              <tr>
+                <th colSpan={4} className={TH1}>Hiện trạng</th>
+                <th colSpan={2} className={TH1}>Kết quả xử lý</th>
               </tr>
               <tr>
                 {['Phần', 'SL', 'Phần', 'SL'].map((t, i) => <th key={`a${i}`} className={TH2}>{t}</th>)}
                 {['Phần', 'SL', '%', 'Phần', 'SL', '%', 'Phần', 'SL', '%'].map((t, i) => (
                   <th key={`b${i}`} className={TH2}>{t}</th>
                 ))}
+                <th className={TH2}>Thời gian nghẽn (giờ)</th>
+                <th className={TH2} title="Phần in đã quá SLA và đã được xác nhận qua trạm trong kỳ">Xong (phần)</th>
+                <th className={TH2} title="Phần in đang quá SLA, chưa được xác nhận">Chưa (phần)</th>
               </tr>
             </thead>
             <tbody>
@@ -173,8 +204,8 @@ export default function BangTheoDoi() {
               ))}
               {!rows.length && !loading && (
                 <tr>
-                  {/* 16 cột = STT + Check point + (2+2+3+3+3) + Ghi chú. Đổi bộ cột thì sửa kèm số này. */}
-                  <td colSpan={16} className="px-3 py-8 text-center text-sm text-ink-soft">Không có dữ liệu</td>
+                  {/* 19 cột = STT + Check point + (2+2+3+3+6) + Ghi chú. Đổi bộ cột thì sửa kèm số này. */}
+                  <td colSpan={19} className="px-3 py-8 text-center text-sm text-ink-soft">Không có dữ liệu</td>
                 </tr>
               )}
             </tbody>
@@ -198,7 +229,7 @@ export default function BangTheoDoi() {
       )}
 
       <p className="border-t border-line px-3 py-1.5 text-[11px] text-ink-soft">
-        Xong% · Tồn cuối% chia (Tồn đầu + Nhận) — cộng lại = 100% · Nghẽn% chia Tồn cuối (nghẽn = đang tồn &amp; quá SLA của trạm).
+        Xong% · Tồn cuối% chia (Tồn đầu + Nhận) — cộng lại = 100% · Nghẽn = phần in quá SLA trong kỳ = Xong (đã xác nhận) + Chưa (đang tồn), Nghẽn% chia (Tồn đầu + Nhận) · Thời gian nghẽn = tổng giờ vượt SLA.
         Số liệu làm mới tối đa mỗi 30 giây. Bấm 1 dòng / 1 ô để xem danh sách phần in (nghẽn bao lâu, lý do, owner).
       </p>
       <BangTheoDoiModal open={!!mo} onClose={() => setMo(null)} dong={mo?.dong} oMacDinh={mo?.o || ''}
