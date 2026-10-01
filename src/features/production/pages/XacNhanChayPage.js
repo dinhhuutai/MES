@@ -9,8 +9,7 @@ import GomBadge from '../../../components/common/GomBadge';
 import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
 import Toast from '../../../components/common/Toast';
-import Icon from '../../../components/common/Icon';
-import { Field, Input, Textarea } from '../../../components/common/controls';
+import { Field, Textarea } from '../../../components/common/controls';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
@@ -22,16 +21,21 @@ import { slaRowClass } from '../../../utils/sla';
 import {
   listProductionCandidates, startProduction, getMonitor, listChuyen, traVeKyThuatSanXuat,
 } from '../../../services/productionService';
-import { fmtNum, fmtDate, trongKhoangNgay } from '../../../utils/format';
+import { fmtNum, fmtDate } from '../../../utils/format';
 import DateRangePicker from '../../../components/common/DateRangePicker';
-import exportCheckpointExcel, { COT_LENH, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
+import exportCheckpointExcel, { moTaBoLoc } from '../../../utils/exportCheckpointExcel';
 import ChipTabs from '../../../components/common/ChipTabs';
 import { LOAI_TABS, hopChipChuyen, nhanChip, demChip, locSiSoTheoChip } from '../../../utils/khuChuyen';
 import RunPanel from '../components/RunPanel';
+import ChoChayModal, { LocLenhPanel } from '../components/ChoChayModal';
+import { locLenhChay, coLoc, LOC_TRONG } from '../utils/locLenhChay';
 import TheoDoiChuyenPage from './TheoDoiChuyenPage';
 import XePhoiPage from './XePhoiPage';
-import { khop } from '../../../utils/timKiem';
 
+// ⚠⚠ GỌN LẠI 01/10/2026 (người dùng yêu cầu): trang chỉ còn bảng *Đang chạy*; danh sách *Chờ chạy* chuyển
+//   vào modal mở từ nút "Chờ chạy (N)" (`components/ChoChayModal`, bộ lọc RIÊNG đầy đủ). Ô tìm + panel lọc
+//   + chip + 2 ô ngày của trang nay chỉ áp cho bảng Đang chạy. Luật lọc dùng chung `utils/locLenhChay.js`
+//   — ô tìm khớp cả MÃ VẠCH TDTHĐH / HSKT (`ma_quet` backend gom đủ mã mọi phần in của lệnh).
 export default function XacNhanChayPage() {
   const { can } = usePermissions();
   const { toast, show } = useToast();
@@ -43,9 +47,10 @@ export default function XacNhanChayPage() {
   const canRun = can('PROD_RUN');
 
   const [candidates, setCandidates] = useState([]);
+  const [choChayOpen, setChoChayOpen] = useState(false);
   const [nghenOpen, setNghenOpen] = useState(false); // modal "Danh sách nghẽn"
-  // ⚠ Theo dõi chuyền + Tình trạng xe phơi GỘP VÀO màn này (24/09/2026): 2 nút cạnh "Bộ lọc" mở modal
-  //   TOÀN MÀN HÌNH dựng NGUYÊN component trang cũ. Route cũ chuyển hướng về đây kèm `?mo=` (App.js).
+  // ⚠ Theo dõi chuyền + Tình trạng xe phơi GỘP VÀO màn này (24/09/2026): 2 nút mở modal TOÀN MÀN HÌNH
+  //   dựng NGUYÊN component trang cũ. Route cũ chuyển hướng về đây kèm `?mo=` (App.js).
   const [params, setParams] = useSearchParams();
   const [moTrang, setMoTrang] = useState(() => {
     const m = params.get('mo');
@@ -60,7 +65,7 @@ export default function XacNhanChayPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showFilter, setShowFilter] = useState(false);
-  const [filters, setFilters] = useState({ khach: '', don: '', maHang: '', mauVai: '', kichVai: '', kichPhim: '', chuyenId: '' });
+  const [filters, setFilters] = useState(LOC_TRONG);
   const [sel, setSel] = useState(null);
   const [confirmRun, setConfirmRun] = useState(null); // lệnh đang xác nhận chạy
   const [runChuyenId, setRunChuyenId] = useState('');
@@ -68,15 +73,15 @@ export default function XacNhanChayPage() {
   const [traVeReason, setTraVeReason] = useState('');
   const [busy, setBusy] = useState(false);
   // Chip LOẠI CHUYỀN + KHU BÀN — cùng bộ với "Theo dõi chuyền" / "Test Run - QA".
-  // Áp cho CẢ 2 bảng (Đang chạy & Chờ chạy) để 2 bảng luôn nói về cùng một nhóm chuyền.
   const [loai, setLoai] = useState('');
+  // Bảng Đang chạy: ngày XÁC NHẬN CHẠY (`phieu_san_xuat.tg_bd`, cạnh title) + ngày SX kế hoạch (mép phải),
+  // chồng nhau theo AND. Mặc định RỖNG = không lọc.
+  const [ngayRun, setNgayRun] = useState({ from: '', to: '' });
+  const [ngayXnRun, setNgayXnRun] = useState({ from: '', to: '' });
 
-  // Dải "Theo dõi" (sĩ số) bám ô tìm + panel lọc + dải chip loại chuyền/khu + ô chọn CHUYỀN.
-  // ⚠⚠ Ô lọc chuyền giữ `chuyenId` (UUID) — backend KHÔNG hiểu UUID, nó khớp theo `ma_chuyen`.
-  //   Phải quy đổi, nếu không ô đó im lặng không tác dụng lên 4 con số.
-  // ⚠ Chip khu bàn CŨNG đặt `maChuyen` (một DANH SÁCH mã) ⇒ khi cả hai cùng bật thì phải GIAO NHAU,
-  //   không được để cái sau đè cái trước: chọn chuyền nằm ngoài khu đang lọc thì đúng ra bảng rỗng,
-  //   nên gửi mã sentinel để khớp rỗng thay vì lặng lẽ bỏ một trong hai điều kiện.
+  // Dải "Theo dõi" (sĩ số) bám ô tìm + panel lọc + chip + ô chuyền.
+  // ⚠⚠ Ô lọc chuyền giữ `chuyenId` (UUID) — backend khớp theo `ma_chuyen` ⇒ phải quy đổi. Chip khu bàn
+  //   cũng đặt `maChuyen` ⇒ cả hai bật thì GIAO NHAU (chọn chuyền ngoài khu ⇒ sentinel khớp rỗng).
   useSiSoLoc((() => {
     const chip = locSiSoTheoChip(loai);
     const maChon = (chuyen || []).find((x) => x.id === filters.chuyenId)?.ma_chuyen || '';
@@ -87,91 +92,40 @@ export default function XacNhanChayPage() {
     }
     return { timKiem: search, ...filters, ...chip, ...(maChuyen ? { maChuyen } : {}) };
   })());
-  // Lọc theo NGÀY KẾ HOẠCH SẢN XUẤT (`lenh_san_xuat.ngay_ke_hoach`) — chọn được NHIỀU NGÀY bằng
-  // cùng 1 ô như trang Hồ sơ kỹ thuật. ⚠ MỖI BẢNG MỘT Ô RIÊNG (khác chip loại chuyền vốn dùng
-  // chung): 2 bảng trả lời 2 câu hỏi khác nhau — "hôm nay chuyền đang chạy hàng của ngày nào" và
-  // "ngày mai xếp chạy những gì" — nên ép chung 1 khoảng ngày là bó tay người điều hành.
-  // Mặc định RỖNG = không lọc; lọc sẵn "hôm nay" sẽ giấu hàng của ngày khác mà không ai biết vì sao.
-  const [ngayRun, setNgayRun] = useState({ from: '', to: '' });
-  const [ngayCand, setNgayCand] = useState({ from: '', to: '' });
-  // NGÀY XÁC NHẬN CHẠY = `phieu_san_xuat.tg_bd` — mốc người đứng chuyền bấm "Xác nhận chạy"
-  // (`monitorRunning` đã SELECT sẵn `ps.tg_bd`, không phải sửa backend).
-  // ⚠ CHỈ bảng *Đang chạy* có ô này: bảng *Chờ chạy* chưa có phiếu SX nên chưa hề có mốc bắt đầu.
-  const [ngayXnRun, setNgayXnRun] = useState({ from: '', to: '' });
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      // ⚠⚠ `limit: 200` cũ ĐÚNG BẰNG trần `getPaging` ⇒ vượt 200 lệnh chờ chạy là mất dòng ÂM THẦM
-      //   (bảng lọc + phân trang + xuất Excel đều ở CLIENT). Prod 19/08 mới 98 dòng nên chưa lộ, nhưng
-      //   đây đúng kiểu lỗi vừa xảy ra ở Test Run - QA (658 lệnh, màn chỉ thấy 200).
+      // Chờ chạy tải HẾT (lọc/tìm ở client trong modal; số trên nút). ⚠ Vượt 200 phải đi `taiHetTrang`.
       const [kq, m] = await Promise.all([
-        taiHetTrang((p) => listProductionCandidates({ search, ...p }), { limit: LIMIT_TAI_LON }),
+        taiHetTrang((p) => listProductionCandidates({ search: '', ...p }), { limit: LIMIT_TAI_LON }),
         getMonitor(),
       ]);
       setCandidates(kq.items);
-      if (kq.thieu) show(`Chỉ tải được ${kq.items.length}/${kq.total} lệnh — hãy thu hẹp bằng ô tìm kiếm`, 'error');
+      if (kq.thieu) show(`Chỉ tải được ${kq.items.length}/${kq.total} lệnh chờ chạy`, 'error');
       setRunning(m.data.running);
     } catch (e) {
       if (!silent) show(e.message || 'Lỗi tải', 'error');
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [search, show]);
+  }, [show]);
 
   useEffect(() => { listChuyen().then((r) => setChuyen(r.data)).catch(() => {}); }, []);
-  useEffect(() => {
-    const t = setTimeout(load, 250);
-    return () => clearTimeout(t);
-  }, [load]);
-  // Tự tải lại khi SL release / sản xuất đổi ở nơi khác (vd cập nhật SL nhận vải / release ở Hệ thống).
-  // ⚠ Tải NGẦM khi có sự kiện realtime: `load(true)` bỏ qua `setLoading(true)` (bảng không bị
-  // thay bằng spinner) và KHÔNG xóa dòng đang tích. Nhiều sự kiện trong 400ms gộp thành 1 lần tải.
+  useEffect(() => { load(); }, [load]);
+  // Tải NGẦM theo sự kiện realtime (không spinner, không xóa lựa chọn); gộp 400ms.
   useSocketReload(['production:updated', 'dashboard:refresh'], () => load(true));
 
-  // Lọc client-side theo từng trường (kết hợp AND) + chuyền. Áp cho cả "Đang chạy" & "Chờ chạy".
-  const selChuyen = useMemo(() => (chuyen || []).find((x) => x.id === filters.chuyenId) || null, [chuyen, filters.chuyenId]);
-  const hasFilter = Object.values(filters).some(Boolean);
-  const applyFilters = useCallback((rows) => {
-    if (!hasFilter) return rows;
-    const like = (v, q) => khop(v, q);
-    const matchChuyen = (r) => {
-      if (!filters.chuyenId || !selChuyen) return true;
-      const names = [selChuyen.ten_chuyen, selChuyen.ma_chuyen].filter(Boolean).map((s) => s.toLowerCase());
-      const rowVals = [r.ten_chuyen, r.ma_chuyen].filter(Boolean).map((s) => s.toLowerCase());
-      return rowVals.some((rv) => names.includes(rv));
-    };
-    // Lệnh GOM SET: khớp nếu BẤT KỲ phần in nào trong lệnh khớp (nếu chỉ xét `r.*` thì chỉ so được
-    // phần in ĐẦU TIÊN — lọc theo mã hàng của phần in thứ 2 sẽ làm mất cả lệnh).
-    const khopPin = (r) => {
-      const list = r.phan_in_list && r.phan_in_list.length ? r.phan_in_list : [r];
-      return list.some((p) =>
-        like(p.ten_khach_hang, filters.khach) && like(p.ma_don_hang, filters.don)
-        && like(p.ma_hang, filters.maHang) && like(p.mau_vai, filters.mauVai)
-        && like(p.kich_vai, filters.kichVai) && like(p.kich_phim, filters.kichPhim));
-    };
-    return (rows || []).filter((r) => khopPin(r) && matchChuyen(r));
-  }, [filters, hasFilter, selChuyen]);
-  // Chip loại chuyền chồng lên bộ lọc trường (AND).
-  const locTheoChip = useCallback((rows) => (loai ? (rows || []).filter((r) => hopChipChuyen(r, loai)) : rows), [loai]);
-  // Khoảng ngày — mỗi bảng dùng ô của riêng nó. `cot` cho phép dùng lại cho NGÀY XÁC NHẬN CHẠY
-  // (`tg_bd`, timestamptz) mà không viết hàm lọc thứ hai: `trongKhoangNgay` cắt ngày theo giờ LOCAL
-  // nên cột DATE (`ngay_ke_hoach`) và cột timestamptz đều so đúng, không lệch múi giờ.
-  const locNgay = useCallback(
-    (rows, ng, cot = 'ngay_ke_hoach') => (rows || []).filter((r) => trongKhoangNgay(r[cot], ng.from, ng.to)),
-    []
-  );
-  const candFiltered = useMemo(() => locNgay(locTheoChip(applyFilters(candidates)), ngayCand),
-    [applyFilters, locTheoChip, locNgay, candidates, ngayCand]);
-  // ⚠ 2 ô ngày của bảng *Đang chạy* chồng lên nhau theo AND (ngày SX kế hoạch ∧ ngày xác nhận chạy).
-  const runFiltered = useMemo(
-    () => locNgay(locNgay(locTheoChip(applyFilters(running)), ngayRun), ngayXnRun, 'tg_bd'),
-    [applyFilters, locTheoChip, locNgay, running, ngayRun, ngayXnRun]
-  );
-  // Nguồn cho "Danh sách nghẽn": GỘP cả 2 bảng, lấy tập ĐẦY ĐỦ (chưa lọc) — danh sách nghẽn là bức
-  // tranh của cả trạm; muốn thu hẹp thì dùng ô tìm ngay trong modal.
-  // ⚠ 2 bảng có thể trùng `lenh_id` không? Không — lệnh đang chạy đã có phiếu nên rời khỏi "chờ chạy";
-  //   vẫn khử trùng theo `lenh_id` cho chắc, để 1 lệnh không bị đếm 2 lần trên nút.
+  const hasFilter = coLoc(filters);
+  const runFiltered = useMemo(() => locLenhChay(running, {
+    search, loc: filters, chuyen, loai, ngay: [{ cot: 'ngay_ke_hoach', ...ngayRun }, { cot: 'tg_bd', ...ngayXnRun }],
+  }), [running, search, filters, chuyen, ngayRun, ngayXnRun, loai]);
+  // Số trên chip = tập đã qua mọi bộ lọc TRỪ chính chip.
+  const countChip = useMemo(() => demChip(locLenhChay(running, {
+    search, loc: filters, chuyen, boChip: true, ngay: [{ cot: 'ngay_ke_hoach', ...ngayRun }, { cot: 'tg_bd', ...ngayXnRun }],
+  })), [running, search, filters, chuyen, ngayRun, ngayXnRun]);
+
+  // Nguồn "Danh sách nghẽn": GỘP cả Đang chạy + Chờ chạy, tập ĐẦY ĐỦ (chưa lọc), khử trùng `lenh_id`.
   const rowsNghen = useMemo(() => {
     const m = new Map();
     [...(running || []), ...(candidates || [])].forEach((r) => {
@@ -179,32 +133,10 @@ export default function XacNhanChayPage() {
     });
     return [...m.values()];
   }, [running, candidates]);
-  // Số trên chip đếm trên tập ĐÃ qua bộ lọc trường + khoảng ngày (bỏ chip) để khớp với bảng đang xem.
-  // Gộp cả 2 bảng: 1 dải chip điều khiển cả "Đang chạy" lẫn "Chờ chạy" — nhưng mỗi bảng vẫn trừ đi
-  // theo khoảng ngày CỦA CHÍNH NÓ, nếu không số trên chip sẽ nhiều hơn tổng 2 bảng.
-  const countChip = useMemo(
-    () => demChip([
-      ...locNgay(locNgay(applyFilters(running), ngayRun), ngayXnRun, 'tg_bd'),
-      ...locNgay(applyFilters(candidates), ngayCand),
-    ]),
-    [applyFilters, locNgay, running, candidates, ngayRun, ngayCand, ngayXnRun]
-  );
-  const clearFilters = () => setFilters({ khach: '', don: '', maHang: '', mauVai: '', kichVai: '', kichPhim: '', chuyenId: '' });
+  const locTheoChip = useCallback((rows) => (loai ? (rows || []).filter((r) => hopChipChuyen(r, loai)) : rows), [loai]);
 
-  // Xuất Excel 2 bảng RIÊNG (đang chạy / chờ chạy) — theo đúng bộ lọc đang bật, hết mọi dòng.
-  // `ng` = khoảng ngày CỦA BẢNG đang xuất (2 bảng có 2 ô ngày riêng) ⇒ phụ đề file nói đúng
-  // bộ lọc đã tạo ra đúng file đó.
-  const moTa = (ng, ngXn = null) => moTaBoLoc({
-    'tìm kiếm': search, khách: filters.khach, đơn: filters.don, 'mã hàng': filters.maHang,
-    'màu vải': filters.mauVai, 'kích vải': filters.kichVai, 'kích phim': filters.kichPhim,
-    chuyền: selChuyen ? (selChuyen.ten_chuyen || selChuyen.ma_chuyen) : '',
-    'loại chuyền': nhanChip(loai),
-    'ngày SX kế hoạch': [ng.from, ng.to].filter(Boolean).join(' → '),
-    // Chỉ bảng *Đang chạy* truyền vào — bảng *Chờ chạy* chưa có phiếu nên không có mốc này.
-    'ngày xác nhận chạy': ngXn ? [ngXn.from, ngXn.to].filter(Boolean).join(' → ') : '',
-  });
-  // Bảng "Đang chạy" lấy từ `monitorRunning` — bộ cột KHÁC danh sách lệnh (không có tính chất in /
-  // loại đợt vải / SL đơn hàng), nên khai riêng thay vì dùng COT_LENH cho có rồi để trống.
+  const selChuyen = (chuyen || []).find((x) => x.id === filters.chuyenId);
+  // Bảng "Đang chạy" lấy từ `monitorRunning` — bộ cột KHÁC danh sách lệnh nên khai riêng.
   const doExcelRunning = () => exportCheckpointExcel({
     cols: [
       { header: 'Mã đợt SX', width: 16, value: (r) => r.ma_lenh_san_xuat || '' },
@@ -224,16 +156,18 @@ export default function XacNhanChayPage() {
       { header: 'Ngừng (phút)', width: 12, num: true, value: (r) => (r.ngung_phut ? Number(r.ngung_phut) : null) },
       { header: 'Hạn giao', width: 13, type: 'date', center: true, value: (r) => r.han_giao_hang },
       { header: 'Ngày SX kế hoạch', width: 15, type: 'date', center: true, value: (r) => r.ngay_ke_hoach },
-      // Cột đang được lọc thì phải xuất ra — không thì mở file không đối chiếu được vì sao ít dòng.
       { header: 'Xác nhận chạy', width: 17, center: true,
         value: (r) => (r.tg_bd ? new Date(r.tg_bd).toLocaleString('vi-VN') : '') },
     ],
-    rows: runFiltered, title: 'Đang sản xuất', fileName: 'dang-san-xuat', moTaLoc: moTa(ngayRun, ngayXnRun),
-  });
-  const doExcelCand = () => exportCheckpointExcel({
-    cols: [...COT_LENH,
-      { header: 'Đã in trước đó', width: 13, num: true, value: (r) => r.da_in_truoc || null }],
-    rows: candFiltered, title: 'Đang chờ chạy', fileName: 'cho-chay', moTaLoc: moTa(ngayCand),
+    rows: runFiltered, title: 'Đang sản xuất', fileName: 'dang-san-xuat',
+    moTaLoc: moTaBoLoc({
+      'tìm kiếm': search, khách: filters.khach, đơn: filters.don, 'mã hàng': filters.maHang,
+      'màu vải': filters.mauVai, 'kích vải': filters.kichVai, 'kích phim': filters.kichPhim,
+      chuyền: selChuyen ? (selChuyen.ten_chuyen || selChuyen.ma_chuyen) : '',
+      'loại chuyền': nhanChip(loai),
+      'ngày SX kế hoạch': [ngayRun.from, ngayRun.to].filter(Boolean).join(' → '),
+      'ngày xác nhận chạy': [ngayXnRun.from, ngayXnRun.to].filter(Boolean).join(' → '),
+    }),
   });
 
   // Mở hộp xác nhận: kế thừa chuyền kế hoạch, cho đổi chuyền thực tế.
@@ -247,6 +181,7 @@ export default function XacNhanChayPage() {
       show('Đã xác nhận chạy — bắt đầu in & tạo tem');
       const startedId = confirmRun.id;
       setConfirmRun(null);
+      setChoChayOpen(false); // đóng modal Chờ chạy để thấy ngay sidebar Sản xuất của lệnh vừa chạy
       setSel(startedId);
       load();
     } catch (e) {
@@ -256,8 +191,7 @@ export default function XacNhanChayPage() {
     }
   };
 
-  // TRẢ VỀ KỸ THUẬT (chờ chạy): lệnh chưa in gì mà kỹ thuật phải làm lại ⇒ hủy lệnh + phần in quay
-  // về READY. Cùng ý nghĩa với nút "Trả về Kỹ thuật" ở Release 1; lý do BẮT BUỘC, nhập trong Modal.
+  // TRẢ VỀ KỸ THUẬT (chờ chạy): hủy lệnh + phần in quay về READY; lý do BẮT BUỘC.
   const doTraVeKyThuat = async () => {
     if (!traVe) return;
     const lyDo = traVeReason.trim();
@@ -276,50 +210,8 @@ export default function XacNhanChayPage() {
     }
   };
 
-  // LỆNH GOM SET → tách 1 dòng / PHẦN IN (prop `subRows` của DataTable). Cột nào thuộc về LỆNH
-  // (chuyền, SL release, ngày SX, trạng thái, nút thao tác) đánh `merge: true` để hợp nhất ô bằng
-  // rowSpan — cùng với STT. Cột thuộc PHẦN IN (khách/đơn/mã hàng/code phần/màu/kích/hạn giao) hiện
-  // theo từng dòng. Backend chỉ gắn `phan_in_list` khi lệnh có >1 phần in ⇒ lệnh thường không đổi gì.
+  // LỆNH GOM SET → tách 1 dòng / PHẦN IN; cột mức lệnh `merge`.
   const subRows = (r) => (r.phan_in_list ? r.phan_in_list.map((p) => ({ ...p, __sub: true })) : null);
-
-  const candCols = [
-    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
-    { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
-    { key: 'ma_hang', header: 'Mã hàng', render: (r) => (
-      <div>
-        <div className="text-ink">{r.ma_hang || '—'}</div>
-        {/* Badge mức LỆNH → chỉ vẽ ở dòng đầu (`__sub` do `subRows` gắn cho dòng con). */}
-        {!r.__sub && r.giai_doan === 'EP_UI' && <Badge tone="info">Ép ủi (in kiếng)</Badge>}
-        {!r.__sub && <GomBadge soDotVai={r.so_dot_vai} soPhanIn={r.so_phan_in} />}
-        {!r.__sub && Number(r.da_in_truoc) > 0 && (
-          <div className="mt-0.5">
-            <Badge tone="warning">
-              Đã in {fmtNum(r.da_in_truoc)}{r.tg_ngung ? ` · ngừng ${new Date(r.tg_ngung).toLocaleString('vi-VN')}` : ''} → in tiếp
-            </Badge>
-          </div>
-        )}
-      </div>
-    ) },
-    { key: 'ma_phan', header: 'Code phần', render: (r) => r.ma_phan || '—' },
-    { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
-    { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
-    { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
-    { key: 'ma_chuyen', header: 'Chuyền', merge: true, render: (r) => r.ten_chuyen || '—' },
-    // Nhà gia công (ERP NGC, mig 072) — mức LỆNH nên `merge` như các cột lệnh khác.
-    { key: 'nha_gia_cong', header: 'Nhà gia công', merge: true, render: (r) => r.nha_gia_cong || '—' },
-    { key: 'so_luong_release', header: 'SL release', className: 'text-right tabular-nums', merge: true, render: (r) => fmtNum(r.so_luong_release) },
-    { key: 'ngay_ke_hoach', header: 'Ngày SX KH', merge: true, render: (r) => fmtDate(r.ngay_ke_hoach) },
-    { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => fmtDate(r.han_giao_hang) },
-    // 2 nút xếp CHỒNG (cột dọc): "Xác nhận chạy" ở trên, "Trả về Kỹ thuật" ngay dưới.
-    { key: 'actions', header: '', className: 'text-right whitespace-nowrap', merge: true, render: (r) =>
-      canRun && (
-        <div className="flex flex-col items-stretch gap-1">
-          <Button className="px-2.5 py-1 text-xs" onClick={() => openConfirm(r)}>Xác nhận chạy</Button>
-          <Button variant="secondary" className="px-2.5 py-1 text-xs"
-            onClick={() => { setTraVeReason(''); setTraVe(r); }}>Trả về Kỹ thuật</Button>
-        </div>
-      ) },
-  ];
 
   const runCols = [
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
@@ -336,10 +228,7 @@ export default function XacNhanChayPage() {
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
     { key: 'ma_chuyen', header: 'Chuyền', merge: true },
     { key: 'nha_gia_cong', header: 'Nhà gia công', merge: true, render: (r) => r.nha_gia_cong || '—' },
-    // Hiện luôn cột đang được lọc (bảng "Chờ chạy" vốn đã có). Mức LỆNH ⇒ `merge` như các cột lệnh khác.
     { key: 'ngay_ke_hoach', header: 'Ngày SX KH', merge: true, render: (r) => fmtDate(r.ngay_ke_hoach) },
-    // Mốc bấm "Xác nhận chạy" (`phieu_san_xuat.tg_bd`) — cột của chính ô lọc ngay trên bảng.
-    // ⚠ Mức PHIẾU ⇒ `merge` như các cột mức lệnh khác, không lặp ở từng dòng phần in.
     { key: 'tg_bd', header: 'Xác nhận chạy', merge: true,
       render: (r) => (r.tg_bd ? new Date(r.tg_bd).toLocaleString('vi-VN') : '—') },
     { key: 'printed', header: 'Đã in', className: 'text-right tabular-nums', merge: true, render: (r) => `${fmtNum(r.printed)} / ${fmtNum(r.target)}` },
@@ -352,8 +241,11 @@ export default function XacNhanChayPage() {
 
   return (
     <div>
-      <Toolbar title="Xác nhận chạy" subtitle="Lệnh đã Release 2 — chọn chuyền thực tế & bắt đầu in"
-        search={search} onSearch={setSearch} searchPlaceholder="Tìm code phần, mã hàng, màu/kích, đơn hàng...">
+      <Toolbar title="Xác nhận chạy" search={search} onSearch={setSearch}
+        searchPlaceholder="Tìm code phần, mã vạch TDTHĐH / HSKT, mã hàng, màu/kích, đơn...">
+        <Button chiXemOk icon="list" onClick={() => setChoChayOpen(true)}>
+          Chờ chạy ({fmtNum(candidates.length)})
+        </Button>
         {can('PROD_MONITOR') && (
           <Button chiXemOk variant="ghost" icon="activity" onClick={() => setMoTrang('theo-doi-chuyen')}>Theo dõi chuyền</Button>
         )}
@@ -363,54 +255,20 @@ export default function XacNhanChayPage() {
         <Button chiXemOk variant={showFilter || hasFilter ? 'secondary' : 'ghost'} icon="filter" onClick={() => setShowFilter((v) => !v)}>
           Bộ lọc{hasFilter ? ' ●' : ''}
         </Button>
-        {/* ⚠ Gộp CẢ 2 bảng "Đang chạy" + "Chờ chạy" — màn này điều hành cả hai, tách ra thì người
-            dùng phải mở 2 danh sách nghẽn cho cùng một việc. */}
-        {/* Chip "Tất cả" ⇒ ẨN nút Nghẽn (26/09/2026); chọn loại chuyền/khu mới hiện, đếm đúng chip đó. */}
+        {/* Nghẽn gộp Đang chạy + Chờ chạy. Chip "Tất cả" ⇒ ẨN nút (26/09/2026). */}
         {loai && (
           <NghenButton rows={locTheoChip(rowsNghen)} trangThai={(r) => statusLenh(r.lenh_id)}
             onClick={() => setNghenOpen(true)} />
         )}
       </Toolbar>
 
-      {showFilter && (
-        <div className="mb-4 rounded-card border border-line bg-surface p-3">
-          <div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-3 lg:grid-cols-4">
-            <Field label="Khách hàng"><Input value={filters.khach} onChange={(e) => setFilters({ ...filters, khach: e.target.value })} placeholder="Lọc khách..." /></Field>
-            <Field label="Đơn hàng"><Input value={filters.don} onChange={(e) => setFilters({ ...filters, don: e.target.value })} placeholder="Lọc đơn..." /></Field>
-            <Field label="Mã hàng"><Input value={filters.maHang} onChange={(e) => setFilters({ ...filters, maHang: e.target.value })} placeholder="Lọc mã hàng..." /></Field>
-            <Field label="Màu vải"><Input value={filters.mauVai} onChange={(e) => setFilters({ ...filters, mauVai: e.target.value })} placeholder="Lọc màu..." /></Field>
-            <Field label="Kích vải"><Input value={filters.kichVai} onChange={(e) => setFilters({ ...filters, kichVai: e.target.value })} placeholder="Lọc kích vải..." /></Field>
-            <Field label="Kích phim"><Input value={filters.kichPhim} onChange={(e) => setFilters({ ...filters, kichPhim: e.target.value })} placeholder="Lọc kích phim..." /></Field>
-            <Field label="Chuyền">
-              <select value={filters.chuyenId} onChange={(e) => setFilters({ ...filters, chuyenId: e.target.value })}
-                className="h-9 w-full rounded-input border border-line bg-surface px-2 text-sm">
-                <option value="">Tất cả chuyền</option>
-                {(chuyen || []).map((c) => <option key={c.id} value={c.id}>{c.ten_chuyen || c.ma_chuyen}</option>)}
-              </select>
-            </Field>
-          </div>
-          {hasFilter && (
-            <div className="mt-2 flex justify-end">
-              <button type="button" onClick={clearFilters} className="inline-flex items-center gap-1 text-xs text-ink-soft hover:text-danger">
-                <Icon name="x" size={14} /> Xóa lọc
-              </button>
-            </div>
-          )}
-        </div>
-      )}
+      {showFilter && <LocLenhPanel loc={filters} setLoc={setFilters} chuyen={chuyen} />}
 
-      {/* Chip LOẠI CHUYỀN + KHU BÀN — cùng bộ với "Theo dõi chuyền" / "Test Run - QA",
-          điều khiển CẢ 2 bảng bên dưới. */}
       <ChipTabs tabs={LOAI_TABS} value={loai} counts={countChip} onChange={setLoai} />
 
-      {/* Ô lọc ngày kế hoạch nằm THẲNG HÀNG với title của bảng — mỗi bảng một ô riêng.
-          `/tổng` hiện khi đang lọc: so số dòng thay vì liệt kê từng bộ lọc, thêm bộ lọc mới
-          về sau cũng không phải sửa lại chỗ này. */}
       <div className="mb-2 mt-1 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="text-sm font-semibold text-ink">Đang chạy ({runFiltered.length}{runFiltered.length !== running.length ? `/${running.length}` : ''})</h3>
-          {/* Ô CHÍNH của bảng này = NGÀY XÁC NHẬN CHẠY (mốc bấm nút, `tg_bd`) — đứng ngay cạnh title.
-              Ngày SX kế hoạch lùi sang mép phải, cạnh nút Excel. */}
           <DateRangePicker value={ngayXnRun} onChange={setNgayXnRun} placeholder="Ngày xác nhận chạy" />
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -424,22 +282,9 @@ export default function XacNhanChayPage() {
         subRows={subRows} rowClassName={(r) => slaRowClass(statusLenh(r.lenh_id))}
         onRowClick={(r) => setSel(r.lenh_id)} emptyText="Không có lệnh đang chạy" />
 
-      <div className="mb-2 mt-6 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <h3 className="text-sm font-semibold text-ink">Chờ chạy ({candFiltered.length}{candFiltered.length !== candidates.length ? `/${candidates.length}` : ''})</h3>
-        </div>
-        {/* Bảng này KHÔNG có ô "ngày xác nhận chạy" (chưa có phiếu SX ⇒ chưa có mốc bắt đầu).
-            Ngày SX kế hoạch vẫn dời sang mép phải cho thẳng hàng với bảng trên. */}
-        <div className="flex flex-wrap items-center gap-2">
-          <DateRangePicker value={ngayCand} onChange={setNgayCand} placeholder="Ngày SX kế hoạch" />
-          <Button chiXemOk variant="secondary" icon="download" onClick={doExcelCand} disabled={!candFiltered.length}>
-            Excel ({candFiltered.length})
-          </Button>
-        </div>
-      </div>
-      <DataTable columns={candCols} rows={candFiltered} loading={loading} sttStart={0}
-        subRows={subRows} rowClassName={(r) => slaRowClass(statusLenh(r.id))}
-        emptyText="Không có lệnh nào chờ chạy" />
+      <ChoChayModal open={choChayOpen} onClose={() => setChoChayOpen(false)} rows={candidates} loading={loading}
+        chuyen={chuyen} canRun={canRun} statusLenh={statusLenh}
+        onConfirm={openConfirm} onTraVe={(r) => { setTraVeReason(''); setTraVe(r); }} />
 
       {/* Xác nhận thông tin chạy + chọn chuyền thực tế */}
       <Modal open={!!confirmRun} onClose={() => setConfirmRun(null)} title="Xác nhận thông tin chạy"
@@ -480,7 +325,6 @@ export default function XacNhanChayPage() {
             <p className="rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
               Lệnh sẽ bị <b>HỦY</b>, phần in quay lại <b>READY</b>: hủy xác nhận Khuôn/Film/Mực + QC,
               kỹ thuật phải làm lại rồi Kế hoạch Release 1 lần nữa. Lý do sẽ hiện ở màn Chuẩn bị kỹ thuật.
-              {/* Lệnh "chờ chạy" vẫn có thể đã in tem ở lượt trước (bị Ngừng lệnh chạy) — nói rõ trước khi bấm. */}
               {Number(traVe.da_in_truoc) > 0 && (
                 <> <b className="text-danger">Toàn bộ {fmtNum(traVe.da_in_truoc)} đã in trước đó (tem + phiếu) cũng bị hủy theo.</b></>
               )}
