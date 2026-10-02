@@ -14,6 +14,7 @@ import Spinner from '../../../components/common/Spinner';
 import DateRangePicker from '../../../components/common/DateRangePicker';
 import KcsBreakdown from '../../../components/common/KcsBreakdown';
 import TraVeGnNote from '../../../components/common/TraVeGnNote';
+import HanhTrinhGiaCong from '../../../components/common/HanhTrinhGiaCong';
 import useToast from '../../../hooks/useToast';
 import { listVaiVe, getPhanIn, setChoKho } from '../../../services/orderService';
 import exportPhanInVaiVeExcel from '../utils/exportPhanInVaiVeExcel';
@@ -951,12 +952,23 @@ export default function PhanInListPage() {
                             <div className="mb-2 flex flex-wrap items-center gap-2">
                               <Badge tone="info">Đợt SX {ji + 1}/{journeys.length}</Badge>
                               <span className="text-sm font-semibold text-ink">{j.ma_lenh_san_xuat}</span>
+                              {j.gia_cong && <Badge tone="warning">Gia công</Badge>}
                               {j.giai_doan === 'EP_UI' && <Badge tone="warning">Ép ủi</Badge>}
                               {j.dot_vai?.length > 0 && (
                                 <span className="text-xs text-ink-soft">vải: {j.dot_vai.map((d) => (d.tg_len_mes ? `${d.ma_dot_vai} (lên MES ${fmtDateTime(d.tg_len_mes)})` : d.ma_dot_vai)).join(', ')}</span>
                               )}
                             </div>
-                            {j.trams.length ? (
+                            {/* Lệnh GIA CÔNG (01/10/2026): khuôn riêng Gửi gia công → Ở nhà GC → Nhận hàng về → OQC →
+                                Giao, có SL đang nằm ở từng bước. READY vẫn vẽ bằng `renderNode` như mọi đợt SX. */}
+                            {j.gia_cong ? (
+                              <>
+                                {(() => {
+                                  const rd = j.trams.find((t) => t.ma_tram === 'READY');
+                                  return rd ? <ol>{renderNode(rd, 0, j.trams, false, j)}</ol> : null;
+                                })()}
+                                <HanhTrinhGiaCong j={j} batDau={j.trams.some((t) => t.ma_tram === 'READY') ? 2 : 1} />
+                              </>
+                            ) : j.trams.length ? (
                               <ol>{j.trams.map((t, i) => renderNode(t, i, j.trams, single, j))}</ol>
                             ) : (
                               <p className="pl-1 text-xs text-ink-soft">Đợt SX vừa tạo — chưa đi qua checkpoint nào.</p>

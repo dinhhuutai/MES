@@ -6,6 +6,7 @@ import Icon from '../../../components/common/Icon';
 import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import TraVeGnNote from '../../../components/common/TraVeGnNote';
+import HanhTrinhGiaCong from '../../../components/common/HanhTrinhGiaCong';
 import { getPhanIn } from '../../../services/orderService';
 import { fmtNum, fmtDate, fmtDateTime } from '../../../utils/format';
 import { hienDsMa } from '../../../utils/maPhanIn';
@@ -152,15 +153,26 @@ export default function PhanInTraCuuPanel({ open, onClose, row }) {
                       <span className="text-sm font-medium text-ink">{j.ma_lenh_san_xuat}</span>
                       {/* Đánh dấu đúng đợt SX của DÒNG đang bấm — phần in có thể có nhiều đợt SX. */}
                       {j.lenh_id === row.lenh_id && <Badge tone="success">dòng đang xem</Badge>}
+                      {j.gia_cong && <Badge tone="warning">Gia công</Badge>}
                       {(j.dot_vai || []).map((d) => (
                         <span key={d.ma_dot_vai} className="text-xs text-ink-soft">
                           {d.ma_dot_vai} · SL {fmtNum(d.so_luong)}{d.tg_len_mes ? ` · lên MES ${fmtDateTime(d.tg_len_mes)}` : ''}
                         </span>
                       ))}
                     </div>
-                    <ul className="space-y-0">
-                      {(j.trams || []).map((t, i) => <TramNode key={`${t.ma_tram}-${i}`} t={t} />)}
-                    </ul>
+                    {/* Lệnh GIA CÔNG: khuôn riêng có SL đang nằm ở từng bước (01/10/2026). READY vẽ như cũ. */}
+                    {j.gia_cong ? (
+                      <div className="space-y-2">
+                        <ul className="space-y-0">
+                          {(j.trams || []).filter((t) => t.ma_tram === 'READY').map((t) => <TramNode key="READY" t={t} />)}
+                        </ul>
+                        <HanhTrinhGiaCong j={j} batDau={(j.trams || []).some((t) => t.ma_tram === 'READY') ? 2 : 1} />
+                      </div>
+                    ) : (
+                      <ul className="space-y-0">
+                        {(j.trams || []).map((t, i) => <TramNode key={`${t.ma_tram}-${i}`} t={t} />)}
+                      </ul>
+                    )}
                   </div>
                 ))}
                 {/* ⚠ `pending` là OBJECT `{dot_vai, trams}` (orders.repository), KHÔNG phải mảng — bản cũ
