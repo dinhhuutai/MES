@@ -65,6 +65,8 @@ export const MODULES = [
       { ten: 'Báo cáo sản xuất', route: '/san-xuat/bao-cao', perm: ['PROD_RUN', 'PROD_MONITOR'] },
       // Báo cáo bất thường dừng chuyền (02/10/2026) — từ các lần "Ngừng chuyền" ở RunPanel; cùng quyền API.
       { ten: 'Báo cáo dừng chuyền', route: '/san-xuat/bao-cao-dung-chuyen', perm: ['PROD_RUN', 'PROD_MONITOR'] },
+      // Báo cáo kết quả kiểm hàng (02/10/2026) — khuôn tờ "Kết quả kiểm tra CLSP theo dây chuyền"; cùng quyền API.
+      { ten: 'Báo cáo kiểm hàng', route: '/san-xuat/bao-cao-kiem-hang', perm: ['PROD_RUN', 'PROD_MONITOR', 'KCS', 'PHAN_LOAI_LOI'] },
       // Danh sách tem in + 4 danh mục GỘP THÀNH 1 TRANG có dải toggle (24/09/2026) — mỗi toggle hiện
       // theo đúng quyền của trang cũ; `perm` ở đây = HỢP các quyền đó. Đặt cuối module (màn tra cứu/cấu hình).
       { ten: 'Tem in & danh mục', route: '/san-xuat/danh-muc',

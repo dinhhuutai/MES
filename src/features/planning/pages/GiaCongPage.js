@@ -88,8 +88,15 @@ const buildVeLabel = (r) => ({
   // ⚠ Trước đây `so_luong_huy` đã khai ở Thiết kế tem nhưng KHÔNG được truyền ở đây ⇒ in ra rỗng.
   sl_dat: r.so_luong_lan_nay != null ? r.so_luong_lan_nay : null,
   so_luong_huy: r.so_luong_huy != null ? r.so_luong_huy : null,
+  // 02/10/2026 — Lỗi vải · Thiếu · SL 1 bó (+ số bó). Nhận hàng vừa xong lấy từ phản hồi; in lại lấy từ audit
+  // (`listGiaCongHistory`). Dòng cũ không có ⇒ null (ô trống), không bịa số.
+  sl_loi_vai: r.sl_loi_vai ?? null,
+  sl_thieu: r.sl_thieu ?? null,
+  sl_mot_bo: r.sl_mot_bo ?? null,
+  so_bo: r.so_bo ?? null,
+  // SL vải THỰC nhận lượt này = đạt + hủy + lỗi vải (phần thiếu thì không nhận được gì).
   sl_nhan_lan_nay: r.so_luong_lan_nay != null
-    ? Number(r.so_luong_lan_nay) + (Number(r.so_luong_huy) || 0) : null,
+    ? Number(r.so_luong_lan_nay) + (Number(r.so_luong_huy) || 0) + (Number(r.sl_loi_vai) || 0) : null,
   // Theo CODE PHẦN của tem (sau lượt nhận). Dòng lịch sử có sẵn 3 khóa `_phan`; dòng vừa nhận thì
   // bên gọi tự tính sẵn; dòng cũ (trước mig 095) không có ⇒ null, không bịa số.
   sl_release_phan: r.sl_release_phan ?? null,
@@ -226,9 +233,16 @@ export default function GiaCongPage() {
   // ⚠ TỐI ĐA 2 vì tờ decal chỉ có 2 khung tem — cùng ràng buộc với modal In tem của trang Sửa.
   const openInTem = () => {
     const ds = [...selected.values()]
-      .map((p) => ({ ...p, qty: String(Number(p.con_lai) || 0), huy: '' }));
+      .map((p) => ({ ...p, qty: String(Number(p.con_lai) || 0), huy: '', loiVai: '', thieu: '', motBo: '' }));
     if (!ds.length) { show('Tích ít nhất 1 code phần để in tem', 'error'); return; }
     setInTem({ ds });
+  };
+
+  // Số của 1 dòng modal nhận hàng (02/10/2026: + lỗi vải · thiếu · SL 1 bó). Ô trống = 0.
+  const soLuot = (p) => {
+    const n = (v) => Math.trunc(Number(v || 0));
+    const x = { dat: n(p.qty), huy: n(p.huy), loiVai: n(p.loiVai), thieu: n(p.thieu), motBo: n(p.motBo) };
+    return { ...x, tong: x.dat + x.huy + x.loiVai + x.thieu };
   };
 
   const datO = (p, khoa, v) => setInTem((s) => (s
@@ -241,14 +255,13 @@ export default function GiaCongPage() {
     const chon = inTem.ds;
     // Kiểm SL TRƯỚC KHI GỌI: sai thì báo ngay tại chỗ, khỏi tốn một lượt xin mã tem của ERP.
     for (const p of chon) {
-      const dat = Math.trunc(Number(p.qty || 0));
-      const huy = Math.trunc(Number(p.huy || 0));
-      if (!Number.isFinite(dat) || dat < 0 || !Number.isFinite(huy) || huy < 0) {
+      const s = soLuot(p);
+      if ([s.dat, s.huy, s.loiVai, s.thieu, s.motBo].some((v) => !Number.isFinite(v) || v < 0)) {
         show(`Số lượng của ${p.ma_phan} không hợp lệ`, 'error'); return;
       }
-      if (dat + huy <= 0) { show(`Nhập số lượng nhận của ${p.ma_phan} (đạt hoặc hủy) lớn hơn 0`, 'error'); return; }
-      if (dat + huy > Number(p.con_lai)) {
-        show(`${p.ma_phan}: đạt ${dat} + hủy ${huy} vượt phần còn lại (${fmtNum(p.con_lai)})`, 'error'); return;
+      if (s.tong <= 0) { show(`Nhập số lượng nhận của ${p.ma_phan} (đạt / hủy / lỗi vải / thiếu) lớn hơn 0`, 'error'); return; }
+      if (s.tong > Number(p.con_lai)) {
+        show(`${p.ma_phan}: đạt + hủy + lỗi vải + thiếu = ${s.tong} vượt phần còn lại (${fmtNum(p.con_lai)})`, 'error'); return;
       }
     }
     // Lệnh quá SLA ⇒ nhập lý do nghẽn trước khi nhận hàng (mig 106).
@@ -270,7 +283,10 @@ export default function GiaCongPage() {
           const res = await giaCongNhanTheoPhan(lenhId, ds.map((p) => ({
             dot_vai_ve_id: p.dot_vai_ve_id,
             so_luong: Math.trunc(Number(p.qty || 0)),
-            so_luong_huy: Math.trunc(Number(p.huy || 0)),
+            so_luong_huy: soLuot(p).huy,
+            sl_loi_vai: soLuot(p).loiVai,
+            sl_thieu: soLuot(p).thieu,
+            sl_mot_bo: soLuot(p).motBo || null,
           })));
           // ⚠ Mã tem lấy từ PHẢN HỒI (ERP cấp), KHÔNG tự suy — mỗi tem 13 là một mã riêng.
           const bayGio = new Date().toISOString();
@@ -278,9 +294,12 @@ export default function GiaCongPage() {
             const p = ds.find((x) => x.ma_phan === t.ma_phan) || {};
             // Dòng code phần (đã làm phẳng) mang `so_luong_release`/`da_chuyen`/`con_lai` CỦA CODE PHẦN,
             // là số TRƯỚC lượt nhận ⇒ cộng/trừ lượt vừa nhận để tem ghi số SAU khi nhận.
-            const lan = (Number(t.so_luong) || 0) + (Number(t.so_luong_huy) || 0);
+            // Phần trừ vào "còn lại" = đạt + hủy + lỗi vải + thiếu (backend trả sẵn `tong_luot`).
+            const lan = t.tong_luot != null ? Number(t.tong_luot)
+              : (Number(t.so_luong) || 0) + (Number(t.so_luong_huy) || 0);
             nhan.push(buildVeLabel({
               ...p, ma_tem: t.ma_tem, so_luong_lan_nay: t.so_luong, so_luong_huy: t.so_luong_huy,
+              sl_loi_vai: t.sl_loi_vai, sl_thieu: t.sl_thieu, sl_mot_bo: t.sl_mot_bo, so_bo: t.so_bo,
               sl_release_phan: p.so_luong_release,
               da_chuyen_phan: p.da_chuyen != null ? Number(p.da_chuyen) + lan : null,
               con_lai_phan: p.con_lai != null ? Number(p.con_lai) - lan : null,
@@ -442,14 +461,16 @@ export default function GiaCongPage() {
                     <th className="px-2.5 py-2 text-right text-[11px] font-bold uppercase tracking-wide text-ink-soft">Còn lại</th>
                     <th className="w-28 px-2.5 py-2 text-left text-[11px] font-bold uppercase tracking-wide text-ink-soft">SL đạt</th>
                     <th className="w-28 px-2.5 py-2 text-left text-[11px] font-bold uppercase tracking-wide text-ink-soft">SL hủy</th>
+                    <th className="w-24 px-2.5 py-2 text-left text-[11px] font-bold uppercase tracking-wide text-ink-soft">Lỗi vải</th>
+                    <th className="w-24 px-2.5 py-2 text-left text-[11px] font-bold uppercase tracking-wide text-ink-soft">Thiếu</th>
+                    <th className="w-24 px-2.5 py-2 text-left text-[11px] font-bold uppercase tracking-wide text-ink-soft">SL 1 bó</th>
                     <th className="px-2.5 py-2 text-right text-[11px] font-bold uppercase tracking-wide text-ink-soft">Tổng nhận</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
                   {inTem.ds.map((p) => {
-                    const dat = Math.trunc(Number(p.qty || 0)) || 0;
-                    const huy = Math.trunc(Number(p.huy || 0)) || 0;
-                    const tong = dat + huy;
+                    const s = soLuot(p);
+                    const tong = Number.isFinite(s.tong) ? s.tong : 0;
                     const vuot = tong > Number(p.con_lai);
                     return (
                       <tr key={p._key}>
@@ -469,6 +490,21 @@ export default function GiaCongPage() {
                           <Input type="number" min={0} max={p.con_lai} value={p.huy}
                             placeholder="0" onChange={(e) => datO(p, 'huy', e.target.value)} />
                         </td>
+                        <td className="px-2.5 py-2">
+                          <Input type="number" min={0} max={p.con_lai} value={p.loiVai}
+                            placeholder="0" onChange={(e) => datO(p, 'loiVai', e.target.value)} />
+                        </td>
+                        <td className="px-2.5 py-2">
+                          <Input type="number" min={0} max={p.con_lai} value={p.thieu}
+                            placeholder="0" onChange={(e) => datO(p, 'thieu', e.target.value)} />
+                        </td>
+                        <td className="px-2.5 py-2">
+                          <Input type="number" min={0} value={p.motBo}
+                            placeholder="—" onChange={(e) => datO(p, 'motBo', e.target.value)} />
+                          {s.motBo > 0 && s.dat > 0 && (
+                            <div className="mt-0.5 text-[11px] text-ink-soft">{fmtNum(Math.ceil(s.dat / s.motBo))} bó</div>
+                          )}
+                        </td>
                         <td className={`px-2.5 py-2 text-right tabular-nums font-medium ${vuot ? 'text-danger' : 'text-ink'}`}>
                           {fmtNum(tong)}{vuot ? ' ⚠' : ''}
                         </td>
@@ -479,9 +515,9 @@ export default function GiaCongPage() {
               </table>
             </div>
             <p className="text-xs text-ink-soft">
-              <b>SL đạt</b> = phần dùng được, đi tiếp sang OQC. <b>SL hủy</b> = hàng hỏng nhà gia công trả
-              về, loại hẳn (không sang OQC). Cả hai đều là vải đã nhận nên <b>tổng đạt + hủy</b> mới là
-              phần trừ vào "còn lại". Bấm <b>In tem</b> là NHẬN HÀNG luôn; code phần nào <b>còn lại về 0</b>
+              <b>SL đạt</b> đi tiếp sang OQC. <b>SL hủy</b> (hàng hỏng nhà gia công trả về) và <b>Lỗi vải</b> loại
+              hẳn, không sang OQC. <b>Thiếu</b> = nhà gia công trả thiếu. Cả 4 số cùng trừ vào "còn lại";
+              <b> SL 1 bó</b> chỉ in trên tem (kèm số bó). Bấm <b>In tem</b> là NHẬN HÀNG luôn; code phần nào <b>còn lại về 0</b>
               thì mới rời khỏi màn Gia công.
             </p>
 
