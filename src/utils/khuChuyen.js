@@ -46,6 +46,8 @@ export const LOAI_TABS = [
   { v: 'BAN', label: 'Bàn' },
   ...KHU_BAN.map((k) => ({ v: `KHU:${k.key}`, label: k.label, khu: k.key })),
   { v: 'MAY', label: 'Máy' },
+  // Máy tròn (mig 110, 02/10/2026) — loại chuyền mới, nhóm "MT" của Báo cáo sản xuất.
+  { v: 'MAY_TRON', label: 'Máy tròn' },
   { v: 'EP', label: 'Ép' },
   { v: 'LOGO', label: 'Logo' },
   { v: 'GIA_CONG', label: 'Gia công' },

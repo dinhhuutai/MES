@@ -39,8 +39,11 @@ export function khoPhieu(boCuc) {
 
 // CSS tờ phiếu — chỉ khung + lưới; kiểu chữ/viền do TỪNG Ô tự mang theo (inline style do `renderKhung`
 // sinh), y hệt cách làm của mẫu tem.
-// ⚠ `.to` đặt bề rộng bằng VÙNG NỘI DUNG rồi để `@page margin` lo phần lề — như vậy khi trình duyệt
-//   ngắt trang, khối `lap` tự chảy sang trang sau với đúng lề.
+// ⚠⚠ `@page margin: 0` + lề dựng bằng PADDING của từng tờ `.to` (02/10/2026): lề `@page` là chỗ trình
+//   duyệt in DÒNG ĐẦU/CHÂN TRANG của nó (ngày giờ in · tiêu đề "Phiếu giao <số CT>" · URL · số trang) —
+//   người dùng chốt bỏ dòng chữ đó. Lề 0 thì trình duyệt không còn chỗ in nên tự bỏ. Mỗi TỜ là một
+//   `.to` riêng (chia tờ ở `renderPhieu`) nên tờ nào cũng có đủ lề trên/trái/phải; lề dưới được giữ bằng
+//   cách ép nội dung mỗi tờ không vượt vùng nội dung (`heSoNen`).
 export function cssPhieu(boCuc) {
   const k = khoPhieu(boCuc);
   const le = k.le;
@@ -48,12 +51,13 @@ export function cssPhieu(boCuc) {
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
   body { font-family: Arial, "Segoe UI", sans-serif; color: #000; }
-  .to { width: ${k.rong}mm; margin: 0 auto; }
+  .to { width: ${k.rongGiay}mm; padding: ${le.tren}mm ${le.phai}mm 0 ${le.trai}mm; }
+  .to + .to { break-before: page; page-break-before: always; }
   table.mt-luoi { width: 100%; border-collapse: collapse; table-layout: fixed; }
   table.mt-luoi td { padding: ${PAD_DOC_MM / 2}mm 0.8mm; line-height: 1.15; overflow: hidden; }
   thead { display: table-header-group; }
   tr { break-inside: avoid; page-break-inside: avoid; }
-  @page { size: ${k.rongGiay}mm ${k.caoGiay}mm; margin: ${le.tren}mm ${le.phai}mm ${le.duoi}mm ${le.trai}mm; }`;
+  @page { size: ${k.rongGiay}mm ${k.caoGiay}mm; margin: 0; }`;
 }
 
 // Một khối lưới ô (đầu / cuối phiếu).
@@ -117,9 +121,11 @@ export function boCot(khung, an) {
   return { ...khung, so_cot: giu.length, cot: giu.map((c) => (khung.cot || [])[c] || {}), o };
 }
 
-function khoiLap(khung0, dongs) {
+// `an` = tập cột ẩn đã tính trên TOÀN BỘ dòng của phiếu — phiếu nhiều tờ thì mọi tờ phải cùng bộ cột
+//   (tính theo dòng của riêng từng tờ là tờ có cột KLG, tờ không).
+function khoiLap(khung0, dongs, an = null) {
   if (!khung0 || !khung0.so_cot || !Array.isArray(khung0.hang) || khung0.hang.length < 2) return '';
-  const khung = boCot(khung0, cotAnTheoDieuKien(khung0, dongs));
+  const khung = boCot(khung0, an || cotAnTheoDieuKien(khung0, dongs));
   if (!khung.so_cot) return '';
   const colgroup = `<colgroup>${Array.from({ length: Number(khung.so_cot) }, (_, i) => {
     const w = (khung.cot || [])[i] && (khung.cot || [])[i].rong_mm;
@@ -149,19 +155,75 @@ function khoiLap(khung0, dongs) {
   return `<table class="mt-luoi">${colgroup}<thead>${trCua(kTieuDe, {})}</thead><tbody>${body}</tbody></table>`;
 }
 
-// Dựng HTML thân tờ phiếu (chưa gồm <html>/<style>).
+// ─── CHIA TỜ + NÉN CHIỀU CAO (02/10/2026 — "tối đa 15 tem trên 1 tờ A5") ──────────────────────
+// Mẫu A5 ngang trên prod: đầu ~39mm + tiêu đề cột 7mm + cuối ~39mm ⇒ vùng nội dung 124mm chỉ còn chỗ
+// cho ~6 dòng 6mm, dòng thứ 7 đã tràn sang tờ 2. Người dùng chốt: 1 tờ phải nhận được TỚI 15 tem.
+// Cách làm — KHÔNG sửa mẫu người dùng đã thiết kế, chỉ xử lý lúc dựng:
+//   1. CHIA TỜ: mỗi tờ tối đa `soDongMoiTo` dòng (≥ 15, hoặc nhiều hơn nếu mẫu vốn chứa vừa nhiều hơn
+//      — vd A4 dọc). Khối ĐẦU lặp ở mọi tờ (tờ nào rời ra vẫn biết của phiếu nào), khối CUỐI (tổng,
+//      chữ ký) chỉ ở tờ cuối. STT chạy liên tục qua các tờ.
+//   2. NÉN: tờ nào cao hơn vùng nội dung thì nhân MỌI chiều cao hàng (đầu · vùng lặp · cuối) với cùng
+//      một hệ số ⇒ bề ngang giữ nguyên, chữ tự co theo ô (`tu_co`, mặc định bật). Không nén dưới
+//      `NEN_TOI_THIEU` — mẫu quá cao thì thà ít dòng/tờ hơn còn hơn chữ không đọc nổi.
+// ⚠ Chiều cao mỗi hàng là mm CỐ ĐỊNH (`renderKhung`) nên tổng chiều cao tính trước được chính xác —
+//   đó là lý do nén được bằng phép tính thay vì đo DOM.
+export const TEM_TOI_DA_MOT_TO = 15;
+export const NEN_TOI_THIEU = 0.6;
+const DU_PHONG_MM = 1.5; // nét viền + làm tròn — để tờ không bao giờ đội quá vùng nội dung
+
+const caoCacHang = (khung) => (Array.isArray(khung && khung.hang) ? khung.hang : [])
+  .map((h) => (Number(h && h.cao_mm) > 0 ? Number(h.cao_mm) : CAO_HANG_MAC_DINH));
+
+// Bản sao khung với mọi hàng = chiều cao gốc × hệ số (hàng tự do cũng được chốt mm cụ thể).
+function nenKhung(khung, f) {
+  if (!khung || !khung.so_cot || f >= 1) return khung;
+  const cao = caoCacHang(khung);
+  return { ...khung, hang: (khung.hang || []).map((h, i) => ({ ...(h || {}), cao_mm: Math.round(cao[i] * f * 100) / 100 })) };
+}
+
+// Kế hoạch chia tờ — tách riêng (hàm thuần) để màn thiết kế/kiểm thử dùng lại được.
+export function keHoachChiaTo(boCuc, soDong) {
+  const k = khoPhieu(boCuc);
+  const vung = Math.max(10, k.cao - DU_PHONG_MM);
+  const caoDau = boCuc.dau && boCuc.dau.so_cot ? tongCaoKhoi(boCuc.dau) : 0;
+  const caoCuoi = boCuc.cuoi && boCuc.cuoi.so_cot ? tongCaoKhoi(boCuc.cuoi) : 0;
+  const lap = caoCacHang(boCuc.lap);
+  const caoTieuDe = lap[0] || 0;
+  const caoDong = lap[1] || CAO_HANG_MAC_DINH;
+  const coDinh = caoDau + caoTieuDe + caoCuoi;
+  const vuaTuNhien = Math.floor((vung - coDinh) / caoDong);
+  const vuaKhiNen = Math.floor((vung / NEN_TOI_THIEU - coDinh) / caoDong);
+  const soDongMoiTo = Math.max(1, vuaTuNhien, Math.min(TEM_TOI_DA_MOT_TO, vuaKhiNen));
+  const n = Math.max(1, soDong);
+  const soTo = Math.ceil(n / soDongMoiTo);
+  const to = Array.from({ length: soTo }, (_, i) => {
+    const tu = i * soDongMoiTo;
+    const den = Math.min(n, tu + soDongMoiTo);
+    const cuoi = i === soTo - 1;
+    const can = caoDau + caoTieuDe + (den - tu) * caoDong + (cuoi ? caoCuoi : 0);
+    return { tu, den, cuoi, heSoNen: can > vung ? Math.max(NEN_TOI_THIEU, vung / can) : 1 };
+  });
+  return { soDongMoiTo, to };
+}
+
+// Dựng HTML thân phiếu (chưa gồm <html>/<style>) — MỘT hoặc NHIỀU tờ `.to`.
 // `data` = dữ liệu mức PHIẾU · `dongs` = mảng dữ liệu mức DÒNG.
 export async function renderPhieu(boCuc, data, dongs) {
   // Ảnh QR/mã vạch chỉ có ở khối đầu/cuối (vùng lặp không hỗ trợ — xem `kiemBoCucPhieu`).
+  // ⚠ Dựng ảnh 1 lần từ khung GỐC: ảnh là dataURL, kích thước in do `htmlOMa` tính theo ô ĐÃ NÉN.
   const [aDau, aCuoi] = await Promise.all([
     boCuc.dau ? dungAnhMa(boCuc.dau, data) : Promise.resolve({}),
     boCuc.cuoi ? dungAnhMa(boCuc.cuoi, data) : Promise.resolve({}),
   ]);
-  return '<div class="to">'
-    + khoiLuoi(boCuc.dau, data, aDau)
-    + khoiLap(boCuc.lap, dongs)
-    + khoiLuoi(boCuc.cuoi, data, aCuoi)
-    + '</div>';
+  const ds = dongs && dongs.length ? dongs : [];
+  const { to } = keHoachChiaTo(boCuc, ds.length);
+  const anCot = boCuc.lap && boCuc.lap.so_cot ? cotAnTheoDieuKien(boCuc.lap, ds) : null;
+  return to.map((t) => '<div class="to">'
+    + khoiLuoi(nenKhung(boCuc.dau, t.heSoNen), data, aDau)
+    // Phiếu rỗng ⇒ mảng rỗng ⇒ `khoiLap` tự dựng 1 dòng trống như trước.
+    + khoiLap(nenKhung(boCuc.lap, t.heSoNen), ds.slice(t.tu, t.den), anCot)
+    + (t.cuoi ? khoiLuoi(nenKhung(boCuc.cuoi, t.heSoNen), data, aCuoi) : '')
+    + '</div>').join('');
 }
 
 // Tài liệu HTML hoàn chỉnh của 1 tờ phiếu. `deIn = true` → tự gọi `print()` + đóng cửa sổ.

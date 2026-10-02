@@ -7,6 +7,7 @@ import Pagination from '../../../components/common/Pagination';
 import QrScanner from '../../../components/common/QrScanner';
 import Toast from '../../../components/common/Toast';
 import useToast from '../../../hooks/useToast';
+import useOTimKiem from '../../../hooks/useOTimKiem';
 import PhanLoaiLoiPanel from '../components/PhanLoaiLoiPanel';
 import { listLoaiLoi } from '../../../services/qualityService';
 import {
@@ -43,6 +44,8 @@ export default function PhanLoaiLoiPage() {
   const { toast, show } = useToast();
   const [ngay, setNgay] = useState(homNay());
   const [search, setSearch] = useState('');
+  // Vào trang con trỏ nằm sẵn ở ô tìm; lưu phân loại xong thì xóa ô + đặt con trỏ lại (quét tem kế).
+  const oTim = useOTimKiem();
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -102,7 +105,10 @@ export default function PhanLoaiLoiPage() {
     try {
       const res = await luuPhanLoaiLoi(chon.tem.tem_id, { dong, ghiChu });
       show(`Đã lưu — sửa ${res.data.tong_sua} · hủy ${res.data.tong_huy}`);
-      setChon(null); load();
+      setChon(null);
+      // Ô tìm đang rỗng thì `load` không đổi ⇒ phải tự tải; có mã thì xóa ô cũng kéo `load` chạy lại.
+      if (search) { setSearch(''); setPage(1); } else load();
+      oTim.datConTro();
     } catch (e) { show(e.message || 'Lưu thất bại', 'error'); }
     setDangLuu(false);
   };
@@ -177,7 +183,7 @@ export default function PhanLoaiLoiPage() {
       <Toolbar
         title="Phân loại lỗi" subtitle="Tem đã KCS có hàng hư — chia SL hư thành sửa / hủy theo từng loại lỗi và biện pháp xử lý"
         search={search} onSearch={(v) => { setSearch(v); setPage(1); }}
-        searchPlaceholder="Tìm mã tem / code phần / khách hàng..."
+        searchPlaceholder="Tìm mã tem / code phần / khách hàng..." searchRef={oTim.ref}
       >
         <input type="date" value={ngay} onChange={(e) => { setNgay(e.target.value); setPage(1); }}
           className="h-11 rounded-input border border-line bg-surface px-3 text-sm outline-none focus:border-primary" />

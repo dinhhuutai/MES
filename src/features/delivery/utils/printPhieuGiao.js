@@ -99,10 +99,13 @@ export function gopTheoCodePhan(tems) {
   }));
 }
 
+// ⚠ `@page margin: 0` + lề bằng padding của body (02/10/2026): lề `@page` là chỗ trình duyệt in dòng
+//   đầu/chân trang của nó (ngày giờ in · "Phiếu giao <số CT>" · URL) — người dùng chốt bỏ. Cùng luật với
+//   phiếu theo mẫu (`renderMauPhieu.cssPhieu`).
 const CSS = `
-  @page { size: A4 portrait; margin: 12mm 10mm; }
+  @page { size: A4 portrait; margin: 0; }
   *{box-sizing:border-box}
-  body{font-family:Inter,Arial,sans-serif;color:#111827;margin:0;font-size:12px}
+  body{font-family:Inter,Arial,sans-serif;color:#111827;margin:0;padding:12mm 10mm;font-size:12px}
   .hd{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #111827;padding-bottom:6px}
   .brand{font-size:20px;font-weight:800;letter-spacing:1px}
   .brand small{display:block;font-size:10px;font-weight:400;letter-spacing:0}

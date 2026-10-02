@@ -25,6 +25,7 @@ import { Field, Input } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import useSocketReload from '../../../hooks/useSocketReload';
 import usePermissions from '../../../hooks/usePermissions';
+import useOTimKiem from '../../../hooks/useOTimKiem';
 import { listKcsCandidates, recordKcs, gopTem, kcsHistory, kcsDone, getTemHanhTrinh } from '../../../services/qualityService';
 import { redryTem, getTemLabel } from '../../../services/productionService';
 import { printKcsGiaoTem } from '../../production/utils/printTemLabel';
@@ -61,6 +62,8 @@ export default function KcsPage() {
   const [traVeOpen, setTraVeOpen] = useState(false); // modal "Danh sách trả về" (25/09/2026)
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  // Vào trang con trỏ nằm sẵn ở ô tìm; xác nhận KCS xong thì xóa ô + đặt con trỏ lại (quét tem kế).
+  const oTim = useOTimKiem();
   const [filters, setFilters] = useState({});
 
   const [range, setRange] = useState(() => ({ from: '', to: '' }));
@@ -268,7 +271,9 @@ export default function KcsPage() {
       show(`KCS ${editing.ma_tem}: Đạt ${fmtNum(d.so_luong_dat)}→OQC · Hư ${fmtNum(d.so_luong_sua)}→chờ sửa`
         + (conLai > 0 ? ` · còn ${fmtNum(conLai)} chờ kiểm` : ' · đã kiểm hết'));
       setEditing(null);
-      load();
+      // Ô tìm đang rỗng thì `load` không đổi ⇒ phải tự tải; có mã thì xóa ô cũng kéo `load` chạy lại.
+      if (search) setSearch(''); else load();
+      oTim.datConTro();
     } catch (e) {
       show(e.message || 'Lưu thất bại', 'error');
     } finally {
@@ -329,7 +334,7 @@ export default function KcsPage() {
   return (
     <div>
       <Toolbar title="KCS — Kiểm tra chất lượng" subtitle="Kiểm theo tem (tem đã khô)"
-        search={search} onSearch={setSearch} searchPlaceholder="Quét/nhập mã tem...">
+        search={search} onSearch={setSearch} searchPlaceholder="Quét/nhập mã tem..." searchRef={oTim.ref}>
         {canKcs && <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét QR</Button>}
         {canKcs && selected.size >= 2 && (
           <Button variant="secondary" icon="git-branch" onClick={openGop}>Gộp tem ({selected.size})</Button>

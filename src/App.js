@@ -58,6 +58,8 @@ import KeHoachTamPage from './features/planning/pages/KeHoachTamPage';
 import TestRunPage from './features/planning/pages/TestRunPage';
 import XacNhanChayPage from './features/production/pages/XacNhanChayPage';
 import DanhMucSanXuatPage from './features/production/pages/DanhMucSanXuatPage';
+import BaoCaoSanXuatPage from './features/production/pages/BaoCaoSanXuatPage';
+import BaoCaoDungChuyenPage from './features/production/pages/BaoCaoDungChuyenPage';
 import ReadyQcPage from './features/quality/pages/ReadyQcPage';
 import KcsPage from './features/quality/pages/KcsPage';
 import SuaPage from './features/quality/pages/SuaPage';
@@ -97,6 +99,8 @@ const PAGES = {
   '/chat-luong/test-run': <TestRunPage />,
   '/san-xuat/xac-nhan-chay': <XacNhanChayPage />,
   '/san-xuat/danh-muc': <DanhMucSanXuatPage />,
+  '/san-xuat/bao-cao': <BaoCaoSanXuatPage />,
+  '/san-xuat/bao-cao-dung-chuyen': <BaoCaoDungChuyenPage />,
   '/san-xuat/kcs': <KcsPage />,
   '/san-xuat/sua': <SuaPage />,
   '/san-xuat/phan-loai-loi': <PhanLoaiLoiPage />,

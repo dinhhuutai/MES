@@ -25,6 +25,7 @@ import { evalSla, slaRowClass } from '../../../utils/sla';
 import useLyDoNghen from '../../../hooks/useLyDoNghen';
 import { trangThaiSla } from '../../../utils/nghen';
 import usePermissions from '../../../hooks/usePermissions';
+import useOTimKiem from '../../../hooks/useOTimKiem';
 import { listOqcCandidates, recordOqc, oqcHistory, oqcDone, returnOqcToKcs } from '../../../services/qualityService';
 import { listUserOptions } from '../../../services/userService';
 import { fmtNum, timTheoMaTem, maTemNhan } from '../../../utils/format';
@@ -57,6 +58,8 @@ export default function OqcPage() {
   const { hoiLyDoNghen, lyDoNghenModal } = useLyDoNghen({ maTrang: 'CL_OQC', trangThai: trangThaiSla });
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  // Vào trang con trỏ nằm sẵn ở ô tìm; xác nhận / trả về xong thì xóa ô + đặt con trỏ lại (quét tem kế).
+  const oTim = useOTimKiem();
   const [range, setRange] = useState(() => ({ from: '', to: '' }));
   const [filters, setFilters] = useState({});
 
@@ -169,6 +172,12 @@ export default function OqcPage() {
   // Trạm nhận tem trả về = trạm trước của nguồn đang mở.
   const returnTram = editing?.nguon === 'SUA' ? 'Sửa' : 'KCS';
 
+  // Sau khi xác nhận / trả về: xóa ô tìm + đặt con trỏ lại. Ô đang rỗng thì `load` không đổi ⇒ tự tải.
+  const lamMoiSauXacNhan = () => {
+    if (search) setSearch(''); else load();
+    oTim.datConTro();
+  };
+
   // Trả về ĐÚNG trạm trước theo nguồn: tem 15- (KCS) → KCS · tem 17- (đã sửa) → Sửa.
   const doReturn = async () => {
     if (!returnReason.trim()) { show(`Nhập lý do trả về ${returnTram}`, 'error'); return; }
@@ -177,7 +186,7 @@ export default function OqcPage() {
       await returnOqcToKcs(editing.tem_id, { lyDo: returnReason.trim(), nguon: editing.nguon });
       show(`Đã trả tem ${editing.ma_tem_display || editing.ma_tem} về ${returnTram}`);
       setEditing(null);
-      load();
+      lamMoiSauXacNhan();
     } catch (e) {
       show(e.message || 'Trả về thất bại', 'error');
     } finally {
@@ -204,7 +213,7 @@ export default function OqcPage() {
       };
       show(`OQC ${editing.ma_tem_display || editing.ma_tem}: ${map[r.data.next] || r.data.next}`, r.data.next === 'GIU_OQC' ? 'warning' : 'success');
       setEditing(null);
-      load();
+      lamMoiSauXacNhan();
     } catch (e) {
       show(e.message || 'Lưu thất bại', 'error');
     } finally {
@@ -247,7 +256,7 @@ export default function OqcPage() {
   return (
     <div>
       <Toolbar title="OQC — Kiểm cuối" subtitle="Kiểm cuối theo tem trước giao hàng"
-        search={search} onSearch={setSearch} searchPlaceholder="Quét/nhập mã tem...">
+        search={search} onSearch={setSearch} searchPlaceholder="Quét/nhập mã tem..." searchRef={oTim.ref}>
         {canOqc && <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét QR</Button>}
         <div className="flex items-center gap-1.5 text-xs text-ink-soft">
           <span>Ngày in tem</span>

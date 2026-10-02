@@ -6,7 +6,8 @@ import Icon from './Icon';
 //   prop `siSo` vào Toolbar, sẽ thành 2 dải sĩ số trên cùng 1 màn.
 // ⚠ `subtitle` (dòng mô tả / hướng dẫn dưới tiêu đề) CỐ Ý KHÔNG RENDER nữa (người dùng chốt 30/09/2026:
 //   bỏ mọi chữ hướng dẫn). Prop vẫn nhận để ~80 trang đang truyền không phải sửa; muốn hiện lại thì mở dòng dưới.
-export default function Toolbar({ title, search, onSearch, searchPlaceholder = 'Tìm kiếm...', children }) {
+// `searchRef` (tùy chọn) = ref gắn vào ô tìm kiếm — để trang tự đặt con trỏ vào ô (xem `hooks/useOTimKiem`).
+export default function Toolbar({ title, search, onSearch, searchPlaceholder = 'Tìm kiếm...', searchRef, children }) {
   return (
     <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div>
@@ -18,6 +19,7 @@ export default function Toolbar({ title, search, onSearch, searchPlaceholder = '
           <div className="relative w-full sm:w-56">
             <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" />
             <input
+              ref={searchRef}
               value={search}
               onChange={(e) => onSearch(e.target.value)}
               placeholder={searchPlaceholder}

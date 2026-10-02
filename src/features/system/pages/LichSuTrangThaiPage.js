@@ -16,7 +16,8 @@ import { QUYEN_XEM_HE_THONG } from '../../../constants/modules';
 import { listConfirmHistory, cancelReadyItem, listReopenReadyCandidates, reopenReady } from '../../../services/readyService';
 import { searchPhanInForCancel, huyPhanIn, listDeletedPhanIn, moPhanIn,
   searchDotVaiForCancel, huyDotVai, listDeletedDotVai, moDotVai } from '../../../services/orderService';
-import { listCancelableLenh, cancelLenh, listLanTestChoHuy, giaCongTemCancelable, huyGiaCongTem } from '../../../services/planningService';
+import { listCancelableLenh, cancelLenh, listLanTestChoHuy, giaCongTemCancelable, huyGiaCongTem,
+  listLanTestCancelable, huyLanTest } from '../../../services/planningService';
 import { listCancelableTem, cancelPrintTem, listCloseCandidates, closeProduction, listReopenCandidates, reopenProduction, listUndoStartCandidates, undoStartProduction } from '../../../services/productionService';
 import { listCancelKcs, cancelKcs, listCancelSua, cancelSua, listCancelOqc, cancelOqc,
   listTemSuaCancelable, listTemSuaDeleted, huyTemSua, moTemSua } from '../../../services/qualityService';
@@ -28,6 +29,26 @@ import { khopNhieu, chuanTuKhoa } from '../../../utils/timKiem';
 
 const todayStr = () => new Date().toISOString().slice(0, 10);
 const fmtTime = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '—');
+
+// ─── CỘT "NGÀY XÁC NHẬN" DÙNG CHUNG MỌI TAB (02/10/2026) ─────────────────────────────────────
+// Người dùng chốt: tab nào của trang này cũng phải thấy NGÀY XÁC NHẬN của thứ sắp bị hủy/mở — đặt ĐẦU
+// bảng, cùng tên cột ở mọi tab. `layTg` = mốc · `layBuoc` (tùy chọn) = dòng chữ nhỏ nói đó là xác nhận
+// gì (Release 1 · Test Run · Xác nhận chạy · In tem · QC READY…), vì mỗi tab hủy một bước khác nhau.
+// Tab "Mở …" thì thứ đã xác nhận là LẦN HỦY ⇒ mốc = lúc hủy, kèm người + lý do.
+const cotNgayXacNhan = (layTg, layBuoc) => ({
+  key: 'ngay_xac_nhan', header: 'Ngày xác nhận', className: 'whitespace-nowrap tabular-nums',
+  render: (r) => {
+    const tg = layTg(r);
+    const buoc = layBuoc ? layBuoc(r) : null;
+    return (
+      <div className="leading-tight">
+        <div className={tg ? 'text-ink' : 'text-ink-soft'}>{fmtTime(tg)}</div>
+        {buoc ? <div className="mt-0.5 max-w-[220px] truncate text-[11px] text-ink-soft" title={buoc}>{buoc}</div> : null}
+      </div>
+    );
+  },
+});
+const buocHuy = (r) => `Hủy · ${r.nguoi_huy || '—'}${r.ly_do ? ` · ${r.ly_do}` : ''}`;
 
 // ─── Tab 1: Hủy (xóa mềm) xác nhận READY đã thực hiện ───────────────────────
 function ReadyCancelSection({ show }) {
@@ -67,7 +88,7 @@ function ReadyCancelSection({ show }) {
   };
 
   const columns = [
-    { key: 'tg_xac_nhan', header: 'Giờ xác nhận', className: 'whitespace-nowrap tabular-nums', render: (r) => fmtTime(r.tg_xac_nhan) },
+    cotNgayXacNhan((r) => r.tg_xac_nhan),
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
@@ -143,6 +164,12 @@ function targetsFor(row) {
   // GIA_CONG (lỡ chọn chuyền gia công ở Release 1) & RELEASE_1 chưa test: không có gì để gỡ.
   return [REL1, READY];
 }
+
+// Bước đã xác nhận đưa lệnh vào trạng thái đang đứng (`xn_buoc`, backend `listCancelableLenh`).
+const XN_BUOC_LENH = {
+  RELEASE_1: 'Release 1', TEST_RUN: 'Test Run (QA)', RELEASE_2: 'Release 2',
+  XAC_NHAN_CHAY: 'Xác nhận chạy', CHAY_HOAN_TAT: 'Chạy hoàn tất',
+};
 
 const KQ_TEST = {
   DAT: { tone: 'success', label: 'Đạt' },
@@ -233,7 +260,10 @@ function LenhCancelSection({ show }) {
     }
   };
 
+  // "Ngày xác nhận" hiện ở CẢ 2 chế độ (thường + Hủy tùy chọn) — mốc của bước đưa lệnh vào trạng thái
+  // đang đứng, tức đúng bước sẽ bị hoàn tác.
   const columns = [
+    cotNgayXacNhan((r) => r.tg_xac_nhan, (r) => XN_BUOC_LENH[r.xn_buoc] || null),
     { key: 'ma_lenh_san_xuat', header: 'Mã lệnh', render: (r) => <Badge tone="info">{r.ma_lenh_san_xuat}</Badge> },
     { key: 'trang_thai', header: 'Đang ở', render: (r) => {
       const s = TT[r.trang_thai] || { tone: 'default', label: r.trang_thai };
@@ -392,6 +422,120 @@ function LenhCancelSection({ show }) {
   );
 }
 
+// ─── Tab: Hủy test run (02/10/2026) ───────────────────────────────────────────────────────────
+// QA xác nhận NHẦM phần in ở Test Run ⇒ gỡ đúng LƯỢT TEST đó. Lượt đang đứng sau kết quả đạt (`dang_hieu_luc`)
+// thì lệnh QUAY LẠI màn Test Run (backend gọi lại `rollbackLenh` đích TEST_RUN); lượt khác chỉ bị đánh dấu
+// đã gỡ. Chỉ lệnh chưa vào sản xuất.
+function TestRunCancelSection({ show }) {
+  const [rows, setRows] = useState([]);
+  const [meta, setMeta] = useState({ page: 1, totalPages: 1, total: 0 });
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [target, setTargetRow] = useState(null);
+  const [lyDo, setLyDo] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listLanTestCancelable({ search, page, limit: 20 });
+      setRows(res.data.items);
+      setMeta(res.data.meta);
+    } catch (e) {
+      show(e.message || 'Lỗi tải', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [search, page, show]);
+
+  useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
+
+  const doHuy = async () => {
+    if (!lyDo.trim()) { show('Nhập lý do hủy lần test', 'error'); return; }
+    setBusy(true);
+    try {
+      const res = await huyLanTest(target.id, { lyDo: lyDo.trim() });
+      show(res.message || `Đã hủy lần test ${target.lan_test}`);
+      setTargetRow(null); setLyDo('');
+      load();
+    } catch (e) {
+      show(e.message || 'Hủy lần test thất bại', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const columns = [
+    cotNgayXacNhan((r) => r.tg_test, (r) => `Test Run (QA) · ${r.nguoi_xac_nhan || '—'}`),
+    { key: 'ma_lenh_san_xuat', header: 'Mã lệnh', render: (r) => <Badge tone="info">{r.ma_lenh_san_xuat}</Badge> },
+    { key: 'lan_test', header: 'Lần test', className: 'text-right tabular-nums', render: (r) => r.lan_test },
+    { key: 'ket_qua', header: 'Kết quả', render: (r) => {
+      const kq = KQ_TEST[r.ket_qua] || { tone: 'default', label: r.ket_qua || '—' };
+      return (
+        <div className="flex flex-col gap-1">
+          <Badge tone={kq.tone}>{kq.label}</Badge>
+          {r.owner_cho_in && <span className="text-xs text-ink-soft">{r.owner_cho_in} cho IN</span>}
+        </div>
+      );
+    } },
+    { key: 'trang_thai', header: 'Đang ở', render: (r) => {
+      const s = r.trang_thai === 'RELEASE_2'
+        ? { tone: 'success', label: 'Release 2' }
+        : r.dang_hieu_luc ? { tone: 'warning', label: 'Chờ Release 2' } : { tone: 'info', label: 'Test Run' };
+      return <Badge tone={s.tone}>{s.label}</Badge>;
+    } },
+    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
+    { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
+    { key: 'ma_phan', header: 'Code phần', render: (r) => (
+      <div>{r.ma_phan || '—'}{r.so_phan_in > 1 && <div className="text-xs text-ink-soft">+{r.so_phan_in - 1} phần in</div>}</div>
+    ) },
+    { key: 'mau_vai', header: 'Màu · Kích', render: (r) => [r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—' },
+    { key: 'ghi_chu', header: 'Ghi chú', render: (r) => <span className="text-xs text-ink-soft">{r.ghi_chu || '—'}</span> },
+    { key: 'actions', header: '', className: 'text-right whitespace-nowrap', render: (r) => (
+      <Button variant="danger" className="px-2.5 py-1 text-xs" onClick={() => { setTargetRow(r); setLyDo(''); }}>Hủy lần test</Button>
+    ) },
+  ];
+
+  return (
+    <div>
+      <Toolbar title="Hủy test run"
+        search={search} onSearch={(v) => { setSearch(v); setPage(1); }}
+        searchPlaceholder="Tìm mã lệnh, code phần, mã hàng, màu/kích...">
+        <Badge tone="info">{meta.total} lần test</Badge>
+      </Toolbar>
+
+      <DataTable columns={columns} rows={rows} loading={loading} pageSize={0} sttStart={(meta.page - 1) * 20}
+        emptyText="Không có lần test nào hủy được (chỉ lệnh chưa vào sản xuất)" />
+      <Pagination page={meta.page} totalPages={meta.totalPages} total={meta.total} onPage={setPage} />
+
+      <Modal
+        open={!!target}
+        onClose={() => setTargetRow(null)}
+        title={`Hủy lần test ${target?.lan_test || ''} · ${target?.ma_lenh_san_xuat || ''}`}
+        footer={
+          <>
+            <Button chiXemOk variant="ghost" onClick={() => setTargetRow(null)}>Đóng</Button>
+            <Button variant="danger" onClick={doHuy} loading={busy}>Xác nhận hủy</Button>
+          </>
+        }
+      >
+        <div className="mb-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          {target?.dang_hieu_luc
+            ? <>Đây là lần test <b>đang cho lệnh đi tiếp</b>. Hủy ⇒ gỡ xác nhận CNSP/QA
+              {target?.trang_thai === 'RELEASE_2' ? <>, bỏ duyệt <b>Release 2</b></> : null} và lệnh
+              <b> quay lại màn Test Run</b> để QA test lại đúng phần in.</>
+            : <>Lần test này chỉ bị <b>đánh dấu đã gỡ</b> (không còn tính vào cột "Lần test"); lệnh vẫn đứng nguyên chỗ cũ.</>}
+        </div>
+        <Field label="Lý do (bắt buộc)">
+          <Textarea rows={2} value={lyDo} onChange={(e) => setLyDo(e.target.value)}
+            placeholder="Vd: QA xác nhận nhầm phần in, test nhầm lệnh..." />
+        </Field>
+      </Modal>
+    </div>
+  );
+}
+
 // ─── Tab 3: Hủy lệnh in tem (xóa tem CHƯA kiểm + gỡ xe phơi, trả SL về) ──────
 const TEM_TT = {
   IN: { tone: 'info', label: 'Đã in (chờ phơi)' },
@@ -441,6 +585,7 @@ function TemCancelSection({ show }) {
   };
 
   const columns = [
+    cotNgayXacNhan((r) => r.created_date, () => 'In tem'),
     { key: 'ma_tem', header: 'Mã tem', render: (r) => <Badge tone="info">{r.ma_tem}</Badge> },
     { key: 'trang_thai', header: 'Trạng thái', render: (r) => {
       const s = TEM_TT[r.trang_thai] || { tone: 'default', label: r.trang_thai };
@@ -545,6 +690,7 @@ function GiaCongTemCancelSection({ show }) {
   };
 
   const columns = [
+    cotNgayXacNhan((r) => r.tg_chuyen, () => 'Nhận hàng về'),
     { key: 'ma_tem', header: 'Mã tem', render: (r) => <Badge tone="info">{r.ma_tem}</Badge> },
     { key: 'so_luong', header: 'SL đã chuyển', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
     { key: 'ma_lenh_san_xuat', header: 'Mã đợt SX', render: (r) => r.ma_lenh_san_xuat || '—' },
@@ -556,7 +702,6 @@ function GiaCongTemCancelSection({ show }) {
     { key: 'ma_phan', header: 'Code phần', render: (r) => r.ma_phan || '—' },
     { key: 'mau_vai', header: 'Màu · Kích', render: (r) => [r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—' },
     { key: 'nguoi_chuyen', header: 'Người chuyển', render: (r) => r.nguoi_chuyen || '—' },
-    { key: 'tg_chuyen', header: 'Giờ chuyển', render: (r) => fmtTime(r.tg_chuyen) },
     { key: 'actions', header: '', className: 'text-right whitespace-nowrap', render: (r) =>
       <Button variant="danger" className="px-2.5 py-1 text-xs"
         onClick={() => { setTargetRow(r); setLyDo(''); }}>Hủy tem gia công</Button> },
@@ -668,6 +813,7 @@ function CloseProductionSection({ show }) {
   const pct = (r) => (r.target > 0 ? Math.round((Number(r.printed) / Number(r.target)) * 100) : null);
 
   const columns = [
+    cotNgayXacNhan((r) => r.tg_bd, () => 'Xác nhận chạy'),
     { key: 'ma_lenh_san_xuat', header: 'Mã lệnh', render: (r) => <Badge tone="info">{r.ma_lenh_san_xuat}</Badge> },
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
@@ -688,8 +834,8 @@ function CloseProductionSection({ show }) {
   ];
 
   const reopenCols = [
+    cotNgayXacNhan((r) => r.tg_kt, () => 'Đóng lệnh / chạy hoàn tất'),
     { key: 'ma_lenh_san_xuat', header: 'Mã lệnh', render: (r) => <Badge tone="info">{r.ma_lenh_san_xuat}</Badge> },
-    { key: 'tg_kt', header: 'Đóng lúc', className: 'whitespace-nowrap tabular-nums', render: (r) => fmtTime(r.tg_kt) },
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
     { key: 'ma_phan', header: 'Code phần', render: (r) => r.ma_phan || '—' },
@@ -811,6 +957,7 @@ function UndoStartSection({ show }) {
   };
 
   const columns = [
+    cotNgayXacNhan((r) => r.tg_bd, () => 'Xác nhận chạy'),
     { key: 'ma_lenh_san_xuat', header: 'Mã lệnh', render: (r) => <Badge tone="info">{r.ma_lenh_san_xuat}</Badge> },
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
@@ -923,7 +1070,7 @@ function QcCancelSection({ show, kind }) {
   };
 
   const columns = [
-    { key: 'tg', header: 'Giờ', className: 'whitespace-nowrap tabular-nums', render: (r) => fmtTime(r.tg) },
+    cotNgayXacNhan((r) => r.tg),
     { key: 'ma_tem', header: 'Tem', render: (r) => <Badge tone="info">{r.ma_tem}</Badge> },
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
@@ -1018,6 +1165,7 @@ function ReopenReadySection({ show }) {
   };
 
   const columns = [
+    cotNgayXacNhan((r) => r.tg_xac_nhan, () => 'QC READY'),
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
@@ -1144,6 +1292,7 @@ function PhanInCancelSection({ show }) {
         <input type="checkbox" checked={selected.has(r.phan_in_id)}
           onClick={(e) => e.stopPropagation()} onChange={() => toggle(r)} aria-label="Chọn phần in" />
       ) },
+    cotNgayXacNhan((r) => r.tg_xac_nhan, (r) => (r.tg_xac_nhan ? 'QC READY' : 'Chưa QC READY')),
     { key: 'ma_phan', header: 'Code phần', className: 'font-medium text-ink', render: (r) => r.ma_phan },
     { key: 'ten_khach_hang', header: 'Khách hàng', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
@@ -1260,18 +1409,13 @@ function PhanInReopenSection({ show }) {
       <input type="checkbox" checked={selected.has(r.phan_in_id)}
         onClick={(e) => e.stopPropagation()} onChange={() => toggle(r)} aria-label="Chọn phần in" />
     ) },
+    cotNgayXacNhan((r) => r.tg_huy, buocHuy),
     { key: 'ma_phan', header: 'Code phần', className: 'font-medium text-ink', render: (r) => r.ma_phan },
     { key: 'ten_khach_hang', header: 'Khách hàng', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
     { key: 'mau_vai', header: 'Màu · Kích', render: (r) => [r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—' },
     { key: 'so_dot_vai', header: 'Đợt vải', className: 'text-right tabular-nums', render: (r) => r.so_dot_vai },
-    { key: 'tg_huy', header: 'Hủy lúc', className: 'whitespace-nowrap', render: (r) => (
-      <div>
-        <div>{fmtTime(r.tg_huy)}</div>
-        <div className="text-xs text-ink-soft">{r.nguoi_huy || '—'}{r.ly_do ? ` · ${r.ly_do}` : ''}</div>
-      </div>
-    ) },
     { key: 'co_snapshot', header: 'Khôi phục', render: (r) => (r.co_snapshot
       ? <Badge tone="success">Trọn vẹn</Badge>
       : <Badge tone="warning" title="Phần in xóa trước khi hỗ trợ snapshot — chỉ khôi phục phần in + đợt vải">Một phần</Badge>) },
@@ -1386,6 +1530,7 @@ function DotVaiCancelSection({ show }) {
           title={r.da_release ? 'Đợt đã release — hủy lệnh sản xuất trước' : ''}
           onClick={(e) => e.stopPropagation()} onChange={() => toggle(r)} aria-label="Chọn đợt vải" />
       ) },
+    cotNgayXacNhan((r) => r.tg_xac_nhan, (r) => (r.tg_xac_nhan ? 'QC READY (đợt)' : 'Chưa QC READY')),
     { key: 'ma_dot_vai', header: 'Mã đợt vải', className: 'font-medium text-ink', render: (r) => r.ma_dot_vai },
     { key: 'loai_dot_vai', header: 'Loại đợt', render: (r) => <Badge tone="default">{r.loai_dot_vai || '—'}</Badge> },
     { key: 'so_luong_vai_ve', header: 'SL nhận vải', className: 'text-right tabular-nums',
@@ -1516,6 +1661,7 @@ function DotVaiReopenSection({ show }) {
         title={moDuoc(r) ? '' : 'Phần in đang bị hủy — mở phần in trước'}
         onClick={(e) => e.stopPropagation()} onChange={() => toggle(r)} aria-label="Chọn đợt vải" />
     ) },
+    cotNgayXacNhan((r) => r.tg_huy, buocHuy),
     { key: 'ma_dot_vai', header: 'Mã đợt vải', className: 'font-medium text-ink', render: (r) => r.ma_dot_vai },
     { key: 'loai_dot_vai', header: 'Loại đợt', render: (r) => <Badge tone="default">{r.loai_dot_vai || '—'}</Badge> },
     { key: 'so_luong_vai_ve', header: 'SL nhận vải', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong_vai_ve) },
@@ -1523,12 +1669,6 @@ function DotVaiReopenSection({ show }) {
     { key: 'ten_khach_hang', header: 'Khách hàng', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
     { key: 'mau_vai', header: 'Màu · Kích', render: (r) => [r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—' },
-    { key: 'tg_huy', header: 'Hủy lúc', className: 'whitespace-nowrap', render: (r) => (
-      <div>
-        <div>{fmtTime(r.tg_huy)}</div>
-        <div className="text-xs text-ink-soft">{r.nguoi_huy || '—'}{r.ly_do ? ` · ${r.ly_do}` : ''}</div>
-      </div>
-    ) },
     { key: 'phan_in_con_hoat_dong', header: 'Phần in', render: (r) => {
       if (r.phan_in_con_hoat_dong) return <Badge tone="success">Còn hoạt động</Badge>;
       // Hủy THEO đợt vải này (hết vải) — mở đợt ra là phần in sống lại, khác hẳn ca người dùng cố ý
@@ -1635,6 +1775,7 @@ function TemSuaCancelSection({ show }) {
         <input type="checkbox" checked={selected.has(r.tem_id)}
           onClick={(e) => e.stopPropagation()} onChange={() => toggle(r)} aria-label="Chọn tem sửa" />
       ) },
+    cotNgayXacNhan((r) => r.tg_xac_nhan, () => 'KCS ghi hư'),
     { key: 'ma_tem', header: 'Tem sửa', render: (r) => <Badge tone="warning">{`16-${r.ma_tem}`}</Badge> },
     { key: 'ma_lenh_san_xuat', header: 'Mã lệnh', render: (r) => r.ma_lenh_san_xuat || '—' },
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
@@ -1745,6 +1886,7 @@ function TemSuaReopenSection({ show }) {
       <input type="checkbox" checked={selected.has(r.tem_id)}
         onClick={(e) => e.stopPropagation()} onChange={() => toggle(r)} aria-label="Chọn tem sửa" />
     ) },
+    cotNgayXacNhan((r) => r.tg_huy, buocHuy),
     { key: 'ma_tem', header: 'Tem sửa', render: (r) => <Badge tone="warning">{`16-${r.ma_tem}`}</Badge> },
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
@@ -1754,12 +1896,6 @@ function TemSuaReopenSection({ show }) {
     { key: 'da_cong_huy', header: 'Lúc hủy SL đi đâu', render: (r) => (r.da_cong_huy
       ? <Badge tone="danger">Cộng vào Hủy</Badge>
       : <Badge tone="info">Về KCS chờ kiểm</Badge>) },
-    { key: 'tg_huy', header: 'Hủy lúc', className: 'whitespace-nowrap', render: (r) => (
-      <div>
-        <div>{fmtTime(r.tg_huy)}</div>
-        <div className="text-xs text-ink-soft">{r.nguoi_huy || '—'}{r.ly_do ? ` · ${r.ly_do}` : ''}</div>
-      </div>
-    ) },
     { key: 'tu_dong', header: 'Nguồn hủy', render: (r) => (r.tu_dong
       ? <Badge tone="info" title="OQC trả tem về KCS → tự động hủy tem sửa">Tự động (OQC trả về)</Badge>
       : <Badge tone="default">Thủ công</Badge>) },
@@ -1847,7 +1983,10 @@ function PhieuGiaoCancelSection({ show }) {
     }
   };
 
+  // In phiếu = xác nhận giao (cùng 1 lần bấm) ⇒ mốc xác nhận = lúc lập phiếu; phiếu `TAO` cũ thì chưa xác nhận.
   const columns = [
+    cotNgayXacNhan((r) => r.created_date,
+      (r) => (r.trang_thai === 'DA_GIAO' ? `Xác nhận giao · ${r.nguoi_tao || '—'}` : `Lập phiếu (chưa xác nhận) · ${r.nguoi_tao || '—'}`)),
     { key: 'ma_phieu_giao', header: 'Mã phiếu', render: (r) => <Badge tone="info">{r.ma_phieu_giao}</Badge> },
     { key: 'trang_thai', header: 'Trạng thái', render: (r) => (r.trang_thai === 'DA_GIAO'
       ? <Badge tone="success">Đã giao</Badge> : <Badge tone="warning">Chờ giao</Badge>) },
@@ -1855,8 +1994,6 @@ function PhieuGiaoCancelSection({ show }) {
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
     { key: 'so_tem', header: 'Số tem', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_tem) },
     { key: 'tong_sl', header: 'Tổng SL giao', className: 'text-right tabular-nums', render: (r) => fmtNum(r.tong_sl) },
-    { key: 'created_date', header: 'Giờ lập', render: (r) => fmtTime(r.created_date) },
-    { key: 'nguoi_tao', header: 'Người lập', render: (r) => r.nguoi_tao || '—' },
     { key: 'actions', header: '', className: 'text-right whitespace-nowrap', render: (r) =>
       <Button variant="danger" className="px-2.5 py-1 text-xs"
         onClick={() => { setTargetRow(r); setLyDo(''); }}>Hủy phiếu giao</Button> },
@@ -1978,6 +2115,7 @@ function TichGiaoCancelSection({ show }) {
       <input type="checkbox" checked={sel.has(r.tem_id)} onChange={() => toggle(r)}
         className="h-4 w-4 rounded border-line text-primary focus:ring-primary" />
     ) },
+    cotNgayXacNhan((r) => r.tg_tich_giao, (r) => `Tích tem · ${r.nguoi_tich_giao || '—'}`),
     { key: 'ma_tem', header: 'Mã tem', render: (r) => (
       <Badge tone={r.la_tem_sua ? 'warning' : 'info'}>{r.ma_tem}</Badge>
     ) },
@@ -1988,8 +2126,6 @@ function TichGiaoCancelSection({ show }) {
     { key: 'ma_phan', header: 'Code phần', render: (r) => r.phan_list || '—' },
     { key: 'mau_vai', header: 'Màu · Kích', render: (r) => [r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—' },
     { key: 'con_giao', header: 'Chờ giao', className: 'text-right tabular-nums font-medium text-primary', render: (r) => fmtNum(r.con_giao) },
-    { key: 'nguoi_tich_giao', header: 'Người tích', render: (r) => r.nguoi_tich_giao || '—' },
-    { key: 'tg_tich_giao', header: 'Giờ tích', render: (r) => fmtTime(r.tg_tich_giao) },
   ];
 
   return (
@@ -2047,6 +2183,8 @@ export default function LichSuTrangThaiPage() {
     can('READY_CANCEL') && { key: 'modotvai', label: 'Mở đợt vải' },
     // `LENH_CANCEL_ANY` (mig 065) vào được tab này dù không có RELEASE1/2 — quyền hủy tùy chọn.
     (can('RELEASE1') || can('RELEASE2') || can('LENH_CANCEL_ANY')) && { key: 'lenh', label: 'Hủy lệnh sản xuất' },
+    // Gỡ 1 lượt test QA xác nhận nhầm phần in (02/10/2026) — gương quyền route `/planning/huy-lan-test`.
+    (can('TESTRUN_QA') || can('RELEASE1') || can('RELEASE2') || can('LENH_CANCEL_ANY')) && { key: 'huytest', label: 'Hủy test run' },
     (can('RELEASE1') || can('RELEASE2')) && { key: 'huytemgiacong', label: 'Hủy tem gia công' },
     can('PROD_RUN') && { key: 'tem', label: 'Hủy lệnh in tem' },
     can('PROD_RUN') && { key: 'dong', label: 'Đóng lệnh sản xuất' },
@@ -2090,6 +2228,7 @@ export default function LichSuTrangThaiPage() {
       {tab === 'huydotvai' && <DotVaiCancelSection show={show} />}
       {tab === 'modotvai' && <DotVaiReopenSection show={show} />}
       {tab === 'lenh' && <LenhCancelSection show={show} />}
+      {tab === 'huytest' && <TestRunCancelSection show={show} />}
       {tab === 'huytemgiacong' && <GiaCongTemCancelSection show={show} />}
       {tab === 'tem' && <TemCancelSection show={show} />}
       {tab === 'dong' && <CloseProductionSection show={show} />}

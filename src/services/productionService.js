@@ -31,6 +31,11 @@ export const updateLyDoNgung = (id, body) => client.patch(`/production/ly-do-ngu
 export const toggleLyDoNgung = (id, active) => client.patch(`/production/ly-do-ngung/${id}/active`, { active });
 
 // Danh mục TỔ IN (mig 084) — ô chọn ở khối Phân công + trang Hệ thống > Danh mục tổ in
+// Báo cáo sản xuất ngày (02/10/2026) — 2 bảng (theo tổ · chi tiết phần in) trong 1 lượt gọi.
+export const getBaoCaoSanXuat = (ngay) => client.get('/production/bao-cao-ngay', { params: { ngay } });
+// Báo cáo bất thường dừng chuyền — khoảng ngày SX (06:00 → 06:00), 'YYYY-MM-DD'.
+export const getBaoCaoDungChuyen = (tuNgay, denNgay) =>
+  client.get('/production/bao-cao-dung-chuyen', { params: { tuNgay, denNgay } });
 export const listToIn = (params) => client.get('/production/to-in', { params });
 export const createToIn = (body) => client.post('/production/to-in', body);
 export const updateToIn = (id, body) => client.patch(`/production/to-in/${id}`, body);

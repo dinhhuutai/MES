@@ -61,6 +61,10 @@ export const MODULES = [
       { ten: 'KCS', route: '/san-xuat/kcs', perm: 'KCS', siSo: 'SX_KCS' },
       { ten: 'Phân loại lỗi', route: '/san-xuat/phan-loai-loi', perm: ['PHAN_LOAI_LOI', 'KCS'] },
       { ten: 'Sửa', route: '/san-xuat/sua', perm: 'SUA', siSo: 'SX_SUA' },
+      // Báo cáo sản xuất ngày (02/10/2026) — theo tổ × nhóm chuyền + chi tiết phần in; cùng quyền API.
+      { ten: 'Báo cáo sản xuất', route: '/san-xuat/bao-cao', perm: ['PROD_RUN', 'PROD_MONITOR'] },
+      // Báo cáo bất thường dừng chuyền (02/10/2026) — từ các lần "Ngừng chuyền" ở RunPanel; cùng quyền API.
+      { ten: 'Báo cáo dừng chuyền', route: '/san-xuat/bao-cao-dung-chuyen', perm: ['PROD_RUN', 'PROD_MONITOR'] },
       // Danh sách tem in + 4 danh mục GỘP THÀNH 1 TRANG có dải toggle (24/09/2026) — mỗi toggle hiện
       // theo đúng quyền của trang cũ; `perm` ở đây = HỢP các quyền đó. Đặt cuối module (màn tra cứu/cấu hình).
       { ten: 'Tem in & danh mục', route: '/san-xuat/danh-muc',
@@ -175,7 +179,7 @@ export const MODULES = [
       // ⚠ KH/QA/SX (quyền công đoạn `permXem`) vào được nhưng CHỈ XEM (30/09/2026): muốn hủy phải có
       //   `HUY_XAC_NHAN` (mig 108, backend đòi thêm ở mọi lệnh hủy/mở theo công đoạn) hoặc quyền hủy riêng.
       { ten: 'Hủy lệnh xác nhận', route: '/he-thong/lich-su-trang-thai', perm: ['READY_CANCEL', 'LENH_CANCEL_ANY', 'HUY_XAC_NHAN'],
-        permXem: ['RELEASE1', 'RELEASE2', 'PROD_RUN', 'KCS', 'SUA', 'OQC'] },
+        permXem: ['RELEASE1', 'RELEASE2', 'TESTRUN_QA', 'PROD_RUN', 'KCS', 'SUA', 'OQC'] },
       // Chốt chặn "bán hàng tích tem" (mig 092). Tem chưa tích thì màn Giao hàng KHÔNG hiện.
       // Quyền trang = WORKFLOW_VIEW (quản trị); tổ giao tích ở màn Giao hàng. API `/giao-hang/tich/*` giữ nguyên.
       { ten: 'Chờ GN tích', route: '/he-thong/tich-giao', perm: 'WORKFLOW_VIEW' },

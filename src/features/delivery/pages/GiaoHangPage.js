@@ -202,6 +202,16 @@ export default function GiaoHangPage() {
       return n;
     });
   const setQty = (key, v) => setSelected((s) => (s[key] ? { ...s, [key]: { ...s[key], qty: v } } : s));
+  // Ô tích ở TIÊU ĐỀ = chọn/bỏ MỌI dòng đang hiện (mọi trang của bảng, sau bộ lọc) — 02/10/2026.
+  // Dòng đã chọn từ trước GIỮ NGUYÊN "SL giao lần này" đã sửa; dòng mới chọn lấy mặc định = còn giao.
+  const allSelected = displayRows.length > 0 && displayRows.every((r) => selected[r._key]);
+  const someSelected = !allSelected && displayRows.some((r) => selected[r._key]);
+  const toggleAll = () => setSelected((s) => {
+    if (allSelected) return {};
+    const n = { ...s };
+    displayRows.forEach((r) => { if (!n[r._key]) n[r._key] = { row: r, qty: Number(r.con_src) || 0 }; });
+    return n;
+  });
 
   // ─── IN PHIẾU = TẠO PHIẾU + XÁC NHẬN GIAO + IN ────────────────────────────────────────────
   // `gop`: false = in CHI TIẾT (1 dòng/tem) · true = in GỘP theo code phần.
@@ -366,7 +376,14 @@ export default function GiaoHangPage() {
   });
 
   const temCols = [
-    { key: 'sel', header: '', className: 'w-10', selection: true, render: (r) => (
+    { key: 'sel', className: 'w-10', selection: true,
+      header: (
+        <input type="checkbox" aria-label="Chọn tất cả tem" checked={allSelected}
+          ref={(el) => { if (el) el.indeterminate = someSelected; }}
+          onChange={toggleAll} disabled={!displayRows.length}
+          className="h-4 w-4 rounded border-line text-primary focus:ring-primary" />
+      ),
+      render: (r) => (
       <input type="checkbox" checked={!!selected[r._key]} onChange={() => toggle(r)}
         className="h-4 w-4 rounded border-line text-primary focus:ring-primary" />
     ) },

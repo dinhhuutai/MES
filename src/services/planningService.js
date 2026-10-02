@@ -105,5 +105,8 @@ export const listCancelableLenh = (params) => client.get('/planning/huy-lenh/can
 export const cancelLenh = (lenhId, body) => client.post(`/planning/huy-lenh/${lenhId}`, body);
 // Lượt test của lệnh (chưa gỡ) — chọn lượt GIỮ khi hoàn tác về Test Run.
 export const listLanTestChoHuy = (lenhId) => client.get(`/planning/huy-lenh/${lenhId}/lan-test`);
+// Tab "Hủy test run" (02/10/2026): mọi lượt test hủy được + gỡ 1 lượt (lý do bắt buộc).
+export const listLanTestCancelable = (params) => client.get('/planning/huy-lan-test/candidates', { params });
+export const huyLanTest = (testRunId, body) => client.post(`/planning/huy-lan-test/${testRunId}`, body);
 export const release2Done = (date) => client.get('/planning/release2/done', { params: { date } });
 export const replanDone = (date) => client.get('/planning/replan/done', { params: { date } });

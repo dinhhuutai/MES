@@ -27,6 +27,7 @@ import { evalSla, slaRowClass } from '../../../utils/sla';
 import useLyDoNghen from '../../../hooks/useLyDoNghen';
 import { trangThaiSla } from '../../../utils/nghen';
 import usePermissions from '../../../hooks/usePermissions';
+import useOTimKiem from '../../../hooks/useOTimKiem';
 import { listSuaCandidates, recordSua, suaHistory, suaDone, luuNguoiSua, guiLaiErpSua } from '../../../services/qualityService';
 import { getTemLabel } from '../../../services/productionService';
 import { listUserOptions } from '../../../services/userService';
@@ -64,6 +65,8 @@ export default function SuaPage() {
   const [traVeOpen, setTraVeOpen] = useState(false); // modal "Danh sách trả về" (25/09/2026)
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  // Vào trang con trỏ nằm sẵn ở ô tìm; xác nhận sửa xong thì xóa ô + đặt con trỏ lại (quét tem kế).
+  const oTim = useOTimKiem();
   const [filters, setFilters] = useState({});
 
   // Dải "Theo dõi" (sĩ số) bám ĐÚNG ô tìm + panel lọc của màn này — xem hooks/useSiSoLoc.js.
@@ -252,7 +255,9 @@ export default function SuaPage() {
       show(`Sửa ${editing.ma_tem}: đạt ${fmtNum(r.data.so_luong_sua_dat)} → OQC`
         + (conLai > 0 ? ` · còn ${fmtNum(conLai)} chờ sửa` : ' · đã sửa hết'));
       setEditing(null);
-      load();
+      // Ô tìm đang rỗng thì `load` không đổi ⇒ phải tự tải; có mã thì xóa ô cũng kéo `load` chạy lại.
+      if (search) setSearch(''); else load();
+      oTim.datConTro();
     } catch (e) {
       show(e.message || 'Lưu thất bại', 'error');
     } finally {
@@ -320,7 +325,7 @@ export default function SuaPage() {
   return (
     <div>
       <Toolbar title="Sửa hàng lỗi" subtitle="Xử lý tem lỗi từ KCS / OQC"
-        search={search} onSearch={setSearch} searchPlaceholder="Quét/nhập mã tem...">
+        search={search} onSearch={setSearch} searchPlaceholder="Quét/nhập mã tem..." searchRef={oTim.ref}>
         {canSua && <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét QR</Button>}
         <div className="flex items-center gap-1.5 text-xs text-ink-soft">
           <span>Ngày in tem</span>

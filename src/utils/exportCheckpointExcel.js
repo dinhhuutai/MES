@@ -6,9 +6,25 @@
 // client, nên truyền `rows` = danh sách sau bộ lọc là đã đủ "hết mọi trang, vẫn theo bộ lọc".
 
 import exportPanelExcel from '../components/common/exportPanelExcel';
+import { PHUONG_AN_IN } from '../components/common/PhuongAnInBadge';
 
 const txt = (v) => (v == null || v === '' ? '' : String(v));
 const num = (v) => (v == null || v === '' ? null : Number(v));
+
+// Cột "Phương án in" (HSKT Pain) — nhãn lấy từ `PHUONG_AN_IN` (nguồn nhãn PA duy nhất, gương badge trên
+// bảng); không có HSKT ⇒ ô trống. Màn nào cần thì tự chèn (Test Run — 02/10/2026), KHÔNG nhét vào
+// `COT_LENH` để các màn khác không tự dưng đổi bộ cột.
+export const COT_PHUONG_AN_IN = {
+  header: 'Phương án in', width: 14,
+  value: (r) => (r.phuong_an_in == null || r.phuong_an_in === ''
+    ? '' : (PHUONG_AN_IN[Number(r.phuong_an_in)] || String(r.phuong_an_in))),
+};
+
+// Chèn cột vào NGAY TRƯỚC cột có tiêu đề `truocHeader` (không thấy ⇒ nối cuối).
+export const chenCot = (cols, cot, truocHeader) => {
+  const i = cols.findIndex((c) => c.header === truocHeader);
+  return i < 0 ? [...cols, cot] : [...cols.slice(0, i), cot, ...cols.slice(i)];
+};
 
 // Bộ cột dùng chung cho danh sách theo ĐỢT VẢI (màn Release 1).
 export const COT_DOT_VAI = [

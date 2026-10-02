@@ -65,7 +65,9 @@ export default function BangTheoDoiModal({ open, onClose, dong, range, oMacDinh 
       const r = await layBangTheoDoiChiTiet(ma, { tu: range.from, den: range.to || range.from });
       setData(r.data);
       // Lý do nghẽn của màn tương ứng — lấy bản MỚI NHẤT theo phần in. Lỗi (thiếu mig 106) ⇒ bỏ qua.
+      // Dòng OPEN không có màn (`man` null) — lý do của nó do hệ thống suy (`ly_do_nghen`), không ai ghi tay.
       try {
+        if (!r.data.man) throw new Error('khong-co-man');
         const l = await listLyDoNghen({ maTrang: r.data.man, soNgay: 120 });
         const m = new Map();
         (l.data?.items || []).forEach((x) => { if (x.phan_in_id && !m.has(x.phan_in_id)) m.set(x.phan_in_id, x); });
@@ -97,7 +99,7 @@ export default function BangTheoDoiModal({ open, onClose, dong, range, oMacDinh 
     let x = o ? items.filter((r) => r[CO[o]]) : items;
     if (tim.trim()) {
       x = x.filter((r) => khop([r.ma_phan, r.ten_khach_hang, r.ma_don_hang, r.ma_hang, r.mau_vai,
-        r.ma_lenh_san_xuat, r.ma_tem, r.ten_chuyen, lyDoCua(r)?.ly_do].filter(Boolean).join(' '), tim));
+        r.ma_lenh_san_xuat, r.ma_tem, r.ten_chuyen, r.ly_do_nghen, lyDoCua(r)?.ly_do].filter(Boolean).join(' '), tim));
     }
     // Nghẽn lâu nhất lên đầu ở toggle Nghẽn; còn lại giữ thứ tự backend (vào trạm mới nhất trước).
     if (o.startsWith('nghen')) x = [...x].sort((a, b) => (b.phut_nghen || 0) - (a.phut_nghen || 0));
@@ -135,7 +137,8 @@ export default function BangTheoDoiModal({ open, onClose, dong, range, oMacDinh 
           { header: 'SLA (phút)', num: true, value: (r) => r.sla_phut },
           { header: 'Bắt đầu nghẽn', width: 18, value: (r) => (r.o_nghen && r.tg_bat_dau_nghen ? fmtDateTime(r.tg_bat_dau_nghen) : '') },
           { header: 'Nghẽn bao lâu (phút)', num: true, value: (r) => r.phut_nghen, red: (r) => !!r.o_nghen },
-          { header: 'Lý do nghẽn', width: 40, value: (r) => lyDoCua(r)?.ly_do || '' },
+          { header: 'Lý do nghẽn', width: 40,
+            value: (r) => [r.o_nghen ? r.ly_do_nghen : null, lyDoCua(r)?.ly_do].filter(Boolean).join(' · ') },
           { header: 'Người ghi lý do', width: 20, value: (r) => lyDoCua(r)?.nguoi || '' },
           { header: 'Owner chịu trách nhiệm', width: 24, value: () => owner.chiu_trach_nhiem.join(', ') },
           { header: 'Người xử lý', width: 24, value: () => owner.xu_ly.join(', ') },
@@ -216,12 +219,14 @@ export default function BangTheoDoiModal({ open, onClose, dong, range, oMacDinh 
                         {r.o_nghen && r.phut_nghen != null ? `+${fmtDur(r.phut_nghen)}` : '—'}
                       </td>
                       <td className={`${TD} min-w-[12rem]`}>
+                        {r.o_nghen && r.ly_do_nghen && <div className="font-medium text-danger">{r.ly_do_nghen}</div>}
                         {ld ? (
                           <>
                             <div className="text-ink">{ld.ly_do}</div>
                             <div className="text-[10px] text-ink-soft">{ld.nguoi || '—'} · {fmtDateTime(ld.created_date)}</div>
                           </>
-                        ) : <span className="text-ink-soft">{r.o_nghen_chua ? 'Chưa có lý do' : '—'}</span>}
+                        ) : (r.o_nghen && r.ly_do_nghen ? null
+                          : <span className="text-ink-soft">{r.o_nghen_chua ? 'Chưa có lý do' : '—'}</span>)}
                       </td>
                       <td className={`${TD} min-w-[9rem]`}>
                         <div className="text-ink">{ctn}</div>

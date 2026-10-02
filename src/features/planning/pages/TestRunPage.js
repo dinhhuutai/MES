@@ -33,7 +33,9 @@ import DateRangePicker from '../../../components/common/DateRangePicker';
 import { fmtDate, trongKhoangNgay } from '../../../utils/format';
 import { LOAI_TABS_TACH_ROBOT, hopChipChuyen as hopChip, nhanChip, demChip, locSiSoTheoChip } from '../../../utils/khuChuyen';
 import ChipTabs from '../../../components/common/ChipTabs';
-import exportCheckpointExcel, { COT_LENH, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
+import exportCheckpointExcel, {
+  COT_LENH, COT_PHUONG_AN_IN, chenCot, moTaBoLoc,
+} from '../../../utils/exportCheckpointExcel';
 
 // Chip lọc theo LOẠI CHUYỀN + KHU của chuyền Bàn — nguồn chung `utils/khuChuyen.js`
 // (dùng chung với "Theo dõi chuyền" và "Xác nhận chạy"; sửa 1 chỗ, 3 màn cùng đổi).
@@ -166,8 +168,9 @@ export default function TestRunPage() {
 
   // Xuất Excel: lấy `filtered` = TOÀN BỘ lệnh sau bộ lọc (trang tải-hết rồi phân trang client
   // ⇒ không bị giới hạn ở trang đang xem).
+  // Cột "Phương án in" đứng sau "Tính chất in" — cùng thứ tự với bảng trên màn (02/10/2026).
   const doExcel = () => exportCheckpointExcel({
-    cols: [...COT_LENH,
+    cols: [...chenCot(COT_LENH, COT_PHUONG_AN_IN, 'Loại đợt vải'),
       { header: 'Số lần test', width: 11, num: true, value: (r) => r.so_lan_test },
       { header: 'Chờ kỹ thuật', width: 13, center: true, value: (r) => (r.cho_ky_thuat ? 'Chờ KT làm lại' : ''),
         red: (r) => !!r.cho_ky_thuat }],

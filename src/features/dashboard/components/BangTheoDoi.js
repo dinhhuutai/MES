@@ -10,7 +10,7 @@ import { fmtNum } from '../../../utils/format';
 // ─────────────────────────────────────────────────────────────────────────────
 // BẢNG THEO DÕI THỰC HIỆN CỦA CÁC CHECK POINT (Dashboard → Tổng quan, 20/09/2026)
 //
-// Dựng lại đúng tờ giấy xưởng đang dùng: 10 dòng × 5 cụm (TỒN ĐẦU · NHẬN · XONG · TỒN CUỐI · NGHẼN),
+// Dựng lại đúng tờ giấy xưởng đang dùng: hàng OPEN (đầu vào) + 10 dòng × 5 cụm (TỒN ĐẦU · NHẬN · XONG · TỒN CUỐI · NGHẼN),
 // mỗi cụm có **Phần** (số phần in) và **SL** (pcs). Nguồn số = engine sĩ số (`utils/siSoTram.js`) nên
 // 4 ô đầu KHỚP TUYỆT ĐỐI với dải "Theo dõi" của 12 màn xác nhận.
 //
@@ -66,8 +66,10 @@ export default function BangTheoDoi() {
 
   // Dòng TỔNG — cộng dọc 10 checkpoint. ⚠ Con số này KHÔNG phải "tổng phần in của nhà máy" (một
   // phần in nằm ở nhiều trạm) mà là TỔNG LƯỢT VIỆC đang nằm trên 10 checkpoint.
+  // ⚠ Hàng OPEN (đầu vào — 02/10/2026) KHÔNG cộng vào dòng Tổng: nó là đợt vải ERP đưa lên MES, cộng vào là
+  //   đếm đôi với READY KT (cùng phần in vừa "Nhận" ở OPEN vừa "Nhận" ở READY).
   const tong = useMemo(() => {
-    const c = (k, f) => rows.reduce((s, r) => s + (Number(r[k][f]) || 0), 0);
+    const c = (k, f) => rows.filter((r) => r.ma !== 'OPEN').reduce((s, r) => s + (Number(r[k][f]) || 0), 0);
     // ⚠ % ở dòng Tổng tính theo cột **Phần** (giống hệt từng dòng) — backend cũng trả `pt_sl` nhưng
     //   bảng chỉ có MỘT ô % cho mỗi cụm, trộn 2 mẫu số vào một ô là không đọc ra được gì.
     const vao = c('ton_dau', 'phan') + c('nhan', 'phan');
@@ -183,7 +185,7 @@ export default function BangTheoDoi() {
               {rows.map((r, i) => (
                 <tr key={r.ma} className="cursor-pointer hover:bg-surface-muted/60"
                   title="Bấm để xem danh sách phần in"
-                  onClick={() => setMo({ dong: r, o: r.nghen.phan > 0 ? 'nghen' : 'ton_cuoi' })}>
+                  onClick={() => setMo({ dong: r, o: r.nghen.phan > 0 ? 'nghen' : (r.ma === 'OPEN' ? 'nhan' : 'ton_cuoi') })}>
                   <td className={`${TD} text-center text-ink-soft`}>{i + 1}</td>
                   <td className="border border-line px-2 py-1 text-xs font-semibold text-primary underline-offset-2 hover:underline">
                     {r.ten}
