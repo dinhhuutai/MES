@@ -18,6 +18,7 @@ import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import FieldFilters, { FilterToggle } from '../../../components/common/FieldFilters';
 import Icon from '../../../components/common/Icon';
+import FinishListModal from '../components/FinishListModal';
 import useToast from '../../../hooks/useToast';
 import useSocketReload from '../../../hooks/useSocketReload';
 import useNow from '../../../hooks/useNow';
@@ -71,6 +72,7 @@ export default function OqcPage() {
   const [saving, setSaving] = useState(false);
   const [histOpen, setHistOpen] = useState(false);
   const [doneOpen, setDoneOpen] = useState(false);
+  const [finishOpen, setFinishOpen] = useState(false); // modal "Danh sách finish"
   const [users, setUsers] = useState([]);
   const [returnReason, setReturnReason] = useState('');
   const [returnMode, setReturnMode] = useState(false);
@@ -265,6 +267,7 @@ export default function OqcPage() {
         </div>
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
         <NghenButton rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} onClick={() => setNghenOpen(true)} />
+        <Button chiXemOk variant="ghost" icon="file-spreadsheet" onClick={() => setFinishOpen(true)}>Danh sách finish</Button>
         <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="warning">{displayRows.length} dòng chờ OQC</Badge>
@@ -419,6 +422,7 @@ export default function OqcPage() {
         tenMan="OQC" rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} tenFile="nghen-oqc"
         maTrang="CL_OQC" />
       {lyDoNghenModal}
+      <FinishListModal open={finishOpen} onClose={() => setFinishOpen(false)} />
       <Toast toast={toast} />
     </div>
   );

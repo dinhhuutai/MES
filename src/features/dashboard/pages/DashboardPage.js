@@ -274,8 +274,10 @@ function PhanInJourney({ id }) {
             {ts.pcs_in > 0 && <Badge tone="default">In xong {fmtNum(ts.pcs_in)} pcs · {fmtNum(ts.so_tem)} tem</Badge>}
             {ts.sl_dat > 0 && <Badge tone="success">Đạt {fmtNum(ts.sl_dat)}</Badge>}
             {ts.sl_sua > 0 && <Badge tone="warning">Sửa {fmtNum(ts.sl_sua)}</Badge>}
-            {sp.oqc_dat > 0 && <Badge tone="success">OQC đạt {fmtNum(sp.oqc_dat)}</Badge>}
-            {sp.sua_dat > 0 && <Badge tone="warning">OQC qua sửa {fmtNum(sp.sua_dat)}</Badge>}
+            {/* OQC bốc mẫu ⇒ số chính là CẢ LÔ đã qua OQC (sổ cái tem), không phải số mẫu đạt. */}
+            {sp.oqc_qua_giao > 0 && <Badge tone="success">Qua OQC {fmtNum(sp.oqc_qua_giao)}</Badge>}
+            {sp.cho_oqc > 0 && <Badge tone="warning">Chờ OQC {fmtNum(sp.cho_oqc)}</Badge>}
+            {sp.sua_dat > 0 && <Badge tone="warning">Sửa đạt {fmtNum(sp.sua_dat)}</Badge>}
           </div>
         )}
         {d.kcs_by_dot?.dot?.length > 0 && (

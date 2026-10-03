@@ -74,15 +74,18 @@ function StagePcsNote({ maTram, sp }) {
     return <div className="mt-1 pl-8 text-xs font-medium text-primary">SL release: {fmtNum(sp.sl_release)}</div>;
   if (maTram === 'SAN_XUAT' && sp.sl_in_xong > 0)
     return <div className="mt-1 pl-8 text-xs font-medium text-primary">SL in xong: {fmtNum(sp.sl_in_xong)} pcs</div>;
-  if (maTram === 'OQC' && (sp.oqc_dat > 0 || sp.sua_dat > 0))
+  // OQC BỐC MẪU (03/10/2026): xác nhận đạt (hoặc không đạt mà cho giao) ⇒ CẢ LÔ qua giao. Số chính là
+  //   "Qua OQC (cả lô)" trên tổng hàng vào OQC (đạt thẳng + qua sửa); "chờ OQC" giải thích phần còn thiếu.
+  //   Số mẫu chỉ để tham khảo — bản cũ hiện số MẪU đạt là "OQC đạt" nên nhìn tưởng cả lô chỉ đạt vài chục.
+  if (maTram === 'OQC' && (sp.oqc_qua_giao > 0 || sp.kcs_dat > 0 || sp.sua_dat > 0))
     return (
       <div className="mt-1 pl-8 text-xs">
-        <span className="font-medium text-emerald-600">OQC đạt: {fmtNum(sp.oqc_dat)}</span>
-        {(sp.kcs_dat > 0 || sp.sua_dat > 0) && (
-          <span className="text-ink-soft"> · nguồn vào: đạt thẳng {fmtNum(sp.kcs_dat)}
-            {sp.sua_dat > 0 && <> · <span className="text-amber-600">qua sửa {fmtNum(sp.sua_dat)}</span></>}
-          </span>
-        )}
+        <span className="font-medium text-emerald-600">Qua OQC (cả lô): {fmtNum(sp.oqc_qua_giao)}</span>
+        <span className="text-ink-soft"> / vào OQC {fmtNum((sp.kcs_dat || 0) + (sp.sua_dat || 0))} (đạt thẳng {fmtNum(sp.kcs_dat)}
+          {sp.sua_dat > 0 && <> + <span className="text-amber-600">qua sửa {fmtNum(sp.sua_dat)}</span></>})
+        </span>
+        {sp.cho_oqc > 0 && <span className="font-medium text-amber-600"> · chờ OQC {fmtNum(sp.cho_oqc)}</span>}
+        {sp.mau_kiem > 0 && <span className="text-ink-soft"> · bốc mẫu {fmtNum(sp.mau_kiem)}, mẫu đạt {fmtNum(sp.mau_dat)}</span>}
       </div>
     );
   return null;

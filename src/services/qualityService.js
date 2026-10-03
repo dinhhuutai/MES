@@ -22,6 +22,9 @@ export const recordOqc = (temId, body) => client.post(`/quality/oqc/${temId}`, b
 export const returnOqcToKcs = (temId, body) => client.post(`/quality/oqc/${temId}/tra-ve`, body);
 export const oqcHistory = (date) => client.get('/quality/oqc/history', { params: { date } });
 export const oqcDone = (date) => client.get('/quality/oqc/done', { params: { date } });
+// Danh sách finish (03/10/2026): 1 dòng / (ngày OQC × phần in) + tập MỤC TIÊU (hạn giao = denNgay).
+export const getOqcFinishList = (tuNgay, denNgay, heThong = false) =>
+  client.get('/quality/oqc/finish-list', { params: { tuNgay, denNgay, heThong: heThong ? 1 : undefined } });
 
 // Hủy xác nhận KCS / Sửa / OQC (lỡ xác nhận lộn / nhập sai số) — trang Hủy lệnh xác nhận
 export const listCancelKcs = (date) => client.get('/quality/kcs/cancelable', { params: { date } });
