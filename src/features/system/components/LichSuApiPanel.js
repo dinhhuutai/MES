@@ -14,7 +14,9 @@ import { lichSuApi, guiLaiApi } from '../../../services/caiDatApiService';
 
 // 5 API ĐẨY dữ liệu có nút "Gửi lại ERP" từng dòng (gương backend `caidatapi/guiLai.js` MA_GUI_LAI).
 // API XIN SỐ (mã tem, ID phiếu giao) KHÔNG có — gọi lại là tiêu thêm 1 số của ERP.
-const CO_GUI_LAI = new Set(['ERP_GHI_IN_TEM', 'ERP_GUI_PHIEU_GIAO', 'ERP_GUI_PHAN_LOAI_LOI', 'ERP_GUI_SUA_DAT', 'ERP_GUI_KIEM_PHAM', 'ERP_GUI_TEM_GIA_CONG', 'ERP_GUI_DS_HUY_VAI', 'ERP_GUI_OQC']);
+const CO_GUI_LAI = new Set(['ERP_GHI_IN_TEM', 'ERP_GUI_PHIEU_GIAO', 'ERP_GUI_PHAN_LOAI_LOI', 'ERP_GUI_SUA_DAT', 'ERP_GUI_KIEM_PHAM', 'ERP_GUI_TEM_GIA_CONG', 'ERP_GUI_DS_HUY_VAI', 'ERP_GUI_OQC', 'ERP_GUI_RELEASE_1']);
+// API mà cột "mã" chứa MÃ LỆNH (backend ghi danh sách mã lệnh vào `ma_tem` của dòng lịch sử).
+const MA_LA_LENH = new Set(['ERP_GUI_RELEASE_1']);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LỊCH SỬ GỌI API ERP — dựng theo đúng khuôn màn *Đồng bộ ERP* (bảng + lọc ngày + phân trang +
@@ -72,6 +74,7 @@ export default function LichSuApiPanel({ open, onClose, ma, ten, laGhiInTem }) {
   const { toast, show } = useToast();
   const { can } = usePermissions();
   const guiLaiDuoc = CO_GUI_LAI.has(ma) && can('WORKFLOW_MANAGE');
+  const nhanMa = MA_LA_LENH.has(ma) ? 'Mã lệnh' : 'Mã tem';
 
   const load = useCallback(async () => {
     if (!open || !ma) return;
@@ -110,7 +113,7 @@ export default function LichSuApiPanel({ open, onClose, ma, ten, laGhiInTem }) {
     // ID KẾT NỐI đứng ngay sau kết quả — thứ người dùng cần nhất khi đối soát 2 bên (27/09/2026: mọi API
     //   đều có — IDMES · ID phiếu giao · mã ERP cấp · ID lượt kéo).
     { key: 'id_mes', header: 'ID kết nối', render: (r) => <MaCopy v={r.id_mes} manh /> },
-    { key: 'ma_tem', header: 'Mã tem', render: (r) => <MaCopy v={r.ma_tem} /> },
+    { key: 'ma_tem', header: nhanMa, render: (r) => <MaCopy v={r.ma_tem} /> },
     {
       key: 'thoi_gian_ms',
       header: 'Mất',
@@ -194,7 +197,7 @@ export default function LichSuApiPanel({ open, onClose, ma, ten, laGhiInTem }) {
             )}
           </div>
           <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-            placeholder="Tìm theo ID kết nối hoặc mã tem…" className={`${inputClass} max-w-xs`} />
+            placeholder={`Tìm theo ID kết nối hoặc ${nhanMa.toLowerCase()}…`} className={`${inputClass} max-w-xs`} />
           <Badge tone="info">{meta.total} lượt gọi</Badge>
           <Button chiXemOk variant="secondary" icon="loader" loading={loading} onClick={load} className="ml-auto px-3 py-1.5">
             Tải lại
@@ -224,7 +227,7 @@ export default function LichSuApiPanel({ open, onClose, ma, ten, laGhiInTem }) {
 
             <div className="grid gap-2 text-sm sm:grid-cols-2">
               <div><span className="text-ink-soft">ID kết nối: </span><MaCopy v={chon.id_mes} manh /></div>
-              <div><span className="text-ink-soft">Mã tem: </span><MaCopy v={chon.ma_tem} /></div>
+              <div><span className="text-ink-soft">{nhanMa}: </span><MaCopy v={chon.ma_tem} /></div>
             </div>
             {chon.url && <p className="break-all font-mono text-xs text-ink-soft">{chon.url}</p>}
 
