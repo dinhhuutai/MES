@@ -11,6 +11,8 @@ import Modal from '../../../components/common/Modal';
 import Toast from '../../../components/common/Toast';
 import { Field, Textarea } from '../../../components/common/controls';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
+import TraVeGnModal from '../../../components/common/TraVeGnModal';
+import { dsPhanInCuaLenh } from '../../../utils/phanInTraVeGn';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import useSocketReload from '../../../hooks/useSocketReload';
@@ -71,6 +73,7 @@ export default function XacNhanChayPage() {
   const [runChuyenId, setRunChuyenId] = useState('');
   const [traVe, setTraVe] = useState(null);           // lệnh đang trả về Kỹ thuật (lý do bắt buộc)
   const [traVeReason, setTraVeReason] = useState('');
+  const [gnLenh, setGnLenh] = useState(null);         // lệnh đang mở "Trả về GN" (lệnh giữ nguyên, tạm rời Chờ chạy)
   const [busy, setBusy] = useState(false);
   // Chip LOẠI CHUYỀN + KHU BÀN — cùng bộ với "Theo dõi chuyền" / "Test Run - QA".
   const [loai, setLoai] = useState('');
@@ -283,7 +286,12 @@ export default function XacNhanChayPage() {
 
       <ChoChayModal open={choChayOpen} onClose={() => setChoChayOpen(false)} rows={candidates} loading={loading}
         chuyen={chuyen} canRun={canRun} statusLenh={statusLenh}
-        onConfirm={openConfirm} onTraVe={(r) => { setTraVeReason(''); setTraVe(r); }} />
+        onConfirm={openConfirm} onTraVe={(r) => { setTraVeReason(''); setTraVe(r); }}
+        onTraVeGn={(r) => setGnLenh(r)} />
+
+      <TraVeGnModal open={!!gnLenh} onClose={() => setGnLenh(null)} nguon="CHO_CHAY" lenhId={gnLenh?.id}
+        phanIn={dsPhanInCuaLenh(gnLenh)[0] || null} dsPhanIn={dsPhanInCuaLenh(gnLenh)}
+        onToast={(m) => show(m)} onDone={() => load(true)} />
 
       {/* Xác nhận thông tin chạy + chọn chuyền thực tế */}
       <Modal open={!!confirmRun} onClose={() => setConfirmRun(null)} title="Xác nhận thông tin chạy"

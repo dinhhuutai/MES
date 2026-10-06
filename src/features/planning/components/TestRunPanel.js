@@ -7,6 +7,7 @@ import { Input, Textarea, Field, Select } from '../../../components/common/contr
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import Modal from '../../../components/common/Modal';
+import TraVeGnModal from '../../../components/common/TraVeGnModal';
 import { getLenhDetail, recordTestRun, confirmQA, cancelQA, returnTestRunToReady, skipTestRun, listOwnerChoIn } from '../../../services/planningService';
 import { fmtNum } from '../../../utils/format';
 
@@ -25,7 +26,9 @@ const ketQuaBadge = (kq) => {
 
 // Panel QA xác nhận Test Run cho 1 lệnh: nhập số lượng test, ghi nhận test lỗi (kèm lý do), xác nhận đạt.
 // `truocXacNhan()` (26/09/2026) — Promise<bool>: trang hỏi LÝ DO NGHẼN nếu lệnh đang quá SLA (mig 106).
-export default function TestRunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
+// `onToast` (tùy chọn): thông báo của TRANG — dùng cho thao tác đóng luôn panel (Trả về GN), toast của
+//   panel sẽ mất theo panel.
+export default function TestRunPanel({ lenhId, onClose, onChanged, truocXacNhan, onToast }) {
   const { can } = usePermissions();
   const { toast, show } = useToast();
   const canQA = can('TESTRUN_QA');
@@ -47,6 +50,10 @@ export default function TestRunPanel({ lenhId, onClose, onChanged, truocXacNhan 
   const [ownerOpts, setOwnerOpts] = useState([]);
   const [ikdOwners, setIkdOwners] = useState(() => new Set());
   const [ikdLyDo, setIkdLyDo] = useState('');
+  const [gnOpen, setGnOpen] = useState(false); // "Trả về GN" — lệnh giữ nguyên, tạm rời Test Run
+
+  // Phần in (khử trùng) của lệnh — lệnh gom set cũ có nhiều phần in ⇒ modal Trả về GN cho chọn.
+  const dsPhanIn = [...new Map((data?.dot_vai || []).map((d) => [d.phan_in_id, { id: d.phan_in_id, ma_phan: d.ma_phan, mau_vai: d.mau_vai }])).values()];
 
   const state = data?.state || {};
   const done = state.qa_done;
@@ -226,6 +233,9 @@ export default function TestRunPanel({ lenhId, onClose, onChanged, truocXacNhan 
           <Button variant="danger" onClick={doCancel} loading={busy === 'cancel'}>Hủy xác nhận QA</Button>
         ) : (
           <>
+            {/* Thông tin phần in SAI ⇒ trả Giao nhận sửa; lệnh GIỮ NGUYÊN, tạm rời Test Run tới khi GN xác nhận lại. */}
+            <Button variant="secondary" icon="undo" className="text-danger" onClick={() => setGnOpen(true)}
+              disabled={!dsPhanIn.length || !!busy}>Trả về GN</Button>
             {/* Đang chờ kỹ thuật làm lại → khóa hết (backend cũng chặn: 409 CHO_KY_THUAT). */}
             <Button variant="secondary" onClick={doSkip} loading={busy === 'skip'} disabled={choKyThuat || busy === 'pass' || busy === 'fail'}>
               Không test run
@@ -438,6 +448,9 @@ export default function TestRunPanel({ lenhId, onClose, onChanged, truocXacNhan 
           </Field>
         </div>
       </Modal>
+      <TraVeGnModal open={gnOpen} onClose={() => setGnOpen(false)} nguon="TEST_RUN" lenhId={lenhId}
+        phanIn={dsPhanIn[0] || null} dsPhanIn={dsPhanIn}
+        onToast={(m) => (onToast ? onToast(m) : show(m))} onDone={() => { onChanged?.(); onClose?.(); }} />
       <Toast toast={toast} />
     </SidePanel>
   );

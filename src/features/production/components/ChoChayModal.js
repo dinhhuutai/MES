@@ -59,7 +59,8 @@ const subRows = (r) => (r.phan_in_list ? r.phan_in_list.map((p) => ({ ...p, __su
 // ⇒ chuyển vào modal mở từ nút "Chờ chạy (N)". Bộ lọc RIÊNG của modal (ô tìm + 7 ô + chip + ngày SX KH),
 // không dính bộ lọc bảng Đang chạy. Nút Xác nhận chạy / Trả về KT gọi ngược ra trang (modal xác nhận ở đó).
 // ─────────────────────────────────────────────────────────────────────────────
-export default function ChoChayModal({ open, onClose, rows, loading, chuyen, canRun, statusLenh, onConfirm, onTraVe }) {
+// `onTraVeGn` (06/10/2026): thông tin phần in SAI ⇒ trả Giao nhận sửa; lệnh GIỮ NGUYÊN, tạm rời Chờ chạy.
+export default function ChoChayModal({ open, onClose, rows, loading, chuyen, canRun, statusLenh, onConfirm, onTraVe, onTraVeGn }) {
   const [search, setSearch] = useState('');
   const [loc, setLoc] = useState(LOC_TRONG);
   const [moLoc, setMoLoc] = useState(false);
@@ -118,6 +119,9 @@ export default function ChoChayModal({ open, onClose, rows, loading, chuyen, can
         <div className="flex flex-col items-stretch gap-1">
           <Button className="px-2.5 py-1 text-xs" onClick={() => onConfirm(r)}>Xác nhận chạy</Button>
           <Button variant="secondary" className="px-2.5 py-1 text-xs" onClick={() => onTraVe(r)}>Trả về Kỹ thuật</Button>
+          {onTraVeGn && (
+            <Button variant="secondary" className="px-2.5 py-1 text-xs text-danger" onClick={() => onTraVeGn(r)}>Trả về GN</Button>
+          )}
         </div>
       ) },
   ];

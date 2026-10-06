@@ -7,6 +7,8 @@ import { fmtNum } from '../../../utils/format';
 import { getReleaseList } from '../../../services/planningService';
 import exportReleaseListExcel from '../utils/exportReleaseListExcel';
 import printReleaseList from '../utils/printReleaseList';
+import printLenhSanXuat from '../utils/printLenhSanXuat';
+import { COT_CHECKLIST, dongTieuDe, tieuDeChecklist } from '../utils/cotChecklistRelease';
 import ChipTabs from '../../../components/common/ChipTabs';
 import Icon from '../../../components/common/Icon';
 import Badge from '../../../components/common/Badge';
@@ -37,14 +39,6 @@ const tomorrowStr = () => {
   const d = new Date(); d.setDate(d.getDate() + 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
-const pad = (n) => String(n).padStart(2, '0');
-const fmtClock = (ts) => {
-  if (!ts) return '—';
-  const x = new Date(ts); if (Number.isNaN(+x)) return '—';
-  let h = x.getHours(); const m = x.getMinutes(); const ap = h < 12 ? 'AM' : 'PM';
-  h = h % 12; if (h === 0) h = 12;
-  return `${h}:${pad(m)} ${ap}`;
-};
 const fmtDMY = (s) => { if (!s) return ''; const [y, m, d] = s.split('-'); return `${d}/${m}/${y}`; };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -72,7 +66,7 @@ function OChu({ v, rong = '12rem', className = '' }) {
 // ⚠ LỌC CỘT "ĐANG Ở" (24/09/2026): mỗi dòng trong hộp thành Ô TÍCH chọn checkpoint (`chon` = mảng mã
 //   giai đoạn, rỗng = không lọc). Số trong hộp tính trên tập CHƯA áp lọc cột này — áp vào thì các
 //   checkpoint chưa tích biến mất, không chọn thêm được nữa.
-function ThDangO({ th, dong, tong, chon = [], onChon }) {
+function ThDangO({ th, dong, tong, chon = [], onChon, rowSpan, nhan = 'Đang ở' }) {
   const [ghim, setGhim] = useState(false);      // bấm = GHIM mở (để rê chuột xuống đọc / cuộn danh sách)
   const [hover, setHover] = useState(false);    // rê chuột = xem nhanh
   // ⚠ Bấm để ĐÓNG trong khi con trỏ vẫn nằm trên header thì `hover` còn true ⇒ hộp KHÔNG chịu đóng,
@@ -102,14 +96,14 @@ function ThDangO({ th, dong, tong, chon = [], onChon }) {
   }, [ghim]);
 
   return (
-    <th className={`${th} text-left`}>
+    <th className={`${th} text-left`} rowSpan={rowSpan}>
       <button ref={neo} type="button"
         onClick={() => { if (hien) { setGhim(false); setChanHover(true); } else { setGhim(true); } }}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => { setHover(false); setChanHover(false); }}
         title="Xem số phần in ở từng checkpoint"
         className="inline-flex items-center gap-1 font-semibold text-ink-soft underline decoration-dotted underline-offset-4 hover:text-primary">
-        Đang ở{chon.length > 0 && <span className="ml-0.5 rounded-full bg-primary px-1.5 text-[10px] font-bold text-white no-underline">{chon.length}</span>}
+        {nhan}{chon.length > 0 && <span className="ml-0.5 rounded-full bg-primary px-1.5 text-[10px] font-bold text-white no-underline">{chon.length}</span>}
         <Icon name="chevron-down" size={13} className={hien ? 'rotate-180 transition-transform' : 'transition-transform'} />
       </button>
       {hien && viTri && (
@@ -231,9 +225,61 @@ export default function ReleaseListModal({ open, onClose }) {
   // Số phần in ở từng checkpoint — tính trên tập ĐANG XEM để khớp với bảng + "Tổng phần" ở đầu modal.
   const bangGiaiDoan = useMemo(() => demGiaiDoan(truocDangO), [truocDangO]);
 
-  const th = 'px-2 py-2 text-xs font-semibold text-ink-soft whitespace-nowrap';
+  const th = 'px-2 py-2 text-xs font-semibold text-ink-soft whitespace-nowrap border border-line/70';
   // `align-top` để hàng có ô xuống dòng vẫn thẳng lối (và ô hợp nhất rowSpan bám đỉnh khối đợt SX).
-  const td = 'px-2 py-1.5 align-top whitespace-nowrap';
+  const td = 'px-2 py-1.5 align-top whitespace-nowrap border-x border-line/40';
+
+  // BẢNG THEO MẪU "BẢNG CHECKLIST RELEASE" (06/10/2026) — bộ cột dùng chung với Excel (`cotChecklistRelease`).
+  const { tren: tieuDeTren, duoi: tieuDeDuoi } = dongTieuDe(COT_CHECKLIST);
+  const tieuDe = tieuDeChecklist(chip, date, mode);
+  const soCot = COT_CHECKLIST.length + 1; // + cột nút In
+  // In LỆNH SẢN XUẤT của 1 lệnh — lấy ĐỦ dòng của lệnh từ `items` (không phải tập đang lọc) để lệnh gom set
+  //   cũ in đủ các phần in dù bộ lọc đang ẩn bớt.
+  const inLenh = (r) => {
+    const ok = printLenhSanXuat(items.filter((x) => x.lenh_id === r.lenh_id));
+    if (!ok) show('Trình duyệt đang chặn cửa sổ in — cho phép popup cho trang này rồi bấm In lại', 'error');
+  };
+  const oSo = (v, dam) => (v === '' || v == null ? '' : <span className={dam ? 'font-semibold text-primary' : ''}>{fmtNum(v)}</span>);
+  const oKiem = (v) => (v ? <span className={v === 'OK' ? 'font-semibold text-success' : 'text-ink-soft'}>{v}</span> : '');
+  // Nội dung ô theo cột — cột không khai ở đây hiện thẳng `value(r)`.
+  const noiDung = (c, r) => {
+    const v = c.value(r);
+    switch (c.key) {
+      case 'tt': return <span className="font-medium text-ink-soft">{v}</span>;
+      case 'chuyen': return (
+        <>
+          <OChu v={v} rong="7rem" />
+          {r._span > 1 && (
+            <div className="mt-0.5">
+              <span className="rounded-full bg-primary-wash px-1.5 py-0.5 text-[10px] font-medium text-primary">gom set {r._span} phần in</span>
+            </div>
+          )}
+        </>
+      );
+      case 'khach': return <OChu v={v} rong="8rem" />;
+      case 'po': return <OChu v={v} rong="10rem" />;
+      // Code phần không có trên mẫu giấy nhưng là định danh để tra — để dòng nhỏ dưới Tên hàng (không thêm cột).
+      case 'ten_hang': return (
+        <>
+          <OChu v={v} rong="14rem" />
+          {r.ma_phan && <div className="mt-0.5 whitespace-normal break-words text-[11px] text-ink-soft" style={{ maxWidth: '14rem' }}>{r.ma_phan}</div>}
+        </>
+      );
+      case 'mau_vai': return <OChu v={v} rong="10rem" />;
+      case 'kich_vai': case 'kich_phim': return <OChu v={v} rong="7rem" />;
+      case 'tho_in': return <OChu v={v} rong="9rem" />;
+      case 'trang_thai': return (
+        // Nhãn dài nhất là "Gia công (chờ chuyển OQC)" ⇒ cho pill XUỐNG DÒNG thay vì kéo phình cả cột.
+        <Badge tone={r.giai_doan_hien_tai === 'DA_GIAO' ? 'success' : 'info'} className="max-w-[8.5rem] whitespace-normal break-words">
+          {v || '—'}
+        </Badge>
+      );
+      case 'kt_khuon': case 'kt_muc': case 'kt_test': return oKiem(v);
+      case 'sl_release': return oSo(v, true);
+      default: return c.num ? oSo(v) : v;
+    }
+  };
+  const canhCot = (c) => (c.num ? 'text-right tabular-nums' : ['gio_bd', 'gio_kt', 'han_ht', 'kt_khuon', 'kt_muc', 'kt_test', 'tinh_chat_in'].includes(c.key) ? 'text-center tabular-nums' : '');
 
   return (
     /* `size="full"` + `lapDay`: bảng 18 cột nên cần gần trọn bề ngang, và modal LUÔN cao hết mức để
@@ -265,7 +311,7 @@ export default function ReleaseListModal({ open, onClose }) {
         {/* `ml-auto` đẩy 2 nút sang mép PHẢI của CHÍNH hàng này */}
         <div className="ml-auto flex items-center gap-2">
           <Button chiXemOk variant="secondary" icon="download" disabled={!viewItems.length}
-            onClick={() => exportReleaseListExcel(viewItems, metaXem)}>Xuất Excel</Button>
+            onClick={() => exportReleaseListExcel(viewItems, metaXem, { chip })}>Xuất Excel</Button>
           <Button icon="printer" disabled={!viewItems.length}
             onClick={() => printReleaseList(viewItems, metaXem)}>In</Button>
         </div>
@@ -313,38 +359,39 @@ export default function ReleaseListModal({ open, onClose }) {
       {/* VÙNG CUỘN DUY NHẤT — `flex-1 min-h-0` ăn hết chiều cao còn lại của modal.
           ⚠ `min-h-0` BẮT BUỘC: mặc định flex item có `min-height:auto` nên bảng dài sẽ đẩy phồng
           khối này ra ngoài modal thay vì cuộn bên trong. */}
+      {/* Tiêu đề như mẫu giấy — phần NGÀY tô đỏ; theo chip đang đứng (vd "IN TAY KHU A"). */}
+      <div className="shrink-0 pb-1.5 text-center text-sm font-bold uppercase tracking-wide text-ink">
+        {tieuDe.truoc}<span className="text-danger">{tieuDe.ngay}</span>
+      </div>
       <div className="min-h-0 flex-1 overflow-auto rounded-control border border-line">
-        <table className="w-full text-sm">
-          <thead className="sticky top-0 z-10 bg-surface-muted">
-            <tr className="border-b border-line">
-              <th className={`${th} w-10 text-center`}>STT</th>
-              <th className={`${th} text-left`}>Chuyền</th>
-              <th className={`${th} text-left`}>KH</th>
-              <th className={`${th} text-left`}>PO</th>
-              <th className={`${th} text-left`}>Mã</th>
-              <th className={`${th} text-left`}>Code phần</th>
-              {/* ĐANG Ở — giai đoạn HIỆN TẠI của phần in (backend tính bằng cùng `dominantStageScalar`
-                  với dashboard). Cột này để đối chiếu "release N phần, giờ chúng nằm đâu";
-                  hover/bấm vào header ra luôn số phần in của TỪNG checkpoint. */}
-              <ThDangO th={th} dong={bangGiaiDoan.dong} tong={bangGiaiDoan.tong} chon={locDangO} onChon={setLocDangO} />
-              <th className={`${th} text-left`}>Màu vải</th>
-              <th className={`${th} text-left`}>Kích vải</th>
-              <th className={`${th} text-left`}>Kích phim</th>
-              <th className={`${th} text-right`}>SLĐH</th>
-              <th className={`${th} text-right`}>SLNV</th>
-              <th className={`${th} text-right`}>SL đã in</th>
-              <th className={`${th} text-right`}>SL đã giao</th>
-              <th className={`${th} text-right`}>SL release</th>
-              <th className={`${th} text-left`}>Owner</th>
-              <th className={`${th} text-left`}>Giờ BD</th>
-              <th className={`${th} text-left`}>Giờ KT</th>
+        <table className="w-full border-collapse text-sm">
+          <thead className="sticky top-0 z-10 bg-emerald-50 dark:bg-emerald-950/40">
+            <tr>
+              {/* Nút IN LỆNH SẢN XUẤT (A4) ở đầu mỗi lệnh. */}
+              <th className={`${th} w-10 text-center`} rowSpan={2}>In</th>
+              {tieuDeTren.map((h) => (h.cot && h.cot.key === 'trang_thai' ? (
+                /* TRẠNG THÁI = giai đoạn HIỆN TẠI của phần in (`dominantStageScalar`, cùng dashboard) —
+                   hover/bấm ra số phần in TỪNG checkpoint + tích để lọc (cột "Đang ở" cũ). */
+                <ThDangO key="trang_thai" th={th} rowSpan={2} nhan="Trạng thái"
+                  dong={bangGiaiDoan.dong} tong={bangGiaiDoan.tong} chon={locDangO} onChon={setLocDangO} />
+              ) : (
+                <th key={h.cot ? h.cot.key : `nhom-${h.tuCot}`} rowSpan={h.rowSpan} colSpan={h.colSpan}
+                  className={`${th} text-center ${h.cot && h.cot.num ? 'text-right' : ''}`}>
+                  {h.nhan}
+                </th>
+              )))}
+            </tr>
+            <tr>
+              {tieuDeDuoi.map((c) => (
+                <th key={c.key} className={`${th} text-center`}>{c.header}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={18} className="px-3 py-8 text-center text-ink-soft">Đang tải...</td></tr>
+              <tr><td colSpan={soCot} className="px-3 py-8 text-center text-ink-soft">Đang tải...</td></tr>
             ) : viewItems.length === 0 ? (
-              <tr><td colSpan={18} className="px-3 py-8 text-center text-ink-soft">
+              <tr><td colSpan={soCot} className="px-3 py-8 text-center text-ink-soft">
                 {soLoc ? 'Không có dòng nào khớp ô tìm / bộ lọc'
                   : chip ? `Không có đợt sản xuất nào thuộc ${nhanChip(chip)} trong ngày này`
                     : 'Không có đợt sản xuất release cho ngày này'}
@@ -361,48 +408,27 @@ export default function ReleaseListModal({ open, onClose }) {
                 title="Bấm để xem phần in này đang ở đâu + hành trình"
                 className={`cursor-pointer transition hover:bg-surface-muted/50 ${r._dau ? 'border-t border-line/60' : ''}`}>
                 {r._dau && (
-                  <td rowSpan={r._span} className={`${td} text-center font-medium text-ink-soft`}>
-                    {r._stt}
+                  <td rowSpan={r._span} className={`${td} text-center`}>
+                    {/* `stopPropagation`: bấm In không mở panel tra cứu của dòng. */}
+                    <button type="button" title={`In lệnh sản xuất ${r.ma_lenh_san_xuat || ''} (A4)`}
+                      onClick={(e) => { e.stopPropagation(); inLenh(r); }}
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-control border border-line text-ink-soft hover:border-primary hover:text-primary">
+                      <Icon name="printer" size={14} />
+                    </button>
                   </td>
                 )}
-                {r._dau && (
-                  <td rowSpan={r._span} className={`${td} font-medium text-ink`}>
-                    <OChu v={r.ten_chuyen} rong="8rem" />
-                    {r._span > 1 && (
-                      <div className="mt-0.5">
-                        <span className="rounded-full bg-primary-wash px-1.5 py-0.5 text-[10px] font-medium text-primary">
-                          gom set {r._span} phần in
-                        </span>
-                      </div>
-                    )}
-                  </td>
-                )}
-                {/* Các ô CHỮ dùng `OChu`: dài thì XUỐNG DÒNG + thu nhỏ cỡ chữ, KHÔNG cắt "…" */}
-                <td className={td}><OChu v={r.ten_khach_hang} rong="9rem" /></td>
-                <td className={td}><OChu v={r.ma_don_hang} rong="10rem" /></td>
-                <td className={td}><OChu v={r.ten_ma_hang || r.ma_hang} rong="14rem" /></td>
-                <td className={td}><OChu v={r.ma_phan} rong="13rem" /></td>
-                <td className={td}>
-                  {/* Nhãn dài nhất là "Gia công (chờ chuyển OQC)" ⇒ cho pill XUỐNG DÒNG trong 8.5rem
-                      thay vì kéo phình cả cột (Badge là `inline-flex` nên phải kẹp `max-w` mới bẻ được). */}
-                  <Badge tone={r.giai_doan_hien_tai === 'DA_GIAO' ? 'success' : 'info'}
-                    className="max-w-[8.5rem] whitespace-normal break-words">
-                    {r.giai_doan_ten || '—'}
-                  </Badge>
-                </td>
-                <td className={td}><OChu v={r.mau_vai} rong="11rem" /></td>
-                <td className={td}><OChu v={r.kich_vai} rong="7rem" /></td>
-                <td className={td}><OChu v={r.kich_phim} rong="7rem" /></td>
-                <td className={`${td} text-right tabular-nums`}>{fmtNum(r.so_luong_don_hang)}</td>
-                <td className={`${td} text-right tabular-nums`}>{fmtNum(r.slnv)}</td>
-                {/* SL đã in / đã giao chỉ tính được ở mức LỆNH (tem không lưu phần in) ⇒ hợp nhất ô,
-                    KHÔNG lặp số ở từng dòng (lặp là có người cộng dồn thành số sai). */}
-                {r._dau && <td rowSpan={r._span} className={`${td} text-right tabular-nums`}>{r.sl_da_in == null ? '' : fmtNum(r.sl_da_in)}</td>}
-                {r._dau && <td rowSpan={r._span} className={`${td} text-right tabular-nums`}>{r.sl_da_giao == null ? '' : fmtNum(r.sl_da_giao)}</td>}
-                <td className={`${td} text-right tabular-nums font-semibold text-primary`}>{fmtNum(r.sl_release_phan)}</td>
-                {r._dau && <td rowSpan={r._span} className={`${td}`} />}{/* Owner để trống (ký tay) */}
-                {r._dau && <td rowSpan={r._span} className={`${td} tabular-nums`}>{fmtClock(r.tg_bd_kh)}</td>}
-                {r._dau && <td rowSpan={r._span} className={`${td} tabular-nums`}>{fmtClock(r.tg_kt_kh)}</td>}
+                {/* Ô MỨC LỆNH (`mucLenh`: TT · Chuyền · SL đã in/giao · Giờ BĐ/KT · Thợ in · Test · sổ cái tem)
+                    chỉ vẽ ở DÒNG ĐẦU của đợt và hợp nhất bằng `rowSpan` — tem không lưu phần in nên KHÔNG lặp
+                    số ở từng dòng (lặp là có người cộng dồn thành số sai). Ô chữ dùng `OChu`: dài thì XUỐNG
+                    DÒNG + thu nhỏ cỡ chữ, KHÔNG cắt "…". */}
+                {COT_CHECKLIST.map((c) => {
+                  if (c.mucLenh && !r._dau) return null;
+                  return (
+                    <td key={c.key} rowSpan={c.mucLenh ? r._span : undefined} className={`${td} ${canhCot(c)}`}>
+                      {noiDung(c, r)}
+                    </td>
+                  );
+                })}
               </tr>
             ))}
           </tbody>

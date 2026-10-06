@@ -22,6 +22,7 @@ import { Field, Input, Textarea } from '../../../components/common/controls';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import TimeSelect from '../../../components/common/TimeSelect';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
+import TraVeGnModal from '../../../components/common/TraVeGnModal';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 import ReleaseListModal from '../components/ReleaseListModal';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
@@ -163,6 +164,7 @@ export default function Release1Page() {
   const [relForm, setRelForm] = useState({ chuyenId: '', ngayKeHoach: '', gioBd: '', gioKt: '' });
   const [saving, setSaving] = useState(false);
   const [traVeOpen, setTraVeOpen] = useState(false);     // modal "Trả về Kỹ thuật" (lý do bắt buộc)
+  const [gnOpen, setGnOpen] = useState(false);           // modal "Trả về GN" (thông tin phần in sai)
   const [traVeReason, setTraVeReason] = useState('');
 
   const load = useCallback(async (silent = false) => {
@@ -534,6 +536,8 @@ export default function Release1Page() {
               <Button variant="danger" icon="chevron-left"
                 onClick={() => { setTraVeReason(''); setTraVeOpen(true); }}>Trả về Kỹ thuật</Button>
             )}
+            {/* Thông tin phần in SAI ⇒ trả Giao nhận sửa; đợt tạm rời Release 1 tới khi GN xác nhận lại. */}
+            <Button variant="secondary" icon="undo" className="text-danger" onClick={() => setGnOpen(true)}>Trả về GN</Button>
             <Button onClick={() => submitRelease([detail.dot_vai_id])} loading={saving} disabled={!form.chuyenId}>Xác nhận Release 1</Button>
           </>
         }
@@ -586,6 +590,10 @@ export default function Release1Page() {
           </div>
         )}
       </SidePanel>
+
+      <TraVeGnModal open={gnOpen} onClose={() => setGnOpen(false)} nguon="RELEASE1"
+        phanIn={detail ? { id: detail.phan_in_id, ma_phan: detail.ma_phan } : null}
+        onToast={(m) => show(m)} onDone={() => { setDetail(null); load(true); }} />
 
       {/* Trả về Kỹ thuật — lý do bắt buộc (hiện lại ở màn READY / QC READY) */}
       <Modal

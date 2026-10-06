@@ -7,15 +7,21 @@ import { khop } from '../../utils/timKiem';
 import { danhMucTraVeGn, traVeGn } from '../../services/suaThongTinService';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// "TRẢ VỀ GIAO NHẬN" — màn READY (Kỹ thuật) + QC chuẩn bị kỹ thuật (25/09/2026, mig 105).
+// "TRẢ VỀ GIAO NHẬN" — màn READY (Kỹ thuật) + QC chuẩn bị kỹ thuật (25/09/2026, mig 105) + từ 06/10/2026
+// Release 1 · Test Run · Release 2 · Chờ chạy (`nguon`, gương backend `utils/traVeGn.js NGUON_TRA_VE_GN`).
 // Tick các THÔNG TIN SAI (chọn được nhiều) + ô "Khác" gõ tự do; ô tìm lọc danh sách mục (không dấu).
-// Gửi xong: phần in RỜI màn READY, sang *Đơn hàng › Phần in chờ sửa thông tin*; GN sửa rồi xác nhận
-// lại là quay về READY. Danh mục mục do BACKEND trả (`utils/traVeGn.js`) — thêm mục không sửa FE.
+// Gửi xong: phần in RỜI màn đang đứng (lệnh GIỮ NGUYÊN, chỉ tạm khóa), sang *Đơn hàng › Phần in chờ sửa
+// thông tin*; GN sửa rồi xác nhận lại là quay về ĐÚNG màn cũ. Danh mục mục do BACKEND trả — thêm mục không sửa FE.
+// `dsPhanIn` (tùy chọn): lệnh gom set có NHIỀU phần in ⇒ cho chọn phần in nào sai (mặc định phần in đầu).
 // ─────────────────────────────────────────────────────────────────────────────
 
 let cacheDanhMuc = null; // danh mục gần như không đổi ⇒ tải 1 lần / phiên trang
 
-export default function TraVeGnModal({ open, onClose, phanIn, nguon = 'KT', onDone, onToast }) {
+const TEN_MAN = {
+  KT: 'READY', QC: 'QC READY', RELEASE1: 'Release 1', TEST_RUN: 'Test Run', RELEASE2: 'Release 2', CHO_CHAY: 'Chờ sản xuất',
+};
+
+export default function TraVeGnModal({ open, onClose, phanIn, dsPhanIn, lenhId, nguon = 'KT', onDone, onToast }) {
   const [danhMuc, setDanhMuc] = useState(cacheDanhMuc || []);
   const [chon, setChon] = useState(() => new Set());
   const [coKhac, setCoKhac] = useState(false);
@@ -23,15 +29,24 @@ export default function TraVeGnModal({ open, onClose, phanIn, nguon = 'KT', onDo
   const [tim, setTim] = useState('');
   const [saving, setSaving] = useState(false);
   const [loi, setLoi] = useState('');
+  // Phần in đang chọn để trả (lệnh 1 phần in ⇒ chính `phanIn`).
+  const nhieuPhanIn = Array.isArray(dsPhanIn) && dsPhanIn.length > 1;
+  const [pinId, setPinId] = useState('');
+  const pin = nhieuPhanIn ? (dsPhanIn.find((x) => String(x.id) === String(pinId)) || dsPhanIn[0]) : phanIn;
+  const sauReady = !['KT', 'QC'].includes(nguon);
+  // ⚠ Chuỗi (không phải mảng) làm deps — `dsPhanIn` thường dựng mới mỗi render, đưa thẳng vào deps là
+  //   effect chạy lại liên tục và xóa sạch mục đã tick.
+  const pinDau = nhieuPhanIn ? String(dsPhanIn[0].id) : '';
 
   useEffect(() => {
     if (!open) return;
     setChon(new Set()); setCoKhac(false); setKhac(''); setTim(''); setLoi('');
+    setPinId(pinDau);
     if (cacheDanhMuc) return;
     danhMucTraVeGn()
       .then((r) => { cacheDanhMuc = r.data?.thong_tin || []; setDanhMuc(cacheDanhMuc); })
       .catch((e) => setLoi(e.message || 'Không tải được danh mục thông tin'));
-  }, [open]);
+  }, [open, pinDau]);
 
   // Lọc theo ô tìm, gom theo nhóm (giữ thứ tự khai ở backend).
   // ⚠ Nhóm "Khác" của danh mục (vd "Hủy vải không in") GỘP vào CHUNG khối "Khác" với ô gõ tự do bên
@@ -55,12 +70,14 @@ export default function TraVeGnModal({ open, onClose, phanIn, nguon = 'KT', onDo
   const hopLe = chon.size > 0 || (coKhac && khac.trim());
 
   const gui = async () => {
-    if (!hopLe || !phanIn) return;
+    if (!hopLe || !pin) return;
     if (coKhac && !khac.trim()) { setLoi('Đã tích "Khác" thì ghi rõ thông tin sai là gì.'); return; }
     setSaving(true); setLoi('');
     try {
-      await traVeGn({ phanInId: phanIn.id, thongTin: [...chon], khac: coKhac ? khac.trim() : '', nguon });
-      onToast?.(`Đã trả ${phanIn.ma_phan} về Giao nhận sửa thông tin`);
+      await traVeGn({
+        phanInId: pin.id, thongTin: [...chon], khac: coKhac ? khac.trim() : '', nguon, lenhId: lenhId || undefined,
+      });
+      onToast?.(`Đã trả ${pin.ma_phan} về Giao nhận sửa thông tin`);
       onDone?.();
       onClose?.();
     } catch (e) {
@@ -70,7 +87,7 @@ export default function TraVeGnModal({ open, onClose, phanIn, nguon = 'KT', onDo
 
   return (
     <Modal open={open} onClose={onClose} size="lg"
-      title={`Trả về Giao nhận — ${phanIn?.ma_phan || ''}`}
+      title={`Trả về Giao nhận — ${pin?.ma_phan || ''}`}
       footer={(
         <>
           <Button chiXemOk variant="ghost" onClick={onClose}>Hủy</Button>
@@ -81,9 +98,23 @@ export default function TraVeGnModal({ open, onClose, phanIn, nguon = 'KT', onDo
       )}>
       <div className="space-y-3">
         <p className="rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
-          Tick các <b>thông tin sai</b> cần Giao nhận sửa. Phần in sẽ <b>rời màn READY</b> tới khi GN sửa xong và
-          xác nhận lại. Xác nhận Khuôn/Film/Mực đã làm vẫn được <b>giữ nguyên</b>.
+          Tick các <b>thông tin sai</b> cần Giao nhận sửa. Phần in sẽ <b>rời màn {TEN_MAN[nguon] || 'READY'}</b> tới khi GN
+          sửa xong và xác nhận lại.{' '}
+          {sauReady
+            ? <>Lệnh sản xuất và xác nhận Khuôn/Film/Mực/QC <b>giữ nguyên</b>; mọi lệnh chưa chạy của phần in này tạm khóa tới khi GN xác nhận lại.</>
+            : <>Xác nhận Khuôn/Film/Mực đã làm vẫn được <b>giữ nguyên</b>.</>}
         </p>
+        {nhieuPhanIn && (
+          <label className="block text-sm">
+            <span className="mb-1 block text-xs font-semibold text-ink-soft">Phần in sai thông tin (lệnh gom set)</span>
+            <select value={pinId} onChange={(e) => setPinId(e.target.value)}
+              className="h-10 w-full rounded-control border border-line bg-surface px-3 text-base outline-none focus:border-primary md:text-sm">
+              {dsPhanIn.map((x) => (
+                <option key={x.id} value={String(x.id)}>{[x.ma_phan, x.mau_vai].filter(Boolean).join(' · ')}</option>
+              ))}
+            </select>
+          </label>
+        )}
         <div className="relative">
           <Icon name="search" size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" />
           <input value={tim} onChange={(e) => setTim(e.target.value)} placeholder="Tìm thông tin: màu, kích phim, hạn giao..."

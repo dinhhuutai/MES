@@ -1,104 +1,86 @@
-// Xuất Excel "DANH SÁCH RELEASE" — bám ĐÚNG bố cục form giấy (tiêu đề + dòng tổng + bảng).
+// Xuất Excel "BẢNG CHECKLIST RELEASE" — bám ĐÚNG mẫu giấy xưởng (06/10/2026): tiêu đề (ngày tô đỏ) + 2 dòng
+// tiêu đề nhóm/cột nền xanh lá + bảng. Bộ cột dùng chung với bảng trên màn hình: `cotChecklistRelease.js`.
 // Lazy import exceljs để không phình bundle chính.
 //
-// ⚠ SỐ DÒNG ĐẾM THEO ĐỢT SẢN XUẤT: lệnh gom set ra nhiều dòng (1 dòng/phần in) nhưng các ô ở MỨC LỆNH
-//   (STT · CHUYỀN · SL ĐÃ IN · SL ĐÃ GIAO · OWNER · GIỜ BD · GIỜ KT · XÁC NHẬN) được **mergeCells**
-//   trên các dòng của cùng 1 đợt ⇒ mở Excel ra nhìn giống hệt bảng trên màn hình và bản in giấy.
-//   Dùng chung `gopTheoLenh` với modal + bản in.
-import { gopTheoLenh, demLenh } from './gopDongRelease';
+// ⚠ SỐ DÒNG ĐẾM THEO ĐỢT SẢN XUẤT: lệnh gom set cũ ra nhiều dòng (1 dòng/phần in) nhưng các ô MỨC LỆNH
+//   (`mucLenh` trong bộ cột) được **mergeCells** dọc trên các dòng của cùng 1 đợt ⇒ mở Excel ra giống hệt
+//   bảng trên màn hình. Dùng chung `gopTheoLenh` với modal.
+import { gopTheoLenh } from './gopDongRelease';
+import { COT_CHECKLIST, dongTieuDe, tieuDeChecklist } from './cotChecklistRelease';
 
-// ⚠ Cột "ĐANG Ở" (giai đoạn HIỆN TẠI của phần in) đặt ngay sau CODE PHẦN — khớp thứ tự cột trên màn
-//   hình. Đây là cột ở MỨC PHẦN IN nên KHÔNG nằm trong `COT_GOP` (lệnh gom set có thể mỗi phần in một
-//   giai đoạn khác nhau — gộp ô là giấu mất giá trị của dòng dưới).
-// ⚠ Thêm/bớt cột ở đây phải sửa KÈM `NUM_COLS` + `COT_GOP` (2 hằng đó đánh số theo vị trí cột).
-const HEADERS = [
-  'STT', 'CHUYỀN', 'KH', 'PO', 'MÃ', 'CODE PHẦN', 'ĐANG Ở', 'Màu vải', 'Kích vải', 'Kích phim',
-  'SLĐH', 'SLNV', 'SL ĐÃ IN', 'SL ĐÃ GIAO', 'SL RELEASE',
-  'OWNER', 'GIỜ BD', 'GIỜ KT', 'XÁC NHẬN RELEASE',
-];
-const WIDTHS = [5, 10, 8, 15, 22, 18, 16, 20, 12, 14, 9, 9, 10, 11, 11, 12, 10, 10, 16];
-const NUM_COLS = [1, 11, 12, 13, 14, 15]; // căn phải: STT + SLĐH..SL RELEASE
-// Cột ở MỨC LỆNH (1-indexed theo HEADERS) — merge dọc trên các dòng của cùng 1 đợt SX.
-const COT_GOP = [1, 2, 13, 14, 16, 17, 18, 19];
+const XANH = 'FFE2EFDA';   // nền tiêu đề như mẫu
+const DO = 'FFFF0000';
 
-const pad = (n) => String(n).padStart(2, '0');
-const fmtDMY = (s) => { if (!s) return ''; const x = new Date(s); return Number.isNaN(+x) ? '' : `${pad(x.getDate())}/${pad(x.getMonth() + 1)}/${x.getFullYear()}`; };
-// Giờ 12h AM/PM giống form ("7:30 AM").
-const fmtClock = (ts) => {
-  if (!ts) return '';
-  const x = new Date(ts); if (Number.isNaN(+x)) return '';
-  let h = x.getHours(); const m = x.getMinutes(); const ap = h < 12 ? 'AM' : 'PM';
-  h = h % 12; if (h === 0) h = 12;
-  return `${h}:${pad(m)} ${ap}`;
-};
-
-export default async function exportReleaseListExcel(items, meta, fileName = 'danh-sach-release') {
+export default async function exportReleaseListExcel(items, meta, { chip = '', fileName = 'checklist-release' } = {}) {
   const ExcelJS = (await import('exceljs')).default || (await import('exceljs'));
   const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet('Danh sách release');
-  ws.columns = WIDTHS.map((w) => ({ width: w }));
-  const N = HEADERS.length;
+  const ws = wb.addWorksheet('Checklist release');
+  const cols = COT_CHECKLIST;
+  const N = cols.length;
+  ws.columns = cols.map((c) => ({ width: c.width }));
 
-  const thin = { style: 'thin', color: { argb: 'FFD0D5DD' } };
+  const thin = { style: 'thin', color: { argb: 'FF000000' } };
   const border = { top: thin, left: thin, bottom: thin, right: thin };
 
-  // Tiêu đề
+  // Dòng 1 — tiêu đề, phần NGÀY tô đỏ (rich text) như mẫu.
   ws.mergeCells(1, 1, 1, N);
+  const tieuDe = tieuDeChecklist(chip, meta?.ngay, meta?.mode);
   const t = ws.getCell(1, 1);
-  t.value = `DANH SÁCH RELEASE ${meta?.mode === 'RELEASE' ? '— NGÀY RELEASE' : 'NGÀY'} ${fmtDMY(meta?.ngay)}`;
-  t.font = { bold: true, size: 15 };
+  t.value = { richText: [
+    { text: tieuDe.truoc, font: { bold: true, size: 18, name: 'Times New Roman' } },
+    { text: tieuDe.ngay, font: { bold: true, size: 18, name: 'Times New Roman', color: { argb: DO } } },
+  ] };
   t.alignment = { horizontal: 'center', vertical: 'middle' };
-  ws.getRow(1).height = 24;
+  ws.getRow(1).height = 30;
 
-  // Dòng tổng
-  const sum = ws.addRow([
-    'TỔNG ĐƠN', meta?.tong_don ?? 0, 'TỔNG MÃ', meta?.tong_ma ?? 0,
-    'TỔNG PHẦN', meta?.tong_phan ?? 0, 'ĐỢT SX', demLenh(items),
-    'SL RELEASE', meta?.sl_release ?? 0,
-  ]);
-  sum.eachCell((c) => { c.font = { bold: true }; c.alignment = { vertical: 'middle' }; });
-
-  ws.addRow([]); // spacer
-
-  // Header bảng
-  const head = ws.addRow(HEADERS);
-  head.height = 26;
-  head.eachCell((cell) => {
-    cell.font = { bold: true, color: { argb: 'FF111827' } };
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF2F7' } };
+  // Dòng 2–3 — tiêu đề nhóm + tiêu đề cột.
+  const { tren } = dongTieuDe(cols);
+  const R1 = 2;
+  const R2 = 3;
+  const kieuTieuDe = (cell) => {
+    cell.font = { bold: true, name: 'Times New Roman', size: 11 };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: XANH } };
     cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
     cell.border = border;
-  });
+  };
+  for (const h of tren) {
+    const c1 = h.tuCot + 1;
+    if (h.rowSpan === 2) {
+      ws.getCell(R1, c1).value = h.nhan;
+      ws.mergeCells(R1, c1, R2, c1);
+    } else {
+      ws.getCell(R1, c1).value = h.nhan;
+      if (h.colSpan > 1) ws.mergeCells(R1, c1, R1, c1 + h.colSpan - 1);
+      for (let k = 0; k < h.colSpan; k += 1) ws.getCell(R2, c1 + k).value = cols[h.tuCot + k].header;
+    }
+  }
+  for (let c = 1; c <= N; c += 1) { kieuTieuDe(ws.getCell(R1, c)); kieuTieuDe(ws.getCell(R2, c)); }
+  ws.getRow(R1).height = 22;
+  ws.getRow(R2).height = 30;
+  ws.autoFilter = { from: { row: R2, column: 1 }, to: { row: R2, column: N } };
+  ws.views = [{ state: 'frozen', ySplit: R2 }];
 
+  // Dữ liệu
   const ds = gopTheoLenh(items);
-  const dongDau = [];   // [{ r, rowNumber }] của các dòng ĐẦU mỗi đợt SX → merge sau khi ghi hết
+  const dongDau = [];
   for (const r of ds) {
-    const row = ws.addRow([
-      // STT + các ô mức LỆNH chỉ ghi giá trị ở DÒNG ĐẦU của đợt; dòng sau để trống rồi merge lên.
-      r._dau ? r._stt : '', r._dau ? (r.ten_chuyen || '') : '',
-      r.ten_khach_hang || '', r.ma_don_hang || '', r.ten_ma_hang || r.ma_hang || '',
-      r.ma_phan || '', r.giai_doan_ten || '',
-      r.mau_vai || '', r.kich_vai || '', r.kich_phim || '',
-      r.so_luong_don_hang ?? '', r.slnv ?? 0,
-      // ⚠ SL ĐÃ IN / ĐÃ GIAO chỉ tính được ở mức LỆNH ⇒ ghi 1 lần rồi merge, KHÔNG lặp số ở từng dòng
-      //   (lặp là sẽ có người cộng dồn cột này thành số sai).
-      r._dau && r.sl_da_in != null ? r.sl_da_in : '',
-      r._dau && r.sl_da_giao != null ? r.sl_da_giao : '',
-      r.sl_release_phan ?? r.so_luong_release ?? 0,
-      '', r._dau ? fmtClock(r.tg_bd_kh) : '', r._dau ? fmtClock(r.tg_kt_kh) : '', '',
-    ]);
-    row.eachCell({ includeEmpty: true }, (cell, col) => {
+    // Ô mức LỆNH chỉ ghi ở DÒNG ĐẦU của đợt SX; dòng sau để trống rồi merge lên.
+    const row = ws.addRow(cols.map((c) => (c.mucLenh && !r._dau ? '' : c.value(r))));
+    row.eachCell({ includeEmpty: true }, (cell, ci) => {
+      const c = cols[ci - 1];
       cell.border = border;
-      cell.alignment = { vertical: 'middle', horizontal: NUM_COLS.includes(col) ? 'right' : 'left', wrapText: false };
+      cell.font = { name: 'Times New Roman', size: 11, bold: ['tt', 'chuyen', 'khach', 'po', 'ten_hang', 'mau_vai', 'kich_vai', 'kich_phim', 'tinh_chat_in', 'sldh', 'slnv', 'sl_release', 'gio_bd', 'gio_kt'].includes(c?.key) };
+      cell.alignment = { vertical: 'middle', horizontal: c?.num || ['gio_bd', 'gio_kt', 'han_ht', 'kt_khuon', 'kt_muc', 'kt_test', 'tinh_chat_in'].includes(c?.key) ? 'center' : 'left', wrapText: true };
+      if (c?.num && typeof cell.value === 'number') cell.numFmt = '#,##0';
     });
     if (r._dau) dongDau.push({ r, rowNumber: row.number });
   }
 
-  // Merge dọc các cột mức LỆNH cho đợt SX có >1 phần in.
-  // ⚠ `_span` đã được `gopTheoLenh` tính trên tập ĐANG XUẤT (sau bộ lọc) nên không merge lố sang đợt kế.
+  // Merge dọc các cột mức LỆNH cho đợt SX có >1 phần in (`_span` tính trên tập ĐANG XUẤT).
+  const cotGop = cols.map((c, i) => (c.mucLenh ? i + 1 : null)).filter(Boolean);
   for (const { r, rowNumber } of dongDau) {
     if (r._span <= 1) continue;
-    for (const col of COT_GOP) ws.mergeCells(rowNumber, col, rowNumber + r._span - 1, col);
+    for (const col of cotGop) ws.mergeCells(rowNumber, col, rowNumber + r._span - 1, col);
   }
 
   const buf = await wb.xlsx.writeBuffer();

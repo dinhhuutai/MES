@@ -25,6 +25,8 @@ import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import PhuongAnInBadge, { PHUONG_AN_IN } from '../../../components/common/PhuongAnInBadge';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
+import TraVeGnModal from '../../../components/common/TraVeGnModal';
+import { dsPhanInCuaLenh } from '../../../utils/phanInTraVeGn';
 import { listRelease2Candidates, approveRelease2, approveRelease2Batch, planHistory, release2Done } from '../../../services/planningService';
 import { fmtNum, fmtDate, trongKhoangNgay } from '../../../utils/format';
 import DateRangePicker from '../../../components/common/DateRangePicker';
@@ -75,6 +77,7 @@ export default function Release2Page() {
   const [showFilters, setShowFilters] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const [detail, setDetail] = useState(null); // bấm vào hàng → SidePanel chi tiết lệnh
+  const [gnLenh, setGnLenh] = useState(null); // lệnh đang mở modal "Trả về GN"
   const [loai, setLoai] = useState(''); // chip loại chuyền / khu bàn ('' = tất cả)
 
   // Dải "Theo dõi" (sĩ số) bám ô tìm + panel lọc + dải chip loại chuyền/khu của màn này.
@@ -275,6 +278,11 @@ export default function Release2Page() {
         footer={(
           <>
             <Button chiXemOk variant="ghost" onClick={() => setDetail(null)}>Đóng</Button>
+            {/* Thông tin phần in SAI ⇒ trả Giao nhận sửa; lệnh GIỮ NGUYÊN, tạm rời Release 2 tới khi GN xác nhận lại. */}
+            {canApprove && detail && (
+              <Button variant="secondary" icon="undo" className="text-danger"
+                onClick={() => { const r = detail; setDetail(null); setGnLenh(r); }}>Trả về GN</Button>
+            )}
             {canApprove && detail && (
               <Button onClick={() => { const r = detail; setDetail(null); setConfirm(r); }}>Duyệt Release 2</Button>
             )}
@@ -304,6 +312,10 @@ export default function Release2Page() {
           </div>
         )}
       </SidePanel>
+
+      <TraVeGnModal open={!!gnLenh} onClose={() => setGnLenh(null)} nguon="RELEASE2" lenhId={gnLenh?.id}
+        phanIn={dsPhanInCuaLenh(gnLenh)[0] || null} dsPhanIn={dsPhanInCuaLenh(gnLenh)}
+        onToast={(m) => show(m)} onDone={() => load(true)} />
 
       <ConfirmDialog
         open={!!confirm}

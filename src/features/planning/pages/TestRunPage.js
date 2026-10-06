@@ -356,7 +356,7 @@ export default function TestRunPage() {
         rowClassName={(r) => `${slaRowClass(statusLenh(r.id))} ${laGomSet(r) ? 'border-l-[3px] border-l-primary' : ''}`}
         emptyText="Không có lệnh nào đang Test Run" />
 
-      {sel && <TestRunPanel lenhId={sel} onClose={() => setSel(null)} onChanged={load}
+      {sel && <TestRunPanel lenhId={sel} onClose={() => setSel(null)} onChanged={load} onToast={show}
         truocXacNhan={() => hoiLyDoNghen(rows.filter((r) => r.id === sel))} />}
 
       {/* ĐỦ `rows` (không phải `selRows`) — quét lệnh đang hiện trên bảng cũng khớp; lệnh không chọn

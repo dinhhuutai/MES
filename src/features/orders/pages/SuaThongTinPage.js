@@ -30,7 +30,11 @@ import {
 //   chỉ cho sửa khi phần in ĐANG chờ ở GN, nên trang này không thành cửa sau sửa phần in bất kỳ.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const NGUON = { KT: 'READY Kỹ thuật', QC: 'QC chuẩn bị KT' };
+// Gương `utils/traVeGn.js NGUON_TRA_VE_GN` (backend) — 06/10/2026 thêm 4 màn sau READY.
+const NGUON = {
+  KT: 'READY Kỹ thuật', QC: 'QC chuẩn bị KT',
+  RELEASE1: 'Release 1', TEST_RUN: 'Test Run', RELEASE2: 'Release 2', CHO_CHAY: 'Chờ sản xuất',
+};
 
 const FILTER_FIELDS = [
   { key: 'khach', label: 'Khách hàng', col: 'ten_khach_hang' },
