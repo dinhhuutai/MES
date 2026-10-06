@@ -24,8 +24,9 @@ import {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ĐƠN HÀNG › PHẦN IN CHỜ SỬA THÔNG TIN (25/09/2026, mig 105).
-// Hàng đợi của GIAO NHẬN: phần in bị READY (Kỹ thuật hoặc QC) trả về vì thông tin sai. GN mở phần in,
-// sửa đúng các trường bị đánh dấu rồi bấm "Xác nhận đã sửa" ⇒ phần in QUAY LẠI màn READY.
+// Hàng đợi của GIAO NHẬN: phần in bị trả về vì thông tin sai (READY · QC READY · từ 06/10/2026 cả Release 1 ·
+// Test Run · Release 2 · Chờ chạy). GN mở phần in, sửa đúng các trường bị đánh dấu rồi bấm "Xác nhận đã sửa"
+// ⇒ phần in QUAY LẠI ĐÚNG MÀN ĐÃ BẤM TRẢ VỀ (lệnh/đợt giữ nguyên lúc trả nên tự hiện lại đúng chỗ).
 // ⚠ Sửa trường đi qua CHÍNH đường ghi của *Quản trị phần in* (whitelist cột + guard + audit) — backend
 //   chỉ cho sửa khi phần in ĐANG chờ ở GN, nên trang này không thành cửa sau sửa phần in bất kỳ.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -35,6 +36,13 @@ const NGUON = {
   KT: 'READY Kỹ thuật', QC: 'QC chuẩn bị KT',
   RELEASE1: 'Release 1', TEST_RUN: 'Test Run', RELEASE2: 'Release 2', CHO_CHAY: 'Chờ sản xuất',
 };
+// Màn phần in QUAY VỀ khi GN xác nhận lại — gương `utils/traVeGn.js MAN_QUAY_VE` (dòng cũ không có nguồn ⇒ READY).
+const MAN_QUAY_VE = {
+  KT: 'READY', QC: 'QC READY', RELEASE1: 'Release 1', TEST_RUN: 'Test Run', RELEASE2: 'Release 2', CHO_CHAY: 'Chờ sản xuất',
+};
+const manQuayVe = (nguon) => MAN_QUAY_VE[nguon] || MAN_QUAY_VE.KT;
+// Gộp tên màn (khử trùng) của nhiều lượt / nhiều phần in thành 1 câu: "Test Run, Release 2".
+const noiMan = (ds) => [...new Set(ds.filter(Boolean))].join(', ') || MAN_QUAY_VE.KT;
 
 const FILTER_FIELDS = [
   { key: 'khach', label: 'Khách hàng', col: 'ten_khach_hang' },
@@ -171,7 +179,7 @@ export default function SuaThongTinPage() {
       const r = await xacNhanLaiNhieuGn({ phanInIds: [...chon], ghiChu: ghiChuXn });
       const d = r.data || {};
       if ((d.loi || []).length) show(`Đã xác nhận ${d.so_ok} · ${d.loi.length} lỗi: ${d.loi[0].loi}`, 'error');
-      else show(`Đã xác nhận ${d.so_ok} phần in — quay lại READY`);
+      else show(`Đã xác nhận ${d.so_ok} phần in — quay lại ${noiMan((d.items || []).flatMap((x) => x.ve_man || []))}`);
       setChon(new Set()); setMoXn(false); setGhiChuXn('');
       await load(true);
     } catch (e) { show(e.message || 'Xác nhận thất bại', 'error'); } finally { setDangXn(false); }
@@ -243,6 +251,8 @@ export default function SuaThongTinPage() {
       ),
     },
     { key: 'nguon', header: 'Trả về từ', render: (r) => <span className="text-xs">{NGUON[r.nguon] || '—'}</span> },
+    // Xác nhận lại ⇒ phần in quay về ĐÚNG màn đã trả về (06/10/2026).
+    { key: 've_man', header: 'Quay về', render: (r) => <Badge tone="info" className="whitespace-nowrap">{manQuayVe(r.nguon)}</Badge> },
     {
       key: 'kh', header: 'Khách · Đơn',
       render: (r) => (<div><div>{r.ten_khach_hang}</div><div className="text-xs text-ink-soft">{r.ma_don_hang}</div></div>),
@@ -273,7 +283,7 @@ export default function SuaThongTinPage() {
     setXuat(true);
     try {
       await exportPanelExcel({
-        title: 'PHẦN IN CHỜ SỬA THÔNG TIN (READY TRẢ VỀ GIAO NHẬN)',
+        title: 'PHẦN IN CHỜ SỬA THÔNG TIN (TRẢ VỀ GIAO NHẬN)',
         subtitle: `${viewRows.length} lượt · xuất ${new Date().toLocaleString('vi-VN')}`,
         fileName: 'phan-in-cho-sua-thong-tin',
         rows: viewRows,
@@ -282,6 +292,7 @@ export default function SuaThongTinPage() {
           { header: 'Trả về lúc', width: 18, value: (r) => fmtDateTime(r.tg_tra_ve) },
           { header: 'Đã chờ', width: 12, value: (r) => fmtThoiLuong(soPhutCho(r, now)) },
           { header: 'Trả về từ', width: 18, value: (r) => NGUON[r.nguon] || '' },
+          { header: 'Quay về', width: 14, value: (r) => manQuayVe(r.nguon) },
           { header: 'Khách hàng', value: (r) => r.ten_khach_hang },
           { header: 'Đơn hàng', value: (r) => r.ma_don_hang },
           { header: 'Mã hàng', value: (r) => r.ma_hang },
@@ -306,7 +317,7 @@ export default function SuaThongTinPage() {
     <div>
       <Toolbar
         title="Phần in chờ sửa thông tin"
-        subtitle={`READY (Kỹ thuật / QC) trả về Giao nhận vì thông tin sai — sửa xong bấm xác nhận để phần in quay lại READY · ${soCho} đang chờ`}
+        subtitle={`Phần in bị trả về Giao nhận vì thông tin sai — sửa xong bấm xác nhận để phần in quay lại đúng màn đã trả về · ${soCho} đang chờ`}
         search={search} onSearch={setSearch}
         searchPlaceholder="Tìm code phần, khách, đơn, mã hàng, lý do..."
       >
@@ -348,16 +359,16 @@ export default function SuaThongTinPage() {
         footer={(
           <>
             <Button chiXemOk variant="ghost" onClick={() => setMoXn(false)} disabled={dangXn}>Hủy</Button>
-            <Button icon="check" loading={dangXn} onClick={xacNhanNhieu}>Xác nhận — trả lại READY</Button>
+            <Button icon="check" loading={dangXn} onClick={xacNhanNhieu}>Xác nhận — trả lại màn cũ</Button>
           </>
         )}>
         <p className="mb-3 text-sm text-ink-soft">
-          Các phần in đã chọn sẽ rời trang này và <b className="text-ink">quay lại màn READY</b>. Chỉ xác nhận khi thông tin
-          đã được sửa đúng (trên ERP hoặc ngay trên trang này).
+          Các phần in đã chọn sẽ rời trang này và <b className="text-ink">quay lại đúng màn đã trả về</b> (cột "Quay về").
+          Chỉ xác nhận khi thông tin đã được sửa đúng (trên ERP hoặc ngay trên trang này).
         </p>
         <div className="mb-3 max-h-40 overflow-auto rounded-control border border-line px-3 py-2 text-xs">
           {rows.filter((r) => !r.da_xu_ly && chon.has(r.phan_in_id)).map((r) => (
-            <div key={r.id}><b>{r.ma_phan}</b> · {r.checklist_list}</div>
+            <div key={r.id}><b>{r.ma_phan}</b> → <b className="text-primary">{manQuayVe(r.nguon)}</b> · {r.checklist_list}</div>
           ))}
         </div>
         <Field label="Ghi chú khi xác nhận (tùy chọn — áp cho mọi phần in đã chọn)">
@@ -429,6 +440,8 @@ function SuaThongTinPanel({ phanInId, coQuyenSua, onToast, onClose, onChanged })
 
   const dangCho = useMemo(() => ct?.tra_ve_dang_cho || [], [ct]);
   const choSua = dangCho.length > 0;
+  // Màn phần in sẽ quay về khi xác nhận lại = màn đã bấm trả về (06/10/2026).
+  const manVeDangCho = dangCho.map((x) => manQuayVe(x.nguon));
   const suaDuoc = coQuyenSua && choSua;
   // Tên các mục bị đánh dấu sai (gộp mọi lượt đang chờ) — để tô đậm đúng ô cần sửa.
   const danhDau = useMemo(() => new Set(dangCho.flatMap((x) => (x.checklist_list || '').split(',').map((s) => s.trim()))), [dangCho]);
@@ -462,8 +475,8 @@ function SuaThongTinPanel({ phanInId, coQuyenSua, onToast, onClose, onChanged })
     if (chuaLuu) { onToast?.('Còn thông tin đã sửa nhưng CHƯA bấm Lưu — lưu trước rồi mới xác nhận', 'error'); return; }
     setDangLuu('xn');
     try {
-      await xacNhanLaiGn(phanInId, { ghiChu });
-      onToast?.(`Đã xác nhận — ${ct.phan_in.ma_phan} quay lại READY`);
+      const r = await xacNhanLaiGn(phanInId, { ghiChu });
+      onToast?.(`Đã xác nhận — ${ct.phan_in.ma_phan} quay lại ${noiMan(r.data?.ve_man || manVeDangCho)}`);
       onChanged?.(); onClose?.();
     } catch (e) { onToast?.(e.message || 'Xác nhận thất bại', 'error'); } finally { setDangLuu(''); }
   };
@@ -538,7 +551,7 @@ function SuaThongTinPanel({ phanInId, coQuyenSua, onToast, onClose, onChanged })
             </Button>
           )}
           {suaDuoc && (
-            <Button icon="check" loading={dangLuu === 'xn'} onClick={xacNhan}>Xác nhận đã sửa — trả lại READY</Button>
+            <Button icon="check" loading={dangLuu === 'xn'} onClick={xacNhan}>Xác nhận đã sửa — trả lại {noiMan(manVeDangCho)}</Button>
           )}
         </>
       )}>
@@ -566,10 +579,11 @@ function SuaThongTinPanel({ phanInId, coQuyenSua, onToast, onClose, onChanged })
             <div key={x.id} className="rounded-control border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-200">
               <div className="text-xs font-semibold uppercase tracking-wide">{NGUON[x.nguon] || 'READY'} trả về · {fmtDateTime(x.tg_tra_ve)}{x.nguoi_tra_ve ? ` · ${x.nguoi_tra_ve}` : ''}</div>
               <div className="mt-1">{x.ly_do}</div>
+              <div className="mt-1 text-xs">Xác nhận lại ⇒ quay về <b>{manQuayVe(x.nguon)}</b></div>
             </div>
           )) : (
             <div className="rounded-control border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-              Phần in không còn chờ sửa — đã được xác nhận lại và quay về READY. Chỉ xem.
+              Phần in không còn chờ sửa — đã được xác nhận lại và quay về màn đã trả về. Chỉ xem.
             </div>
           )}
           {choSua && !coQuyenSua && (
