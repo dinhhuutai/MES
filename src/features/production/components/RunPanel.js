@@ -14,8 +14,16 @@ import usePermissions from '../../../hooks/usePermissions';
 import { getRun, printTem, printTemBatch, reprintTem, getTemLabel, getTemLogs, finishRun, stopLine, resumeLine, addVaiHuy, savePhanCong, pauseLenhChay, listProductionCandidates, startProduction, vuotSanXuat, doiChuyen, traVeKyThuatSanXuat, listChuyen, listLyDoNgung, listToIn, luuLyDoBoSungDotVai } from '../../../services/productionService';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import { listUserOptions } from '../../../services/userService';
-import printTemLabel from '../utils/printTemLabel';
+import printTemLabel, { printTemLabelNhieu, moSanCuaSoIn, dongCuaSoIn } from '../utils/printTemLabel';
 import { fmtNum, fmtDate } from '../../../utils/format';
+
+// Ô "Số tem" (07/10/2026): in N tem cùng SL trong 1 lần bấm — mỗi tem 1 tờ (15 trái · 16 phải), mọi tờ trong
+// 1 cửa sổ in. Trần khớp backend `printTemBatch TOI_DA_TEM_MOT_LUOT`.
+const TOI_DA_SO_TEM = 50;
+const soTemHopLe = (v) => {
+  const n = Math.trunc(Number(v));
+  return Number.isFinite(n) && n >= 1 ? Math.min(n, TOI_DA_SO_TEM) : 1;
+};
 
 const TEM_TONE = { IN: 'warning', DANG_PHOI: 'info', DA_KHO: 'success', HUY: 'danger' };
 const TEM_LABEL = { IN: 'Chờ phơi', DANG_PHOI: 'Đang phơi', DA_KHO: 'Đã khô', HUY: 'Đã hủy' };
@@ -368,12 +376,14 @@ function PrintSetModal({ open, onClose, rows, onPrintRow, busy, meta, setMeta, g
   const num = (id, key) => Number((form[id] || {})[key]) || 0;
 
   const capOf = (r) => Math.floor((Number(r.sl_vao_sx) || 0) * 1.1);
+  // Số tem của dòng (07/10/2026) — trống/sai ⇒ 1. Trần 110% tính trên TỔNG SL × số tem (gương backend).
+  const soTemDong = (id) => soTemHopLe((form[id] || {}).so_tem || 1);
   const overRow = (r) => {
     const cap = capOf(r);
-    return cap > 0 && num(r.dot_vai_ve_id, 'sl') > cap;
+    return cap > 0 && num(r.dot_vai_ve_id, 'sl') * soTemDong(r.dot_vai_ve_id) > cap;
   };
 
-  // In 1 dòng: gửi ĐÚNG 1 item (tái dùng `printTemBatch` để giữ nguyên guard 110% từng đợt + tổng lệnh).
+  // In 1 dòng: `printTemBatch` (giữ guard 110% từng đợt + tổng lệnh) — N tem cùng SL ⇒ 1 cửa sổ in N tờ.
   const inDong = async (r) => {
     const id = r.dot_vai_ve_id;
     const f = form[id] || {};
@@ -383,11 +393,11 @@ function PrintSetModal({ open, onClose, rows, onPrintRow, busy, meta, setMeta, g
       soLuongHuy: num(id, 'huy'),
       soLuongThieu: num(id, 'thieu'),
       gcMauVai: (f.gc || '').trim() || null,
-    });
+    }, soTemDong(id));
     if (ok) {
       setDaIn((s) => new Set(s).add(id));
       // Xóa SL đã in để không bấm nhầm lần 2; giữ lại GC màu vải cho dễ đối chiếu.
-      setForm((s) => ({ ...s, [id]: { ...(s[id] || {}), sl: '', huy: '', thieu: '' } }));
+      setForm((s) => ({ ...s, [id]: { ...(s[id] || {}), sl: '', huy: '', thieu: '', so_tem: '' } }));
     }
   };
 
@@ -409,8 +419,8 @@ function PrintSetModal({ open, onClose, rows, onPrintRow, busy, meta, setMeta, g
       )}
       <p className="mb-3 text-xs text-ink-soft">
         Nhập <b>SL in</b> + <b>GC màu vải</b> của từng phần in rồi bấm <b>{chiLuu ? 'Lưu' : 'In tem'}</b> ở ĐÚNG dòng đó —
-        mỗi lần bấm 1 tem. Trần mỗi phần in = <b>110% SL vào SX</b>. <b>SL vải hủy/thiếu</b> &gt; 0
-        sẽ ghi vào sổ vải của đợt đó.
+        <b> Số tem</b> &gt; 1 thì in nhiều tem cùng SL trong 1 lần bấm. Trần mỗi phần in = <b>110% SL vào SX</b>
+        (tính trên tổng). <b>SL vải hủy/thiếu</b> &gt; 0 sẽ ghi vào sổ vải của đợt đó.
       </p>
       <div className="overflow-auto rounded-card border border-line">
         <table className="w-full border-collapse">
@@ -422,6 +432,7 @@ function PrintSetModal({ open, onClose, rows, onPrintRow, busy, meta, setMeta, g
               <th className={`${TH} text-right`}>SL vải thiếu</th>
               <th className={TH}>GC màu vải</th>
               <th className={`${TH} text-right`}>Số lượng in</th>
+              <th className={`${TH} text-right`}>Số tem</th>
               <th className={TH} />
             </tr>
           </thead>
@@ -452,14 +463,19 @@ function PrintSetModal({ open, onClose, rows, onPrintRow, busy, meta, setMeta, g
                       onChange={(e) => setCell(id, 'sl', e.target.value)}
                       placeholder="0"
                       className={`${numCls} ${overRow(r) ? 'border-danger focus:border-danger' : ''}`} />
-                    {overRow(r) && <div className="mt-0.5 text-[11px] text-danger">Tối đa {fmtNum(capOf(r))}</div>}
+                    {overRow(r) && <div className="mt-0.5 text-[11px] text-danger">Tối đa {fmtNum(capOf(r))} (tổng)</div>}
+                  </td>
+                  <td className={`${TD} text-right`}>
+                    <input type="number" min="1" max={TOI_DA_SO_TEM} value={f.so_tem || ''} placeholder="1"
+                      onChange={(e) => setCell(id, 'so_tem', e.target.value)} className={numCls} />
                   </td>
                   <td className={`${TD} whitespace-nowrap`}>
                     <div className="flex items-center gap-2">
                       <Button className="px-2.5 py-1 text-xs" icon={chiLuu ? 'save' : 'printer'} loading={busy}
                         disabled={busy || overRow(r) || (num(id, 'sl') <= 0 && !coGhiVai)}
                         onClick={() => inDong(r)}>
-                        {num(id, 'sl') <= 0 && coGhiVai ? 'Ghi vải' : (chiLuu ? 'Lưu' : 'In tem')}
+                        {num(id, 'sl') <= 0 && coGhiVai ? 'Ghi vải'
+                          : (chiLuu ? 'Lưu' : (soTemDong(id) > 1 ? `In ${soTemDong(id)} tem` : 'In tem'))}
                       </Button>
                       {daIn.has(id) && (
                         <span className="text-xs font-medium text-success">{chiLuu ? '✓ đã lưu' : '✓ đã in'}</span>
@@ -487,6 +503,7 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [soLuong, setSoLuong] = useState('');
+  const [soTem, setSoTem] = useState('1'); // in N tem cùng SL 1 lần (07/10/2026)
   const [stopReason, setStopReason] = useState('');   // ghi chú thêm (tùy chọn)
   const [stopLyDoId, setStopLyDoId] = useState('');   // lý do chọn từ danh mục (mig 076)
   const [lyDoNgungDs, setLyDoNgungDs] = useState([]);
@@ -584,58 +601,100 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
       .catch(() => setToInDs([]));
   }, []);
 
-  // Lấy dữ liệu nhãn tem rồi mở cửa sổ in (barcode Code128 = mã tem).
-  // `dotVaiId` (gom set) → nhãn lấy đúng khách/đơn/mã hàng/màu/kích của phần in đó.
-  const printLabelFor = async (temId, dotVaiId = null) => {
-    if (!temId) return;
-    try { const res = await getTemLabel(temId, dotVaiId); await printTemLabel(res.data); }
-    catch (e) { show(e.message || 'Không lấy được dữ liệu tem để in', 'error'); }
+  // Lấy dữ liệu nhãn của 1..N tem rồi in hết trong 1 cửa sổ (`w` = cửa sổ mở sẵn trong cú bấm).
+  // `dot_vai_id` (gom set) → nhãn lấy đúng khách/đơn/mã hàng/màu/kích của phần in đó.
+  // Không ném lỗi: tem đã tạo xong rồi, lỗi in chỉ báo (in lại ở "Tem đã in").
+  const printLabelsFor = async (tems, w) => {
+    const ds = (tems || []).filter((t) => t && t.tem_id);
+    if (!ds.length) { dongCuaSoIn(w); return; }
+    try {
+      const labels = await Promise.all(ds.map(async (t) => (await getTemLabel(t.tem_id, t.dot_vai_id || null)).data));
+      if (labels.length === 1) await printTemLabel(labels[0], w);
+      else await printTemLabelNhieu(labels, w);
+    } catch (e) {
+      dongCuaSoIn(w);
+      show(`CHƯA in được nhãn tem: ${e.message || ''} — in lại ở "Tem đã in"`, 'error');
+    }
   };
+  // In (lại) nhãn của 1 tem đã có — nút máy in ở "Tem đã in" + In lại.
+  const printLabelFor = (temId, dotVaiId = null) => printLabelsFor([{ tem_id: temId, dot_vai_id: dotVaiId }], null);
 
   // BTP TRƯỚC = bán thành phẩm chuyển tiếp trong xưởng ⇒ KHÔNG dán tem ra ngoài: vẫn lưu dữ liệu
   // (tạo tem + vào xe phơi + ghi ngày ca/giờ SX) như bình thường, chỉ BỎ bước mở cửa sổ in nhãn.
   const chiLuu = !!temMeta.btpTruoc;
 
+  // ⚠ Mở SẴN cửa sổ in ngay trong cú bấm (trước mọi await) — xin N mã tem ERP xong mới mở là bị chặn popup.
+  const moCuaSo = () => {
+    if (chiLuu) return null;
+    try { return moSanCuaSoIn(); } catch (e) { show(e.message, 'error'); return undefined; }
+  };
+
   const doPrint = async () => {
+    const n = soTemHopLe(soTem);
+    const w = moCuaSo();
+    if (w === undefined) return; // popup bị chặn — chưa tạo tem nào
     setBusy(true);
     try {
-      const res = await printTem(phieu.id, Number(soLuong), metaGuiDi(temMeta));
+      let tems;
+      if (n === 1) {
+        const res = await printTem(phieu.id, Number(soLuong), metaGuiDi(temMeta));
+        tems = [{ tem_id: res.data?.new_tem_id }];
+      } else {
+        // N tem cùng SL — `printTemBatch` giữ trần 110% (tổng) và tạo N tem trong 1 transaction.
+        const res = await printTemBatch(phieu.id,
+          Array.from({ length: n }, () => ({ soLuong: Number(soLuong) })), metaGuiDi(temMeta));
+        tems = res.data?.tems_in || [];
+      }
+      const tong = Number(soLuong) * n;
       show(chiLuu
-        ? `Đã lưu ${fmtNum(soLuong)} (BTP trước — không in tem) — tự đưa vào xe phơi, đang đếm ngược`
-        : `Đã in tem ${fmtNum(soLuong)} — tự đưa vào xe phơi, đang đếm ngược`);
+        ? `Đã lưu ${n > 1 ? `${n} tem × ` : ''}${fmtNum(soLuong)}${n > 1 ? ` = ${fmtNum(tong)}` : ''} (BTP trước — không in tem) — tự đưa vào xe phơi, đang đếm ngược`
+        : `Đã in ${n > 1 ? `${n} tem × ${fmtNum(soLuong)} = ${fmtNum(tong)}` : `tem ${fmtNum(soLuong)}`} — tự đưa vào xe phơi, đang đếm ngược`);
       setSoLuong('');
-      if (!chiLuu) await printLabelFor(res.data?.new_tem_id);
+      setSoTem('1');
+      if (!chiLuu) await printLabelsFor(tems, w);
       // Xóa meta rồi tải lại ⇒ lượt in KẾ TIẾP lấy gợi ý mới (giờ BĐ = mốc kết thúc của lượt vừa in).
       setTemMeta(META_MAC_DINH());
       await load();
       onChanged?.();
     } catch (e) {
+      dongCuaSoIn(w);
       show(e.message || 'In tem thất bại', 'error');
     } finally {
       setBusy(false);
     }
   };
 
-  // GOM SET: in tem cho ĐÚNG 1 phần in (1 lần bấm = 1 tem = 1 cửa sổ in ⇒ không bị chặn popup).
+  // GOM SET: in tem cho ĐÚNG 1 phần in — `soTemDong` tem cùng SL (07/10/2026), 1 cửa sổ in.
   // Trả true/false để modal biết có đánh dấu "đã in" cho dòng đó không. KHÔNG đóng modal, KHÔNG reset
   // `temMeta` (ngày ca/giờ áp chung cho cả lượt đứng máy — còn in tiếp các dòng khác).
-  const doPrintRow = async (item) => {
+  // ⚠ Vải hủy/thiếu chỉ gắn vào DÒNG ĐẦU — backend ghi sổ vải theo từng dòng, lặp N dòng là ghi N lần.
+  const doPrintRow = async (item, soTemDong = 1) => {
+    const n = item.soLuong > 0 ? soTemHopLe(soTemDong) : 1;
+    const w = item.soLuong > 0 ? moCuaSo() : null;
+    if (w === undefined) return false;
     setBusy(true);
     try {
-      const res = await printTemBatch(phieu.id, [item], metaGuiDi(temMeta));
-      const t = (res.data?.tems_in || [])[0];
-      if (t) {
+      const items = [item, ...Array.from({ length: n - 1 }, () => ({
+        dotVaiId: item.dotVaiId, soLuong: item.soLuong, gcMauVai: item.gcMauVai,
+      }))];
+      const res = await printTemBatch(phieu.id, items, metaGuiDi(temMeta));
+      const tems = res.data?.tems_in || [];
+      if (tems.length) {
+        const t = tems[0];
         show(chiLuu
-          ? `Đã lưu tem ${t.ma_tem} (${fmtNum(t.so_luong)}) — BTP trước, không in nhãn`
-          : `Đã in tem ${t.ma_tem} (${fmtNum(t.so_luong)}) — tự vào xe phơi, đang đếm ngược`);
-        if (!chiLuu) await printLabelFor(t.tem_id, t.dot_vai_id);
+          ? `Đã lưu ${tems.length > 1 ? `${tems.length} tem` : `tem ${t.ma_tem}`} (${fmtNum(t.so_luong)}${tems.length > 1 ? '/tem' : ''}) — BTP trước, không in nhãn`
+          : `Đã in ${tems.length > 1 ? `${tems.length} tem` : `tem ${t.ma_tem}`} (${fmtNum(t.so_luong)}${tems.length > 1 ? '/tem' : ''}) — tự vào xe phơi, đang đếm ngược`);
+        if (!chiLuu) await printLabelsFor(tems, w);
+        else dongCuaSoIn(w);
       } else {
+        dongCuaSoIn(w);
         show('Đã ghi sổ vải hủy/thiếu cho phần in này');
       }
       await load();
       onChanged?.();
       return true;
     } catch (e) {
+      dongCuaSoIn(w);
       show(e.message || 'In tem thất bại', 'error');
       return false;
     } finally {
@@ -882,7 +941,8 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
   const maxTotal = target ? Math.floor(target * 1.1) : 0;       // trần 110% SL release
   const minFinish = target ? Math.ceil(target * 0.9) : 0;       // tối thiểu 90% SL release (cho -10%) mới hoàn tất được
   const remain = target ? Math.max(0, maxTotal - printed) : null; // còn được in
-  const overMax = target > 0 && Number(soLuong) > remain;
+  const nTem = soTemHopLe(soTem);
+  const overMax = target > 0 && Number(soLuong) * nTem > remain; // trần tính trên TỔNG N tem
 
   return (
     <SidePanel
@@ -948,18 +1008,32 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
                   Nhập số lượng &amp; {chiLuu ? 'lưu' : 'in tem'}…
                 </Button>
               ) : (
-                <div className="flex items-end gap-2">
-                  <div className="flex-1">
-                    <label className="mb-1 block text-xs font-medium text-ink-soft">Số lượng in (1 tem)</label>
-                    <Input type="number" max={remain || undefined} value={soLuong}
-                      onChange={(e) => setSoLuong(e.target.value)} placeholder="vd: 200"
-                      className={overMax ? 'border-danger focus:border-danger focus:ring-danger/10' : ''} />
+                <div>
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1">
+                      <label className="mb-1 block text-xs font-medium text-ink-soft">Số lượng in (1 tem)</label>
+                      <Input type="number" max={remain || undefined} value={soLuong}
+                        onChange={(e) => setSoLuong(e.target.value)} placeholder="vd: 200"
+                        className={overMax ? 'border-danger focus:border-danger focus:ring-danger/10' : ''} />
+                    </div>
+                    {/* SỐ TEM (07/10/2026): in N tem cùng SL 1 lần — N tờ trong 1 cửa sổ in. */}
+                    <div className="w-24">
+                      <label className="mb-1 block text-xs font-medium text-ink-soft">Số tem</label>
+                      <Input type="number" min={1} max={TOI_DA_SO_TEM} value={soTem}
+                        onChange={(e) => setSoTem(e.target.value)} />
+                    </div>
+                    {/* BTP trước → chỉ LƯU (không mở cửa sổ in nhãn), nút đổi hẳn nhãn cho khỏi hiểu nhầm. */}
+                    <Button onClick={doPrint} loading={busy} icon={chiLuu ? 'save' : undefined}
+                      disabled={!soLuong || Number(soLuong) <= 0 || overMax || remain === 0}>
+                      {chiLuu ? 'Lưu' : (nTem > 1 ? `In ${nTem} tem` : 'In tem')}
+                    </Button>
                   </div>
-                  {/* BTP trước → chỉ LƯU (không mở cửa sổ in nhãn), nút đổi hẳn nhãn cho khỏi hiểu nhầm. */}
-                  <Button onClick={doPrint} loading={busy} icon={chiLuu ? 'save' : undefined}
-                    disabled={!soLuong || Number(soLuong) <= 0 || overMax || remain === 0}>
-                    {chiLuu ? 'Lưu' : 'In tem'}
-                  </Button>
+                  {nTem > 1 && Number(soLuong) > 0 && (
+                    <p className={`mt-1 text-xs ${overMax ? 'text-danger' : 'text-ink-soft'}`}>
+                      {nTem} tem × {fmtNum(soLuong)} = <b>{fmtNum(Number(soLuong) * nTem)}</b>
+                      {overMax ? ` — vượt phần còn được in (${fmtNum(remain)})` : ''}
+                    </p>
+                  )}
                 </div>
               )}
               {chiLuu && (

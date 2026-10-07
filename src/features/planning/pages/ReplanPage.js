@@ -11,6 +11,8 @@ import DonePanel from '../../../components/common/DonePanel';
 import { Field, Input, Textarea } from '../../../components/common/controls';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import TimeSelect from '../../../components/common/TimeSelect';
+import NhieuNguoiSelect from '../../../components/common/NhieuNguoiSelect';
+import { listUserOptions } from '../../../services/userService';
 import useToast from '../../../hooks/useToast';
 import useSocketReload from '../../../hooks/useSocketReload';
 import usePermissions from '../../../hooks/usePermissions';
@@ -101,8 +103,13 @@ export default function ReplanPage() {
   const [detail, setDetail] = useState(null);
   // `dsDot` = đợt vải của lệnh đang mở + SL release đang giữ + trần được nâng (tải khi mở panel).
   const [dsDot, setDsDot] = useState([]);
-  const [form, setForm] = useState({ chuyenId: '', ngayKeHoach: '', gioBd: '', gioKt: '', lyDo: '', slRelease: {} });
+  const [form, setForm] = useState({ chuyenId: '', ngayKeHoach: '', gioBd: '', gioKt: '', lyDo: '', slRelease: {}, thoIn: '' });
   const [saving, setSaving] = useState(false);
+  // Danh sách người cho ô THỢ IN KẾ HOẠCH (mig 111, cùng ô ở Release 1) — lỗi tải thì vẫn gõ tên tay được.
+  const [users, setUsers] = useState([]);
+  useEffect(() => {
+    listUserOptions({ limit: 500 }).then((r) => setUsers(r.data || [])).catch(() => {});
+  }, []);
   // Tổng SL release đang nhập + cờ chặn Lưu. Ô để TRỐNG cũng tính là sai: SL release là số bắt buộc,
   // để trống rồi lưu thì người dùng tưởng đã xóa số mà thật ra backend giữ nguyên giá trị cũ.
   const tongSlMoi = useMemo(
@@ -117,7 +124,7 @@ export default function ReplanPage() {
 
   const [selected, setSelected] = useState(() => new Set());
   const [batchOpen, setBatchOpen] = useState(false);
-  const [batchForm, setBatchForm] = useState({ chuyenId: '', ngayKeHoach: '', gioBd: '', gioKt: '', lyDo: '' });
+  const [batchForm, setBatchForm] = useState({ chuyenId: '', ngayKeHoach: '', gioBd: '', gioKt: '', lyDo: '', thoIn: '' });
   const [scanOpen, setScanOpen] = useState(false);
   const [scanRows, setScanRows] = useState([]);
   const [chonHetBusy, setChonHetBusy] = useState(false);
@@ -181,6 +188,7 @@ export default function ReplanPage() {
       gioKt: gioStr(row.tg_kt_kh),
       lyDo: '',
       slRelease: {},
+      thoIn: row.tho_in_kh || '',
     });
     try {
       const r = await getReplanDetail(row.id);
@@ -215,9 +223,11 @@ export default function ReplanPage() {
   };
 
   const openBatch = () => {
-    setBatchForm({ chuyenId: '', ngayKeHoach: '', gioBd: '', gioKt: '', lyDo: '' });
+    setBatchForm({ chuyenId: '', ngayKeHoach: '', gioBd: '', gioKt: '', lyDo: '', thoIn: '' });
     setBatchOpen(true);
   };
+  // Backend chưa có cột thợ in kế hoạch (mig 111 chưa chạy) ⇒ lập lại kế hoạch vẫn xong, chỉ báo thêm.
+  const canhBaoThoIn = (res) => (res?.data?.tho_in_chua_luu ? ' · CHƯA lưu thợ in (hệ thống chưa cập nhật cơ sở dữ liệu)' : '');
 
   const submitBatch = async () => {
     if (!batchForm.ngayKeHoach) { show('Chọn ngày sản xuất kế hoạch', 'error'); return; }
@@ -230,9 +240,11 @@ export default function ReplanPage() {
         tgBdKh: mkTs(batchForm.ngayKeHoach, batchForm.gioBd),
         tgKtKh: mkTs(batchForm.ngayKeHoach, batchForm.gioKt),
         lyDo: batchForm.lyDo.trim(),
+        // Trống = GIỮ thợ in kế hoạch riêng của từng lệnh (không gửi khóa ⇒ backend không đụng).
+        ...(batchForm.thoIn.trim() ? { thoIn: batchForm.thoIn } : {}),
       });
       const { okCount, failedCount } = res.data;
-      show(failedCount ? `Đã lập lại ${okCount} lệnh, ${failedCount} lỗi` : `Đã lập lại kế hoạch ${okCount} lệnh`,
+      show((failedCount ? `Đã lập lại ${okCount} lệnh, ${failedCount} lỗi` : `Đã lập lại kế hoạch ${okCount} lệnh`) + canhBaoThoIn(res),
         failedCount ? 'error' : 'success');
       setBatchOpen(false);
       setSelected(new Set());
@@ -249,7 +261,7 @@ export default function ReplanPage() {
     if (vuotSl) { show('Số lượng release không hợp lệ — kiểm tra lại các ô SL', 'error'); return; }
     setSaving(true);
     try {
-      await replan(detail.id, {
+      const res = await replan(detail.id, {
         chuyenId: form.chuyenId || null,
         ngayKeHoach: form.ngayKeHoach,
         tgBdKh: mkTs(form.ngayKeHoach, form.gioBd),
@@ -259,8 +271,10 @@ export default function ReplanPage() {
         slRelease: Object.fromEntries(dsDot
           .filter((d) => String(form.slRelease[d.dot_vai_id] ?? '') !== String(d.so_luong))
           .map((d) => [d.dot_vai_id, form.slRelease[d.dot_vai_id]])),
+        // Thợ in kế hoạch: chỉ gửi khi đổi (xóa hết = gửi chuỗi rỗng ⇒ backend xóa).
+        ...((form.thoIn || '') !== (detail.tho_in_kh || '') ? { thoIn: form.thoIn || '' } : {}),
       });
-      show(`Đã lập lại kế hoạch cho ${detail.ma_lenh_san_xuat}`);
+      show(`Đã lập lại kế hoạch cho ${detail.ma_lenh_san_xuat}${canhBaoThoIn(res)}`);
       setDetail(null);
       load();
     } catch (e) {
@@ -326,6 +340,7 @@ export default function ReplanPage() {
     { key: 'so_luong_vai_ve', header: 'SLNV', className: 'text-right tabular-nums', merge: true, render: (r) => fmtNum(r.so_luong_vai_ve) },
     { key: 'han_giao_hang', header: 'Hạn giao', merge: true, render: (r) => fmtDate(r.han_giao_hang) },
     { key: 'chuyen', header: 'Chuyền hiện tại', merge: true, render: (r) => r.ten_chuyen || '—' },
+    { key: 'tho_in_kh', header: 'Thợ in', merge: true, render: (r) => r.tho_in_kh || '—' },
     { key: 'ngay_ke_hoach', header: 'Ngày SX kế hoạch', merge: true, render: (r) => fmtDate(r.ngay_ke_hoach) },
   ];
 
@@ -463,6 +478,12 @@ export default function ReplanPage() {
                   <TimeSelect value={form.gioKt} onChange={(v) => setForm({ ...form, gioKt: v })} minuteStep={5} />
                 </Field>
               </div>
+              {/* THỢ IN KẾ HOẠCH (mig 111) — đổ sẵn thợ in đã chọn lúc Release 1; gõ tên ngoài danh sách rồi Enter được. */}
+              <Field label="Thợ in">
+                <NhieuNguoiSelect value={form.thoIn} options={users}
+                  onChange={(v) => setForm((f) => ({ ...f, thoIn: v }))}
+                  placeholder="Gõ tên hoặc MSNV để tìm rồi chọn / Enter..." />
+              </Field>
               <Field label="Lý do lập lại" hint="Không bắt buộc — có nhập thì hiện ở sidebar Lịch sử">
                 <Textarea rows={3} value={form.lyDo}
                   onChange={(e) => setForm({ ...form, lyDo: e.target.value })}
@@ -506,6 +527,11 @@ export default function ReplanPage() {
             <TimeSelect value={batchForm.gioKt} onChange={(v) => setBatchForm({ ...batchForm, gioKt: v })} minuteStep={5} />
           </Field>
         </div>
+        <Field label="Thợ in" hint="Trống = giữ thợ in kế hoạch của từng lệnh">
+          <NhieuNguoiSelect value={batchForm.thoIn} options={users}
+            onChange={(v) => setBatchForm((f) => ({ ...f, thoIn: v }))}
+            placeholder="Gõ tên hoặc MSNV để tìm rồi chọn / Enter..." />
+        </Field>
         <Field label="Lý do lập lại" hint="Không bắt buộc — có nhập thì hiện ở sidebar Lịch sử">
           <Textarea rows={3} value={batchForm.lyDo}
             onChange={(e) => setBatchForm({ ...batchForm, lyDo: e.target.value })}

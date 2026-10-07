@@ -24,7 +24,7 @@ import { laGomSet } from '../utils/phanInLenh';
 import Pagination from '../../../components/common/Pagination';
 import DateRangePicker from '../../../components/common/DateRangePicker';
 import { listGiaCong, giaCongNhanTheoPhan, giaCongTraLai } from '../../../services/planningService';
-import { printGiaCongVeTem } from '../../production/utils/printTemLabel';
+import { printGiaCongVeTem, moSanCuaSoIn, dongCuaSoIn } from '../../production/utils/printTemLabel';
 import { fmtNum, fmtDate } from '../../../utils/format';
 
 // ⚠⚠ LỌC + PHÂN TRANG Ở SERVER (01/10/2026 — cùng cách màn Lập kế hoạch lại): prod ~1.300 lệnh gia công,
@@ -104,8 +104,10 @@ const buildVeLabel = (r) => ({
   con_lai_phan: r.con_lai_phan ?? null,
 });
 
-// Tối đa số CODE PHẦN in được trong 1 lượt — tờ decal 110×80mm chỉ có 2 khung tem.
-const TOI_DA_PHAN = 2;
+// Tối đa số CODE PHẦN nhận + in trong 1 lượt. 07/10/2026 nâng từ 2 lên 50 (người dùng chốt "in bao nhiêu tem
+// cũng được"): mỗi tờ decal vẫn 2 tem, N tem ⇒ ⌈N/2⌉ tờ trong 1 cửa sổ in. Gương backend
+// `planning.service TOI_DA_IN_TEM` (mỗi tem xin 1 mã ERP tuần tự ⇒ có trần).
+const TOI_DA_PHAN = 50;
 
 // Khóa lý do nghẽn (mig 106): hàng lệnh (`id`) hoặc hàng code phần đã làm phẳng (`lenh_id`).
 const KHOA_GIA_CONG = (r) => ({
@@ -210,9 +212,17 @@ export default function GiaCongPage() {
   // thay bằng spinner) và KHÔNG xóa dòng đang tích. Nhiều sự kiện trong 400ms gộp thành 1 lần tải.
   useSocketReload(['workflow:updated', 'quality:updated'], () => load(true));
 
-  // Ô CHỌN nay để CHỌN CODE PHẦN CẦN IN TEM — tối đa `TOI_DA_PHAN` (tờ decal 2 khung).
-  // ⚠ Không có "chọn tất cả": trần 2 dòng nên nút đó vô nghĩa.
+  // Ô CHỌN để CHỌN CODE PHẦN CẦN IN TEM — tối đa `TOI_DA_PHAN`. Ô đầu bảng = chọn/bỏ mọi dòng chọn được
+  // của TRANG ĐANG XEM (giữ lựa chọn ở trang khác).
   const chonDuoc = (r) => !r.cho_tra_lai && Number(r.con_lai) > 0;
+  const chonDuocTrang = filtered.filter(chonDuoc);
+  const tatCaTrang = chonDuocTrang.length > 0 && chonDuocTrang.every((r) => selected.has(r._key));
+  const chonTatCaTrang = () => setSelected((s) => {
+    const next = new Map(s);
+    if (tatCaTrang) chonDuocTrang.forEach((r) => next.delete(r._key));
+    else chonDuocTrang.forEach((r) => { if (next.size < TOI_DA_PHAN) next.set(r._key, r); });
+    return next;
+  });
   const toggleOne = (r) => setSelected((s) => {
     const next = new Map(s);
     if (next.has(r._key)) next.delete(r._key);
@@ -229,8 +239,8 @@ export default function GiaCongPage() {
     : (Number(r?.so_luong_release) || 0) - (Number(r?.da_chuyen) || 0));
 
   // ─── IN TEM = NHẬN HÀNG, THEO TỪNG CODE PHẦN (09/09/2026) ────────────────────────────────────
-  // Tick ≤2 dòng code phần trên bảng rồi bấm "In tem (N)" → modal nhập **SL đạt + SL hủy** từng dòng.
-  // ⚠ TỐI ĐA 2 vì tờ decal chỉ có 2 khung tem — cùng ràng buộc với modal In tem của trang Sửa.
+  // Tick các dòng code phần trên bảng rồi bấm "In tem (N)" → modal nhập **SL đạt + SL hủy** từng dòng.
+  // 07/10/2026: bỏ trần 2 — mỗi tờ decal vẫn 2 tem, N tem in ⌈N/2⌉ tờ trong 1 cửa sổ.
   const openInTem = () => {
     const ds = [...selected.values()]
       .map((p) => ({ ...p, qty: String(Number(p.con_lai) || 0), huy: '', loiVai: '', thieu: '', motBo: '' }));
@@ -266,6 +276,10 @@ export default function GiaCongPage() {
     }
     // Lệnh quá SLA ⇒ nhập lý do nghẽn trước khi nhận hàng (mig 106).
     if (!(await hoiLyDoNghen(chon))) return;
+    // ⚠ MỞ SẴN cửa sổ in TRƯỚC khi gọi server: N code phần = N lượt xin mã tem ERP, chờ xong mới mở là trình
+    //   duyệt chặn popup. Không mở được ⇒ dừng luôn (chưa nhận hàng gì).
+    let w;
+    try { w = moSanCuaSoIn(); } catch (e) { show(e.message, 'error'); return; }
     setSaving(true);
     try {
       // ⚠⚠ Tick được 2 dòng của 2 LỆNH KHÁC NHAU ⇒ phải gom theo lệnh và gọi service TỪNG LỆNH
@@ -316,16 +330,19 @@ export default function GiaCongPage() {
       setSelected(new Map());
       if (loi.length) show(`Nhận hàng lỗi — ${loi.join(' · ')}`, 'error');
       else show(`Đã nhận ${nhan.length} code phần`);
-      // In SAU khi đã báo kết quả: popup bị chặn thì hàng vẫn được ghi nhận, chỉ thiếu bước in
+      // In SAU khi đã báo kết quả: lỗi in thì hàng vẫn được ghi nhận, chỉ thiếu bước in
       // (in lại được ở "Lịch sử chuyển") — đừng để lỗi in che mất việc nhận hàng đã thành công.
-      // ⚠⚠ MỘT LẦN BẤM = MỘT CỬA SỔ IN: gom cả 2 tem vào 1 lượt gọi, kể cả khi chúng khác lệnh.
-      //   Gọi in 2 lần liên tiếp thì trình duyệt CHẶN POPUP từ cửa sổ thứ 2 (bài học modal gom set).
+      // ⚠⚠ MỘT LẦN BẤM = MỘT CỬA SỔ IN: mọi tem (kể cả khác lệnh) vào cửa sổ đã mở sẵn, 2 tem/tờ.
       if (nhan.length) {
-        try { await printGiaCongVeTem(nhan); }
-        catch (e) { show(`Đã nhận hàng nhưng CHƯA in được tem: ${e.message || ''} — in lại ở "Lịch sử chuyển"`, 'error'); }
-      }
+        try { await printGiaCongVeTem(nhan, w); }
+        catch (e) {
+          dongCuaSoIn(w);
+          show(`Đã nhận hàng nhưng CHƯA in được tem: ${e.message || ''} — in lại ở "Lịch sử chuyển"`, 'error');
+        }
+      } else dongCuaSoIn(w);
       load();
     } catch (e) {
+      dongCuaSoIn(w);
       show(e.message || 'Nhận hàng thất bại', 'error');
     } finally { setSaving(false); }
   };
@@ -344,14 +361,16 @@ export default function GiaCongPage() {
   };
 
   const columns = [
-    // Ô chọn theo TỪNG CODE PHẦN (tối đa 2 — tờ tem 2 khung). Không có "chọn tất cả": trần 2 dòng.
-    ...(canDo ? [{ key: 'sel', className: 'w-10', selection: true, header: '',
+    // Ô chọn theo TỪNG CODE PHẦN (tối đa `TOI_DA_PHAN`); ô đầu bảng = chọn/bỏ mọi dòng chọn được của trang.
+    ...(canDo ? [{ key: 'sel', className: 'w-10', selection: true,
+      header: <input type="checkbox" checked={tatCaTrang} disabled={!chonDuocTrang.length}
+        onChange={chonTatCaTrang} aria-label="Chọn tất cả code phần của trang" />,
       render: (r) => {
         const tick = selected.has(r._key);
         const khoa = !tick && (!chonDuoc(r) || selected.size >= TOI_DA_PHAN);
         const vi = r.cho_tra_lai ? 'Đang chờ trả lại nhà gia công'
           : !(Number(r.con_lai) > 0) ? 'Code phần này đã nhận đủ'
-            : khoa ? `Mỗi lần in tối đa ${TOI_DA_PHAN} code phần (tờ tem có 2 khung)` : undefined;
+            : khoa ? `Mỗi lần nhận + in tối đa ${TOI_DA_PHAN} code phần` : undefined;
         return (
           <input type="checkbox" checked={tick} disabled={khoa} title={vi}
             onClick={(e) => e.stopPropagation()} onChange={() => toggleOne(r)} aria-label="Chọn code phần" />
@@ -426,7 +445,7 @@ export default function GiaCongPage() {
         <div title="Ngày SX kế hoạch — để trống = mọi lệnh">
           <DateRangePicker value={ngay} onChange={setNgay} placeholder="Mọi ngày SX kế hoạch" />
         </div>
-        {/* ⚠ IN TEM = NHẬN HÀNG: tick ≤2 code phần trên bảng rồi bấm đây để nhập SL đạt/hủy và in. */}
+        {/* ⚠ IN TEM = NHẬN HÀNG: tick code phần trên bảng rồi bấm đây để nhập SL đạt/hủy và in (2 tem/tờ). */}
         {canDo && selected.size > 0 && (
           <Button icon="printer" onClick={openInTem}>In tem ({selected.size})</Button>
         )}
@@ -448,7 +467,7 @@ export default function GiaCongPage() {
         emptyText={activeCount || ngay.from || ngay.to ? 'Không có code phần nào khớp bộ lọc' : 'Không có hàng gia công nào đang chờ nhận về'} />
       <Pagination page={page} totalPages={meta.totalPages || 1} total={meta.total} onPage={setPage} />
 
-      {/* IN TEM = NHẬN HÀNG, theo TỪNG CODE PHẦN — tick tối đa 2 dòng + nhập SL rồi in tờ 2 tem. */}
+      {/* IN TEM = NHẬN HÀNG, theo TỪNG CODE PHẦN — tick N dòng + nhập SL rồi in ⌈N/2⌉ tờ (2 tem/tờ). */}
       <Modal open={!!inTem} onClose={() => setInTem(null)} title="In tem hàng về — nhận theo từng code phần" size="lg">
         {inTem && (
           <div className="space-y-4">
@@ -524,7 +543,7 @@ export default function GiaCongPage() {
             <div className="flex justify-end gap-2">
               <Button chiXemOk variant="ghost" onClick={() => setInTem(null)} disabled={saving}>Hủy</Button>
               <Button icon="printer" onClick={doInTemNhan} loading={saving}>
-                In tem ({inTem.ds.length})
+                In tem ({inTem.ds.length}{inTem.ds.length > 2 ? ` · ${Math.ceil(inTem.ds.length / 2)} tờ` : ''})
               </Button>
             </div>
           </div>

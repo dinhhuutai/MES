@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { Combobox, ComboboxInput, ComboboxOptions, ComboboxOption } from '@headlessui/react';
 import { inputClass } from './controls';
-import { chuanTim as norm } from '../../utils/timKiem';
+import { khopTungTu, chuoiTimNguoi } from '../../utils/timKiem';
 
 // Select có ô tìm kiếm (combobox) — dùng khi danh sách dài (vd chọn người trong hàng trăm user).
 // Dropdown portal (anchor) để không bị cắt trong Modal/SidePanel.
-// getSearch: chuỗi để KHỚP tìm kiếm (mặc định = getLabel). Truyền để tìm theo cả tên + username...
+// getSearch: chuỗi để KHỚP tìm kiếm. Mặc định (07/10/2026) = nhãn + họ tên/tên đăng nhập/mã nhân viên nếu
+//   option là NGƯỜI (`chuoiTimNguoi`) ⇒ mọi ô chọn người tự tìm được bằng tên không dấu HOẶC username.
+//   Khớp TỪNG TỪ (`khopTungTu`): "nguyen an" ra "Nguyễn Văn An".
 //
 // `moNgay`: BẤM VÀO Ô LÀ BUNG SẴN CẢ DANH SÁCH, không cần gõ chữ nào (prop `immediate` của Headless UI
 //   — mặc định combobox chỉ mở khi bắt đầu gõ). Bật cho danh mục vừa phải mà người dùng hay muốn
@@ -29,9 +31,8 @@ export default function SearchableSelect({
   chapNhanTuDo = false,
 }) {
   const [query, setQuery] = useState('');
-  const q = norm(query);
-  const searchText = getSearch || getLabel;
-  const filtered = q === '' ? options : options.filter((o) => norm(searchText(o)).includes(q));
+  const searchText = getSearch || ((o) => chuoiTimNguoi(o, getLabel(o)));
+  const filtered = !query.trim() ? options : options.filter((o) => khopTungTu(searchText(o), query));
   const selected = options.find((o) => getValue(o) === value) || null;
 
   // Gõ chữ không khớp ai trong danh sách → nhận nguyên văn. Chỉ chốt khi KHÔNG còn gợi ý nào, để
@@ -71,7 +72,7 @@ export default function SearchableSelect({
               Enter sẽ chọn "— Không —" (kết quả khớp nằm ở dòng 2), người dùng phải bấm chuột mới
               chọn được — chậm hẳn thao tác nhập lỗi/biện pháp. Ẩn khi có từ khóa ⇒ Enter lấy đúng
               dòng khớp đầu tiên. Muốn bỏ chọn thì xóa hết chữ trong ô, dòng này hiện lại. */}
-          {q === '' && (
+          {!query.trim() && (
             <ComboboxOption
               value=""
               className="cursor-pointer px-3 py-2 text-sm text-ink-soft data-[focus]:bg-surface-muted"

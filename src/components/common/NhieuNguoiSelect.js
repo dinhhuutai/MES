@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Combobox, ComboboxInput, ComboboxOptions, ComboboxOption } from '@headlessui/react';
 import Icon from './Icon';
 import { inputClass } from './controls';
-import { chuanTim as norm } from '../../utils/timKiem';
+import { chuanTim as norm, khopTungTu, chuoiTimNguoi } from '../../utils/timKiem';
 
 // Ô chọn NHIỀU NGƯỜI — giá trị lưu là 1 CHUỖI các tên ngăn cách bằng dấu phẩy (vd "Nguyễn A, Trần B").
 //
@@ -12,7 +12,8 @@ import { chuanTim as norm } from '../../utils/timKiem';
 // Cách dùng: chọn 1 người trong danh sách → tên được THÊM vào danh sách, ô tìm trống lại để chọn
 // tiếp. Gõ tên KHÔNG có trong danh sách rồi Enter cũng thêm được (thợ khoán / người mới chưa có tài
 // khoản) — đó là lý do không dùng `SearchableSelect` (component đó chỉ chọn được trong options).
-// Tìm KHÔNG DẤU qua `utils/timKiem`.
+// Tìm KHÔNG DẤU qua `utils/timKiem`; mặc định (07/10/2026) khớp cả TÊN lẫn USERNAME/MSNV và khớp TỪNG TỪ
+// (`chuoiTimNguoi` + `khopTungTu`) — bên gọi không cần truyền `getSearch` nữa.
 export default function NhieuNguoiSelect({
   value = '',
   onChange,
@@ -23,8 +24,7 @@ export default function NhieuNguoiSelect({
   disabled = false,
 }) {
   const [query, setQuery] = useState('');
-  const q = norm(query);
-  const searchText = getSearch || getLabel;
+  const searchText = getSearch || ((o) => chuoiTimNguoi(o, getLabel(o)));
 
   const ten = useMemo(
     () => String(value || '').split(',').map((s) => s.trim()).filter(Boolean),
@@ -43,9 +43,9 @@ export default function NhieuNguoiSelect({
   // Ẩn người ĐÃ CHỌN khỏi danh sách gợi ý cho khỏi bấm trùng.
   const filtered = useMemo(() => {
     const conLai = options.filter((o) => !daCo(getLabel(o)));
-    return q === '' ? conLai : conLai.filter((o) => norm(searchText(o)).includes(q));
+    return !query.trim() ? conLai : conLai.filter((o) => khopTungTu(searchText(o), query));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [options, q, value]);
+  }, [options, query, value]);
 
   return (
     <div>

@@ -39,3 +39,18 @@ export function khopNhieu(giaTriList, tu) {
   if (!t) return true;
   return (giaTriList || []).some((v) => chuanTim(v).includes(t));
 }
+
+// Khớp TỪNG TỪ của từ khóa (07/10/2026): mọi từ đều có trong chuỗi, thứ tự nào cũng được ⇒ gõ "nguyen an"
+// ra "Nguyễn Văn An", gõ "an 0210" ra "Nguyễn Văn An (021000123)". Mọi chuỗi khớp kiểu `khop` (chứa liền)
+// đều vẫn khớp ở đây — chỉ rộng hơn, không hẹp đi.
+export function khopTungTu(hay, tu) {
+  const t = chuanTim(tu);
+  if (!t) return true;
+  const h = chuanTim(hay);
+  return t.split(' ').every((x) => h.includes(x));
+}
+
+// Chuỗi để TÌM 1 NGƯỜI trong ô chọn người: nhãn hiển thị + họ tên + tên đăng nhập (= MSNV) + mã nhân viên
+// (khóa nào có thì lấy) ⇒ gõ tên (không dấu) hay username đều ra. Option không phải người thì chỉ còn nhãn.
+export const chuoiTimNguoi = (o, nhan = '') => [nhan, o && o.ho_ten, o && o.ten_dang_nhap, o && o.username, o && o.ma_user]
+  .filter(Boolean).join(' ');

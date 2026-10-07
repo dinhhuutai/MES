@@ -9,7 +9,8 @@ import { ngayLocalISO } from '../../../utils/format';
 // ─────────────────────────────────────────────────────────────────────────────
 // BÁO CÁO SẢN XUẤT NGÀY (Sản xuất › Báo cáo sản xuất, 02/10/2026)
 // 2 bảng từ CÙNG một lượt API (`GET /production/bao-cao-ngay`) ⇒ bấm chuyển bảng là đổi ngay, không tải lại:
-//   · "Theo tổ · khu chuyền": Tổ in (C1…) × nhóm chuyền MTD · Banin · RB · MT · LG · MEP + dòng Tổng.
+//   · "Theo khu chuyền"     : nhóm chuyền MTD · Banin · RB · MT · LG · MEP cả xưởng + dòng Tổng cộng
+//                             (07/10/2026 bỏ cột Tổ — trước đó tách theo tổ in).
 //   · "Chi tiết phần in"    : 1 dòng / (chuyền × phần in).
 // Mỗi cột-nhóm (Tổng · HC · CA1 · CA2 · CA3): SL kế hoạch · SL in thực tế · % (= TT / KH) · Số giờ KH ·
 // Số giờ TT · C.lệch giờ (= TT − KH). Luật tính ở backend `utils/baoCaoSanXuat.js`.
@@ -22,10 +23,12 @@ const NHOM_CA = [
 ];
 const COT_SO = ['SL kế hoạch', 'SL in thực tế', '%', 'Số giờ KH', 'Số giờ TT', 'C.lệch giờ'];
 const BANG = [
-  { v: 'TO', label: 'Theo tổ · khu chuyền', icon: 'layout' },
+  // Giữ mã 'TO' (đã nhớ ở localStorage `bcsx.bang`) — bảng nay không còn tách tổ.
+  { v: 'TO', label: 'Theo khu chuyền', icon: 'layout' },
   { v: 'CT', label: 'Chi tiết phần in', icon: 'list' },
 ];
 const TEN_CA = { NGAN: 'Ca ngắn · CA1–CA3', DAI: 'Ca dài · CA1–CA2', HANH_CHINH: 'Hành chính' };
+const TEN_LOAI_CA_RIENG = { MAY: 'Chuyền Máy', BAN: 'Chuyền Bàn', ROBOT: 'Chuyền Robot' };
 const COT_CT = [
   { k: 'ma_chuyen', l: 'Chuyền', w: 'w-[76px] min-w-[76px] max-w-[76px]' },
   { k: 'khach', l: 'Khách hàng', w: 'w-[112px] min-w-[112px] max-w-[112px]' },
@@ -97,51 +100,25 @@ function TieuDe({ cotTrai }) {
   );
 }
 
-// Bảng 1 — tổ × nhóm chuyền. Ô Tổ gộp dọc; dòng Tổng mỗi tổ + Tổng cộng cuối bảng.
-function BangTheoTo({ data }) {
-  const cotTrai = [
-    { l: 'Tổ', dinh: 'left-0', w: 'w-[64px] min-w-[64px] max-w-[64px]' },
-    { l: 'Chuyền', dinh: 'left-[64px]', w: 'w-[84px] min-w-[84px] max-w-[84px]' },
-  ];
+// Bảng 1 — nhóm chuyền cả xưởng (07/10/2026 bỏ cột Tổ) + Tổng cộng cuối bảng.
+function BangTheoNhom({ data }) {
+  const cotTrai = [{ l: 'Chuyền', dinh: 'left-0', w: 'w-[84px] min-w-[84px] max-w-[84px]' }];
   return (
     <table className="w-full min-w-max border-separate border-spacing-0 text-xs">
       <TieuDe cotTrai={cotTrai} />
       <tbody>
-        {data.theo_to.map((g) => (
-          <TheoToKhoi key={g.ma_to || '_'} g={g} />
-        ))}
-        {data.theo_to.length > 1 && (
-          <tr>
-            <td colSpan={2} className="sticky left-0 z-10 border-t-2 border-line bg-surface-muted px-2 py-2 font-bold text-ink">Tổng cộng</td>
-            {NHOM_CA.map((n) => <OSo key={n.k} m={data.tong[n.k]} nhom={n.k} dam />)}
+        {(data.theo_nhom || []).map((n) => (
+          <tr key={n.key}>
+            <td className="sticky left-0 z-10 border-b border-line/60 bg-surface px-2 py-1.5 text-ink">{n.label}</td>
+            {NHOM_CA.map((c) => <OSo key={c.k} m={n.m[c.k]} nhom={c.k} />)}
           </tr>
-        )}
+        ))}
+        <tr>
+          <td className="sticky left-0 z-10 border-t-2 border-line bg-surface-muted px-2 py-2 font-bold text-ink">Tổng cộng</td>
+          {NHOM_CA.map((n) => <OSo key={n.k} m={data.tong[n.k]} nhom={n.k} dam />)}
+        </tr>
       </tbody>
     </table>
-  );
-}
-
-function TheoToKhoi({ g }) {
-  const soDong = g.nhom.length + 1;
-  return (
-    <>
-      {g.nhom.map((n, i) => (
-        <tr key={n.key}>
-          {i === 0 && (
-            <td rowSpan={soDong} title={g.ten_to}
-              className="sticky left-0 z-10 border-b border-line bg-surface px-2 text-center align-middle font-semibold text-ink">
-              {g.ma_to || <span className="text-[11px] font-normal text-ink-soft">{g.ten_to}</span>}
-            </td>
-          )}
-          <td className="sticky left-[64px] z-10 border-b border-line/60 bg-surface px-2 py-1.5 text-ink">{n.label}</td>
-          {NHOM_CA.map((c) => <OSo key={c.k} m={n.m[c.k]} nhom={c.k} />)}
-        </tr>
-      ))}
-      <tr className="bg-surface-muted/70">
-        <td className="sticky left-[64px] z-10 border-b border-line bg-surface-muted px-2 py-1.5 font-semibold text-ink">Tổng</td>
-        {NHOM_CA.map((c) => <OSo key={c.k} m={g.tong[c.k]} nhom={c.k} dam />)}
-      </tr>
-    </>
   );
 }
 
@@ -299,6 +276,12 @@ export default function BaoCaoSanXuatPage() {
             {TEN_CA[dangXem.loai_ca] || dangXem.loai_ca}{dangXem.loai_ca_da_cai ? '' : ' (theo tem)'}
           </span>
         )}
+        {/* Mig 112: loại chuyền cài ca RIÊNG khác ca chung của tuần. */}
+        {dangXem && !cuNgay && Object.entries(dangXem.loai_ca_rieng || {}).map(([lc, ca]) => (
+          <span key={lc} className="rounded-full bg-surface-muted px-2 py-0.5">
+            {TEN_LOAI_CA_RIENG[lc] || lc}: {TEN_CA[ca] || ca}
+          </span>
+        ))}
       </div>
 
       <div className="relative">
@@ -318,7 +301,7 @@ export default function BaoCaoSanXuatPage() {
         ) : dangXem ? (
           <div key={bang}
             className={`max-h-[calc(100vh-13.5rem)] overflow-auto rounded-card border border-line bg-surface transition-opacity duration-200 motion-reduce:animate-none ${huong === 'phai' ? 'animate-vao-tu-phai' : 'animate-vao-tu-trai'} ${cuNgay ? 'opacity-50' : ''}`}>
-            {bang === 'TO' ? <BangTheoTo data={dangXem} /> : <BangChiTiet data={dangXem} />}
+            {bang === 'TO' ? <BangTheoNhom data={dangXem} /> : <BangChiTiet data={dangXem} />}
           </div>
         ) : null}
       </div>

@@ -31,7 +31,7 @@ import useOTimKiem from '../../../hooks/useOTimKiem';
 import { listSuaCandidates, recordSua, suaHistory, suaDone, luuNguoiSua, guiLaiErpSua } from '../../../services/qualityService';
 import { getTemLabel } from '../../../services/productionService';
 import { listUserOptions } from '../../../services/userService';
-import { printSuaOqcTem } from '../../production/utils/printTemLabel';
+import { printSuaOqcTem, moSanCuaSoIn, dongCuaSoIn } from '../../production/utils/printTemLabel';
 import exportCheckpointExcel, { cotTemChung, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
 import { fmtNum, timTheoMaTem, temCode } from '../../../utils/format';
 
@@ -103,11 +103,12 @@ export default function SuaPage() {
   const openRow = (row) => { setEditing(row); setForm({ ...empty, soLuongSuaDat: String(row.con_sua || '') }); };
 
   // ── IN TEM 17 (Sửa đã hoàn thành → OQC) ────────────────────────────────────
-  // ⚠⚠ ĐÃ BỎ nút "In tem" ở TỪNG DÒNG (đổi 12/08/2026). Nay: tích 1–2 dòng ở sidebar "Đã hoàn thành"
+  // ⚠⚠ ĐÃ BỎ nút "In tem" ở TỪNG DÒNG (đổi 12/08/2026). Nay: tích dòng ở sidebar "Đã hoàn thành"
   //   → nút "In tem" ở CHÂN panel → modal nhập TÊN NGƯỜI SỬA từng dòng → in.
   //   Vì sao: tờ decal vốn là 2-up (2 tem/tờ) — in 1 tem mỗi lần thì tem bên cạnh bỏ trắng, tốn nửa
   //   tờ; và tem 17 dán lô đi giao cần biết AI ĐÃ SỬA, trước đây không có chỗ nào nhập.
-  //   Tối đa 2 vì 1 tờ chỉ có 2 khung; tối thiểu 1.
+  //   07/10/2026: BỎ trần 2 dòng — tích bao nhiêu cũng được; mỗi tờ vẫn 2 tem (dòng 1–2 tờ 1, dòng 3–4 tờ 2…),
+  //   mọi tờ trong 1 cửa sổ in.
   const [inOpen, setInOpen] = useState(false);
   const [inRows, setInRows] = useState([]);   // dòng đang chuẩn bị in (kèm ô nhập người sửa)
   const [inBusy, setInBusy] = useState(false);
@@ -130,14 +131,16 @@ export default function SuaPage() {
     setInOpen(true);
   };
 
-  // Lưu người sửa (mig 080) rồi IN — 1 lần bấm = 1 cửa sổ in cho cả 1–2 tem (popup blocker chỉ cho
-  // mở 1 cửa sổ / 1 lượt bấm, xem ghi chú ở `printSuaOqcTem`).
+  // Lưu người sửa (mig 080) rồi IN — 1 lần bấm = 1 cửa sổ in cho mọi tem (popup blocker chỉ cho mở 1 cửa
+  // sổ / 1 lượt bấm). Cửa sổ MỞ SẴN ngay trong cú bấm: N dòng phải lưu người sửa + lấy N nhãn, mở sau là bị chặn.
   const doInTem = async () => {
     if (!inRows.length) return;
     if (inRows.some((r) => !String(r.nguoiSua || '').trim())) {
       show('Nhập tên người sửa cho mọi dòng trước khi in', 'error');
       return;
     }
+    let w;
+    try { w = moSanCuaSoIn(); } catch (e) { show(e.message, 'error'); return; }
     setInBusy(true);
     try {
       await luuNguoiSua(inRows.map((r) => ({
@@ -166,11 +169,12 @@ export default function SuaPage() {
           tg_sua: r.tg || null,
         };
       }));
-      await printSuaOqcTem(labels);
-      show(`Đã in ${labels.length} tem 17 (sửa đạt → OQC)`);
+      await printSuaOqcTem(labels, w);
+      show(`Đã in ${labels.length} tem 17 (sửa đạt → OQC) · ${Math.ceil(labels.length / 2)} tờ`);
       setInOpen(false);
       clearChonRef.current?.();
     } catch (e) {
+      dongCuaSoIn(w);
       show(e.message || 'Không in được tem', 'error');
     } finally { setInBusy(false); }
   };
@@ -415,14 +419,14 @@ export default function SuaPage() {
         title="Lịch sử Sửa" fetcher={suaHistory} />
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
         title="Tem đã sửa" maHeader="Tem" fetcher={suaDone} columns={doneColumns}
-        chonNhieu toiDaChon={2}
+        chonNhieu
         chonDuoc={(r) => (r.tem_id ? (r.sua_id ? true : 'Thiếu migration 080 — chưa in được tem có tên người sửa') : 'Dòng này không có tem')}
         footerChon={({ rows: sel, clear }) => (
           <>
             <span className="mr-auto text-xs text-ink-soft">
               {sel.length === 0
-                ? 'Tích 1–2 dòng để in tem (1 tờ = 2 tem: dòng 1 → tem trái, dòng 2 → tem phải)'
-                : `Đã chọn ${sel.length}/2 dòng`}
+                ? 'Tích các dòng để in tem (mỗi tờ 2 tem: dòng 1 → trái, dòng 2 → phải, dòng 3–4 sang tờ sau…)'
+                : `Đã chọn ${sel.length} dòng · ${Math.ceil(sel.length / 2)} tờ`}
             </span>
             {sel.length > 0 && <Button chiXemOk variant="ghost" onClick={clear}>Bỏ chọn</Button>}
             <Button icon="printer" disabled={!sel.length} onClick={() => moModalIn(sel, clear)}>
@@ -455,13 +459,13 @@ export default function SuaPage() {
           màn Sản xuất; giá trị lưu là TÊN nên người chưa có tài khoản vẫn in được — gõ tên rồi Enter
           (`chapNhanTuDo`), CHỈ 1 ô nhập cho mỗi dòng. */}
       <Modal open={inOpen} onClose={() => setInOpen(false)} size="xl"
-        title={`In tem 17 — ${inRows.length} tem trên 1 tờ`}
+        title={`In tem 17 — ${inRows.length} tem trên ${Math.ceil(inRows.length / 2)} tờ`}
         footer={
           <>
             <span className="mr-auto text-xs text-ink-soft">
               {inRows.length === 1
                 ? 'In 2 nhãn GIỐNG NHAU trên tờ decal'
-                : 'Dòng 1 → tem bên trái · dòng 2 → tem bên phải'}
+                : `Mỗi tờ 2 tem: dòng lẻ → trái · dòng chẵn → phải${inRows.length % 2 ? ' · tờ cuối 2 nhãn giống nhau' : ''}`}
             </span>
             <Button chiXemOk variant="ghost" onClick={() => setInOpen(false)}>Hủy</Button>
             <Button icon="printer" loading={inBusy} onClick={doInTem}>In tem</Button>
