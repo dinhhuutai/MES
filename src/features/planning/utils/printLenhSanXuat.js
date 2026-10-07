@@ -6,7 +6,9 @@
 //   · mỗi TỜ tối đa 6 DÒNG (`DONG_MOT_TO`) như mẫu giấy; dài hơn thì sang tờ sau (STT chạy tiếp, mỗi tờ đủ đầu
 //     tờ + ô ký — tờ nào cũng là 1 mẫu trọn vẹn, tách rời vẫn đọc được), tờ cuối thiếu thì dòng trống.
 //   · đầu tờ: ngày SX KH · Tổ in (tổ của phiếu chạy gần nhất các lệnh, trống nếu chưa chạy) · Chuyền ·
-//     Phụ trách (trống, ghi tay) · Số = `<ddmmyy>-<mã chuyền>` (1 chuyền × 1 ngày ⇒ duy nhất) · Tờ k/N.
+//     Phụ trách (= TÊN THỢ IN ĐẦU TIÊN — lệnh nhỏ đầu tiên có thợ in, phân công thật trước rồi thợ in kế
+//     hoạch; nhiều thợ chỉ lấy tên đầu; không có thì trống để ghi tay) · Số = `<ddmmyy>-<mã chuyền>`
+//     (1 chuyền × 1 ngày ⇒ duy nhất) · Tờ k/N.
 //   · bảng: Khách · PO · Mã hàng (dòng nhỏ: code phần · mã lệnh nhỏ) · Kích vải/phim · Màu · Định mức ·
 //     SL cần in (SL release của phần in trong lệnh) · Kế hoạch từ/đến giờ (của CHÍNH lệnh nhỏ). Thực hiện ·
 //     Sản lượng · Ghi chú để ghi tay. Dòng xếp theo giờ BĐ kế hoạch.
@@ -25,15 +27,21 @@ RONG.push(100 - RONG.reduce((a, b) => a + b, 0));
 const COLS = RONG.map((w) => `<col style="width:${w}%">`).join('');
 // Dòng ĐẦU tờ có bố cục RIÊNG (không bám cột bảng): tiêu đề dài, bám cột là đè lên ô ngày.
 //   Đo theo chữ thật ở khổ A5 (198mm): tiêu đề 11pt đậm ~32mm · ngày ~20mm · "Phụ trách" ~17mm · Số ~29mm.
-const RONG_DAU = [17, 10.5, 5.5, 6, 6.5, 12.5, 8.5, 7.5, 3.5, 14.5, 8];
+//   Ô tên Phụ trách (thợ in — prod hay viết HOA, ~18 ký tự, 7,5pt) lấy chỗ dư của ô ngày/nhãn/Chuyền (tên chuyền
+//   ≤ 9 ký tự); Số rộng đủ cho mã chuyền dài nhất (`071026-MEHENLG01`). Đo Chrome 07/10/2026: tên 18 ký tự HOA
+//   vừa, dài hơn thì cắt "…" (không xuống dòng — phình đầu tờ là ô ký tràn trang).
+const RONG_DAU = [17, 9, 5, 6, 6.5, 9, 8, 16, 3, 15, 5.5];
 const COLS_DAU = RONG_DAU.map((w) => `<col style="width:${w}%">`).join('');
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const so = (n) => (n == null || n === '' ? '' : Number(n).toLocaleString('vi-VN'));
 const tg = (v) => { const x = v ? new Date(v).getTime() : NaN; return Number.isNaN(x) ? Infinity : x; };
 const soSanhChu = (a, b) => String(a || '').localeCompare(String(b || ''), 'vi', { numeric: true });
+// Tên thợ in ĐẦU TIÊN của 1 dòng — cùng thứ tự ưu tiên cột "Thợ in" (`cotChecklistRelease`): phân công thật,
+//   chưa có thì thợ in kế hoạch. Chuỗi tên ngăn dấu phẩy.
+const thoInDau = (r) => String(r.tho_in || r.tho_in_kh || '').split(',').map((s) => s.trim()).find(Boolean) || '';
 
 // Gom dòng Danh sách release thành các LỆNH SẢN XUẤT theo (chuyền × ngày SX KH).
-// Trả [{ khoa, ma_chuyen, ten_chuyen, ngay_ke_hoach, dinh_muc_gio, to_in, so, dong[], so_lenh, so_to }].
+// Trả [{ khoa, ma_chuyen, ten_chuyen, ngay_ke_hoach, dinh_muc_gio, to_in, phu_trach, so, dong[], so_lenh, so_to }].
 export function nhomTheoChuyen(rows) {
   const map = new Map();
   (rows || []).forEach((r) => {
@@ -60,6 +68,8 @@ export function nhomTheoChuyen(rows) {
         so_lenh: new Set(dong.map((r) => r.lenh_id)).size,
         so_to: soTo(dong.length),
         to_in: [...new Set(dong.map((r) => r.to_in).filter(Boolean))].join(', '),
+        // Phụ trách = thợ in đầu tiên của lệnh nhỏ đầu tiên (theo giờ BĐ KH) có thợ in.
+        phu_trach: dong.map(thoInDau).find(Boolean) || '',
         // Số lệnh lớn: ddmmyy-mã chuyền (vd 071026-M4A-4B).
         so: [ngay ? ngay.slice(0, 4) + ngay.slice(6) : '', g.ma_chuyen || g.ten_chuyen].filter(Boolean).join('-'),
       };
@@ -103,7 +113,7 @@ function toGiay(g, k, ngayKy) {
         <td class="nhan">Chuyền</td>
         <td class="gt c">${esc(g.ten_chuyen)}</td>
         <td class="nhan">Phụ trách</td>
-        <td></td>
+        <td class="gt c pt">${esc(g.phu_trach)}</td>
         <td class="nhan">Số</td>
         <td class="gt so">${esc(g.so)}</td>
         <td class="r nho">Tờ ${k + 1}/${g.so_to}</td>
@@ -162,6 +172,7 @@ export default function printLenhSanXuat(nhom) {
       .dau .tieu-de { font-weight: bold; font-size: 11pt; }
       .dau .gt { font-weight: bold; }
       .dau .so { font-size: 8pt; }
+      .dau .pt { font-size: 7.5pt; text-overflow: ellipsis; }
       .dau .nhan { text-align: right; }
       .bang th, .bang td { border: 1px solid #000; padding: 0.6mm 0.8mm; font-size: 7.5pt; vertical-align: middle; }
       .bang th { font-weight: normal; text-align: center; font-size: 7pt; line-height: 1.15; }
