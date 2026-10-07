@@ -254,12 +254,7 @@ export default function TestRunPanel({ lenhId, onClose, onChanged, truocXacNhan,
           <Button variant="danger" onClick={doCancel} loading={busy === 'cancel'}>Hủy xác nhận QA</Button>
         ) : (
           <>
-            {/* Thông tin phần in SAI ⇒ trả Giao nhận sửa; lệnh GIỮ NGUYÊN, tạm rời Test Run tới khi GN xác nhận lại. */}
-            <Button variant="secondary" icon="undo" className="text-danger" onClick={() => setGnOpen(true)}
-              disabled={!dsPhanIn.length || !!busy}>Trả về GN</Button>
-            {/* Kế hoạch cần sửa lại (chuyền / giờ / thợ…) ⇒ trả về Release 1, GIỮ lệnh — Kế hoạch xác nhận lại là về đây. */}
-            <Button variant="secondary" icon="undo" className="text-danger" onClick={() => { setKhLyDo(''); setKhOpen(true); }}
-              disabled={choKyThuat || !!busy}>Trả về Kế hoạch</Button>
+            {/* Trả về GN / Kỹ thuật / Kế hoạch nằm CHUNG 1 hàng trong thân panel (07/10/2026) — không để ở footer. */}
             {/* Đang chờ kỹ thuật làm lại → khóa hết (backend cũng chặn: 409 CHO_KY_THUAT). */}
             <Button variant="secondary" onClick={doSkip} loading={busy === 'skip'} disabled={choKyThuat || busy === 'pass' || busy === 'fail'}>
               Không test run
@@ -308,13 +303,23 @@ export default function TestRunPanel({ lenhId, onClose, onChanged, truocXacNhan,
             </div>
           </section>
 
-          {canQA && !done && !choKyThuat && (
+          {canQA && !done && (
             <section className="border-t border-line pt-4">
-              {!returnMode ? (
-                <button type="button" onClick={() => setReturnMode(true)}
-                  className="text-xs font-medium text-danger hover:underline">↩ Trả về Kỹ thuật</button>
-              ) : (
-                <div className="rounded-control border border-rose-200 bg-rose-50 p-3 dark:border-rose-900/60 dark:bg-rose-950/40">
+              {/* 3 LỐI TRẢ VỀ CÙNG 1 HÀNG, thứ tự GN → Kỹ thuật → Kế hoạch (người dùng chốt 07/10/2026):
+                  · GN: thông tin phần in SAI — lệnh GIỮ, tạm rời Test Run tới khi GN xác nhận lại.
+                  · Kỹ thuật: mở form chọn mục rớt ngay bên dưới.
+                  · Kế hoạch: sửa chuyền / giờ / thợ… — lệnh GIỮ, về màn Release 1 tới khi Kế hoạch xác nhận lại.
+                  Lệnh đang chờ kỹ thuật làm lại ⇒ chỉ còn GN (KT/KH khóa, backend cũng chặn). */}
+              <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+                <button type="button" onClick={() => setGnOpen(true)} disabled={!dsPhanIn.length || !!busy}
+                  className="text-xs font-medium text-danger hover:underline disabled:cursor-not-allowed disabled:opacity-50 disabled:no-underline">↩ Trả về GN</button>
+                <button type="button" onClick={() => setReturnMode(true)} disabled={choKyThuat || !!busy}
+                  className={`text-xs font-medium text-danger hover:underline disabled:cursor-not-allowed disabled:opacity-50 disabled:no-underline ${returnMode ? 'underline' : ''}`}>↩ Trả về Kỹ thuật</button>
+                <button type="button" onClick={() => { setKhLyDo(''); setKhOpen(true); }} disabled={choKyThuat || !!busy}
+                  className="text-xs font-medium text-danger hover:underline disabled:cursor-not-allowed disabled:opacity-50 disabled:no-underline">↩ Trả về Kế hoạch</button>
+              </div>
+              {returnMode && !choKyThuat && (
+                <div className="mt-3 rounded-control border border-rose-200 bg-rose-50 p-3 dark:border-rose-900/60 dark:bg-rose-950/40">
                   {/* LÝ DO TRẢ VỀ — quyết định lệnh có được giữ hay bị hủy, nên phải chọn TRƯỚC. */}
                   <div className="mb-3 space-y-1.5">
                     {[
