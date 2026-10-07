@@ -6,6 +6,9 @@
 // ⚠ Dựa vào `ma_loai` chứ không vào sự có mặt của trường nào đó — 2 nguồn cố ý trả CÙNG bộ cột.
 export const laThongBaoDuyet = (t) => String(t?.ma_loai || '').startsWith('DUYET_');
 
+// Loại trả về có đích KHÁC READY Kỹ thuật (07/10/2026: Test Run trả về Kế hoạch → màn Release 1).
+const TRANG_TRA_VE = { TRA_VE_TEST_RUN_KH: '/ke-hoach/release-1' };
+
 // Bấm thông báo → đi đâu.
 //   · họ TRẢ VỀ  → màn READY Kỹ thuật, tìm sẵn code phần (`ReadyPage` đọc `?q=`)
 //   · họ DUYỆT   → màn **Danh sách phần in vải về**, chip **"Tất cả"**, tìm sẵn code phần
@@ -21,7 +24,8 @@ export const duongDanThongBao = (t) => {
     const ma = t?.ma_phan_dau || String(t?.ma_phan || '').split(',')[0].trim();
     return `/don-hang/phan-in?stage=ALL&boNgay=1&q=${encodeURIComponent(ma || '')}`;
   }
-  return `/ky-thuat/ready?q=${encodeURIComponent(t?.ma_phan || '')}`;
+  // Họ trả về: về màn ĐÍCH của loại — gương BE `utils/thongBao.js duongDanTraVe` (`LOAI_TB[..].trang`).
+  return `${TRANG_TRA_VE[t?.ma_loai] || '/ky-thuat/ready'}?q=${encodeURIComponent(t?.ma_phan || '')}`;
 };
 
 // Câu mô tả LUỒNG: "Release 1 → trả về READY Kỹ thuật" / "Thay đổi phương án in — chờ duyệt".

@@ -234,7 +234,9 @@ function LyDoBoSungInline({ dot, canRun, onSave }) {
 //   Ca trưởng lưu **id** (`phieu_san_xuat.ca_truong_id`), còn Chuyền trưởng / Thợ in lưu **TÊN**
 //   (`chuyen_truong` VARCHAR · `tho_in` TEXT) ⇒ đổi sang ô chọn KHÔNG cần migration, và vẫn cho gõ
 //   tên người chưa có tài khoản (thợ khoán) — xem `NhieuNguoiSelect`.
-function PhanCongInline({ pc, users, toIns = [], onSave, busy, canRun }) {
+// `thoInKh` (mig 111) = thợ in KẾ HOẠCH chọn lúc Release 1 — chưa phân công thì điền sẵn vào ô Thợ in (vẫn phải
+//   bấm Lưu mới thành phân công thật, vì phân công là thứ gửi ERP).
+function PhanCongInline({ pc, users, toIns = [], onSave, busy, canRun, thoInKh = '' }) {
   const daLuu = !!(pc?.ca_truong_id || pc?.chuyen_truong || pc?.tho_in || pc?.to_in_id);
   const [sua, setSua] = useState(false);
   const [form, setForm] = useState({ caTruongId: '', chuyenTruong: '', thoIn: '', toInId: '' });
@@ -245,9 +247,9 @@ function PhanCongInline({ pc, users, toIns = [], onSave, busy, canRun }) {
   useEffect(() => {
     setForm({
       caTruongId: pc?.ca_truong_id || '', chuyenTruong: pc?.chuyen_truong || '',
-      thoIn: pc?.tho_in || '', toInId: pc?.to_in_id || '',
+      thoIn: pc?.tho_in || thoInKh || '', toInId: pc?.to_in_id || '',
     });
-  }, [pc?.ca_truong_id, pc?.chuyen_truong, pc?.tho_in, pc?.to_in_id, sua]);
+  }, [pc?.ca_truong_id, pc?.chuyen_truong, pc?.tho_in, pc?.to_in_id, sua, thoInKh]);
 
   const dangSua = canRun && (!daLuu || sua); // không có quyền PROD_RUN → chỉ xem
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
@@ -258,7 +260,10 @@ function PhanCongInline({ pc, users, toIns = [], onSave, busy, canRun }) {
         <div className="grid grid-cols-1 gap-y-1">
           <div><span className="text-ink-soft">Ca trưởng:</span> <b className="text-ink">{pc?.ca_truong_ten || '—'}</b></div>
           <div><span className="text-ink-soft">Chuyền trưởng:</span> <b className="text-ink">{pc?.chuyen_truong || '—'}</b></div>
-          <div><span className="text-ink-soft">Thợ in:</span> <b className="text-ink">{pc?.tho_in || '—'}</b></div>
+          <div>
+            <span className="text-ink-soft">Thợ in:</span> <b className="text-ink">{pc?.tho_in || thoInKh || '—'}</b>
+            {!pc?.tho_in && thoInKh && <span className="text-xs text-ink-soft"> (kế hoạch)</span>}
+          </div>
           {coToIn && (
             <div>
               <span className="text-ink-soft">Tổ in:</span>{' '}
@@ -995,7 +1000,8 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
           {phieu && dotVaiList.length > 0 && (
             <section className="border-t border-line pt-4">
               <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-soft">Phân công</h3>
-              <PhanCongInline pc={data.phan_cong} users={users} toIns={toInDs} onSave={doSavePhanCong} busy={busy} canRun={canRun} />
+              <PhanCongInline pc={data.phan_cong} users={users} toIns={toInDs} onSave={doSavePhanCong} busy={busy} canRun={canRun}
+                thoInKh={data.lenh?.tho_in_kh || ''} />
             </section>
           )}
 

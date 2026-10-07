@@ -51,7 +51,8 @@ export const COT_CHECKLIST = [
   { key: 'uu_tien', header: 'Ưu tiên', width: 7, value: trong },
   { key: 'quyet_dinh', header: 'Quyết định', width: 9, value: trong },
   { key: 'nhom_tho', header: 'Nhóm thợ', width: 8, value: trong },
-  { key: 'tho_in', header: 'Thợ in', width: 14, mucLenh: true, value: (r) => r.tho_in || '' },
+  // Phân công lúc chạy thắng; lệnh chưa chạy thì hiện thợ in KẾ HOẠCH chọn lúc Release 1 (mig 111).
+  { key: 'tho_in', header: 'Thợ in', width: 14, mucLenh: true, value: (r) => r.tho_in || r.tho_in_kh || '' },
   { key: 'trang_thai', header: 'Trạng thái', width: 15, value: (r) => r.giai_doan_ten || '' },
   { key: 'kt_vai', header: 'Vải', nhom: 'DANH MỤC KIỂM TRA', width: 6, value: trong },
   { key: 'kt_khuon', header: 'Khuôn', nhom: 'DANH MỤC KIỂM TRA', width: 7, value: (r) => r.khuon_nhan || '' },

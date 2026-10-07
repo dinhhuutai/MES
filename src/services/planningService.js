@@ -41,6 +41,11 @@ export const cancelQA = (id) => client.post(`/planning/test-run/${id}/cancel-qa`
 // Test không đạt → trả về KỸ THUẬT (READY) theo mục rớt: body {checklists:['KHUON'|'FILM'|'MUC'], lyDo}.
 // Lệnh GIỮ NGUYÊN → QC xác nhận READY xong là tự quay lại Test Run (không qua Release 1).
 export const returnTestRunToReady = (id, body) => client.post(`/planning/test-run/${id}/tra-ve-ky-thuat`, body);
+// Test Run trả về KẾ HOẠCH (giữ lệnh) — body { lyDo } (07/10/2026).
+export const testRunTraVeKeHoach = (id, body) => client.post(`/planning/test-run/${id}/tra-ve-ke-hoach`, body);
+// Màn Release 1: lệnh bị Test Run trả về (1 dòng / lệnh × đợt) + xác nhận lại { chuyenId, ngayKeHoach, tgBdKh, tgKtKh, thoIn }.
+export const listRelease1TestRunTraVe = () => client.get('/planning/release1/test-run-tra-ve');
+export const xacNhanLaiRelease1 = (lenhId, body) => client.post(`/planning/release1/test-run-tra-ve/${lenhId}/xac-nhan`, body);
 export const listOwnerChoIn = () => client.get('/planning/test-run/owner-cho-in');
 export const skipTestRun = (id) => client.post(`/planning/test-run/${id}/skip`);
 export const confirmCNSPBatch = (lenhIds) => client.post('/planning/test-run/cnsp-confirm-batch', { lenhIds });

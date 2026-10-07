@@ -8,7 +8,7 @@ import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import Modal from '../../../components/common/Modal';
 import TraVeGnModal from '../../../components/common/TraVeGnModal';
-import { getLenhDetail, recordTestRun, confirmQA, cancelQA, returnTestRunToReady, skipTestRun, listOwnerChoIn } from '../../../services/planningService';
+import { getLenhDetail, recordTestRun, confirmQA, cancelQA, returnTestRunToReady, skipTestRun, listOwnerChoIn, testRunTraVeKeHoach } from '../../../services/planningService';
 import { fmtNum } from '../../../utils/format';
 
 const fmt = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '');
@@ -51,6 +51,10 @@ export default function TestRunPanel({ lenhId, onClose, onChanged, truocXacNhan,
   const [ikdOwners, setIkdOwners] = useState(() => new Set());
   const [ikdLyDo, setIkdLyDo] = useState('');
   const [gnOpen, setGnOpen] = useState(false); // "Trả về GN" — lệnh giữ nguyên, tạm rời Test Run
+  // "Trả về Kế hoạch" (07/10/2026) — GIỮ lệnh, chỉ gắn cờ + chuông cho Kế hoạch; lệnh rời Test Run, hiện ở
+  //   khối "Test Run trả về" màn Release 1 tới khi Kế hoạch xác nhận lại.
+  const [khOpen, setKhOpen] = useState(false);
+  const [khLyDo, setKhLyDo] = useState('');
 
   // Phần in (khử trùng) của lệnh — lệnh gom set cũ có nhiều phần in ⇒ modal Trả về GN cho chọn.
   const dsPhanIn = [...new Map((data?.dot_vai || []).map((d) => [d.phan_in_id, { id: d.phan_in_id, ma_phan: d.ma_phan, mau_vai: d.mau_vai }])).values()];
@@ -222,6 +226,23 @@ export default function TestRunPanel({ lenhId, onClose, onChanged, truocXacNhan,
     }
   };
 
+  const doTraVeKeHoach = async () => {
+    if (!khLyDo.trim()) { show('Nhập lý do trả về Kế hoạch', 'error'); return; }
+    setBusy('kh');
+    try {
+      await testRunTraVeKeHoach(lenhId, { lyDo: khLyDo.trim() });
+      // Panel đóng ngay ⇒ báo bằng toast của TRANG (toast của panel mất theo panel).
+      (onToast || show)('Đã trả về Kế hoạch — lệnh được giữ, chờ Kế hoạch xác nhận lại ở màn Release 1');
+      setKhOpen(false); setKhLyDo('');
+      onChanged?.();
+      onClose?.();
+    } catch (e) {
+      show(e.message || 'Trả về Kế hoạch thất bại', 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <SidePanel
       open={!!lenhId}
@@ -236,6 +257,9 @@ export default function TestRunPanel({ lenhId, onClose, onChanged, truocXacNhan,
             {/* Thông tin phần in SAI ⇒ trả Giao nhận sửa; lệnh GIỮ NGUYÊN, tạm rời Test Run tới khi GN xác nhận lại. */}
             <Button variant="secondary" icon="undo" className="text-danger" onClick={() => setGnOpen(true)}
               disabled={!dsPhanIn.length || !!busy}>Trả về GN</Button>
+            {/* Kế hoạch cần sửa lại (chuyền / giờ / thợ…) ⇒ trả về Release 1, GIỮ lệnh — Kế hoạch xác nhận lại là về đây. */}
+            <Button variant="secondary" icon="undo" className="text-danger" onClick={() => { setKhLyDo(''); setKhOpen(true); }}
+              disabled={choKyThuat || !!busy}>Trả về Kế hoạch</Button>
             {/* Đang chờ kỹ thuật làm lại → khóa hết (backend cũng chặn: 409 CHO_KY_THUAT). */}
             <Button variant="secondary" onClick={doSkip} loading={busy === 'skip'} disabled={choKyThuat || busy === 'pass' || busy === 'fail'}>
               Không test run
@@ -447,6 +471,25 @@ export default function TestRunPanel({ lenhId, onClose, onChanged, truocXacNhan,
               placeholder="vd: Khuôn sai (tùy chọn)" />
           </Field>
         </div>
+      </Modal>
+      <Modal open={khOpen} onClose={() => (busy === 'kh' ? null : setKhOpen(false))} size="sm"
+        title={`Trả về Kế hoạch — ${data?.lenh?.ma_lenh_san_xuat || ''}`}
+        footer={(
+          <>
+            <Button chiXemOk variant="ghost" onClick={() => setKhOpen(false)} disabled={busy === 'kh'}>Hủy</Button>
+            <Button variant="danger" onClick={doTraVeKeHoach} loading={busy === 'kh'} disabled={!khLyDo.trim()}>
+              Trả về Kế hoạch
+            </Button>
+          </>
+        )}>
+        <p className="mb-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
+          Lệnh <b>được giữ nguyên</b> (không hủy, giữ kết quả test) — chuyển sang màn <b>Release 1</b> kèm badge
+          <b> Test Run trả về</b> và thông báo cho Kế hoạch. Kế hoạch xác nhận lại là lệnh quay về Test Run.
+        </p>
+        <Field label="Lý do trả về Kế hoạch" required>
+          <Textarea rows={3} value={khLyDo} autoFocus onChange={(e) => setKhLyDo(e.target.value)}
+            placeholder="Vd: sai chuyền, chưa đến giờ chạy, cần đổi thợ in..." />
+        </Field>
       </Modal>
       <TraVeGnModal open={gnOpen} onClose={() => setGnOpen(false)} nguon="TEST_RUN" lenhId={lenhId}
         phanIn={dsPhanIn[0] || null} dsPhanIn={dsPhanIn}

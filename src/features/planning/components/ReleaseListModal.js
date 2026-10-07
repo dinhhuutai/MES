@@ -7,7 +7,7 @@ import { fmtNum } from '../../../utils/format';
 import { getReleaseList } from '../../../services/planningService';
 import exportReleaseListExcel from '../utils/exportReleaseListExcel';
 import printReleaseList from '../utils/printReleaseList';
-import printLenhSanXuat from '../utils/printLenhSanXuat';
+import InLenhSanXuatModal from './InLenhSanXuatModal';
 import { COT_CHECKLIST, dongTieuDe, tieuDeChecklist } from '../utils/cotChecklistRelease';
 import ChipTabs from '../../../components/common/ChipTabs';
 import Icon from '../../../components/common/Icon';
@@ -167,6 +167,7 @@ export default function ReleaseListModal({ open, onClose }) {
   const [mode, setMode] = useState('KE_HOACH');
   // Dòng đang tra cứu → SidePanel "phần in này giờ đang ở đâu + hành trình".
   const [traCuu, setTraCuu] = useState(null);
+  const [inLsxOpen, setInLsxOpen] = useState(false); // modal chọn chuyền → in LỆNH SẢN XUẤT (A5)
 
   const load = useCallback(async () => {
     if (!open) return;
@@ -232,13 +233,7 @@ export default function ReleaseListModal({ open, onClose }) {
   // BẢNG THEO MẪU "BẢNG CHECKLIST RELEASE" (06/10/2026) — bộ cột dùng chung với Excel (`cotChecklistRelease`).
   const { tren: tieuDeTren, duoi: tieuDeDuoi } = dongTieuDe(COT_CHECKLIST);
   const tieuDe = tieuDeChecklist(chip, date, mode);
-  const soCot = COT_CHECKLIST.length + 1; // + cột nút In
-  // In LỆNH SẢN XUẤT của 1 lệnh — lấy ĐỦ dòng của lệnh từ `items` (không phải tập đang lọc) để lệnh gom set
-  //   cũ in đủ các phần in dù bộ lọc đang ẩn bớt.
-  const inLenh = (r) => {
-    const ok = printLenhSanXuat(items.filter((x) => x.lenh_id === r.lenh_id));
-    if (!ok) show('Trình duyệt đang chặn cửa sổ in — cho phép popup cho trang này rồi bấm In lại', 'error');
-  };
+  const soCot = COT_CHECKLIST.length;
   const oSo = (v, dam) => (v === '' || v == null ? '' : <span className={dam ? 'font-semibold text-primary' : ''}>{fmtNum(v)}</span>);
   const oKiem = (v) => (v ? <span className={v === 'OK' ? 'font-semibold text-success' : 'text-ink-soft'}>{v}</span> : '');
   // Nội dung ô theo cột — cột không khai ở đây hiện thẳng `value(r)`.
@@ -314,6 +309,10 @@ export default function ReleaseListModal({ open, onClose }) {
             onClick={() => exportReleaseListExcel(viewItems, metaXem, { chip })}>Xuất Excel</Button>
           <Button icon="printer" disabled={!viewItems.length}
             onClick={() => printReleaseList(viewItems, metaXem)}>In</Button>
+          {/* LỆNH SẢN XUẤT theo CHUYỀN (A5) — chọn chuyền trong modal; lấy `chipItems` (đủ dòng của chuyền, bỏ
+              qua ô tìm/bộ lọc trường) để lệnh của 1 chuyền không bị in thiếu. */}
+          <Button chiXemOk variant="secondary" icon="printer" disabled={!chipItems.length}
+            onClick={() => setInLsxOpen(true)}>In lệnh SX</Button>
         </div>
       </div>
 
@@ -367,8 +366,6 @@ export default function ReleaseListModal({ open, onClose }) {
         <table className="w-full border-collapse text-sm">
           <thead className="sticky top-0 z-10 bg-emerald-50 dark:bg-emerald-950/40">
             <tr>
-              {/* Nút IN LỆNH SẢN XUẤT (A4) ở đầu mỗi lệnh. */}
-              <th className={`${th} w-10 text-center`} rowSpan={2}>In</th>
               {tieuDeTren.map((h) => (h.cot && h.cot.key === 'trang_thai' ? (
                 /* TRẠNG THÁI = giai đoạn HIỆN TẠI của phần in (`dominantStageScalar`, cùng dashboard) —
                    hover/bấm ra số phần in TỪNG checkpoint + tích để lọc (cột "Đang ở" cũ). */
@@ -407,16 +404,6 @@ export default function ReleaseListModal({ open, onClose }) {
                 onClick={() => setTraCuu(r)}
                 title="Bấm để xem phần in này đang ở đâu + hành trình"
                 className={`cursor-pointer transition hover:bg-surface-muted/50 ${r._dau ? 'border-t border-line/60' : ''}`}>
-                {r._dau && (
-                  <td rowSpan={r._span} className={`${td} text-center`}>
-                    {/* `stopPropagation`: bấm In không mở panel tra cứu của dòng. */}
-                    <button type="button" title={`In lệnh sản xuất ${r.ma_lenh_san_xuat || ''} (A4)`}
-                      onClick={(e) => { e.stopPropagation(); inLenh(r); }}
-                      className="inline-flex h-7 w-7 items-center justify-center rounded-control border border-line text-ink-soft hover:border-primary hover:text-primary">
-                      <Icon name="printer" size={14} />
-                    </button>
-                  </td>
-                )}
                 {/* Ô MỨC LỆNH (`mucLenh`: TT · Chuyền · SL đã in/giao · Giờ BĐ/KT · Thợ in · Test · sổ cái tem)
                     chỉ vẽ ở DÒNG ĐẦU của đợt và hợp nhất bằng `rowSpan` — tem không lưu phần in nên KHÔNG lặp
                     số ở từng dòng (lặp là có người cộng dồn thành số sai). Ô chữ dùng `OChu`: dài thì XUỐNG
@@ -436,6 +423,8 @@ export default function ReleaseListModal({ open, onClose }) {
       </div>
       {/* SidePanel nằm TRÊN modal (Headless UI xếp chồng theo thứ tự mở) nên không cần đóng modal. */}
       <PhanInTraCuuPanel open={!!traCuu} onClose={() => setTraCuu(null)} row={traCuu} />
+      <InLenhSanXuatModal open={inLsxOpen} onClose={() => setInLsxOpen(false)} rows={chipItems}
+        onLoi={(m) => show(m, 'error')} />
 
       <Toast toast={toast} />
     </Modal>

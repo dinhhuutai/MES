@@ -30,6 +30,7 @@ export const LOAI_TRA_VE = {
   RELEASE1: 'Kế hoạch trả về READY',
   TEST_RUN_KT: 'Test Run trả về READY',
   TEST_RUN: 'Test Run không đạt (chờ KT làm lại)',
+  TEST_RUN_KH: 'Test Run trả về Kế hoạch (giữ lệnh)',
   OQC: 'OQC trả về KCS',
   OQC_SUA: 'OQC trả về Sửa',
   OQC_GIA_CONG: 'OQC trả về Kế hoạch (gia công)',
@@ -42,8 +43,9 @@ export const LOAI_TRA_VE = {
 export const TRA_VE_THEO_MAN = {
   KT_READY: ['READY', 'RELEASE1', 'TEST_RUN_KT'],
   CL_QC_READY: ['READY', 'RELEASE1', 'TEST_RUN_KT'],
-  KH_RELEASE1: ['TEST_RUN'],
-  CL_TEST_RUN: ['TEST_RUN'],
+  // `TEST_RUN_KH` (07/10/2026): lệnh nằm ở Release 1 chờ Kế hoạch xác nhận lại rồi quay về Test Run.
+  KH_RELEASE1: ['TEST_RUN', 'TEST_RUN_KH'],
+  CL_TEST_RUN: ['TEST_RUN', 'TEST_RUN_KH'],
   KH_GIA_CONG: ['OQC_GIA_CONG'],
   SX_KCS: ['OQC'],
   SX_SUA: ['OQC_SUA'],

@@ -57,6 +57,12 @@ export function timLyDo(map, k) {
   return null;
 }
 
+// NHÓM CODE PHẦN để LẤY LẠI lý do nghẽn trong ngày (07/10/2026): 3 đoạn đầu ngăn dấu '-'
+// (`DK-2610-004-A01-F01-C01` → `DK-2610-004`). Gương BE `lydonghen.service tienToCodePhan` — sửa cả hai.
+export const tienToCodePhan = (ma) => String(ma || '').trim().split('-').slice(0, 3).join('-');
+// Code phần của 1 hàng (màn mức lệnh gom set cũ có `phan_in_list`).
+export const codePhanCuaHang = (r) => (r && (r.ma_phan || (Array.isArray(r.phan_in_list) && r.phan_in_list[0]?.ma_phan))) || '';
+
 // Khóa cho màn mức LỆNH mà `r.id` = id lệnh (Test Run · Release 2 · Gia công).
 export const KHOA_LENH = (r) => ({
   lenh_san_xuat_id: r.id, phan_in_id: r.phan_in_id || null, ma: r.ma_lenh_san_xuat || r.ma_phan || null,

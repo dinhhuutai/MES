@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
 import TraVeListModal, { TraVeListButton, TRA_VE_THEO_MAN } from '../../../components/common/TraVeListModal';
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
@@ -21,6 +22,7 @@ import DonePanel from '../../../components/common/DonePanel';
 import { Field, Input, Textarea } from '../../../components/common/controls';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import TimeSelect from '../../../components/common/TimeSelect';
+import NhieuNguoiSelect from '../../../components/common/NhieuNguoiSelect';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import TraVeGnModal from '../../../components/common/TraVeGnModal';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
@@ -34,8 +36,10 @@ import useLyDoNghen from '../../../hooks/useLyDoNghen';
 import { slaRowClass } from '../../../utils/sla';
 import {
   listRelease1Candidates, createRelease1, listChuyen, release1History,
-  release1Done, release1TraVeKyThuat,
+  release1Done, release1TraVeKyThuat, listRelease1TestRunTraVe, xacNhanLaiRelease1,
 } from '../../../services/planningService';
+import { khopNhieu } from '../../../utils/timKiem';
+import { listUserOptions } from '../../../services/userService';
 import { fmtNum, fmtDate } from '../../../utils/format';
 import exportCheckpointExcel, { COT_DOT_VAI, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
 // Chip lọc theo PHƯƠNG ÁN IN — nhãn dựng từ `PHUONG_AN_IN` nên không bao giờ lệch với badge.
@@ -54,6 +58,18 @@ function SelectAllCheckbox({ checked, indeterminate, onChange }) {
   return (
     <input ref={ref} type="checkbox" checked={checked} onChange={onChange}
       className="h-4 w-4 rounded border-line text-primary focus:ring-primary" />
+  );
+}
+
+// Ô chọn THỢ IN KẾ HOẠCH (mig 111, 07/10/2026) — giá trị = 1 chuỗi tên ngăn dấu phẩy, cùng định dạng phân công
+// lúc chạy; gõ tên ngoài danh sách rồi Enter được (thợ khoán). Lưu vào lệnh (hoặc kế hoạch tạm nếu đợt chưa Ready).
+const timNguoi = (u) => `${u.ho_ten || ''} ${u.ten_dang_nhap || ''}`;
+function ThoInField({ value, onChange, users }) {
+  return (
+    <Field label="Thợ in">
+      <NhieuNguoiSelect value={value} onChange={onChange} options={users} getSearch={timNguoi}
+        placeholder="Gõ tên hoặc MSNV để tìm rồi chọn / Enter..." />
+    </Field>
   );
 }
 
@@ -111,14 +127,33 @@ function DataCells({ r }) {
   );
 }
 
+// Giờ 'HH:MM' của 1 mốc đã lưu (đổ sẵn vào TimeSelect khi xác nhận lại lệnh bị Test Run trả về).
+const gioCua = (v) => {
+  if (!v) return '';
+  const d = new Date(v); if (Number.isNaN(d.getTime())) return '';
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+const ngayCua = (v) => {
+  if (!v) return '';
+  const d = new Date(v); if (Number.isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
 export default function Release1Page() {
   const { toast, show } = useToast();
+  const [searchParams] = useSearchParams();
   const [rows, setRows] = useState([]);
+  // LỆNH BỊ TEST RUN TRẢ VỀ KẾ HOẠCH (07/10/2026) — giữ lệnh; 1 dòng / lệnh × đợt vải. Khối riêng ĐẦU màn, KHÔNG
+  //   trộn vào bảng đợt vải (đợt đã release đủ, không chọn/release được như dòng thường).
+  const [tvRows, setTvRows] = useState([]);
+  const [tvDetail, setTvDetail] = useState(null);
+  const [tvForm, setTvForm] = useState({ chuyenId: '', ngayKeHoach: '', gioBd: '', gioKt: '', thoIn: '' });
   const [nghenOpen, setNghenOpen] = useState(false); // modal "Danh sách nghẽn"
   const [dsTraVeOpen, setDsTraVeOpen] = useState(false); // modal "Danh sách trả về" (25/09/2026)
   const [meta, setMeta] = useState({ page: 1, totalPages: 1, total: 0 });
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
+  // `?q=` — bấm thông báo "Test Run trả về Kế hoạch" mở sẵn ô tìm code phần.
+  const [search, setSearch] = useState(() => searchParams.get('q') || '');
   // ⚠ ĐÃ BỎ state `page` (phân trang SERVER): trang này tải-hết rồi phân trang ở CLIENT bằng `cpage`.
   //   Gửi `page` lên API chỉ tổ nhảy sang lô 200 dòng khác; đổi từ khóa tìm kiếm thì `cpage` đã tự
   //   về 1 nhờ effect theo `viewRowsGom.length`.
@@ -159,9 +194,10 @@ export default function Release1Page() {
   const [cpage, setCpage] = useState(1);             // phân trang CLIENT (chọn-tất-cả vẫn spanning mọi trang)
 
   const [detail, setDetail] = useState(null);        // row lẻ đang xem
-  const [form, setForm] = useState({ chuyenId: '', soLuongRelease: '', ngayKeHoach: '', gioBd: '', gioKt: '' });
+  const [form, setForm] = useState({ chuyenId: '', soLuongRelease: '', ngayKeHoach: '', gioBd: '', gioKt: '', thoIn: '' });
   const [releaseOpen, setReleaseOpen] = useState(false); // modal release gộp
-  const [relForm, setRelForm] = useState({ chuyenId: '', ngayKeHoach: '', gioBd: '', gioKt: '' });
+  const [relForm, setRelForm] = useState({ chuyenId: '', ngayKeHoach: '', gioBd: '', gioKt: '', thoIn: '' });
+  const [users, setUsers] = useState([]);            // tài khoản cho ô "Thợ in" (mig 111)
   const [saving, setSaving] = useState(false);
   const [traVeOpen, setTraVeOpen] = useState(false);     // modal "Trả về Kỹ thuật" (lý do bắt buộc)
   const [gnOpen, setGnOpen] = useState(false);           // modal "Trả về GN" (thông tin phần in sai)
@@ -175,8 +211,13 @@ export default function Release1Page() {
       //   này (backend bỏ điều kiện loại chúng ra) ⇒ gọi thêm API set sẽ làm hàng hiện ĐÚP.
       // ⚠⚠ PHẢI đi qua `taiHetTrang`: `limit: 500` cũ bị `getPaging` cắt còn 200 mà không báo gì —
       //   xem sự cố Test Run - QA 19/08/2026 (658 lệnh, màn chỉ thấy 200).
-      const { items, total, thieu } = await taiHetTrang((p) => listRelease1Candidates({ search, ...p }), { limit: LIMIT_TAI_LON });
+      // Khối "Test Run trả về" tải SONG SONG; lỗi thì để rỗng — không làm hỏng bảng chính.
+      const [{ items, total, thieu }, tv] = await Promise.all([
+        taiHetTrang((p) => listRelease1Candidates({ search, ...p }), { limit: LIMIT_TAI_LON }),
+        listRelease1TestRunTraVe().then((r) => r.data || []).catch(() => null),
+      ]);
       setRows(items);
+      if (tv) setTvRows(tv);
       setMeta({ total });
       if (thieu) show(`Chỉ tải được ${items.length}/${total} đợt vải — hãy thu hẹp bằng ô tìm kiếm`, 'error');
     } catch (e) {
@@ -187,6 +228,8 @@ export default function Release1Page() {
   }, [search, show]);
 
   useEffect(() => { listChuyen().then((r) => setChuyen(r.data)).catch(() => {}); }, []);
+  // `/users/options` chỉ cần đăng nhập (không đòi USER_VIEW). Lỗi ⇒ ô Thợ in vẫn gõ tay được.
+  useEffect(() => { listUserOptions({ limit: 500 }).then((r) => setUsers(r.data || [])).catch(() => {}); }, []);
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
   // Tự tải lại khi trạm trước xác nhận (tránh màn để lâu → dữ liệu cũ).
   // ⚠ Tải NGẦM khi có sự kiện realtime: `load(true)` bỏ qua `setLoading(true)` (bảng không bị
@@ -214,6 +257,41 @@ export default function Release1Page() {
     return demChipPain(filterRows(base, filters, FILTER_FIELDS).filter((r) => readyPass(!!r.qc_done)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onlyReturned, traVeRange, rows, filters, showReady, showWait]);
+
+  // Khối "Test Run trả về" theo CÙNG ô tìm + bộ lọc trường + chip phương án in của trang (không theo ô tích tình
+  // trạng Ready / "chỉ bị trả về" — các dòng này luôn là hàng bị trả về, đã Ready).
+  const tvView = useMemo(() => {
+    let base = tvRows.filter((r) => khopNhieu([r.ma_phan, r.ten_khach_hang, r.ma_hang, r.mau_vai, r.kich_vai,
+      r.kich_phim, r.ma_dot_vai, r.ma_lenh_san_xuat, r.ma_don_hang], search));
+    if (loaiPain) base = base.filter((r) => hopChipPain(r, loaiPain));
+    return filterRows(base, filters, FILTER_FIELDS);
+  }, [tvRows, search, loaiPain, filters]);
+
+  const openTvDetail = (r) => {
+    setTvDetail(r);
+    setTvForm({
+      chuyenId: r.chuyen_id || '', ngayKeHoach: ngayCua(r.ngay_ke_hoach),
+      gioBd: gioCua(r.tg_bd_kh), gioKt: gioCua(r.tg_kt_kh), thoIn: r.tho_in_kh || '',
+    });
+  };
+  // Xác nhận lại Release 1 cho lệnh bị Test Run trả về: GIỮ lệnh, đổi gì thì backend đi qua Lập kế hoạch lại.
+  const doXacNhanLai = async () => {
+    if (!tvDetail) return;
+    if (!(await hoiLyDoNghen([tvDetail]))) return; // mig 106
+    setSaving(true);
+    try {
+      const mkTs = (gio) => (tvForm.ngayKeHoach && gio ? `${tvForm.ngayKeHoach}T${gio}:00` : null);
+      const res = await xacNhanLaiRelease1(tvDetail.lenh_id, {
+        chuyenId: tvForm.chuyenId || null, ngayKeHoach: tvForm.ngayKeHoach || null,
+        tgBdKh: mkTs(tvForm.gioBd), tgKtKh: mkTs(tvForm.gioKt), thoIn: tvForm.thoIn || null,
+      });
+      show(`Đã xác nhận lại ${res?.data?.ma_lenh || ''} — lệnh quay về Test Run${res?.data?.doi_ke_hoach ? ' (đã cập nhật kế hoạch)' : ''}${canhBaoThoIn(res)}`);
+      setTvDetail(null);
+      load(true);
+    } catch (e) {
+      show(e.message || 'Xác nhận lại thất bại', 'error');
+    } finally { setSaving(false); }
+  };
 
   // GOM TẠI CHỖ các đợt vải cùng gom set: giữ NGUYÊN vị trí của thành viên đầu tiên rồi kéo các
   // thành viên còn lại xuống ngay dưới ⇒ nhìn thành 1 khối liền mạch mà KHÔNG đẩy set lên đầu bảng.
@@ -279,8 +357,10 @@ export default function Release1Page() {
   const openDetail = (row) => {
     setDetail(row);
     // Mặc định release phần CÒN LẠI (SL vải về − đã release); release theo số lượng, giữ phần còn.
-    setForm({ chuyenId: chuyen[0]?.id || '', soLuongRelease: String(row.con_release ?? row.so_luong_vai_ve ?? ''), ngayKeHoach: dateOffsetStr(1), gioBd: '', gioKt: '' });
+    setForm({ chuyenId: chuyen[0]?.id || '', soLuongRelease: String(row.con_release ?? row.so_luong_vai_ve ?? ''), ngayKeHoach: dateOffsetStr(1), gioBd: '', gioKt: '', thoIn: '' });
   };
+  // Backend chưa chạy mig 111 ⇒ release vẫn xong nhưng thợ in không được lưu — nói rõ thay vì im lặng.
+  const canhBaoThoIn = (res) => (res?.data?.tho_in_chua_luu ? ' · CHƯA lưu thợ in (hệ thống chưa cập nhật cơ sở dữ liệu)' : '');
 
   // Release 1 phần in lẻ (từ side panel chi tiết)
   const submitRelease = async (dotVaiIds) => {
@@ -295,12 +375,13 @@ export default function Release1Page() {
         soLuongRelease: form.soLuongRelease ? Number(form.soLuongRelease) : null,
         ngayKeHoach: form.ngayKeHoach || null,
         tgBdKh: mkTs(form.gioBd), tgKtKh: mkTs(form.gioKt),
+        thoIn: form.thoIn || null,
       });
       const skipped = res?.data?.skipped_test_count || 0;
       const tam = res?.data?.ke_hoach_tam_count || 0;
       const tamMsg = tam > 0 ? ` · ${tam} phần chưa Ready → lưu Kế hoạch tạm` : '';
-      if (res?.data?.chi_tam) show(`${tam} phần chưa Ready → đã lưu Kế hoạch tạm (xác nhận lại khi Ready xong)`, 'success');
-      else show((skipped > 0 ? `Đã tạo lệnh — ${skipped} đợt vải vào thẳng Release 2` : 'Đã Release 1 — tạo lệnh sản xuất') + tamMsg);
+      if (res?.data?.chi_tam) show(`${tam} phần chưa Ready → đã lưu Kế hoạch tạm (xác nhận lại khi Ready xong)${canhBaoThoIn(res)}`, 'success');
+      else show((skipped > 0 ? `Đã tạo lệnh — ${skipped} đợt vải vào thẳng Release 2` : 'Đã Release 1 — tạo lệnh sản xuất') + tamMsg + canhBaoThoIn(res));
       setSelected((s) => { const n = { ...s }; dotVaiIds.forEach((id) => delete n[id]); return n; });
       setDetail(null);
       load();
@@ -328,7 +409,7 @@ export default function Release1Page() {
   };
 
   const openReleaseAll = () => {
-    setRelForm({ chuyenId: chuyen[0]?.id || '', ngayKeHoach: dateOffsetStr(1), gioBd: '', gioKt: '' });
+    setRelForm({ chuyenId: chuyen[0]?.id || '', ngayKeHoach: dateOffsetStr(1), gioBd: '', gioKt: '', thoIn: '' });
     setReleaseOpen(true);
   };
 
@@ -343,10 +424,11 @@ export default function Release1Page() {
         dotVaiIds: looseList.map((r) => r.dot_vai_id),
         chuyenId: relForm.chuyenId, soLuongRelease: null, ngayKeHoach: relForm.ngayKeHoach || null,
         tgBdKh: mkTsR(relForm.gioBd), tgKtKh: mkTsR(relForm.gioKt),
+        thoIn: relForm.thoIn || null,
       });
       const tam = res?.data?.ke_hoach_tam_count || 0;
       const daTao = res?.data?.created_count || 0;
-      show(`Đã tạo ${daTao} lệnh${tam > 0 ? ` · ${tam} đợt chưa Ready → lưu Kế hoạch tạm` : ''}`);
+      show(`Đã tạo ${daTao} lệnh${tam > 0 ? ` · ${tam} đợt chưa Ready → lưu Kế hoạch tạm` : ''}${canhBaoThoIn(res)}`);
       setSelected({}); setReleaseOpen(false);
       load();
     } catch (e) {
@@ -385,6 +467,53 @@ export default function Release1Page() {
       <ChipTabs tabs={PAIN_TABS} value={loaiPain} counts={countPain} onChange={setLoaiPain} />
 
       <FieldFilters fields={FILTER_FIELDS} values={filters} onField={(k, v) => setFilters((f) => ({ ...f, [k]: v }))} onClear={() => setFilters({})} open={showFilters} />
+
+      {/* LỆNH BỊ TEST RUN TRẢ VỀ KẾ HOẠCH (07/10/2026) — lệnh được GIỮ; bấm dòng để xác nhận lại Release 1. */}
+      {tvView.length > 0 && (
+        <div className="card mb-3 overflow-hidden border-rose-200 dark:border-rose-900/60">
+          <div className="flex items-center gap-2 border-b border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300">
+            <Icon name="undo" size={15} /> Test Run trả về ({tvView.length})
+          </div>
+          <div className="max-h-72 overflow-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-line bg-surface-muted/60 text-left">
+                  {['Lệnh', 'Khách hàng · Đơn hàng', 'Mã hàng', 'Code phần', 'Màu · Kích (vải/phim)', 'Phương án in', 'Chuyền', 'Ngày KH', 'SL', 'Trả về'].map((h) => (
+                    <th key={h} className={`${TH} ${h === 'SL' ? 'text-right' : ''}`}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {tvView.map((r) => (
+                  <tr key={r._key} onClick={() => openTvDetail(r)}
+                    className={`cursor-pointer border-b border-line/70 transition hover:bg-surface-muted/40 ${slaRowClass(statusDot(r.dot_vai_id))}`}>
+                    <td className={`${TD} font-medium text-ink`}>{r.ma_lenh_san_xuat}</td>
+                    <td className={TD}>
+                      <div className="leading-tight">
+                        <div className="font-medium text-ink">{r.ten_khach_hang || '—'}</div>
+                        <div className="text-xs text-ink-soft">{r.ma_don_hang || '—'}</div>
+                      </div>
+                    </td>
+                    <td className={TD}>{r.ma_hang || '—'}</td>
+                    <td className={TD}>{r.ma_phan || '—'}</td>
+                    <td className={TD}>
+                      <div className="leading-tight">
+                        <div className="text-ink">{r.mau_vai || '—'}</div>
+                        <div className="text-xs text-ink-soft">{[r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—'}</div>
+                      </div>
+                    </td>
+                    <td className={TD}><PhuongAnInBadge value={r.phuong_an_in} /></td>
+                    <td className={TD}>{r.ten_chuyen || r.ma_chuyen || '—'}</td>
+                    <td className={TD}>{fmtDate(r.ngay_ke_hoach)}</td>
+                    <td className={`${TD} text-right tabular-nums`}>{fmtNum(r.sl_release_dot)}</td>
+                    <td className={TD}><TraVeBadge data={r.tra_ve} label="Test Run trả về" nguon="Test Run (QA)" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="card overflow-hidden">
         <div className="overflow-auto max-h-[calc(100vh-13rem)]">
@@ -519,6 +648,8 @@ export default function Release1Page() {
             <TimeSelect value={relForm.gioKt} onChange={(v) => setRelForm({ ...relForm, gioKt: v })} minuteStep={5} />
           </Field>
         </div>
+        <ThoInField value={relForm.thoIn} users={users}
+          onChange={(v) => setRelForm((f) => ({ ...f, thoIn: v }))} />
       </Modal>
 
       {/* Chi tiết / release 1 đợt vải lẻ */}
@@ -586,6 +717,66 @@ export default function Release1Page() {
                   <TimeSelect value={form.gioKt} onChange={(v) => setForm({ ...form, gioKt: v })} minuteStep={5} />
                 </Field>
               </div>
+              <ThoInField value={form.thoIn} users={users}
+                onChange={(v) => setForm((f) => ({ ...f, thoIn: v }))} />
+            </div>
+          </div>
+        )}
+      </SidePanel>
+
+      {/* Lệnh bị Test Run trả về Kế hoạch — GIỮ lệnh; xác nhận lại (đổi được chuyền/ngày/giờ/thợ in) ⇒ về Test Run. */}
+      <SidePanel
+        open={!!tvDetail}
+        onClose={() => setTvDetail(null)}
+        title={tvDetail ? `Xác nhận lại Release 1 — ${tvDetail.ma_lenh_san_xuat}` : ''}
+        subtitle={tvDetail ? `${tvDetail.ma_phan || ''} · ${tvDetail.ten_khach_hang || ''}` : ''}
+        footer={
+          <>
+            <Button chiXemOk variant="ghost" onClick={() => setTvDetail(null)}>Đóng</Button>
+            <Button onClick={doXacNhanLai} loading={saving} disabled={!tvForm.chuyenId}>Xác nhận Release 1</Button>
+          </>
+        }
+      >
+        {tvDetail && (
+          <div className="space-y-4">
+            <div className="rounded-control border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300">
+              <div className="mb-1 flex flex-wrap items-center gap-2">
+                <TraVeBadge data={tvDetail.tra_ve} label="Test Run trả về" nguon="Test Run (QA)" />
+                <span className="text-xs">{tvDetail.tra_ve?.nguoi || ''}{tvDetail.tra_ve?.tg ? ` · ${new Date(tvDetail.tra_ve.tg).toLocaleString('vi-VN')}` : ''}</span>
+              </div>
+              <div><b>Lý do:</b> {tvDetail.tra_ve?.ly_do || '—'}</div>
+              <div className="mt-1 text-xs">Lệnh <b>{tvDetail.ma_lenh_san_xuat}</b> được giữ nguyên — xác nhận lại là lệnh quay về Test Run.</div>
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+              <Info label="Khách hàng" value={tvDetail.ten_khach_hang} />
+              <Info label="Đơn hàng" value={tvDetail.ma_don_hang} />
+              <Info label="Mã hàng" value={tvDetail.ma_hang} />
+              <Info label="Code phần" value={tvDetail.ma_phan} />
+              <Info label="Màu vải" value={tvDetail.mau_vai} />
+              <Info label="Đợt vải" value={tvDetail.ma_dot_vai} />
+              <Info label="Kích vải" value={tvDetail.kich_vai} />
+              <Info label="Kích phim" value={tvDetail.kich_phim} />
+              <Info label="SL release (đợt)" value={fmtNum(tvDetail.sl_release_dot)} />
+              <Info label="Hạn giao" value={fmtDate(tvDetail.han_giao_hang)} />
+            </div>
+            <div className="space-y-3 border-t border-line pt-4">
+              <Field label="Chuyền in" required>
+                <ChuyenPicker chuyen={chuyen} value={tvForm.chuyenId} onChange={(id) => setTvForm((f) => ({ ...f, chuyenId: id }))} />
+              </Field>
+              <div className="grid grid-cols-2 gap-x-4">
+                <Field label="Ngày kế hoạch">
+                  <Input type="date" value={tvForm.ngayKeHoach} onChange={(e) => setTvForm((f) => ({ ...f, ngayKeHoach: e.target.value }))} />
+                </Field>
+                <div />
+                <Field label="Giờ bắt đầu">
+                  <TimeSelect value={tvForm.gioBd} onChange={(v) => setTvForm((f) => ({ ...f, gioBd: v }))} minuteStep={5} />
+                </Field>
+                <Field label="Giờ kết thúc">
+                  <TimeSelect value={tvForm.gioKt} onChange={(v) => setTvForm((f) => ({ ...f, gioKt: v }))} minuteStep={5} />
+                </Field>
+              </div>
+              <ThoInField value={tvForm.thoIn} users={users}
+                onChange={(v) => setTvForm((f) => ({ ...f, thoIn: v }))} />
             </div>
           </div>
         )}

@@ -278,6 +278,8 @@ export default function KeHoachTamPage() {
     { key: 'ten_chuyen', header: 'Chuyền (dự kiến)', render: (r) => r.ten_chuyen || '—' },
     { key: 'ngay_ke_hoach', header: 'Ngày KH', render: (r) => fmtDate(r.ngay_ke_hoach) },
     { key: 'gio', header: 'Giờ BD–KT', render: (r) => (r.tg_bd_kh || r.tg_kt_kh ? `${hhmm(r.tg_bd_kh) || '—'}–${hhmm(r.tg_kt_kh) || '—'}` : '—') },
+    // Thợ in KẾ HOẠCH chọn lúc Release 1 (mig 111) — xác nhận kế hoạch tạm thì chép sang lệnh.
+    { key: 'tho_in_kh', header: 'Thợ in', render: (r) => r.tho_in_kh || '—' },
     { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => fmtDate(r.han_giao_hang) },
     ...(canDo ? [{ key: 'act', header: '', className: 'text-right whitespace-nowrap', render: (r) => (
       <div className="flex items-center justify-end gap-1">

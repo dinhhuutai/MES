@@ -7,3 +7,5 @@ export const listLyDoNghen = (params) => client.get('/ly-do-nghen', { params });
 export const ghiLyDoNghen = (body) => client.post('/ly-do-nghen', body);
 // Lịch sử nghẽn ĐÃ XÁC NHẬN của 1 màn theo NGÀY BẮT ĐẦU NGHẼN: params { maTrang, tuNgay, denNgay } (YYYY-MM-DD).
 export const lichSuNghen = (params) => client.get('/ly-do-nghen/lich-su', { params });
+// Lý do đã nhập HÔM NAY của nhóm code phần (3 đoạn đầu): params { maTrang, tien: 'DK-2610-004,SL-2607-006' }.
+export const goiYLyDoNghen = (params) => client.get('/ly-do-nghen/goi-y', { params });
