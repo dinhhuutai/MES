@@ -22,6 +22,9 @@ import { khop } from '../../../utils/timKiem';
 import {
   getReport, getMetrics, getDatasets, updateReport, undoReport, renderReport, reportHistory,
 } from '../../../services/baoCaoService';
+import { ngayLocalISO } from '../../../utils/format';
+
+const NGAY_RE = /^\d{4}-\d{2}-\d{2}$/; // ngày cụ thể của ô metric theo ngày (còn lại = hôm nay)
 
 const LOAI_OPTS = [
   { v: '', label: '— Trống —' },
@@ -627,6 +630,23 @@ export default function ReportDesignerPage({ idProp = null, onClose = null }) {
                           </div>
                         );
                       })()}
+                      {/* Chỉ số `theo_ngay` (nhóm "Test Run hôm nay", 08/10/2026): chọn ngày cho RIÊNG ô này. Ô Ngày ở
+                          "Báo cáo của tôi" đè mọi ô loại này cho lượt xem/xuất. */}
+                      {metricsByMa[cell.metric]?.theo_ngay && (
+                        <Field label="Ngày" hint="Hôm nay = tự đổi theo ngày xem">
+                          <div className="space-y-1">
+                            <Select value={NGAY_RE.test(cell.ngay || '') ? 'CU_THE' : 'HOM_NAY'}
+                              onChange={(e) => patchCell(anchor, { ngay: e.target.value === 'CU_THE' ? ngayLocalISO(new Date()) : 'HOM_NAY' })}>
+                              <option value="HOM_NAY">Hôm nay (tự đổi)</option>
+                              <option value="CU_THE">Ngày cụ thể…</option>
+                            </Select>
+                            {NGAY_RE.test(cell.ngay || '') && (
+                              <Input type="date" value={cell.ngay} max={ngayLocalISO(new Date())}
+                                onChange={(e) => e.target.value && patchCell(anchor, { ngay: e.target.value })} />
+                            )}
+                          </div>
+                        </Field>
+                      )}
                     </>
                   )}
                   {cell?.loai === 'cong_thuc' && (
@@ -727,7 +747,11 @@ export default function ReportDesignerPage({ idProp = null, onClose = null }) {
         onSave={(list) => setGrid((g) => ({ ...g, bieu_do: list }))} />
 
       <MetricPickerModal open={metricPickOpen} metricGroups={metricGroups} current={cell?.metric}
-        onPick={(ma) => { if (anchor) patchCell(anchor, { loai: 'metric', metric: ma }); }}
+        onPick={(ma) => {
+          if (!anchor) return;
+          // Đổi sang chỉ số không theo ngày ⇒ bỏ ngày cũ của ô (khỏi hiện "· dd/mm" thừa trên lưới).
+          patchCell(anchor, { loai: 'metric', metric: ma, ...(metricsByMa[ma]?.theo_ngay ? {} : { ngay: undefined }) });
+        }}
         onClose={() => setMetricPickOpen(false)} />
 
       <ConditionalFormatModal open={cfOpen} onClose={() => setCfOpen(false)}

@@ -150,7 +150,11 @@ function display(cell, res, mode, metricName) {
   if (!cell) return { text: '' };
   if (cell.loai === 'text') return { text: cell.gia_tri || '' };
   if (cell.loai === 'so') return { text: fmtSo(cell.gia_tri ?? '', dd.dinh_dang_so) };
-  if (cell.loai === 'metric') return { text: metricName(cell.metric) };
+  // Ô metric chọn NGÀY cụ thể (metric `theo_ngay`) ⇒ kèm "· dd/mm/yyyy" để 2 ô cùng chỉ số khác ngày không trông như nhau.
+  if (cell.loai === 'metric') {
+    const ngay = /^\d{4}-\d{2}-\d{2}$/.test(cell.ngay || '') ? cell.ngay.split('-').reverse().join('/') : '';
+    return { text: ngay ? `${metricName(cell.metric)} · ${ngay}` : metricName(cell.metric) };
+  }
   if (cell.loai === 'cong_thuc') return { text: `=${cell.bieu_thuc || ''}` };
   if (cell.loai === 'hop_kiem') return { isCheck: true, checked: !!cell.gia_tri };
   if (cell.loai === 'tha_xuong') return { text: cell.gia_tri || '—' };
