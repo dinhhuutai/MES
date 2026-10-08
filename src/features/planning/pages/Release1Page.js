@@ -274,7 +274,8 @@ export default function Release1Page() {
       gioBd: gioCua(r.tg_bd_kh), gioKt: gioCua(r.tg_kt_kh), thoIn: r.tho_in_kh || '',
     });
   };
-  // Xác nhận lại Release 1 cho lệnh bị Test Run trả về: GIỮ lệnh, đổi gì thì backend đi qua Lập kế hoạch lại.
+  // Xác nhận lại Release 1 cho lệnh bị Test Run trả về: GIỮ lệnh; backend LUÔN chạy như 1 lần Lập kế hoạch lại
+  //   (audit REPLAN + báo ERP kế hoạch lệnh — 08/10/2026), kể cả khi không đổi gì.
   const doXacNhanLai = async () => {
     if (!tvDetail) return;
     if (!(await hoiLyDoNghen([tvDetail]))) return; // mig 106
@@ -285,7 +286,9 @@ export default function Release1Page() {
         chuyenId: tvForm.chuyenId || null, ngayKeHoach: tvForm.ngayKeHoach || null,
         tgBdKh: mkTs(tvForm.gioBd), tgKtKh: mkTs(tvForm.gioKt), thoIn: tvForm.thoIn || null,
       });
-      show(`Đã xác nhận lại ${res?.data?.ma_lenh || ''} — lệnh quay về Test Run${res?.data?.doi_ke_hoach ? ' (đã cập nhật kế hoạch)' : ''}${canhBaoThoIn(res)}`);
+      const veMan = res?.data?.trang_thai === 'GIA_CONG' ? 'chuyển sang Gia công' : 'quay về Test Run';
+      show(`Đã xác nhận lại ${res?.data?.ma_lenh || ''} — lệnh ${veMan}${res?.data?.doi_ke_hoach ? ' (đã cập nhật kế hoạch)' : ''}`
+        + ` · đã lập lại kế hoạch + báo ERP${canhBaoThoIn(res)}`);
       setTvDetail(null);
       load(true);
     } catch (e) {

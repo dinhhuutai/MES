@@ -633,7 +633,7 @@ export default function ReportDesignerPage({ idProp = null, onClose = null }) {
                       {/* Chỉ số `theo_ngay` (nhóm "Test Run hôm nay", 08/10/2026): chọn ngày cho RIÊNG ô này. Ô Ngày ở
                           "Báo cáo của tôi" đè mọi ô loại này cho lượt xem/xuất. */}
                       {metricsByMa[cell.metric]?.theo_ngay && (
-                        <Field label="Ngày" hint="Hôm nay = tự đổi theo ngày xem">
+                        <Field label={metricsByMa[cell.metric]?.nhan_ngay || 'Ngày'} hint="Hôm nay = tự đổi theo ngày xem">
                           <div className="space-y-1">
                             <Select value={NGAY_RE.test(cell.ngay || '') ? 'CU_THE' : 'HOM_NAY'}
                               onChange={(e) => patchCell(anchor, { ngay: e.target.value === 'CU_THE' ? ngayLocalISO(new Date()) : 'HOM_NAY' })}>
