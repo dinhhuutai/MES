@@ -8,7 +8,7 @@ import { getReleaseList } from '../../../services/planningService';
 import exportReleaseListExcel from '../utils/exportReleaseListExcel';
 import printReleaseList from '../utils/printReleaseList';
 import InLenhSanXuatModal from './InLenhSanXuatModal';
-import { COT_CHECKLIST, dongTieuDe, tieuDeChecklist } from '../utils/cotChecklistRelease';
+import { COT_CHECKLIST, dongTieuDe, tieuDeChecklist, maChuyenIn } from '../utils/cotChecklistRelease';
 import ChipTabs from '../../../components/common/ChipTabs';
 import Icon from '../../../components/common/Icon';
 import Badge from '../../../components/common/Badge';
@@ -19,8 +19,11 @@ import { LOAI_TABS, hopChipChuyen, nhanChip, demChip } from '../../../utils/khuC
 import { gopTheoLenh, demLenh, demGiaiDoan } from '../utils/gopDongRelease';
 
 // Bộ lọc từng trường (client-side — modal tải trọn 1 ngày nên lọc tại chỗ là đủ).
+// `_chuyen_tim` = mã hiện ở cột "Chuyền in" + mã chuyền + tên chuyền (gắn lúc tải) ⇒ gõ "1A1B", "M1A-1B" hay
+//   "Bàn 1A-1B" đều ra.
+const themChuyenTim = (r) => ({ ...r, _chuyen_tim: [maChuyenIn(r), r.ma_chuyen, r.ten_chuyen].filter(Boolean).join(' ') });
 const FILTER_FIELDS = [
-  { key: 'chuyen', label: 'Chuyền', col: 'ten_chuyen' },
+  { key: 'chuyen', label: 'Chuyền', col: '_chuyen_tim' },
   { key: 'khach', label: 'Khách hàng', col: 'ten_khach_hang' },
   { key: 'don', label: 'Đơn hàng', col: 'ma_don_hang' },
   { key: 'maHang', label: 'Mã hàng', col: 'ma_hang' },
@@ -31,7 +34,7 @@ const FILTER_FIELDS = [
 ];
 // Các trường mà ô tìm 1-ô quét qua (bất kỳ trường nào khớp là được) — tìm KHÔNG DẤU.
 const oTimCols = (r) => [
-  r.ten_chuyen, r.ten_khach_hang, r.ma_don_hang, r.ma_hang, r.ten_ma_hang,
+  r._chuyen_tim, r.ten_khach_hang, r.ma_don_hang, r.ma_hang, r.ten_ma_hang,
   r.ma_phan, r.mau_vai, r.kich_vai, r.kich_phim, r.ma_lenh_san_xuat,
 ];
 
@@ -174,7 +177,7 @@ export default function ReleaseListModal({ open, onClose }) {
     setLoading(true);
     try {
       const r = await getReleaseList(date, mode);
-      setItems(r.data.items || []);
+      setItems((r.data.items || []).map(themChuyenTim));
       setMeta(r.data.meta || null);
     } catch (e) {
       show(e.message || 'Lỗi tải danh sách release', 'error');

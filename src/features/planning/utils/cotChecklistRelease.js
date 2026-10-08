@@ -26,13 +26,23 @@ export const ngayDMY = (s, sep = '/') => {
   return [pad(x.getDate()), pad(x.getMonth() + 1), x.getFullYear()].join(sep);
 };
 
+// Cột "Chuyền in" = MÃ CHUYỀN theo cách xưởng ghi trên tờ (08/10/2026, người dùng chốt): Máy / Ép / Logo giữ
+//   nguyên mã (M1 … M8 · MEHTD1 · MECT01 · MEHENLG01); Bàn + Robot bỏ chữ "M" đầu và dấu "-" (M1A-1B → 1A1B ·
+//   M10A → 10A · MRB1 → RB1). Mã không mở đầu bằng "M" (vd C03) giữ nguyên. Thiếu mã ⇒ lùi về tên chuyền.
+export const maChuyenIn = (r) => {
+  const ma = String((r && r.ma_chuyen) || '').trim();
+  if (!ma) return (r && r.ten_chuyen) || '';
+  const loai = String((r && r.ma_loai_chuyen) || '').toUpperCase();
+  return loai === 'BAN' || loai === 'ROBOT' ? ma.replace(/^M(?=.)/i, '').replace(/-/g, '') : ma;
+};
+
 const daIn = (r) => Number(r.sl_da_in) > 0;
 const soSauIn = (k) => (r) => (daIn(r) && r[k] != null ? Number(r[k]) || 0 : '');
 const trong = () => '';
 
 export const COT_CHECKLIST = [
   { key: 'tt', header: 'TT', width: 5, num: true, mucLenh: true, value: (r) => r._stt ?? '' },
-  { key: 'chuyen', header: 'Chuyền in', width: 9, mucLenh: true, value: (r) => r.ten_chuyen || r.ma_chuyen || '' },
+  { key: 'chuyen', header: 'Chuyền in', width: 9, mucLenh: true, value: maChuyenIn },
   { key: 'khach', header: 'Khách hàng', width: 9, value: (r) => r.ten_khach_hang || '' },
   { key: 'po', header: 'PO', width: 15, value: (r) => r.ma_don_hang || '' },
   { key: 'ten_hang', header: 'Tên hàng', width: 26, value: (r) => r.ten_ma_hang || r.ma_hang || '' },
