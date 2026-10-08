@@ -21,23 +21,34 @@ import useNghenMap from '../../../hooks/useNghenMap';
 import useLyDoNghen from '../../../hooks/useLyDoNghen';
 import { slaRowClass } from '../../../utils/sla';
 import {
-  listProductionCandidates, startProduction, getMonitor, listChuyen, traVeKyThuatSanXuat,
+  listProductionCandidates, startProduction, startProductionBatch, getMonitor, listChuyen, traVeKyThuatSanXuat,
 } from '../../../services/productionService';
 import { fmtNum, fmtDate } from '../../../utils/format';
+import { Select } from '../../../components/common/controls';
 import DateRangePicker from '../../../components/common/DateRangePicker';
 import exportCheckpointExcel, { moTaBoLoc } from '../../../utils/exportCheckpointExcel';
 import ChipTabs from '../../../components/common/ChipTabs';
 import { LOAI_TABS, hopChipChuyen, nhanChip, demChip, locSiSoTheoChip } from '../../../utils/khuChuyen';
 import RunPanel from '../components/RunPanel';
+import RunNhieuPanel from '../components/RunNhieuPanel';
 import ChoChayModal, { LocLenhPanel } from '../components/ChoChayModal';
-import { locLenhChay, coLoc, LOC_TRONG } from '../utils/locLenhChay';
+import { locLenhChay, coLoc, LOC_TRONG, timLenhTheoMa } from '../utils/locLenhChay';
+import useOTimKiem from '../../../hooks/useOTimKiem';
 import TheoDoiChuyenPage from './TheoDoiChuyenPage';
 import XePhoiPage from './XePhoiPage';
+
+// Trần số lệnh mở chung 1 sidebar (mỗi lệnh 1 lượt `getRun`).
+const TOI_DA_MO_CHUNG = 30;
 
 // ⚠⚠ GỌN LẠI 01/10/2026 (người dùng yêu cầu): trang chỉ còn bảng *Đang chạy*; danh sách *Chờ chạy* chuyển
 //   vào modal mở từ nút "Chờ chạy (N)" (`components/ChoChayModal`, bộ lọc RIÊNG đầy đủ). Ô tìm + panel lọc
 //   + chip + 2 ô ngày của trang nay chỉ áp cho bảng Đang chạy. Luật lọc dùng chung `utils/locLenhChay.js`
 //   — ô tìm khớp cả MÃ VẠCH TDTHĐH / HSKT (`ma_quet` backend gom đủ mã mọi phần in của lệnh).
+// ⚠⚠ QUÉT ĐỂ GOM LỆNH ĐANG CHẠY (08/10/2026, người dùng chốt): con trỏ nằm sẵn ở ô tìm của trang (`useOTimKiem`);
+//   đầu đọc gõ mã + Enter ⇒ lệnh đang chạy khớp được TÍCH + đưa LÊN ĐẦU bảng, ô tìm tự xóa ⇒ quét tiếp. Thanh
+//   "Đã chọn N lệnh" có 1 nút "Mở (N)": 1 lệnh ⇒ `RunPanel` như cũ; ≥ 2 ⇒ `RunNhieuPanel` (phân công · ngừng chuyền
+//   làm 1 lần cho tất cả, in tem qua modal danh sách — mỗi tem 1 tờ 15 | 16). Khớp mã: `timLenhTheoMa` (chính xác
+//   mã lệnh / code phần / TDTHĐH → mã HSKT ⇒ tích MỌI lệnh khớp; gần đúng chỉ tích khi ra đúng 1 lệnh).
 export default function XacNhanChayPage() {
   const { can } = usePermissions();
   const { toast, show } = useToast();
@@ -69,11 +80,21 @@ export default function XacNhanChayPage() {
   const [showFilter, setShowFilter] = useState(false);
   const [filters, setFilters] = useState(LOC_TRONG);
   const [sel, setSel] = useState(null);
+  const [selNhieu, setSelNhieu] = useState(null); // lenhIds[] — sidebar nhiều lệnh đang chạy
+  const [chonRun, setChonRun] = useState([]);     // phieu_id[] đã quét/tích ở bảng Đang chạy (mới nhất đứng đầu)
+  const oTim = useOTimKiem();
   const [confirmRun, setConfirmRun] = useState(null); // lệnh đang xác nhận chạy
   const [runChuyenId, setRunChuyenId] = useState('');
   const [traVe, setTraVe] = useState(null);           // lệnh đang trả về Kỹ thuật (lý do bắt buộc)
   const [traVeReason, setTraVeReason] = useState('');
   const [gnLenh, setGnLenh] = useState(null);         // lệnh đang mở "Trả về GN" (lệnh giữ nguyên, tạm rời Chờ chạy)
+  // XÁC NHẬN CHẠY NHIỀU (08/10/2026): danh sách tích trong modal Chờ chạy (id lệnh, mới tích đứng đầu) + lỗi
+  // từng lệnh của lượt chạy trước + hộp xác nhận (dòng đang chạy, chuyền thực tế đổi theo từng lệnh).
+  const [chon, setChon] = useState([]);
+  const [loiChay, setLoiChay] = useState({});
+  const [xnNhieu, setXnNhieu] = useState(null);
+  const [chuyenNhieu, setChuyenNhieu] = useState({});
+  const [datConTro, setDatConTro] = useState(0);
   const [busy, setBusy] = useState(false);
   // Chip LOẠI CHUYỀN + KHU BÀN — cùng bộ với "Theo dõi chuyền" / "Test Run - QA".
   const [loai, setLoai] = useState('');
@@ -104,7 +125,9 @@ export default function XacNhanChayPage() {
         taiHetTrang((p) => listProductionCandidates({ search: '', ...p }), { limit: LIMIT_TAI_LON }),
         getMonitor(),
       ]);
-      setCandidates(kq.items);
+      // ⚠ Dòng chờ chạy chỉ có `id` (= id lệnh) — gắn `lenh_id` để hỏi lý do nghẽn (`trangThai`/`khoaMacDinh`
+      //   đọc `lenh_id`) + nút Nghẽn gộp được hàng chờ chạy. Thiếu nó thì 2 việc đó bỏ sót chờ chạy (tới 08/10/2026).
+      setCandidates(kq.items.map((r) => (r.lenh_id ? r : { ...r, lenh_id: r.id })));
       if (kq.thieu) show(`Chỉ tải được ${kq.items.length}/${kq.total} lệnh chờ chạy`, 'error');
       setRunning(m.data.running);
     } catch (e) {
@@ -127,6 +150,55 @@ export default function XacNhanChayPage() {
   const countChip = useMemo(() => demChip(locLenhChay(running, {
     search, loc: filters, chuyen, boChip: true, ngay: [{ cot: 'ngay_ke_hoach', ...ngayRun }, { cot: 'tg_bd', ...ngayXnRun }],
   })), [running, search, filters, chuyen, ngayRun, ngayXnRun]);
+
+  // ── QUÉT / TÍCH lệnh đang chạy (08/10/2026) ──
+  const chonRunSet = useMemo(() => new Set(chonRun), [chonRun]);
+  const runTheoPhieu = useMemo(() => new Map((running || []).map((r) => [r.phieu_id, r])), [running]);
+  // Lệnh đã tích còn đang chạy (lệnh vừa chạy hoàn tất / bị hủy tự rơi ra).
+  const daChonRun = useMemo(() => chonRun.map((id) => runTheoPhieu.get(id)).filter(Boolean), [chonRun, runTheoPhieu]);
+  // Bảng = [đã tích — mới nhất trên cùng, LUÔN hiện dù bộ lọc loại nó] + [phần còn lại theo bộ lọc].
+  const bangRun = useMemo(
+    () => [...daChonRun, ...runFiltered.filter((r) => !chonRunSet.has(r.phieu_id))],
+    [daChonRun, runFiltered, chonRunSet]
+  );
+  const doiTichRun = (r) => {
+    setChonRun((c) => (c.includes(r.phieu_id) ? c.filter((x) => x !== r.phieu_id) : [r.phieu_id, ...c]));
+    oTim.datConTro();
+  };
+  // ENTER ở ô tìm = 1 lần quét: khớp CHÍNH XÁC (mã lệnh · code phần · TDTHĐH → mã HSKT) ⇒ tích mọi lệnh khớp;
+  // chỉ khớp GẦN ĐÚNG mà ra > 1 lệnh ⇒ không tích, giữ chữ trong ô để bảng lọc ra cho người dùng tích tay.
+  const quetRun = (giaTri) => {
+    const ma = String(giaTri || '').trim();
+    if (!ma) return;
+    const { luot, ds } = timLenhTheoMa(running, ma);
+    if (!ds.length) {
+      show(`Không có lệnh đang chạy nào khớp «${ma}»`, 'error');
+      setSearch('');
+      oTim.datConTro();
+      return;
+    }
+    if (luot === 3 && ds.length > 1) {
+      show(`«${ma}» khớp ${ds.length} lệnh — quét mã vạch chính xác hoặc tích tay`, 'info');
+      return;
+    }
+    const ids = ds.map((r) => r.phieu_id);
+    const moi = ids.filter((id) => !chonRunSet.has(id));
+    if (chonRunSet.size + moi.length > TOI_DA_MO_CHUNG) {
+      show(`Tối đa ${TOI_DA_MO_CHUNG} lệnh mỗi lần mở chung`, 'error');
+      return;
+    }
+    setChonRun((c) => [...ids, ...c.filter((x) => !ids.includes(x))]);
+    const ten = ds.length === 1 ? (ds[0].ma_phan || ds[0].phan_list || ds[0].ma_lenh_san_xuat) : `${ds.length} lệnh`;
+    show(moi.length ? `Đã thêm ${ten}${ds.length > 1 && luot === 2 ? ' (mã HSKT dùng chung)' : ''}` : `${ten} đã có trong danh sách`,
+      moi.length ? 'success' : 'info');
+    setSearch('');
+    oTim.datConTro();
+  };
+  // "Mở (N)": 1 lệnh ⇒ RunPanel như cũ; nhiều ⇒ sidebar chung.
+  const moDaChon = () => {
+    if (daChonRun.length === 1) setSel(daChonRun[0].lenh_id);
+    else if (daChonRun.length > 1) setSelNhieu(daChonRun.map((r) => r.lenh_id));
+  };
 
   // Nguồn "Danh sách nghẽn": GỘP cả Đang chạy + Chờ chạy, tập ĐẦY ĐỦ (chưa lọc), khử trùng `lenh_id`.
   const rowsNghen = useMemo(() => {
@@ -194,6 +266,41 @@ export default function XacNhanChayPage() {
     }
   };
 
+  // XÁC NHẬN CHẠY NHIỀU LỆNH — mở hộp xác nhận (chuyền thực tế = chuyền kế hoạch, đổi được từng lệnh).
+  const moChayNhieu = (ds) => {
+    setChuyenNhieu(Object.fromEntries(ds.map((r) => [r.id, r.chuyen_id || ''])));
+    setXnNhieu(ds);
+  };
+  const dongChayNhieu = () => { setXnNhieu(null); setDatConTro((n) => n + 1); };
+  const doStartNhieu = async () => {
+    const ds = xnNhieu || [];
+    if (ds.some((r) => !chuyenNhieu[r.id])) { show('Có lệnh chưa chọn chuyền thực tế', 'error'); return; }
+    if (!(await hoiLyDoNghen(ds))) return; // lệnh quá SLA ⇒ lý do nghẽn (mig 106)
+    setBusy(true);
+    try {
+      const res = await startProductionBatch(ds.map((r) => ({
+        lenhId: r.id, chuyenId: chuyenNhieu[r.id] !== r.chuyen_id ? chuyenNhieu[r.id] : null,
+      })));
+      const { ok = [], loi = [] } = res.data || {};
+      const daChay = new Set(ok.map((x) => x.lenhId));
+      setChon((c) => c.filter((id) => !daChay.has(id)));
+      setLoiChay(Object.fromEntries(loi.map((x) => [x.lenhId, x.message])));
+      setXnNhieu(null);
+      if (!loi.length) {
+        show(`Đã xác nhận chạy ${fmtNum(ok.length)} lệnh`);
+        setChoChayOpen(false); // về bảng Đang chạy để thấy ngay các lệnh vừa chạy
+      } else {
+        show(`Đã chạy ${fmtNum(ok.length)} lệnh · ${fmtNum(loi.length)} lệnh chưa chạy được (vẫn tích, có ghi lỗi)`, 'error');
+        setDatConTro((n) => n + 1);
+      }
+      load(true);
+    } catch (e) {
+      show(e.message || 'Xác nhận chạy thất bại', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   // TRẢ VỀ KỸ THUẬT (chờ chạy): hủy lệnh + phần in quay về READY; lý do BẮT BUỘC.
   const doTraVeKyThuat = async () => {
     if (!traVe) return;
@@ -217,6 +324,11 @@ export default function XacNhanChayPage() {
   const subRows = (r) => (r.phan_in_list ? r.phan_in_list.map((p) => ({ ...p, __sub: true })) : null);
 
   const runCols = [
+    // Ô tích (selection — DataTable vẽ ở dòng đầu bản ghi, chặn click mở panel): gom lệnh để "Mở (N)" chung.
+    { key: 'chon', header: '', selection: true, render: (r) => (
+      <input type="checkbox" className="h-4 w-4 cursor-pointer accent-primary" aria-label="Chọn để mở chung"
+        checked={chonRunSet.has(r.phieu_id)} onChange={() => doiTichRun(r)} />
+    ) },
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => (
@@ -244,8 +356,8 @@ export default function XacNhanChayPage() {
 
   return (
     <div>
-      <Toolbar title="Xác nhận chạy" search={search} onSearch={setSearch}
-        searchPlaceholder="Tìm code phần, mã vạch TDTHĐH / HSKT, mã hàng, màu/kích, đơn...">
+      <Toolbar title="Xác nhận chạy" search={search} onSearch={setSearch} searchRef={oTim.ref} onSearchEnter={quetRun}
+        searchPlaceholder="Quét mã vạch rồi Enter để chọn — gõ để tìm code phần, mã hàng, màu/kích, đơn...">
         <Button chiXemOk icon="list" onClick={() => setChoChayOpen(true)}>
           Chờ chạy ({fmtNum(candidates.length)})
         </Button>
@@ -280,14 +392,75 @@ export default function XacNhanChayPage() {
           </Button>
         </div>
       </div>
-      <DataTable columns={runCols} rows={runFiltered} loading={loading} rowKey="phieu_id" sttStart={0}
-        subRows={subRows} rowClassName={(r) => slaRowClass(statusLenh(r.lenh_id))}
+      {daChonRun.length > 0 && (
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-control border border-primary/30 bg-primary/5 px-3 py-2">
+          <span className="text-sm text-ink">Đã chọn <b>{fmtNum(daChonRun.length)}</b> lệnh</span>
+          <div className="flex flex-wrap gap-2">
+            <Button chiXemOk variant="ghost" className="px-3 py-1.5" onClick={() => { setChonRun([]); oTim.datConTro(); }}>Bỏ chọn</Button>
+            <Button chiXemOk icon="eye" className="px-3 py-1.5" onClick={moDaChon}>Mở ({fmtNum(daChonRun.length)})</Button>
+          </div>
+        </div>
+      )}
+      <DataTable columns={runCols} rows={bangRun} loading={loading} rowKey="phieu_id" sttStart={0}
+        subRows={subRows}
+        rowClassName={(r) => slaRowClass(statusLenh(r.lenh_id)) || (chonRunSet.has(r.phieu_id) ? 'bg-primary/5' : '')}
         onRowClick={(r) => setSel(r.lenh_id)} emptyText="Không có lệnh đang chạy" />
 
       <ChoChayModal open={choChayOpen} onClose={() => setChoChayOpen(false)} rows={candidates} loading={loading}
         chuyen={chuyen} canRun={canRun} statusLenh={statusLenh}
         onConfirm={openConfirm} onTraVe={(r) => { setTraVeReason(''); setTraVe(r); }}
-        onTraVeGn={(r) => setGnLenh(r)} />
+        onTraVeGn={(r) => setGnLenh(r)}
+        chon={chon} setChon={setChon} loiChay={loiChay} onToast={show} onChayNhieu={moChayNhieu}
+        datConTro={datConTro} />
+
+      {/* Xác nhận chạy NHIỀU lệnh (từ modal Chờ chạy) — chuyền thực tế mặc định = chuyền kế hoạch, đổi được từng lệnh */}
+      <Modal open={!!xnNhieu} onClose={dongChayNhieu} size="xl" title={`Xác nhận chạy ${fmtNum((xnNhieu || []).length)} lệnh`}
+        footer={<>
+          <Button chiXemOk variant="ghost" onClick={dongChayNhieu}>Hủy</Button>
+          <Button onClick={doStartNhieu} loading={busy}
+            disabled={!(xnNhieu || []).length || (xnNhieu || []).some((r) => !chuyenNhieu[r.id])}>
+            Bắt đầu chạy ({fmtNum((xnNhieu || []).length)})
+          </Button>
+        </>}>
+        {xnNhieu && (
+          <div className="overflow-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-soft">
+                  <th className="px-2 py-2 text-right">STT</th>
+                  <th className="px-2 py-2">Mã lệnh</th>
+                  <th className="px-2 py-2">Code phần · Mã hàng</th>
+                  <th className="px-2 py-2 text-right">SL release</th>
+                  <th className="px-2 py-2">Ngày SX KH</th>
+                  <th className="px-2 py-2">Chuyền thực tế</th>
+                </tr>
+              </thead>
+              <tbody>
+                {xnNhieu.map((r, i) => (
+                  <tr key={r.id} className={`border-b border-line/70 ${slaRowClass(statusLenh(r.id))}`}>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-ink-soft">{i + 1}</td>
+                    <td className="px-2 py-1.5 font-medium text-ink">{r.ma_lenh_san_xuat}</td>
+                    <td className="px-2 py-1.5">
+                      <div className="text-ink">{r.phan_list || r.ma_phan || '—'}</div>
+                      <div className="text-xs text-ink-soft">{[r.ma_hang, r.mau_vai, r.kich_vai].filter(Boolean).join(' · ')}</div>
+                    </td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">{fmtNum(r.so_luong_release)}</td>
+                    <td className="px-2 py-1.5">{fmtDate(r.ngay_ke_hoach)}</td>
+                    <td className="px-2 py-1.5">
+                      <div className="min-w-[10rem]">
+                        <Select value={chuyenNhieu[r.id] || ''} onChange={(e) => setChuyenNhieu((m) => ({ ...m, [r.id]: e.target.value }))}>
+                          <option value="">— Chọn chuyền —</option>
+                          {(chuyen || []).map((c) => <option key={c.id} value={c.id}>{c.ten_chuyen || c.ma_chuyen}</option>)}
+                        </Select>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Modal>
 
       <TraVeGnModal open={!!gnLenh} onClose={() => setGnLenh(null)} nguon="CHO_CHAY" lenhId={gnLenh?.id}
         phanIn={dsPhanInCuaLenh(gnLenh)[0] || null} dsPhanIn={dsPhanInCuaLenh(gnLenh)}
@@ -344,7 +517,9 @@ export default function XacNhanChayPage() {
         )}
       </Modal>
 
-      {sel && <RunPanel lenhId={sel} onClose={() => setSel(null)} onChanged={load}
+      {selNhieu && <RunNhieuPanel lenhIds={selNhieu} onClose={() => { setSelNhieu(null); oTim.datConTro(); }}
+        onChanged={() => load(true)} onMoLenh={(id) => { setSelNhieu(null); setSel(id); }} />}
+      {sel && <RunPanel lenhId={sel} onClose={() => { setSel(null); oTim.datConTro(); }} onChanged={load}
         truocXacNhan={() => hoiLyDoNghen(rowsNghen.filter((r) => r.lenh_id === sel))} />}
       {/* Modal TOÀN MÀN HÌNH của 2 trang cũ — chỉ dựng component khi mở (2 trang có vòng tự làm mới 10–15s). */}
       <Modal open={moTrang === 'theo-doi-chuyen'} onClose={dongTrang} size="full" canhTren={8} title="Theo dõi chuyền in">

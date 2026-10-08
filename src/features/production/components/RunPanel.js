@@ -19,8 +19,8 @@ import { fmtNum, fmtDate } from '../../../utils/format';
 
 // Ô "Số tem" (07/10/2026): in N tem cùng SL trong 1 lần bấm — mỗi tem 1 tờ (15 trái · 16 phải), mọi tờ trong
 // 1 cửa sổ in. Trần khớp backend `printTemBatch TOI_DA_TEM_MOT_LUOT`.
-const TOI_DA_SO_TEM = 50;
-const soTemHopLe = (v) => {
+export const TOI_DA_SO_TEM = 50;
+export const soTemHopLe = (v) => {
   const n = Math.trunc(Number(v));
   return Number.isFinite(n) && n >= 1 ? Math.min(n, TOI_DA_SO_TEM) : 1;
 };
@@ -73,15 +73,15 @@ const homNayLocal = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
-const META_MAC_DINH = () => ({ ngayCa: '', gioBd: '', gioKt: '', btpTruoc: false, btpCuoi: false, gcMauVai: '', ngayCt: homNayLocal(), _suaGioKt: false });
-const gioHienTai = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+export const META_MAC_DINH = () => ({ ngayCa: '', gioBd: '', gioKt: '', btpTruoc: false, btpCuoi: false, gcMauVai: '', ngayCt: homNayLocal(), _suaGioKt: false });
+export const gioHienTai = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 // ⚠⚠ "ĐẾN GIỜ" CHẠY THEO ĐỒNG HỒ tới khi người dùng TỰ SỬA (30/09/2026): bản cũ điền giờ LÚC MỞ SIDEBAR rồi
 //   đứng yên ⇒ để sidebar mở lâu rồi bấm In là gửi ERP giờ kết thúc cũ. Cờ `_suaGioKt` bật khi người dùng
 //   chọn giờ ở ô đó; chưa bật ⇒ vòng 20s + lúc bấm In đều cập nhật về giờ hiện tại (ô hiện gì = gửi nấy).
-const metaGuiDi =(m) => (m._suaGioKt ? m : { ...m, gioKt: gioHienTai() });
+export const metaGuiDi = (m) => (m._suaGioKt ? m : { ...m, gioKt: gioHienTai() });
 
 // `anGcMauVai`: lệnh GOM SET nhập GC màu vải RIÊNG từng dòng trong bảng → ẩn ô chung ở đây cho khỏi lẫn.
-function TemMetaFields({ meta, setMeta, goiY, anGcMauVai = false }) {
+export function TemMetaFields({ meta, setMeta, goiY, anGcMauVai = false }) {
   const set = (k, v) => setMeta((m) => ({ ...m, [k]: v, ...(k === 'gioKt' ? { _suaGioKt: true } : {}) }));
   const chk = 'h-4 w-4 rounded border-line text-primary focus:ring-primary/30';
   const khacGoiY = goiY?.ngay_ca && meta.ngayCa && meta.ngayCa !== goiY.ngay_ca;
@@ -244,7 +244,7 @@ function LyDoBoSungInline({ dot, canRun, onSave }) {
 //   tên người chưa có tài khoản (thợ khoán) — xem `NhieuNguoiSelect`.
 // `thoInKh` (mig 111) = thợ in KẾ HOẠCH chọn lúc Release 1 — chưa phân công thì điền sẵn vào ô Thợ in (vẫn phải
 //   bấm Lưu mới thành phân công thật, vì phân công là thứ gửi ERP).
-function PhanCongInline({ pc, users, toIns = [], onSave, busy, canRun, thoInKh = '' }) {
+export function PhanCongInline({ pc, users, toIns = [], onSave, busy, canRun, thoInKh = '' }) {
   const daLuu = !!(pc?.ca_truong_id || pc?.chuyen_truong || pc?.tho_in || pc?.to_in_id);
   const [sua, setSua] = useState(false);
   const [form, setForm] = useState({ caTruongId: '', chuyenTruong: '', thoIn: '', toInId: '' });

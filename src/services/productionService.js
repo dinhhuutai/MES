@@ -3,6 +3,8 @@ import client from './axiosClient';
 // Xác nhận chạy + in tem
 export const listProductionCandidates = (params) => client.get('/production/candidates', { params });
 export const startProduction = (lenhId, chuyenId) => client.post(`/production/${lenhId}/start`, { chuyenId });
+// Nhiều lệnh 1 lượt (modal Chờ chạy): items = [{ lenhId, chuyenId? }] ⇒ data { ok: [{lenhId, ma}], loi: [{lenhId, message}] }.
+export const startProductionBatch = (items) => client.post('/production/start-batch', { items });
 export const listChuyen = () => client.get('/catalog/chuyen');
 export const getRun = (lenhId) => client.get(`/production/run/${lenhId}`);
 // `meta` (mig 066) = { ngayCa, gioBd, gioKt, btpTruoc, btpCuoi } — ngày ca / giờ SX từ→đến / cờ BTP

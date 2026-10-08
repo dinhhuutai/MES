@@ -61,6 +61,9 @@ function ghiChu(it, duPhong) {
     dong.push(`Ngoài các khung trên ⇒ SLA checkpoint READY: ${ready.tram_sla != null ? thoiLuong(ready.tram_sla) : 'chưa cấu hình'}${ready.tram_cb ? ` (vàng trước ${ready.tram_cb} phút)` : ''}.`);
   } else if (it.ma === 'TEST_RUN_THEO_GIO_SX') {
     dong.push(`Nghẽn từ ${thoiLuong(g.truoc_sx_phut)} trước giờ SX kế hoạch; vàng từ ${thoiLuong(g.truoc_sx_phut + g.canh_bao_phut)} trước.`);
+    if (g.toi_thieu_phut > 0) {
+      dong.push(`Nhưng luôn có ít nhất ${thoiLuong(g.toi_thieu_phut)} kể từ lúc Release 1 đưa lệnh xuống rồi mới báo nghẽn (lệnh release sát hoặc trễ giờ SX).`);
+    }
     dong.push(`Lệnh chưa đặt giờ SX ⇒ lấy ngày kế hoạch lúc ${g.gio_sx_mac_dinh}; không có cả ngày ⇒ SLA checkpoint TEST_RUN: ${test.tram_sla != null ? thoiLuong(test.tram_sla) : 'chưa cấu hình'}.`);
   }
   return dong;
@@ -155,6 +158,9 @@ function SuaModal({ it, onClose, onSaved }) {
           <Field label="Nghẽn trước giờ SX (phút)"><Input type="number" min="0" value={g.truoc_sx_phut} onChange={(e) => setG({ ...g, truoc_sx_phut: e.target.value })} /></Field>
           <Field label="Vàng sớm hơn mốc nghẽn (phút)"><Input type="number" min="0" value={g.canh_bao_phut} onChange={(e) => setG({ ...g, canh_bao_phut: e.target.value })} /></Field>
           <Field label="Giờ SX mặc định (lệnh chưa đặt giờ)"><TimeSelect value={g.gio_sx_mac_dinh} onChange={(v) => setG({ ...g, gio_sx_mac_dinh: v })} /></Field>
+          <Field label="Tối thiểu từ lúc Release 1 đưa xuống (phút)" hint={Number(g.toi_thieu_phut) > 0 ? thoiLuong(Number(g.toi_thieu_phut)) : 'Không gia hạn'}>
+            <Input type="number" min="0" value={g.toi_thieu_phut ?? ''} onChange={(e) => setG({ ...g, toi_thieu_phut: e.target.value })} />
+          </Field>
         </div>
       )}
 

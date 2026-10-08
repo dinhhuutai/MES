@@ -7,7 +7,9 @@ import Icon from './Icon';
 // ⚠ `subtitle` (dòng mô tả / hướng dẫn dưới tiêu đề) CỐ Ý KHÔNG RENDER nữa (người dùng chốt 30/09/2026:
 //   bỏ mọi chữ hướng dẫn). Prop vẫn nhận để ~80 trang đang truyền không phải sửa; muốn hiện lại thì mở dòng dưới.
 // `searchRef` (tùy chọn) = ref gắn vào ô tìm kiếm — để trang tự đặt con trỏ vào ô (xem `hooks/useOTimKiem`).
-export default function Toolbar({ title, search, onSearch, searchPlaceholder = 'Tìm kiếm...', searchRef, children }) {
+// `onSearchEnter(giaTri)` (tùy chọn, 08/10/2026) = bấm Enter ở ô tìm — đầu đọc mã vạch gõ mã + Enter (vd Xác nhận
+//   chạy: quét để tích lệnh đang chạy). Không truyền ⇒ Enter không làm gì như cũ.
+export default function Toolbar({ title, search, onSearch, searchPlaceholder = 'Tìm kiếm...', searchRef, onSearchEnter, children }) {
   return (
     <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div>
@@ -22,6 +24,7 @@ export default function Toolbar({ title, search, onSearch, searchPlaceholder = '
               ref={searchRef}
               value={search}
               onChange={(e) => onSearch(e.target.value)}
+              onKeyDown={onSearchEnter ? (e) => { if (e.key === 'Enter') { e.preventDefault(); onSearchEnter(e.currentTarget.value); } } : undefined}
               placeholder={searchPlaceholder}
               className="h-10 w-full rounded-control border border-line pl-9 pr-3 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
             />
