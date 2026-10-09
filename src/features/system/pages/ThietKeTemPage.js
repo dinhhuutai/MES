@@ -22,7 +22,7 @@ const DATA_XEM_TRUOC = {
   ten_khach_hang: 'SL-GLOVIS', ma_don_hang: 'SG26-SPG-006', ma_hang: 'A01-F01', bo_phan_bh: 'THLA',
   ma_phan: 'GL-2606-005-A01-F01-C01', so_luong_don_hang: 1200,
   mau_vai: 'ĐEN', kich_vai: '1.5 x 2.0', kich_phim: '40 x 60', gc_mau_vai: 'GC ĐEN',
-  so_luong: 504, ma_chuyen: 'M4A-4B', ten_chuyen: 'Chuyền M4A-4B', ca: 'Ca 1',
+  so_luong: 504, ma_chuyen: '4A4B', ten_chuyen: 'Bàn 4A-4B', ca: 'Ca 1',
   ma_ngay_ca: '260808C1', nguoi_in: 'Nguyễn Văn A', nha_gia_cong: 'KK',
   created_date: new Date().toISOString(), tg_bd_in: new Date().toISOString(),
   tg_bd_phoi: new Date().toISOString(), tg_kt_phoi: new Date(Date.now() + 36e5).toISOString(),

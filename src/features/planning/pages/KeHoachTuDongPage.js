@@ -9,20 +9,22 @@ import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import { autoPlanCandidates, createDotSanXuat } from '../../../services/planningService';
 import { fmtNum, fmtDate } from '../../../utils/format';
+import { chuanMaChuyen } from '../../../utils/maChuyen';
 
 // Sơ đồ mặt bằng chuyền theo file PDF nhà máy. 'h' = thanh ngang, 'v' = thanh dọc.
-// A: cụm trái (M7..M1 thanh ngang). B: cụm giữa (M8 trên + M1A-1B..M8A-8B thanh dọc).
-// C: MRB1..3 thanh dọc. D: cụm phải 2 hàng (trên M10B..M13B, dưới M10A..M13A).
+// A: cụm trái (M7..M1 thanh ngang). B: cụm giữa (M8 trên + 1A1B..9A9B thanh dọc).
+// C: RB1..3 thanh dọc. D: cụm phải 2 hàng (trên 10B..14B, dưới 10A..14A).
 const FLOOR = {
   A: ['M7', 'M6', 'M5', 'M4', 'M3', 'M2', 'M1'],
   B_top: 'M8',
-  B: ['M1A-1B', 'M2A-2B', 'M3A-3B', 'M4A-4B', 'M5A-5B', 'M6A-6B', 'M7A-7B', 'M8A-8B', 'M9A-9B'],
-  C: ['MRB1', 'MRB2', 'MRB3'],
-  D_top: ['M10B', 'M11B', 'M12B', 'M13B', 'M14B'],
-  D_bot: ['M10A', 'M11A', 'M12A', 'M13A', 'M14A'],
+  B: ['1A1B', '2A2B', '3A3B', '4A4B', '5A5B', '6A6B', '7A7B', '8A8B', '9A9B'],
+  C: ['RB1', 'RB2', 'RB3'],
+  D_top: ['10B', '11B', '12B', '13B', '14B'],
+  D_bot: ['10A', '11A', '12A', '13A', '14A'],
 };
 
-const norm = (s) => String(s || '').trim().toUpperCase();
+// Mã ô = MÃ ERP; so qua `chuanMaChuyen` ⇒ khớp cả mã cũ `M4A-4B` lẫn mã mới `4A4B` (09/10/2026).
+const norm = (s) => chuanMaChuyen(s);
 
 // 1 ô chuyền trên sơ đồ. info = { chuyenId, chuyen, count, pcs } (null nếu chưa gắn chuyền hệ thống).
 function Box({ code, orient, info, selected, onSelect }) {

@@ -1,6 +1,8 @@
 import Modal from './Modal';
 import Button from './Button';
 
+// `children` (tùy chọn, 09/10/2026) = nội dung thêm dưới câu hỏi (vd cảnh báo + danh sách) — `message` nằm trong
+// `<p>` nên không nhét khối/danh sách vào đó được.
 export default function ConfirmDialog({
   open,
   onClose,
@@ -10,6 +12,7 @@ export default function ConfirmDialog({
   confirmText = 'Xác nhận',
   variant = 'primary',
   loading = false,
+  children,
 }) {
   return (
     <Modal
@@ -32,6 +35,7 @@ export default function ConfirmDialog({
       }
     >
       <p className="text-sm text-ink-soft">{message}</p>
+      {children && <div className="mt-3">{children}</div>}
     </Modal>
   );
 }

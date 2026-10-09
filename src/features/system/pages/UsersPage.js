@@ -15,8 +15,9 @@ import {
   listUsers, getUser, createUser, updateUser, setUserActive, resetUserPassword,
 } from '../../../services/userService';
 import { listPhongBan, listRoleOptions } from '../../../services/systemService';
+import { listPhongBan as listPhongBanVaTo } from '../../../services/phongBanService';
 
-const emptyForm = { tenDangNhap: '', matKhau: '', hoTen: '', email: '', soDienThoai: '', chucVu: '', gioiTinh: '', phongBanId: '', roleIds: [] };
+const emptyForm = { tenDangNhap: '', matKhau: '', hoTen: '', email: '', soDienThoai: '', chucVu: '', gioiTinh: '', phongBanId: '', toPhongBanId: '', roleIds: [] };
 
 export default function UsersPage() {
   const { can } = usePermissions();
@@ -30,6 +31,8 @@ export default function UsersPage() {
   const [page, setPage] = useState(1);
 
   const [phongBan, setPhongBan] = useState([]);
+  // Tổ theo phòng (mig 104): `null` = chưa có bảng tổ / không tải được ⇒ ẩn ô Tổ, không gửi khóa `toPhongBanId`.
+  const [toTheoPhong, setToTheoPhong] = useState(null);
   const [roles, setRoles] = useState([]);
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -57,6 +60,10 @@ export default function UsersPage() {
   useEffect(() => {
     listPhongBan().then((r) => setPhongBan(r.data)).catch(() => {});
     listRoleOptions().then((r) => setRoles(r.data)).catch(() => {});
+    listPhongBanVaTo().then((r) => {
+      if (!r.data?.co_bang_to) return;
+      setToTheoPhong(Object.fromEntries((r.data.items || []).map((p) => [p.id, (p.to_list || []).filter((t) => t.dang_hoat_dong !== false)])));
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -75,7 +82,7 @@ export default function UsersPage() {
     setForm({
       tenDangNhap: u.ten_dang_nhap, matKhau: '', hoTen: u.ho_ten || '', email: u.email || '',
       soDienThoai: u.so_dien_thoai || '', chucVu: u.chuc_vu || '', gioiTinh: u.gioi_tinh || '',
-      phongBanId: u.phong_ban_id || '', roleIds: [],
+      phongBanId: u.phong_ban_id || '', toPhongBanId: u.to_phong_ban_id || '', roleIds: [],
     });
     setModalOpen(true);
     // Nạp sẵn vai trò hiện tại để khi lưu không xóa nhầm role.
@@ -96,7 +103,10 @@ export default function UsersPage() {
   const save = async () => {
     setSaving(true);
     try {
-      const payload = { ...form, phongBanId: form.phongBanId || null };
+      const { toPhongBanId, ...conLai } = form;
+      const payload = { ...conLai, phongBanId: form.phongBanId || null,
+        // Chỉ gửi khi ô Tổ thật sự hiện (backend có bảng tổ) — không gửi ⇒ backend không đụng tổ.
+        ...(toTheoPhong ? { toPhongBanId: toPhongBanId || null } : {}) };
       if (editing) {
         await updateUser(editing.id, payload);
         show('Đã cập nhật người dùng');
@@ -228,11 +238,21 @@ export default function UsersPage() {
             </Select>
           </Field>
           <Field label="Phòng ban">
-            <Select value={form.phongBanId} onChange={(e) => setForm({ ...form, phongBanId: e.target.value })}>
+            {/* Đổi phòng ⇒ bỏ tổ đã chọn (tổ thuộc phòng — backend chặn 422 `TO_KHAC_PHONG`). */}
+            <Select value={form.phongBanId} onChange={(e) => setForm({ ...form, phongBanId: e.target.value, toPhongBanId: '' })}>
               <option value="">— Chọn phòng ban —</option>
               {phongBan.map((pb) => <option key={pb.id} value={pb.id}>{pb.ten_phong_ban}</option>)}
             </Select>
           </Field>
+          {toTheoPhong && (
+            <Field label="Tổ" hint={!form.phongBanId ? 'Chọn phòng ban trước' : (toTheoPhong[form.phongBanId] || []).length ? undefined : 'Phòng ban này chưa có tổ'}>
+              <Select value={form.toPhongBanId} disabled={!(toTheoPhong[form.phongBanId] || []).length}
+                onChange={(e) => setForm({ ...form, toPhongBanId: e.target.value })}>
+                <option value="">— Không thuộc tổ —</option>
+                {(toTheoPhong[form.phongBanId] || []).map((t) => <option key={t.id} value={t.id}>{t.ten_to || t.ma_to}</option>)}
+              </Select>
+            </Field>
+          )}
         </div>
         <Field label="Vai trò" hint={editing ? 'Cập nhật vai trò sẽ thay thế toàn bộ vai trò hiện tại' : undefined}>
           <div className="flex flex-wrap gap-2">

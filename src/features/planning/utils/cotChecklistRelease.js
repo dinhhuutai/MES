@@ -12,6 +12,7 @@
 //   trống cho ghi tay, khỏi một hàng số 0 vô nghĩa.
 // ─────────────────────────────────────────────────────────────────────────────
 import { nhanChip } from '../../../utils/khuChuyen';
+import { chuanMaChuyen } from '../../../utils/maChuyen';
 
 const pad = (n) => String(n).padStart(2, '0');
 // Giờ 24h như mẫu ("7:30", "13:30").
@@ -33,7 +34,7 @@ export const maChuyenIn = (r) => {
   const ma = String((r && r.ma_chuyen) || '').trim();
   if (!ma) return (r && r.ten_chuyen) || '';
   const loai = String((r && r.ma_loai_chuyen) || '').toUpperCase();
-  return loai === 'BAN' || loai === 'ROBOT' ? ma.replace(/^M(?=.)/i, '').replace(/-/g, '') : ma;
+  return loai === 'BAN' || loai === 'ROBOT' ? chuanMaChuyen(ma) : ma; // mã ERP (`utils/maChuyen.js`)
 };
 
 const daIn = (r) => Number(r.sl_da_in) > 0;

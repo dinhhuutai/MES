@@ -76,8 +76,8 @@ function ReadyCancelSection({ show }) {
   const doCancel = async () => {
     setBusy(true);
     try {
-      await cancelReadyItem(confirm.phan_in_id, confirm.ma_checkpoint);
-      show(`Đã hủy xác nhận ${confirm.muc_label} — ${confirm.ma_phan}. Người phụ trách có thể xác nhận lại.`);
+      await cancelReadyItem(confirm.phan_in_id, confirm.ma_checkpoint, confirm.dot_vai_ve_id || null);
+      show(`Đã hủy xác nhận ${confirm.muc_label} — ${confirm.ma_phan}${confirm.dot_label ? ` (đợt ${confirm.dot_label})` : ''}. Người phụ trách có thể xác nhận lại.`);
       setConfirm(null);
       load();
     } catch (e) {
@@ -93,10 +93,14 @@ function ReadyCancelSection({ show }) {
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
     { key: 'mau_vai', header: 'Màu · Kích', render: (r) => [r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—' },
+    // Dòng THEO ĐỢT VẢI (09/10/2026): phần in đã Ready từ đợt cũ ⇒ xác nhận đợt mới chỉ ghi theo đợt — hủy chỉ đợt đó.
     { key: 'muc_label', header: 'Mục xác nhận', render: (r) => (
-      <div className="flex items-center gap-1.5">
-        <Badge tone="info">{r.muc_label}</Badge>
-        {r.gia_tri_text ? <span className="text-xs text-ink-soft">{r.gia_tri_text}</span> : null}
+      <div>
+        <div className="flex items-center gap-1.5">
+          <Badge tone="info">{r.muc_label}</Badge>
+          {r.gia_tri_text ? <span className="text-xs text-ink-soft">{r.gia_tri_text}</span> : null}
+        </div>
+        {r.dot_vai_ve_id && <div className="mt-0.5 text-xs text-ink-soft">Theo đợt vải {r.dot_label || ''}</div>}
       </div>
     ) },
     { key: 'nguoi_xac_nhan', header: 'Người xác nhận', render: (r) => r.nguoi_xac_nhan || '—' },
@@ -126,7 +130,7 @@ function ReadyCancelSection({ show }) {
         loading={busy}
         title="Hủy xác nhận READY"
         message={confirm
-          ? `Hủy xác nhận "${confirm.muc_label}" của phần in ${confirm.ma_phan} (do ${confirm.nguoi_xac_nhan || '—'} xác nhận)? Mục này sẽ trở lại trạng thái CHƯA xác nhận để người phụ trách làm lại.`
+          ? `Hủy xác nhận "${confirm.muc_label}" của phần in ${confirm.ma_phan}${confirm.dot_vai_ve_id ? ` — CHỈ đợt vải ${confirm.dot_label || ''}` : ''} (do ${confirm.nguoi_xac_nhan || '—'} xác nhận)? Mục này sẽ trở lại trạng thái CHƯA xác nhận để người phụ trách làm lại.`
           : ''}
         confirmText="Hủy xác nhận"
         variant="danger"

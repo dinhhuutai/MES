@@ -41,6 +41,9 @@ export const getBaoCaoDungChuyen = (tuNgay, denNgay) =>
 // Báo cáo kết quả kiểm hàng (02/10/2026) — theo dây chuyền / chuyền / lượt KCS, khoảng ngày SX.
 export const getBaoCaoKiemHang = (tuNgay, denNgay) =>
   client.get('/production/bao-cao-kiem-hang', { params: { tuNgay, denNgay } });
+// Báo cáo sửa hàng (09/10/2026) — kết quả sửa · kiểm hàng sửa · tồn sửa · nghẽn theo dây chuyền, khoảng ngày SX.
+export const getBaoCaoSuaHang = (tuNgay, denNgay) =>
+  client.get('/production/bao-cao-sua-hang', { params: { tuNgay, denNgay } });
 export const listToIn = (params) => client.get('/production/to-in', { params });
 export const createToIn = (body) => client.post('/production/to-in', body);
 export const updateToIn = (id, body) => client.patch(`/production/to-in/${id}`, body);

@@ -63,6 +63,7 @@ function ghiChu(it, duPhong) {
     dong.push(`Nghẽn từ ${thoiLuong(g.truoc_sx_phut)} trước giờ SX kế hoạch; vàng từ ${thoiLuong(g.truoc_sx_phut + g.canh_bao_phut)} trước.`);
     if (g.toi_thieu_phut > 0) {
       dong.push(`Nhưng luôn có ít nhất ${thoiLuong(g.toi_thieu_phut)} kể từ lúc Release 1 đưa lệnh xuống rồi mới báo nghẽn (lệnh release sát hoặc trễ giờ SX).`);
+      dong.push(`Lệnh bị Test Run trả về Kế hoạch ⇒ ${thoiLuong(g.toi_thieu_phut)} này tính lại từ lúc Kế hoạch xác nhận Release 1 lại.`);
     }
     dong.push(`Lệnh chưa đặt giờ SX ⇒ lấy ngày kế hoạch lúc ${g.gio_sx_mac_dinh}; không có cả ngày ⇒ SLA checkpoint TEST_RUN: ${test.tram_sla != null ? thoiLuong(test.tram_sla) : 'chưa cấu hình'}.`);
   }

@@ -1,3 +1,5 @@
+import { chuanMaChuyen } from './maChuyen';
+
 // KHU CHUYỀN BÀN — chia nhỏ loại chuyền `BAN` theo bố trí thật của xưởng (chốt 2026-08-03).
 // Dùng chung cho toggle lọc ở "Theo dõi chuyền" (Sản xuất) và "Test Run - QA" (Kế hoạch)
 // ⇒ sửa 1 chỗ, 2 màn cùng đổi.
@@ -13,19 +15,22 @@
 // ⚠⚠ THÊM CHUYỀN ROBOT MỚI THÌ PHẢI THÊM VÀO ĐÂY: từ 2026-09-10 dải chip không còn chip "Robot" nên
 //   chuyền robot nào không nằm trong khu nào sẽ **chỉ còn lọc được ở chip "Tất cả"** — không mất dòng,
 //   nhưng không soi riêng được. (Đo prod 10/09: đúng 3 chuyền loại ROBOT, cả 3 đều đã có khu.)
+// ⚠⚠ (09/10/2026) Mã viết theo MÃ ERP (`4A4B`, `10A`, `RB1` — người dùng gửi danh mục chuyền ERP) và mọi phép so đi
+//   qua `chuanMaChuyen` (`utils/maChuyen.js`) ⇒ khớp cả mã cũ trên DB (`M4A-4B`, `M10A`, `MRB1`) lẫn mã mới sau khi
+//   chạy script `database/scripts/doi_ma_chuyen_theo_erp.sql`.
 export const KHU_BAN = [
-  { key: 'BAN_A', label: 'Bàn khu A', ma: ['M4A-4B', 'M5A-5B', 'M6A-6B', 'M7A-7B', 'M8A-8B', 'M9A-9B', 'MRB1'] },
-  { key: 'BAN_B', label: 'Bàn khu B', ma: ['M10A', 'M11A', 'M12A', 'M13A', 'M14A', 'M10B', 'M11B', 'M12B', 'M13B', 'M14B', 'MRB2', 'MRB3'] },
-  { key: 'MAU', label: 'Mẫu', ma: ['M3A-3B'] },
-  { key: 'CANH_HANG', label: 'Canh hàng', ma: ['M1A-1B'] },
-  { key: 'BO_SUNG_MTD', label: 'Bổ sung MTĐ', ma: ['M2A-2B'] },
+  { key: 'BAN_A', label: 'Bàn khu A', ma: ['4A4B', '5A5B', '6A6B', '7A7B', '8A8B', '9A9B', 'RB1'] },
+  { key: 'BAN_B', label: 'Bàn khu B', ma: ['10A', '11A', '12A', '13A', '14A', '10B', '11B', '12B', '13B', '14B', 'RB2', 'RB3'] },
+  { key: 'MAU', label: 'Mẫu', ma: ['3A3B'] },
+  { key: 'CANH_HANG', label: 'Canh hàng', ma: ['1A1B'] },
+  { key: 'BO_SUNG_MTD', label: 'Bổ sung MTĐ', ma: ['2A2B'] },
 ];
 
-// Tra nhanh: ma_chuyen → key khu.
+// Tra nhanh: mã chuyền CHUẨN → key khu.
 const MA_TO_KHU = {};
-KHU_BAN.forEach((k) => k.ma.forEach((m) => { MA_TO_KHU[m.toUpperCase()] = k.key; }));
+KHU_BAN.forEach((k) => k.ma.forEach((m) => { MA_TO_KHU[chuanMaChuyen(m)] = k.key; }));
 
-export const khuCuaChuyen = (maChuyen) => MA_TO_KHU[String(maChuyen || '').trim().toUpperCase()] || null;
+export const khuCuaChuyen = (maChuyen) => MA_TO_KHU[chuanMaChuyen(maChuyen)] || null;
 
 // Hàng có thuộc chip khu đang chọn không (khớp theo ma_chuyen của hàng).
 export const thuocKhu = (maChuyen, khuKey) => !!khuKey && khuCuaChuyen(maChuyen) === khuKey;
@@ -57,9 +62,9 @@ export const LOAI_TABS = [
 // Có chip "Robot" riêng và 3 chuyền robot KHÔNG còn nằm trong chip Bàn khu A/B. Các màn khác giữ
 // nguyên `LOAI_TABS` (robot nằm trong khu). Bật bằng `{ tachRobot: true }` ở 3 helper bên dưới.
 // ⚠ Nhận diện robot bằng loại chuyền `ROBOT` HOẶC mã trong `MA_CHUYEN_ROBOT` (sĩ số chỉ biết mã chuyền).
-export const MA_CHUYEN_ROBOT = ['MRB1', 'MRB2', 'MRB3'];
+export const MA_CHUYEN_ROBOT = ['RB1', 'RB2', 'RB3'];
 const laChuyenRobot = (row) => row?.ma_loai_chuyen === 'ROBOT'
-  || MA_CHUYEN_ROBOT.includes(String(row?.ma_chuyen || '').trim().toUpperCase());
+  || MA_CHUYEN_ROBOT.includes(chuanMaChuyen(row?.ma_chuyen));
 
 export const LOAI_TABS_TACH_ROBOT = [
   ...LOAI_TABS.slice(0, LOAI_TABS.findIndex((t) => t.v === 'MAY') + 1),

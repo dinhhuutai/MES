@@ -6,6 +6,8 @@ import Toast from '../../../components/common/Toast';
 import Icon from '../../../components/common/Icon';
 import { Field, Input } from '../../../components/common/controls';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
+import CanhBaoGiaCong from '../components/CanhBaoGiaCong';
+import { laChuyenGiaCong, tenChuyen } from '../utils/chuyenGiaCong';
 import TimeSelect from '../../../components/common/TimeSelect';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
@@ -236,6 +238,11 @@ export default function TaoDotSanXuatPage() {
             <Field label="Chuyền sản xuất" required>
               <ChuyenPicker chuyen={chuyen} value={chuyenId} onChange={setChuyenId} />
             </Field>
+            {laChuyenGiaCong(chuyen, chuyenId) && (
+              <CanhBaoGiaCong tenChuyen={tenChuyen(chuyen, chuyenId)}>
+                Đợt sản xuất tạo ra sẽ vào ngay <b>Kế hoạch › Gia công</b> (gửi nhà gia công — không qua Test Run / Sản xuất).
+              </CanhBaoGiaCong>
+            )}
             <Field label="Ngày kế hoạch (tùy chọn)">
               <Input type="date" value={ngayKeHoach} onChange={(e) => setNgayKeHoach(e.target.value)}
                 className="cursor-pointer"

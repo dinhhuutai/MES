@@ -10,6 +10,8 @@ import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
 import { Field, Input, Textarea } from '../../../components/common/controls';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
+import CanhBaoGiaCong from '../components/CanhBaoGiaCong';
+import { laChuyenGiaCong, tenChuyen } from '../utils/chuyenGiaCong';
 import TimeSelect from '../../../components/common/TimeSelect';
 import NhieuNguoiSelect from '../../../components/common/NhieuNguoiSelect';
 import { listUserOptions } from '../../../services/userService';
@@ -428,6 +430,11 @@ export default function ReplanPage() {
                 <ChuyenPicker chuyen={chuyen} value={form.chuyenId}
                   onChange={(id) => setForm({ ...form, chuyenId: id })} />
               </Field>
+              {laChuyenGiaCong(chuyen, form.chuyenId) && !laChuyenGiaCong(chuyen, detail.chuyen_id) && (
+                <CanhBaoGiaCong tenChuyen={tenChuyen(chuyen, form.chuyenId)}>
+                  Lệnh sẽ chuyển sang <b>Kế hoạch › Gia công</b> (gửi nhà gia công — không qua Test Run / Sản xuất).
+                </CanhBaoGiaCong>
+              )}
               <Field label="Ngày sản xuất kế hoạch" required>
                 <Input type="date" value={form.ngayKeHoach}
                   onChange={(e) => setForm({ ...form, ngayKeHoach: e.target.value })} />
@@ -513,6 +520,14 @@ export default function ReplanPage() {
             onChange={(id) => setBatchForm({ ...batchForm, chuyenId: id })}
             placeholder="— Giữ chuyền hiện tại —" />
         </Field>
+        {laChuyenGiaCong(chuyen, batchForm.chuyenId) && (
+          <div className="mb-3">
+            <CanhBaoGiaCong tenChuyen={tenChuyen(chuyen, batchForm.chuyenId)}>
+              Mọi lệnh đã chọn chưa ở gia công sẽ chuyển sang <b>Kế hoạch › Gia công</b> (gửi nhà gia công — không qua
+              Test Run / Sản xuất).
+            </CanhBaoGiaCong>
+          </div>
+        )}
         <Field label="Ngày sản xuất kế hoạch" required>
           <Input type="date" value={batchForm.ngayKeHoach}
             onChange={(e) => setBatchForm({ ...batchForm, ngayKeHoach: e.target.value })} />

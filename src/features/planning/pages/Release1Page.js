@@ -21,6 +21,8 @@ import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
 import { Field, Input, Textarea } from '../../../components/common/controls';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
+import CanhBaoGiaCong from '../components/CanhBaoGiaCong';
+import { laChuyenGiaCong, tenChuyen } from '../utils/chuyenGiaCong';
 import TimeSelect from '../../../components/common/TimeSelect';
 import NhieuNguoiSelect from '../../../components/common/NhieuNguoiSelect';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
@@ -618,7 +620,9 @@ export default function Release1Page() {
         footer={
           <>
             <Button chiXemOk variant="ghost" onClick={() => setReleaseOpen(false)}>Hủy</Button>
-            <Button onClick={doReleaseAll} loading={saving} disabled={!relForm.chuyenId}>Xác nhận Release</Button>
+            <Button onClick={doReleaseAll} loading={saving} disabled={!relForm.chuyenId}>
+              {laChuyenGiaCong(chuyen, relForm.chuyenId) ? `Release vào Gia công (${looseList.length})` : 'Xác nhận Release'}
+            </Button>
           </>
         }
       >
@@ -638,6 +642,18 @@ export default function Release1Page() {
         <Field label="Chuyền in" required>
           <ChuyenPicker chuyen={chuyen} value={relForm.chuyenId} onChange={(id) => setRelForm({ ...relForm, chuyenId: id })} />
         </Field>
+        {laChuyenGiaCong(chuyen, relForm.chuyenId) && (
+          <div className="mb-3">
+            <CanhBaoGiaCong tenChuyen={tenChuyen(chuyen, relForm.chuyenId)}>
+              <b>{looseList.filter((r) => r.qc_done).length}</b> đợt đã Ready sẽ vào ngay <b>Kế hoạch › Gia công</b> (gửi nhà
+              gia công — không qua Test Run / Sản xuất).
+              {looseList.some((r) => !r.qc_done) && (
+                <> <b>{looseList.filter((r) => !r.qc_done).length}</b> đợt chưa Ready lưu Kế hoạch tạm trên chuyền này —
+                  sau này bấm "Xác nhận Release 1" ở Kế hoạch tạm cũng vào Gia công.</>
+              )}
+            </CanhBaoGiaCong>
+          </div>
+        )}
         <Field label="Ngày kế hoạch">
           <Input type="date" value={relForm.ngayKeHoach} onChange={(e) => setRelForm({ ...relForm, ngayKeHoach: e.target.value })} />
         </Field>
@@ -672,7 +688,9 @@ export default function Release1Page() {
             )}
             {/* Thông tin phần in SAI ⇒ trả Giao nhận sửa; đợt tạm rời Release 1 tới khi GN xác nhận lại. */}
             <Button variant="secondary" icon="undo" className="text-danger" onClick={() => setGnOpen(true)}>Trả về GN</Button>
-            <Button onClick={() => submitRelease([detail.dot_vai_id])} loading={saving} disabled={!form.chuyenId}>Xác nhận Release 1</Button>
+            <Button onClick={() => submitRelease([detail.dot_vai_id])} loading={saving} disabled={!form.chuyenId}>
+              {laChuyenGiaCong(chuyen, form.chuyenId) ? 'Release vào Gia công' : 'Xác nhận Release 1'}
+            </Button>
           </>
         }
       >
@@ -705,6 +723,13 @@ export default function Release1Page() {
               <Field label="Chuyền in" required>
                 <ChuyenPicker chuyen={chuyen} value={form.chuyenId} onChange={(id) => setForm({ ...form, chuyenId: id })} />
               </Field>
+              {laChuyenGiaCong(chuyen, form.chuyenId) && (
+                <CanhBaoGiaCong tenChuyen={tenChuyen(chuyen, form.chuyenId)}>
+                  {detail.qc_done
+                    ? <>Phần in sẽ vào ngay <b>Kế hoạch › Gia công</b> (gửi nhà gia công — không qua Test Run / Sản xuất).</>
+                    : <>Đợt chưa Ready ⇒ lưu Kế hoạch tạm trên chuyền này — bấm "Xác nhận Release 1" ở Kế hoạch tạm sau này sẽ vào <b>Gia công</b>.</>}
+                </CanhBaoGiaCong>
+              )}
               <div className="grid grid-cols-2 gap-x-4">
                 <Field label="Số lượng release" hint={`Còn lại ${fmtNum(detail.con_release ?? detail.so_luong_vai_ve)} — release ít hơn thì đợt vẫn ở lại kế hoạch với phần còn`}>
                   <Input type="number" min="1" max={detail.con_release ?? detail.so_luong_vai_ve}
@@ -736,7 +761,9 @@ export default function Release1Page() {
         footer={
           <>
             <Button chiXemOk variant="ghost" onClick={() => setTvDetail(null)}>Đóng</Button>
-            <Button onClick={doXacNhanLai} loading={saving} disabled={!tvForm.chuyenId}>Xác nhận Release 1</Button>
+            <Button onClick={doXacNhanLai} loading={saving} disabled={!tvForm.chuyenId}>
+              {laChuyenGiaCong(chuyen, tvForm.chuyenId) ? 'Xác nhận — chuyển sang Gia công' : 'Xác nhận Release 1'}
+            </Button>
           </>
         }
       >
@@ -766,6 +793,11 @@ export default function Release1Page() {
               <Field label="Chuyền in" required>
                 <ChuyenPicker chuyen={chuyen} value={tvForm.chuyenId} onChange={(id) => setTvForm((f) => ({ ...f, chuyenId: id }))} />
               </Field>
+              {laChuyenGiaCong(chuyen, tvForm.chuyenId) && (
+                <CanhBaoGiaCong tenChuyen={tenChuyen(chuyen, tvForm.chuyenId)}>
+                  Lệnh <b>{tvDetail.ma_lenh_san_xuat}</b> sẽ chuyển sang <b>Kế hoạch › Gia công</b> thay vì quay về Test Run.
+                </CanhBaoGiaCong>
+              )}
               <div className="grid grid-cols-2 gap-x-4">
                 <Field label="Ngày kế hoạch">
                   <Input type="date" value={tvForm.ngayKeHoach} onChange={(e) => setTvForm((f) => ({ ...f, ngayKeHoach: e.target.value }))} />

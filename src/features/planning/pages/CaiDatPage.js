@@ -39,12 +39,15 @@ const CA_OPTIONS = [
   { v: 'DAI', label: 'Dài' },
   { v: 'HANH_CHINH', label: 'Hành chính' },
 ];
-// Cài ca RIÊNG theo loại chuyền (mig 112, 07/10/2026) — gương backend `utils/ca.js LOAI_CHUYEN_CA`. Loại
-// khác (Máy tròn, Logo, Ép, Gia công) luôn theo ca CHUNG của tuần.
+// Cài ca RIÊNG theo loại chuyền (mig 112, 07/10/2026) — gương backend `utils/ca.js NHOM_CA_RIENG`. `KHAC` (09/10/2026)
+// = mọi loại chuyền còn lại (Gia công, Máy tròn, Logo, Ép…): mặc định HÀNH CHÍNH, KHÔNG theo ca chung.
+const NHOM_KHAC = 'KHAC';
+const CA_KHAC_MAC_DINH = 'HANH_CHINH';
 const LOAI_CHUYEN = [
   { v: 'MAY', label: 'Máy' },
   { v: 'BAN', label: 'Bàn' },
   { v: 'ROBOT', label: 'Robot' },
+  { v: NHOM_KHAC, label: 'Khác', cot: 'Chuyền khác', title: 'Gia công · Máy tròn · Logo · Ép' },
 ];
 const toneCa = (ca) => (ca === 'DAI' ? 'warning' : ca === 'HANH_CHINH' ? 'success' : 'info');
 
@@ -88,7 +91,7 @@ export default function CaiDatPage() {
   const wk = isoWeek(new Date(ngay));
   const tuanRows = gomTheoTuan(rows);
   const batLoai = (v) => setApCho((ds) => (ds.includes(v) ? ds.filter((x) => x !== v) : [...ds, v]));
-  const tenApCho = apCho.length ? LOAI_CHUYEN.filter((x) => apCho.includes(x.v)).map((x) => x.label).join(', ') : 'tất cả chuyền';
+  const tenApCho = apCho.length ? LOAI_CHUYEN.filter((x) => apCho.includes(x.v)).map((x) => x.cot || x.label).join(', ') : 'tất cả chuyền';
 
   const submit = async () => {
     setSaving(true);
@@ -109,13 +112,15 @@ export default function CaiDatPage() {
   };
 
   // Ô của 1 loại chuyền = ca riêng nếu có, không thì ca CHUNG (chữ mờ "theo chung"), không có gì ⇒ Ngắn mặc định.
+  // Nhóm "Chuyền khác" không theo chung: chưa cài riêng ⇒ Hành chính mặc định.
   const oLoai = (r, lc) => {
-    const ca = r.rieng[lc] || r.chung || 'NGAN';
+    const khac = lc === NHOM_KHAC;
+    const ca = r.rieng[lc] || (khac ? CA_KHAC_MAC_DINH : r.chung || 'NGAN');
     const rieng = !!r.rieng[lc];
     return (
       <div className="flex flex-col items-start gap-0.5">
         <Badge tone={rieng ? toneCa(ca) : 'default'}>{CA_LABEL[ca] || ca}</Badge>
-        {!rieng && <span className="text-[11px] text-ink-soft">{r.chung ? 'theo chung' : 'mặc định'}</span>}
+        {!rieng && <span className="text-[11px] text-ink-soft">{!khac && r.chung ? 'theo chung' : 'mặc định'}</span>}
       </div>
     );
   };
@@ -125,7 +130,7 @@ export default function CaiDatPage() {
     { key: 'chung', header: 'Chung (mọi chuyền)', render: (r) => (r.chung
       ? <Badge tone={toneCa(r.chung)}>{CA_LABEL[r.chung] || r.chung}</Badge>
       : <span className="text-xs text-ink-soft">Ngắn (mặc định)</span>) },
-    ...LOAI_CHUYEN.map((l) => ({ key: `lc_${l.v}`, header: l.label, render: (r) => oLoai(r, l.v) })),
+    ...LOAI_CHUYEN.map((l) => ({ key: `lc_${l.v}`, header: l.cot || l.label, render: (r) => oLoai(r, l.v) })),
     { key: 'ghi_chu', header: 'Ghi chú', render: (r) => r.ghi_chu || '—' },
   ];
 
@@ -150,9 +155,10 @@ export default function CaiDatPage() {
       <div className="mb-4 rounded-control border border-line bg-surface p-3 text-xs">
         <span className="font-semibold text-ink">Ghi chú: </span>
         <span className="text-ink-soft">
-          Tuần chưa cài mặc định đi ca <b>Ngắn</b>. Chuyền Máy / Bàn / Robot cài riêng thì theo cài riêng, còn lại theo
-          ca <b>chung</b> của tuần (Máy tròn, Logo, Ép, Gia công luôn theo chung). Lưu cho <b>tất cả chuyền</b> sẽ đưa
-          cả các cài riêng của tuần đó về cùng loại ca.
+          Tuần chưa cài mặc định đi ca <b>Ngắn</b>. Chuyền Máy / Bàn / Robot cài riêng thì theo cài riêng, không thì theo
+          ca <b>chung</b> của tuần. <b>Chuyền khác</b> (Gia công, Máy tròn, Logo, Ép) mặc định <b>Hành chính</b>, không theo
+          ca chung — đổi thì chọn "Khác". Lưu cho <b>tất cả chuyền</b> sẽ đưa các cài riêng Máy / Bàn / Robot của tuần
+          đó về cùng loại ca (không đụng "Khác").
         </span>
       </div>
 
@@ -175,7 +181,7 @@ export default function CaiDatPage() {
                     !apCho.length ? 'border-primary bg-primary-wash text-primary' : 'border-line text-ink-soft'
                   }`}>Tất cả</button>
                 {LOAI_CHUYEN.map((o) => (
-                  <button key={o.v} type="button" onClick={() => batLoai(o.v)}
+                  <button key={o.v} type="button" onClick={() => batLoai(o.v)} title={o.title}
                     className={`flex-1 rounded-control border px-2 py-2.5 text-sm font-semibold transition ${
                       apCho.includes(o.v) ? 'border-primary bg-primary-wash text-primary' : 'border-line text-ink-soft'
                     }`}>{o.label}</button>

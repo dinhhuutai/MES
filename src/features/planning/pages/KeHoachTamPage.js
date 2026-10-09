@@ -18,6 +18,8 @@ import Modal from '../../../components/common/Modal';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import { Field, Input, Textarea } from '../../../components/common/controls';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
+import CanhBaoGiaCong from '../components/CanhBaoGiaCong';
+import { laChuyenGiaCong } from '../utils/chuyenGiaCong';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
 import useToast from '../../../hooks/useToast';
@@ -233,6 +235,10 @@ export default function KeHoachTamPage() {
     load();
   };
 
+  // Dòng sắp xác nhận nằm trên chuyền GIA CÔNG ⇒ cảnh báo + liệt kê trong hộp xác nhận (09/10/2026).
+  const dongGiaCong = confirm
+    ? rows.filter((r) => confirm.ids.includes(r.id) && laChuyenGiaCong(chuyen, r.chuyen_id)) : [];
+
   const doDelete = async () => {
     if (!del) return;
     setSaving(true);
@@ -275,7 +281,12 @@ export default function KeHoachTamPage() {
     { key: 'loai_dot_vai', header: 'Loại đợt vải', render: (r) => <LoaiDotVaiBadge value={r.loai_dot_vai} /> },
     { key: 'nha_gia_cong', header: 'Nhà gia công', render: (r) => r.nha_gia_cong || '—' },
     { key: 'so_luong', header: 'SL', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
-    { key: 'ten_chuyen', header: 'Chuyền (dự kiến)', render: (r) => r.ten_chuyen || '—' },
+    { key: 'ten_chuyen', header: 'Chuyền (dự kiến)', render: (r) => (
+      <div>
+        <div>{r.ten_chuyen || '—'}</div>
+        {laChuyenGiaCong(chuyen, r.chuyen_id) && <Badge tone="warning">Gia công</Badge>}
+      </div>
+    ) },
     { key: 'ngay_ke_hoach', header: 'Ngày KH', render: (r) => fmtDate(r.ngay_ke_hoach) },
     { key: 'gio', header: 'Giờ BD–KT', render: (r) => (r.tg_bd_kh || r.tg_kt_kh ? `${hhmm(r.tg_bd_kh) || '—'}–${hhmm(r.tg_kt_kh) || '—'}` : '—') },
     // Thợ in KẾ HOẠCH chọn lúc Release 1 (mig 111) — xác nhận kế hoạch tạm thì chép sang lệnh.
@@ -352,9 +363,22 @@ export default function KeHoachTamPage() {
         onConfirm={doConfirm}
         loading={saving}
         title="Xác nhận Release 1"
-        confirmText="Xác nhận Release 1"
+        confirmText={dongGiaCong.length ? `Xác nhận — ${fmtNum(dongGiaCong.length)} vào Gia công` : 'Xác nhận Release 1'}
         message={confirm ? `Xác nhận Release 1 cho ${confirm.label} theo chuyền/giờ/ngày đã lập kế hoạch tạm?` : ''}
-      />
+      >
+        {/* 09/10/2026: dòng kế hoạch tạm lập trên chuyền GIA CÔNG ⇒ xác nhận là vào thẳng Kế hoạch › Gia công. */}
+        {dongGiaCong.length > 0 && (
+          <CanhBaoGiaCong tenChuyen={[...new Set(dongGiaCong.map((r) => r.ten_chuyen).filter(Boolean))].join(', ')}>
+            <b>{fmtNum(dongGiaCong.length)}</b>{confirm && confirm.ids.length > dongGiaCong.length ? `/${fmtNum(confirm.ids.length)}` : ''} phần in
+            sẽ chuyển sang <b>Kế hoạch › Gia công</b> (gửi nhà gia công — không qua Test Run / Sản xuất):
+            <ul className="mt-1 max-h-40 list-disc overflow-auto pl-5 text-xs">
+              {dongGiaCong.map((r) => (
+                <li key={r.id}>{r.ma_phan}{r.nha_gia_cong ? ` · ${r.nha_gia_cong}` : ''}</li>
+              ))}
+            </ul>
+          </CanhBaoGiaCong>
+        )}
+      </ConfirmDialog>
       <ConfirmDialog
         open={!!del}
         onClose={() => setDel(null)}
@@ -400,6 +424,11 @@ export default function KeHoachTamPage() {
               <Field label="Chuyền in" required>
                 <ChuyenPicker chuyen={chuyen} value={editForm.chuyenId} onChange={(id) => setEditForm((f) => ({ ...f, chuyenId: id }))} />
               </Field>
+              {laChuyenGiaCong(chuyen, editForm.chuyenId) && (
+                <CanhBaoGiaCong tenChuyen={(chuyen.find((c) => c.id === editForm.chuyenId) || {}).ten_chuyen}>
+                  Xác nhận Release 1 kế hoạch tạm này ⇒ phần in vào <b>Kế hoạch › Gia công</b> (không qua Test Run / Sản xuất).
+                </CanhBaoGiaCong>
+              )}
               <div className="grid grid-cols-2 gap-x-4">
                 <Field label="Số lượng release" hint={edit.so_luong_vai_ve != null ? `SL nhận vải ${fmtNum(edit.so_luong_vai_ve)}` : undefined}>
                   <Input type="number" min="1" max={edit.so_luong_vai_ve || undefined}
