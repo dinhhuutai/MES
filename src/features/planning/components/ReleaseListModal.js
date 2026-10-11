@@ -9,7 +9,7 @@ import exportReleaseListExcel from '../utils/exportReleaseListExcel';
 import printReleaseList from '../utils/printReleaseList';
 import InLenhSanXuatModal from './InLenhSanXuatModal';
 import {
-  COT_CHECKLIST, dongTieuDe, tieuDeChecklist, maChuyenIn, tongGiaRelease, fmtGia, LOC_GIO, hopLocGio,
+  COT_CHECKLIST, dongTieuDe, tieuDeChecklist, maChuyenIn, tongDoanhThuRelease, danhDauLapDoanhThu, fmtGia, LOC_GIO, hopLocGio,
 } from '../utils/cotChecklistRelease';
 import ChipTabs from '../../../components/common/ChipTabs';
 import Icon from '../../../components/common/Icon';
@@ -205,7 +205,8 @@ export default function ReleaseListModal({ open, onClose }) {
     () => filterRows(chipItems, filters, FILTER_FIELDS).filter((r) => khopNhieu(oTimCols(r), q) && hopLocGio(r, locGio)),
     [chipItems, filters, q, locGio]
   );
-  const viewItems = useMemo(() => gopTheoLenh(truocDangO.filter(hopDangO)), [truocDangO, hopDangO]);
+  // `danhDauLapDoanhThu` gắn `_dt_lap` cho dòng lặp code phần (cột Doanh thu in mờ) — cũng tính trên tập đang hiển thị.
+  const viewItems = useMemo(() => danhDauLapDoanhThu(gopTheoLenh(truocDangO.filter(hopDangO))), [truocDangO, hopDangO]);
   // So dem tren chip tinh tren tap DA qua o tim + bo loc (chip chi la 1 chieu loc khac) => bam chip
   // nao cung thay dung so dong se hien ra.
   const counts = useMemo(
@@ -236,8 +237,8 @@ export default function ReleaseListModal({ open, onClose }) {
     };
   }, [meta, dangLoc, viewItems]);
 
-  // Tổng theo ĐƠN GIÁ (mig 113) — luôn tính trên tập ĐANG XEM (cùng hàm với BE).
-  const tongGia = useMemo(() => tongGiaRelease(viewItems), [viewItems]);
+  // Tổng DOANH THU (đơn giá × SLĐH, mỗi code phần 1 lần) — luôn tính trên tập ĐANG XEM (cùng luật với BE).
+  const tongDt = useMemo(() => tongDoanhThuRelease(viewItems), [viewItems]);
 
   // Số phần in ở từng checkpoint — tính trên tập ĐANG XEM để khớp với bảng + "Tổng phần" ở đầu modal.
   const bangGiaiDoan = useMemo(() => demGiaiDoan(truocDangO), [truocDangO]);
@@ -287,9 +288,13 @@ export default function ReleaseListModal({ open, onClose }) {
       );
       case 'kt_khuon': case 'kt_muc': case 'kt_test': return oKiem(v);
       case 'sl_release': return oSo(v, true);
-      // Đơn giá = ERP `Dongia`; rê chuột xem tách Giá in / Giá ép / Giá in kiếng.
-      case 'don_gia': return v === '' ? '' : (
-        <span title={`Giá in ${fmtGia(r.gia_in) || '—'} · Giá ép ${fmtGia(r.gia_ep) || '—'} · Giá in kiếng ${fmtGia(r.gia_in_kieng) || '—'}`}>{fmtGia(v)}</span>
+      // Doanh thu = đơn giá (ERP `Dongia`) × SLĐH; rê chuột xem phép tính + tách Giá in / Giá ép / Giá in kiếng.
+      // Dòng lặp code phần (`_dt_lap`) in mờ: "Tổng doanh thu" chỉ tính code phần đó 1 lần.
+      case 'doanh_thu': return v === '' ? '' : (
+        <span className={r._dt_lap ? 'italic text-ink-soft' : ''}
+          title={`Đơn giá ${fmtGia(r.don_gia)} × SLĐH ${fmtNum(r.so_luong_don_hang)} · Giá in ${fmtGia(r.gia_in) || '—'} · Giá ép ${fmtGia(r.gia_ep) || '—'} · Giá in kiếng ${fmtGia(r.gia_in_kieng) || '—'}${r._dt_lap ? ' · Code phần đã có ở dòng trên — tổng chỉ tính 1 lần' : ''}`}>
+          {fmtGia(v)}
+        </span>
       );
       default: return c.num ? oSo(v) : v;
     }
@@ -343,11 +348,10 @@ export default function ReleaseListModal({ open, onClose }) {
           <span>Tổng mã <b className="text-ink">{fmtNum(metaXem.tong_ma)}</b></span>
           <span>Tổng phần <b className="text-ink">{fmtNum(metaXem.tong_phan)}</b></span>
           <span>SL release <b className="text-ink">{fmtNum(metaXem.sl_release)}</b></span>
-          <span>Tổng đơn giá <b className="text-ink">{fmtGia(tongGia.tong_don_gia) || '0'}</b></span>
-          <span title="Σ (SL release × đơn giá) của các dòng đang xem">
-            Thành tiền <b className="text-ink">{fmtGia(tongGia.thanh_tien) || '0'}</b>
-            {tongGia.so_thieu_gia > 0 && (
-              <span className="text-warning"> · {fmtNum(tongGia.so_thieu_gia)} dòng chưa có giá</span>
+          <span title="Σ doanh thu (đơn giá × SLĐH) của các code phần đang xem — mỗi code phần tính 1 lần">
+            Tổng doanh thu <b className="text-ink">{fmtGia(tongDt.tong_doanh_thu) || '0'}</b>
+            {tongDt.so_thieu_gia > 0 && (
+              <span className="text-warning"> · {fmtNum(tongDt.so_thieu_gia)} phần chưa có giá</span>
             )}
           </span>
           {/* Đơn vị điều hành là ĐỢT SX ⇒ để nó lên trước; số dòng phần in chỉ là phụ đề. */}

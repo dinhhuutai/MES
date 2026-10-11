@@ -43,22 +43,45 @@ export const soGia = (v) => {
   const n = Number(v);
   return Number.isFinite(n) ? n : '';
 };
-// Hiện giá: tối đa 2 số lẻ, không kéo đuôi ",00".
+// Hiện giá / doanh thu: tối đa 2 số lẻ, không kéo đuôi ",00".
 export const fmtGia = (v) => (v === '' || v == null ? '' : Number(v).toLocaleString('vi-VN', { maximumFractionDigits: 2 }));
 
-// Tổng theo đơn giá của tập ĐANG XEM (gương BE `planning.service tongGiaRelease`):
-//   `tong_don_gia` = Σ đơn giá các dòng · `thanh_tien` = Σ (SL release × đơn giá) · `so_thieu_gia` = số dòng
-//   chưa có đơn giá (tổng còn thiếu các dòng này).
-export function tongGiaRelease(items) {
-  let tongDonGia = 0; let thanhTien = 0; let thieu = 0;
+// DOANH THU của phần in (11/10/2026, người dùng chốt — thay cột "Đơn giá"): đơn giá × SỐ LƯỢNG ĐƠN HÀNG (SLĐH).
+//   Phần in ERP chưa gửi giá (hoặc thiếu SLĐH) ⇒ '' (ô để trống).
+const tron2 = (n) => Math.round(n * 100) / 100;
+export const doanhThu = (r) => {
+  const gia = soGia(r && r.don_gia);
+  if (gia === '' || r.so_luong_don_hang == null || r.so_luong_don_hang === '') return '';
+  const sl = Number(r.so_luong_don_hang);
+  return Number.isFinite(sl) ? tron2(gia * sl) : '';
+};
+
+// ⚠ SLĐH là của CẢ PHẦN IN: 1 code phần release thành nhiều lệnh trong ngày ra NHIỀU DÒNG cùng một doanh thu
+//   (đo prod ngày KH 12/10/2026: 145 dòng / 132 code phần — cộng theo dòng 335,9 triệu, đúng là 249,3 triệu).
+//   ⇒ tổng tính MỖI CODE PHẦN 1 LẦN (cùng cách đếm "Tổng phần"); dòng lặp gắn `_dt_lap` để bảng + Excel in mờ.
+const khoaPhan = (r) => r.phan_in_id || r.ma_phan;
+// Gắn `_dt_lap` = true cho dòng thứ 2 trở đi của cùng code phần — tính trên tập ĐANG HIỂN THỊ (như `gopTheoLenh`).
+export function danhDauLapDoanhThu(items) {
+  const daCo = new Set();
+  return (items || []).map((r) => {
+    const k = khoaPhan(r);
+    const lap = !!k && daCo.has(k);
+    if (k) daCo.add(k);
+    return { ...r, _dt_lap: lap };
+  });
+}
+// Tổng doanh thu của tập ĐANG XEM (gương BE `planning.service tongDoanhThuRelease`): `tong_doanh_thu` = Σ doanh
+//   thu, mỗi code phần 1 lần · `so_thieu_gia` = số code phần chưa có giá (tổng còn thiếu các phần này) ·
+//   `so_dong_lap` = số dòng lặp code phần (không cộng thêm).
+export function tongDoanhThuRelease(items) {
+  const theoPhan = new Map();
   for (const r of items || []) {
-    const gia = soGia(r.don_gia);
-    if (gia === '') { thieu += 1; continue; }
-    tongDonGia += gia;
-    thanhTien += gia * (Number(r.sl_release_phan ?? r.so_luong_release) || 0);
+    const k = khoaPhan(r) || r; // dòng không có khóa phần in ⇒ tính riêng dòng đó
+    if (!theoPhan.has(k)) theoPhan.set(k, doanhThu(r));
   }
-  const tron = (n) => Math.round(n * 100) / 100;
-  return { tong_don_gia: tron(tongDonGia), thanh_tien: tron(thanhTien), so_thieu_gia: thieu };
+  let tong = 0; let thieu = 0;
+  for (const v of theoPhan.values()) { if (v === '') thieu += 1; else tong += v; }
+  return { tong_doanh_thu: tron2(tong), so_thieu_gia: thieu, so_dong_lap: (items || []).length - theoPhan.size };
 }
 
 // LỌC "CÓ GIỜ / KHÔNG CÓ GIỜ" (11/10/2026): giờ BĐ + giờ KT kế hoạch của LỆNH (nhập lúc làm kế hoạch).
@@ -86,8 +109,8 @@ export const COT_CHECKLIST = [
   { key: 'sl_da_in', header: 'SL đã in', width: 8, num: true, mucLenh: true, value: (r) => (r.sl_da_in == null ? '' : Number(r.sl_da_in)) },
   { key: 'sl_giao', header: 'SL Giao', width: 8, num: true, mucLenh: true, value: (r) => (r.sl_da_giao == null ? '' : Number(r.sl_da_giao)) },
   { key: 'sl_release', header: 'SL Release', width: 10, num: true, value: (r) => Number(r.sl_release_phan ?? r.so_luong_release) || 0 },
-  // Đơn giá của PHẦN IN (mig 113, ERP `Dongia` = GiaIn + Giaep + giainkieng). Phần in ERP chưa gửi giá ⇒ trống.
-  { key: 'don_gia', header: 'Đơn giá', width: 10, num: true, gia: true, value: (r) => soGia(r.don_gia) },
+  // Doanh thu của PHẦN IN = đơn giá (mig 113, ERP `Dongia` = GiaIn + Giaep + giainkieng) × SLĐH. Chưa có giá ⇒ trống.
+  { key: 'doanh_thu', header: 'Doanh thu', width: 14, num: true, gia: true, value: doanhThu },
   { key: 'gio_bd', header: 'Giờ BĐ', nhom: 'Hạn hoàn thành', width: 8, mucLenh: true, value: (r) => gio24(r.tg_bd_kh) },
   { key: 'gio_kt', header: 'Giờ KT', nhom: 'Hạn hoàn thành', width: 8, mucLenh: true, value: (r) => gio24(r.tg_kt_kh) },
   { key: 'han_ht', header: 'Hạn hoàn thành', nhom: 'Hạn hoàn thành', width: 11, value: (r) => ngayDMY(r.han_giao) },
