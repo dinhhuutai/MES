@@ -555,11 +555,12 @@ export default function ReadyQcPage() {
       />
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
         title="Phần in đã QC (READY hoàn thành)" maHeader="Phần in"
-        fetcher={(date) => readyDone(date, 'qc')} />
+        fetcher={(date) => readyDone(date, 'qc')} showLoaiDotVai showPhuongAnIn />
 
       <TraVeListModal open={traVeOpen} onClose={() => setTraVeOpen(false)}
         tenMan="QC chuẩn bị kỹ thuật" loais={TRA_VE_THEO_MAN.CL_QC_READY} tenFile="tra-ve-qc-ready" />
       <TraVeGnModal open={gnOpen} onClose={() => setGnOpen(false)} nguon="QC" onToast={show}
+        dotVaiIds={editing?.dot_vai_ids}
         phanIn={editing ? { id: editing.id, ma_phan: editing.ma_phan } : null}
         onDone={() => { setEditing(null); load(); }} />
       <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}

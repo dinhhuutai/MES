@@ -8,7 +8,9 @@ import { getReleaseList } from '../../../services/planningService';
 import exportReleaseListExcel from '../utils/exportReleaseListExcel';
 import printReleaseList from '../utils/printReleaseList';
 import InLenhSanXuatModal from './InLenhSanXuatModal';
-import { COT_CHECKLIST, dongTieuDe, tieuDeChecklist, maChuyenIn } from '../utils/cotChecklistRelease';
+import {
+  COT_CHECKLIST, dongTieuDe, tieuDeChecklist, maChuyenIn, tongGiaRelease, fmtGia, LOC_GIO, hopLocGio,
+} from '../utils/cotChecklistRelease';
 import ChipTabs from '../../../components/common/ChipTabs';
 import Icon from '../../../components/common/Icon';
 import Badge from '../../../components/common/Badge';
@@ -165,6 +167,8 @@ export default function ReleaseListModal({ open, onClose }) {
   const [filters, setFilters] = useState({}); // panel loc tung truong
   const [moLoc, setMoLoc] = useState(false);
   const [locDangO, setLocDangO] = useState([]); // lọc cột "Đang ở" — mảng mã giai đoạn, rỗng = không lọc
+  // Lọc theo GIỜ KẾ HOẠCH của lệnh: '' tất cả | 'CO' đủ giờ BĐ + KT | 'KHONG' thiếu giờ (`cotChecklistRelease.hopLocGio`).
+  const [locGio, setLocGio] = useState('');
   // CHE DO NGAY: 'KE_HOACH' (ngay hang len chuyen - de in phieu release) | 'RELEASE' (ngay bam
   // Release 1). Dung 'RELEASE' thi chip "Tat ca" khop dung voi sidebar "Da hoan thanh" cua Release 1.
   const [mode, setMode] = useState('KE_HOACH');
@@ -198,18 +202,24 @@ export default function ReleaseListModal({ open, onClose }) {
     (r) => !locDangO.length || locDangO.includes(r.giai_doan_hien_tai || '_KHAC'), [locDangO]);
   // Tập TRƯỚC khi áp lọc cột "Đang ở" — nguồn số đếm của hộp chọn checkpoint.
   const truocDangO = useMemo(
-    () => filterRows(chipItems, filters, FILTER_FIELDS).filter((r) => khopNhieu(oTimCols(r), q)),
-    [chipItems, filters, q]
+    () => filterRows(chipItems, filters, FILTER_FIELDS).filter((r) => khopNhieu(oTimCols(r), q) && hopLocGio(r, locGio)),
+    [chipItems, filters, q, locGio]
   );
   const viewItems = useMemo(() => gopTheoLenh(truocDangO.filter(hopDangO)), [truocDangO, hopDangO]);
   // So dem tren chip tinh tren tap DA qua o tim + bo loc (chip chi la 1 chieu loc khac) => bam chip
   // nao cung thay dung so dong se hien ra.
   const counts = useMemo(
-    () => demChip(filterRows(items, filters, FILTER_FIELDS).filter((r) => khopNhieu(oTimCols(r), q)).filter(hopDangO)),
-    [items, filters, q, hopDangO]
+    () => demChip(filterRows(items, filters, FILTER_FIELDS)
+      .filter((r) => khopNhieu(oTimCols(r), q) && hopLocGio(r, locGio)).filter(hopDangO)),
+    [items, filters, q, locGio, hopDangO]
   );
+  // Số dòng theo từng lựa chọn "có giờ" — tính trên tập đã qua chip + ô tìm + bộ lọc (chưa áp chính lọc giờ).
+  const demGio = useMemo(() => {
+    const ds = filterRows(chipItems, filters, FILTER_FIELDS).filter((r) => khopNhieu(oTimCols(r), q)).filter(hopDangO);
+    return { '': ds.length, CO: ds.filter((r) => hopLocGio(r, 'CO')).length, KHONG: ds.filter((r) => hopLocGio(r, 'KHONG')).length };
+  }, [chipItems, filters, q, hopDangO]);
   const soLoc = Object.values(filters).filter((v) => (v || '').trim()).length + (q.trim() ? 1 : 0);
-  const dangLoc = !!chip || soLoc > 0 || locDangO.length > 0;
+  const dangLoc = !!chip || soLoc > 0 || locDangO.length > 0 || !!locGio;
   // Cac so tong phai tinh LAI theo tap DANG XEM, khong dung `meta` cua server: neu khong thi bam chip
   // loc con 3 dong ma van hien "Tong phan 49" - hai con so da nhau ngay tren cung mot man.
   const metaXem = useMemo(() => {
@@ -225,6 +235,9 @@ export default function ReleaseListModal({ open, onClose }) {
       sl_release: viewItems.reduce((acc, r) => acc + (Number(r.sl_release_phan) || 0), 0),
     };
   }, [meta, dangLoc, viewItems]);
+
+  // Tổng theo ĐƠN GIÁ (mig 113) — luôn tính trên tập ĐANG XEM (cùng hàm với BE).
+  const tongGia = useMemo(() => tongGiaRelease(viewItems), [viewItems]);
 
   // Số phần in ở từng checkpoint — tính trên tập ĐANG XEM để khớp với bảng + "Tổng phần" ở đầu modal.
   const bangGiaiDoan = useMemo(() => demGiaiDoan(truocDangO), [truocDangO]);
@@ -274,6 +287,10 @@ export default function ReleaseListModal({ open, onClose }) {
       );
       case 'kt_khuon': case 'kt_muc': case 'kt_test': return oKiem(v);
       case 'sl_release': return oSo(v, true);
+      // Đơn giá = ERP `Dongia`; rê chuột xem tách Giá in / Giá ép / Giá in kiếng.
+      case 'don_gia': return v === '' ? '' : (
+        <span title={`Giá in ${fmtGia(r.gia_in) || '—'} · Giá ép ${fmtGia(r.gia_ep) || '—'} · Giá in kiếng ${fmtGia(r.gia_in_kieng) || '—'}`}>{fmtGia(v)}</span>
+      );
       default: return c.num ? oSo(v) : v;
     }
   };
@@ -326,6 +343,13 @@ export default function ReleaseListModal({ open, onClose }) {
           <span>Tổng mã <b className="text-ink">{fmtNum(metaXem.tong_ma)}</b></span>
           <span>Tổng phần <b className="text-ink">{fmtNum(metaXem.tong_phan)}</b></span>
           <span>SL release <b className="text-ink">{fmtNum(metaXem.sl_release)}</b></span>
+          <span>Tổng đơn giá <b className="text-ink">{fmtGia(tongGia.tong_don_gia) || '0'}</b></span>
+          <span title="Σ (SL release × đơn giá) của các dòng đang xem">
+            Thành tiền <b className="text-ink">{fmtGia(tongGia.thanh_tien) || '0'}</b>
+            {tongGia.so_thieu_gia > 0 && (
+              <span className="text-warning"> · {fmtNum(tongGia.so_thieu_gia)} dòng chưa có giá</span>
+            )}
+          </span>
           {/* Đơn vị điều hành là ĐỢT SX ⇒ để nó lên trước; số dòng phần in chỉ là phụ đề. */}
           <span className="text-ink">
             <b>{fmtNum(demLenh(viewItems))}</b> đợt SX
@@ -348,6 +372,15 @@ export default function ReleaseListModal({ open, onClose }) {
               <Icon name="x" size={14} />
             </button>
           )}
+        </div>
+        {/* LỌC GIỜ KẾ HOẠCH — lệnh đã nhập đủ giờ bắt đầu + kết thúc lúc làm kế hoạch hay chưa. */}
+        <div className="flex items-center gap-1 rounded-control border border-line p-0.5" title="Lọc theo giờ bắt đầu + kết thúc kế hoạch của lệnh">
+          {LOC_GIO.map(([m, nhan]) => (
+            <button key={m || 'ALL'} type="button" onClick={() => setLocGio(m)}
+              className={`rounded-[10px] px-2.5 py-1 text-xs font-medium ${locGio === m ? 'bg-primary text-white' : 'text-ink-soft hover:bg-surface-muted'}`}>
+              {nhan} <span className={locGio === m ? 'opacity-80' : 'text-ink-soft'}>({fmtNum(demGio[m] || 0)})</span>
+            </button>
+          ))}
         </div>
         <FilterToggle open={moLoc} count={soLoc} onClick={() => setMoLoc((v) => !v)} />
       </div>
@@ -392,7 +425,7 @@ export default function ReleaseListModal({ open, onClose }) {
               <tr><td colSpan={soCot} className="px-3 py-8 text-center text-ink-soft">Đang tải...</td></tr>
             ) : viewItems.length === 0 ? (
               <tr><td colSpan={soCot} className="px-3 py-8 text-center text-ink-soft">
-                {soLoc ? 'Không có dòng nào khớp ô tìm / bộ lọc'
+                {soLoc || locGio || locDangO.length ? 'Không có dòng nào khớp ô tìm / bộ lọc'
                   : chip ? `Không có đợt sản xuất nào thuộc ${nhanChip(chip)} trong ngày này`
                     : 'Không có đợt sản xuất release cho ngày này'}
               </td></tr>

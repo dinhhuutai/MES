@@ -260,6 +260,7 @@ export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, onClose, o
       <Toast toast={toast} />
       {/* Trả về Giao nhận sửa thông tin — gửi xong phần in rời READY ⇒ đóng panel + tải lại bảng. */}
       <TraVeGnModal open={gnOpen} onClose={() => setGnOpen(false)} nguon="KT" onToast={onToast || show}
+        dotVaiIds={dotVaiIds}
         phanIn={detail?.phan_in ? { id: phanInId, ma_phan: detail.phan_in.ma_phan } : null}
         onDone={() => { onChanged?.(); onClose?.(); }} />
     </SidePanel>

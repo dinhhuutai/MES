@@ -44,6 +44,9 @@ export const getBaoCaoKiemHang = (tuNgay, denNgay) =>
 // Báo cáo sửa hàng (09/10/2026) — kết quả sửa · kiểm hàng sửa · tồn sửa · nghẽn theo dây chuyền, khoảng ngày SX.
 export const getBaoCaoSuaHang = (tuNgay, denNgay) =>
   client.get('/production/bao-cao-sua-hang', { params: { tuNgay, denNgay } });
+// Báo cáo phân loại lỗi (11/10/2026) — mã lỗi × dây chuyền/chuyền/thợ in/khách hàng (sửa · hủy · % lỗi).
+export const getBaoCaoPhanLoaiLoi = (tuNgay, denNgay) =>
+  client.get('/production/bao-cao-phan-loai-loi', { params: { tuNgay, denNgay } });
 export const listToIn = (params) => client.get('/production/to-in', { params });
 export const createToIn = (body) => client.post('/production/to-in', body);
 export const updateToIn = (id, body) => client.patch(`/production/to-in/${id}`, body);

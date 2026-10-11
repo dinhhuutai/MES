@@ -156,14 +156,30 @@ export function apDungThay(chuoi, thay) {
   return s;
 }
 
+// TRƯỜNG DỰ PHÒNG (11/10/2026, người dùng yêu cầu: "không có dữ liệu trường này thì lấy trường khác"):
+//   `duPhong` = [{ ma, kieu, dinh_dang }] theo THỨ TỰ ƯU TIÊN. Trường chính KHÔNG có dữ liệu (null / chuỗi rỗng /
+//   toàn khoảng trắng — số 0 vẫn là có dữ liệu) ⇒ lấy trường dự phòng ĐẦU TIÊN có dữ liệu, định dạng theo kiểu
+//   của CHÍNH trường đó (ngày thiếu định dạng riêng thì dùng định dạng của trường chính). Không trường nào có
+//   ⇒ rỗng như cũ. Luật `thay` (đổi cách hiển thị) chạy SAU, trên giá trị đã chọn.
+//   vd ô "Thợ in": trường chính `tho_in`, dự phòng `chuyen_truong` ⇒ chuyền Máy chưa phân thợ thì in chuyền trưởng.
+export const coDuLieuTruong = (v) => !(v == null || (typeof v === 'string' && v.trim() === ''));
+// Trường THỰC SỰ được dùng: { ma, kieu, dinh_dang, la_du_phong } (panel thiết kế hiện "đang lấy từ…").
+export function chonTruong(data, ma, dinhDang, kieuTruong, duPhong) {
+  const chinh = { ma, kieu: kieuTruong, dinh_dang: dinhDang, la_du_phong: false };
+  if (coDuLieuTruong(data ? data[ma] : null) || !Array.isArray(duPhong)) return chinh;
+  const d = duPhong.find((x) => x && x.ma && x.ma !== ma && coDuLieuTruong(data ? data[x.ma] : null));
+  return d ? { ma: d.ma, kieu: d.kieu || 'chu', dinh_dang: d.dinh_dang || dinhDang, la_du_phong: true } : chinh;
+}
+
 // Giá trị 1 trường dữ liệu, đã định dạng theo kiểu ô.
 // ⚠ EXPORT để panel thiết kế xem trước "cũ → mới" bằng ĐÚNG hàm của đường IN — tự tính lại ở panel là
 //   sớm muộn 2 bên lệch nhau (xem một kiểu in một kiểu).
-export function giaTriTruong(data, ma, dinhDang, kieuTruong, thay) {
-  const v = data ? data[ma] : '';
+export function giaTriTruong(data, ma, dinhDang, kieuTruong, thay, duPhong) {
+  const t = chonTruong(data, ma, dinhDang, kieuTruong, duPhong);
+  const v = data ? data[t.ma] : '';
   let out;
-  if (kieuTruong === 'ngay') out = dinhDangNgay(v, dinhDang);
-  else if (kieuTruong === 'so') out = fmtSo(v);
+  if (t.kieu === 'ngay') out = dinhDangNgay(v, t.dinh_dang);
+  else if (t.kieu === 'so') out = fmtSo(v);
   else out = v == null ? '' : String(v);
   return apDungThay(out, thay);
 }
@@ -174,8 +190,10 @@ export function giaTriTruong(data, ma, dinhDang, kieuTruong, thay) {
 //   `giaTriTruong` trực tiếp ở 2 nơi nữa.
 // ⚠ Luật ở đây đổi LUÔN NỘI DUNG ĐƯỢC MÃ HÓA (khác ô chữ chỉ đổi chữ hiện ra) — cắt/thêm ký tự là máy
 //   quét ở KCS/Sửa/OQC đọc ra chuỗi khác `ma_tem` gốc. Panel thiết kế có cảnh báo đỏ nhắc điều này.
+// Ô mã cũng có trường dự phòng (`cell.du_phong`, cùng nghĩa với mảnh trường) — luôn mã hóa dạng CHỮ thô.
 export function giaTriMa(cell, data) {
-  return giaTriTruong(data, (cell && cell.ma_qr) || 'ma_tem', null, 'chu', cell && cell.thay);
+  const duPhong = cell && Array.isArray(cell.du_phong) ? cell.du_phong.map((d) => ({ ma: d && d.ma, kieu: 'chu' })) : null;
+  return giaTriTruong(data, (cell && cell.ma_qr) || 'ma_tem', null, 'chu', cell && cell.thay, duPhong);
 }
 
 // Nội dung 1 ô = nối các mảnh `phan` (chữ cố định + trường dữ liệu).
@@ -193,7 +211,7 @@ export function noiDungO(o, data, truongMap) {
       const kieu = p.kieu
         || (truongMap && truongMap[p.ma] ? truongMap[p.ma].kieu : null)
         || (p.dinh_dang ? 'ngay' : 'chu');
-      return giaTriTruong(data, p.ma, p.dinh_dang, kieu, p.thay);
+      return giaTriTruong(data, p.ma, p.dinh_dang, kieu, p.thay, p.du_phong);
     }
     return '';
   }).join('');

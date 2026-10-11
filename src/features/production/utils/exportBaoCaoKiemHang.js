@@ -62,7 +62,9 @@ const COT_SO = [
   { header: '% K.đạt', width: 10, num: true, fmt: PT, value: (x) => x.ty_le_khong_dat },
 ];
 
-export default async function exportBaoCaoKiemHang(data, { chiTiet, moTaLoc = '' } = {}) {
+// `bangChieu` (11/10/2026, tùy chọn) = bảng tổng hợp theo chiều đang xem trên trang ⇒ thêm 1 sheet "Theo <chiều>":
+//   { ten: 'Khách hàng' | 'Thợ in' | 'Chuyền' | 'Chi tiết phần in', laChiTietPhan, rows, tong }.
+export default async function exportBaoCaoKiemHang(data, { chiTiet, moTaLoc = '', bangChieu = null } = {}) {
   const ExcelJS = (await import('exceljs')).default || (await import('exceljs'));
   const wb = new ExcelJS.Workbook();
   const khoang = data.tu_ngay === data.den_ngay
@@ -85,6 +87,23 @@ export default async function exportBaoCaoKiemHang(data, { chiTiet, moTaLoc = ''
     + `${data.chua_phan_loai ? ` (${data.chua_phan_loai} lượt có hàng hư CHƯA phân loại — đang tính là sửa)` : ''}`])
     .getCell(1).font = { italic: true, size: 10, color: { argb: 'FF6B7280' } };
 
+  // ── Sheet theo CHIỀU đang xem (Chuyền / Khách hàng / Thợ in / Chi tiết phần in) ──
+  if (bangChieu && Array.isArray(bangChieu.rows)) {
+    const chu = (header, key, width = 18) => ({ header, width, value: (x) => x[key] || '' });
+    const cotC = bangChieu.laChiTietPhan
+      ? [chu('Chuyền', 'ma_chuyen', 12), chu('Khách hàng', 'khach', 14), chu('PO', 'po'), chu('Mã hàng', 'ma_hang', 20),
+        chu('Màu vải', 'mau_vai', 16), chu('Kích vải', 'kich_vai', 12), chu('Kích phim', 'kich_phim', 12),
+        chu('Code phần', 'ma_phan', 26), chu('Thợ in', 'tho_ds', 26), ...COT_SO]
+      : [{ header: bangChieu.ten, width: 30, value: (x) => x.ten }, ...COT_SO];
+    const wsC = wb.addWorksheet(`Theo ${bangChieu.ten}`.slice(0, 31));
+    wsC.columns = cotC.map((c) => ({ width: c.width }));
+    dauTrang(wsC, cotC.length, `KẾT QUẢ KIỂM TRA CLSP THEO ${bangChieu.ten.toUpperCase()}`, `${phuDe}${moTaLoc ? ` · lọc: ${moTaLoc}` : ''}`);
+    tieuDeBang(wsC, cotC);
+    wsC.views = [{ state: 'frozen', ySplit: wsC.rowCount }];
+    bangChieu.rows.forEach((x, i) => dong(wsC, cotC, x, { nen: i % 2 ? 'FFF8F9FB' : null }));
+    if (bangChieu.tong) dong(wsC, cotC, { ...bangChieu.tong, ten: 'Tổng', ma_chuyen: 'Tổng' }, { dam: true, nen: 'FFDCE7F7' });
+  }
+
   // ── Sheet 2: Chi tiết ──────────────────────────────────────────────────────
   const rows = chiTiet || data.chi_tiet || [];
   const cot2 = [
@@ -100,6 +119,9 @@ export default async function exportBaoCaoKiemHang(data, { chiTiet, moTaLoc = ''
     { header: 'Đơn hàng', width: 18, value: (x) => x.po || '' },
     { header: 'Mã hàng', width: 18, value: (x) => x.ma_hang || '' },
     { header: 'Màu vải', width: 16, value: (x) => x.mau_vai || '' },
+    { header: 'Kích vải', width: 12, value: (x) => x.kich_vai || '' },
+    { header: 'Kích phim', width: 12, value: (x) => x.kich_phim || '' },
+    { header: 'Thợ in', width: 26, value: (x) => x.tho_ds || '' },
     { header: 'SL kiểm', width: 10, num: true, fmt: SO, value: (x) => x.sl_kiem },
     { header: 'SL đạt', width: 10, num: true, fmt: SO, value: (x) => x.sl_dat },
     { header: 'SL sửa', width: 10, num: true, fmt: SO, value: (x) => x.sl_sua },

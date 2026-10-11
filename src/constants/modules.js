@@ -69,6 +69,8 @@ export const MODULES = [
       { ten: 'Báo cáo kiểm hàng', route: '/san-xuat/bao-cao-kiem-hang', perm: ['PROD_RUN', 'PROD_MONITOR', 'KCS', 'PHAN_LOAI_LOI'] },
       // Báo cáo sửa hàng (09/10/2026) — khuôn tờ xưởng: kết quả sửa · kiểm hàng sửa · tồn sửa · nghẽn theo dây chuyền.
       { ten: 'Báo cáo sửa hàng', route: '/san-xuat/bao-cao-sua-hang', perm: ['PROD_RUN', 'PROD_MONITOR', 'SUA', 'KCS', 'PHAN_LOAI_LOI'] },
+      // Báo cáo phân loại lỗi (11/10/2026) — khuôn tờ xưởng "Báo cáo PLL": mã lỗi × dây chuyền / chuyền / thợ in / khách hàng.
+      { ten: 'Báo cáo phân loại lỗi', route: '/san-xuat/bao-cao-phan-loai-loi', perm: ['PROD_RUN', 'PROD_MONITOR', 'KCS', 'SUA', 'PHAN_LOAI_LOI'] },
       // Danh sách tem in + 4 danh mục GỘP THÀNH 1 TRANG có dải toggle (24/09/2026) — mỗi toggle hiện
       // theo đúng quyền của trang cũ; `perm` ở đây = HỢP các quyền đó. Đặt cuối module (màn tra cứu/cấu hình).
       { ten: 'Tem in & danh mục', route: '/san-xuat/danh-muc',

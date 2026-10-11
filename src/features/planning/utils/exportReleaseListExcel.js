@@ -6,7 +6,7 @@
 //   (`mucLenh` trong bộ cột) được **mergeCells** dọc trên các dòng của cùng 1 đợt ⇒ mở Excel ra giống hệt
 //   bảng trên màn hình. Dùng chung `gopTheoLenh` với modal.
 import { gopTheoLenh } from './gopDongRelease';
-import { COT_CHECKLIST, dongTieuDe, tieuDeChecklist } from './cotChecklistRelease';
+import { COT_CHECKLIST, dongTieuDe, tieuDeChecklist, tongGiaRelease } from './cotChecklistRelease';
 
 const XANH = 'FFE2EFDA';   // nền tiêu đề như mẫu
 const DO = 'FFFF0000';
@@ -71,7 +71,8 @@ export default async function exportReleaseListExcel(items, meta, { chip = '', f
       cell.border = border;
       cell.font = { name: 'Times New Roman', size: 11, bold: ['tt', 'chuyen', 'khach', 'po', 'ten_hang', 'mau_vai', 'kich_vai', 'kich_phim', 'tinh_chat_in', 'sldh', 'slnv', 'sl_release', 'gio_bd', 'gio_kt'].includes(c?.key) };
       cell.alignment = { vertical: 'middle', horizontal: c?.num || ['gio_bd', 'gio_kt', 'han_ht', 'kt_khuon', 'kt_muc', 'kt_test', 'tinh_chat_in'].includes(c?.key) ? 'center' : 'left', wrapText: true };
-      if (c?.num && typeof cell.value === 'number') cell.numFmt = '#,##0';
+      // Đơn giá có thể lẻ (6062,5) — số nguyên thì không kéo đuôi thập phân.
+      if (c?.num && typeof cell.value === 'number') cell.numFmt = c.gia && !Number.isInteger(cell.value) ? '#,##0.##' : '#,##0';
     });
     if (r._dau) dongDau.push({ r, rowNumber: row.number });
   }
@@ -81,6 +82,30 @@ export default async function exportReleaseListExcel(items, meta, { chip = '', f
   for (const { r, rowNumber } of dongDau) {
     if (r._span <= 1) continue;
     for (const col of cotGop) ws.mergeCells(rowNumber, col, rowNumber + r._span - 1, col);
+  }
+
+  // DÒNG TỔNG (11/10/2026): Σ SL Release · Σ Đơn giá · Thành tiền = Σ (SL release × đơn giá) — tính trên đúng
+  // tập đang xuất, cùng hàm với dải số tổng trên màn hình.
+  const iSl = cols.findIndex((c) => c.key === 'sl_release') + 1;
+  const iGia = cols.findIndex((c) => c.key === 'don_gia') + 1;
+  if (ds.length && iSl > 0 && iGia > 0) {
+    const tong = tongGiaRelease(ds);
+    const slRelease = ds.reduce((a, r) => a + (Number(r.sl_release_phan ?? r.so_luong_release) || 0), 0);
+    const dongTong = (nhan, giaTri) => {
+      const row = ws.addRow(cols.map(() => ''));
+      row.getCell(1).value = nhan;
+      if (iSl > 2) ws.mergeCells(row.number, 1, row.number, iSl - 1);
+      Object.entries(giaTri).forEach(([col, v]) => { row.getCell(Number(col)).value = v; });
+      row.eachCell({ includeEmpty: true }, (cell, ci) => {
+        cell.border = border;
+        cell.font = { name: 'Times New Roman', size: 11, bold: true };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: XANH } };
+        cell.alignment = { vertical: 'middle', horizontal: ci === 1 ? 'right' : 'center' };
+        if (typeof cell.value === 'number') cell.numFmt = Number.isInteger(cell.value) ? '#,##0' : '#,##0.##';
+      });
+    };
+    dongTong('TỔNG CỘNG', { [iSl]: slRelease, [iGia]: tong.tong_don_gia });
+    dongTong(`THÀNH TIỀN (SL release × đơn giá)${tong.so_thieu_gia ? ` — ${tong.so_thieu_gia} dòng chưa có giá` : ''}`, { [iGia]: tong.thanh_tien });
   }
 
   const buf = await wb.xlsx.writeBuffer();

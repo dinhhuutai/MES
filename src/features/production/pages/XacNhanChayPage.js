@@ -27,6 +27,7 @@ import { fmtNum, fmtDate } from '../../../utils/format';
 import { Select } from '../../../components/common/controls';
 import DateRangePicker from '../../../components/common/DateRangePicker';
 import exportCheckpointExcel, { moTaBoLoc } from '../../../utils/exportCheckpointExcel';
+import { thoInHienThi } from '../../../utils/thoIn';
 import ChipTabs from '../../../components/common/ChipTabs';
 import { LOAI_TABS, hopChipChuyen, nhanChip, demChip, locSiSoTheoChip } from '../../../utils/khuChuyen';
 import RunPanel from '../components/RunPanel';
@@ -212,25 +213,53 @@ export default function XacNhanChayPage() {
 
   const selChuyen = (chuyen || []).find((x) => x.id === filters.chuyenId);
   // Bảng "Đang chạy" lấy từ `monitorRunning` — bộ cột KHÁC danh sách lệnh nên khai riêng.
+  // ⚠ 11/10/2026 — bộ cột theo MẪU SỔ XƯỞNG (người dùng gửi ảnh tiêu đề vàng): Khách hàng · Đơn hàng · Mã hàng ·
+  //   Màu vải · Kích vải · Kích phim · Màu in · Độ in · Tính chất in · Barcode · NGC · SL IN · SLVH · Phút · Tổ in ·
+  //   TB in · Thợ · Ca · Ngày ca · Ngày SX KH — đứng ĐẦU, đúng thứ tự mẫu; các cột cũ của MES nối phía sau.
+  //   · Barcode = mã vạch phần in (TDTHĐH) · SLVH = SL vải hủy của phiếu · Phút = Σ giờ SX nhập ở ô In tem, chưa
+  //     tem nào có giờ ⇒ số phút từ lúc xác nhận chạy trừ thời gian ngừng · TB in = SL IN ÷ giờ in (pcs/giờ) ·
+  //     Thợ = thợ in phân công (chuyền Máy lấy chuyền trưởng — `utils/thoIn.js`).
+  const phutIn = (r) => {
+    const p = Number(r.phut_in) || 0;
+    if (p > 0) return p;
+    if (!r.tg_bd) return null;
+    const chay = Math.round((Date.now() - new Date(r.tg_bd).getTime()) / 60000) - (Number(r.ngung_phut) || 0);
+    return chay > 0 ? chay : null;
+  };
   const doExcelRunning = () => exportCheckpointExcel({
     cols: [
+      { header: 'Khách hàng', width: 16, value: (r) => r.ten_khach_hang || '' },
+      { header: 'Đơn hàng', width: 18, value: (r) => r.ma_don_hang || '' },
+      { header: 'Mã hàng', width: 22, value: (r) => r.ma_hang || '' },
+      { header: 'Màu vải', width: 16, value: (r) => r.mau_vai || '' },
+      { header: 'Kích vải', width: 12, value: (r) => r.kich_vai || '' },
+      { header: 'Kích phim', width: 12, value: (r) => r.kich_phim || '' },
+      { header: 'Màu in', width: 12, value: (r) => r.mau_in || '' },
+      { header: 'Độ in', width: 10, value: (r) => r.do_in || '' },
+      { header: 'Tính chất in', width: 13, value: (r) => r.tinh_chat_in || '' },
+      { header: 'Barcode', width: 18, value: (r) => r.ma_vach_pin || '' },
+      { header: 'NGC', width: 10, value: (r) => r.nha_gia_cong || '' },
+      { header: 'SL IN', width: 10, num: true, value: (r) => (r.printed == null ? null : Number(r.printed)) },
+      { header: 'SLVH', width: 9, num: true, value: (r) => (r.sl_vai_huy ? Number(r.sl_vai_huy) : null) },
+      { header: 'Phút', width: 9, num: true, value: phutIn },
+      { header: 'Tổ in', width: 9, center: true, value: (r) => r.to_in || '' },
+      { header: 'TB in (pcs/giờ)', width: 13, num: true,
+        value: (r) => { const p = phutIn(r); const sl = Number(r.printed) || 0; return p && sl ? Math.round((sl / p) * 60) : null; } },
+      { header: 'Thợ', width: 26, value: thoInHienThi },
+      { header: 'Ca', width: 8, center: true, value: (r) => r.ca || '' },
+      { header: 'Ngày ca', width: 12, type: 'date', center: true, value: (r) => r.ngay_ca },
+      { header: 'Ngày SX kế hoạch', width: 15, type: 'date', center: true, value: (r) => r.ngay_ke_hoach },
       { header: 'Mã đợt SX', width: 16, value: (r) => r.ma_lenh_san_xuat || '' },
       { header: 'Chuyền', width: 16, value: (r) => r.ten_chuyen || r.ma_chuyen || '' },
       { header: 'Code phần', width: 24, value: (r) => r.ma_phan || r.phan_list || '' },
-      { header: 'Khách hàng', width: 18, value: (r) => r.ten_khach_hang || '' },
-      { header: 'Đơn hàng', width: 18, value: (r) => r.ma_don_hang || '' },
-      { header: 'Mã hàng', width: 18, value: (r) => r.ma_hang || '' },
-      { header: 'Màu vải', width: 18, value: (r) => r.mau_vai || '' },
-      { header: 'Kích vải', width: 14, value: (r) => r.kich_vai || '' },
-      { header: 'Kích phim', width: 14, value: (r) => r.kich_phim || '' },
       { header: 'SL release', width: 12, num: true, value: (r) => (r.target == null ? null : Number(r.target)) },
-      { header: 'Đã in', width: 12, num: true, value: (r) => (r.printed == null ? null : Number(r.printed)) },
       { header: 'Số tem', width: 10, num: true, value: (r) => (r.so_tem == null ? null : Number(r.so_tem)) },
+      { header: 'Chuyền trưởng', width: 20, value: (r) => r.chuyen_truong || '' },
+      { header: 'Ca trưởng', width: 20, value: (r) => r.ca_truong || '' },
       { header: 'Trạng thái', width: 13, center: true, value: (r) => (r.dang_ngung ? 'Đang ngừng' : 'Đang chạy'),
         red: (r) => !!r.dang_ngung },
       { header: 'Ngừng (phút)', width: 12, num: true, value: (r) => (r.ngung_phut ? Number(r.ngung_phut) : null) },
       { header: 'Hạn giao', width: 13, type: 'date', center: true, value: (r) => r.han_giao_hang },
-      { header: 'Ngày SX kế hoạch', width: 15, type: 'date', center: true, value: (r) => r.ngay_ke_hoach },
       { header: 'Xác nhận chạy', width: 17, center: true,
         value: (r) => (r.tg_bd ? new Date(r.tg_bd).toLocaleString('vi-VN') : '') },
     ],

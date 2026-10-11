@@ -37,6 +37,36 @@ export const maChuyenIn = (r) => {
   return loai === 'BAN' || loai === 'ROBOT' ? chuanMaChuyen(ma) : ma; // mã ERP (`utils/maChuyen.js`)
 };
 
+// Giá từ API là chuỗi NUMERIC ("6062.50") ⇒ đổi sang số; trống / không phải số ⇒ '' (ô để trống).
+export const soGia = (v) => {
+  if (v == null || v === '') return '';
+  const n = Number(v);
+  return Number.isFinite(n) ? n : '';
+};
+// Hiện giá: tối đa 2 số lẻ, không kéo đuôi ",00".
+export const fmtGia = (v) => (v === '' || v == null ? '' : Number(v).toLocaleString('vi-VN', { maximumFractionDigits: 2 }));
+
+// Tổng theo đơn giá của tập ĐANG XEM (gương BE `planning.service tongGiaRelease`):
+//   `tong_don_gia` = Σ đơn giá các dòng · `thanh_tien` = Σ (SL release × đơn giá) · `so_thieu_gia` = số dòng
+//   chưa có đơn giá (tổng còn thiếu các dòng này).
+export function tongGiaRelease(items) {
+  let tongDonGia = 0; let thanhTien = 0; let thieu = 0;
+  for (const r of items || []) {
+    const gia = soGia(r.don_gia);
+    if (gia === '') { thieu += 1; continue; }
+    tongDonGia += gia;
+    thanhTien += gia * (Number(r.sl_release_phan ?? r.so_luong_release) || 0);
+  }
+  const tron = (n) => Math.round(n * 100) / 100;
+  return { tong_don_gia: tron(tongDonGia), thanh_tien: tron(thanhTien), so_thieu_gia: thieu };
+}
+
+// LỌC "CÓ GIỜ / KHÔNG CÓ GIỜ" (11/10/2026): giờ BĐ + giờ KT kế hoạch của LỆNH (nhập lúc làm kế hoạch).
+//   'CO' = đủ cả giờ bắt đầu và kết thúc · 'KHONG' = thiếu ít nhất một · '' = không lọc.
+export const LOC_GIO = [['', 'Tất cả'], ['CO', 'Có giờ'], ['KHONG', 'Không có giờ']];
+export const coGioKeHoach = (r) => !!(r && r.tg_bd_kh && r.tg_kt_kh);
+export const hopLocGio = (r, loc) => !loc || (loc === 'CO' ? coGioKeHoach(r) : !coGioKeHoach(r));
+
 const daIn = (r) => Number(r.sl_da_in) > 0;
 const soSauIn = (k) => (r) => (daIn(r) && r[k] != null ? Number(r[k]) || 0 : '');
 const trong = () => '';
@@ -56,6 +86,8 @@ export const COT_CHECKLIST = [
   { key: 'sl_da_in', header: 'SL đã in', width: 8, num: true, mucLenh: true, value: (r) => (r.sl_da_in == null ? '' : Number(r.sl_da_in)) },
   { key: 'sl_giao', header: 'SL Giao', width: 8, num: true, mucLenh: true, value: (r) => (r.sl_da_giao == null ? '' : Number(r.sl_da_giao)) },
   { key: 'sl_release', header: 'SL Release', width: 10, num: true, value: (r) => Number(r.sl_release_phan ?? r.so_luong_release) || 0 },
+  // Đơn giá của PHẦN IN (mig 113, ERP `Dongia` = GiaIn + Giaep + giainkieng). Phần in ERP chưa gửi giá ⇒ trống.
+  { key: 'don_gia', header: 'Đơn giá', width: 10, num: true, gia: true, value: (r) => soGia(r.don_gia) },
   { key: 'gio_bd', header: 'Giờ BĐ', nhom: 'Hạn hoàn thành', width: 8, mucLenh: true, value: (r) => gio24(r.tg_bd_kh) },
   { key: 'gio_kt', header: 'Giờ KT', nhom: 'Hạn hoàn thành', width: 8, mucLenh: true, value: (r) => gio24(r.tg_kt_kh) },
   { key: 'han_ht', header: 'Hạn hoàn thành', nhom: 'Hạn hoàn thành', width: 11, value: (r) => ngayDMY(r.han_giao) },

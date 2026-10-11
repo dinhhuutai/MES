@@ -62,6 +62,7 @@ import BaoCaoSanXuatPage from './features/production/pages/BaoCaoSanXuatPage';
 import BaoCaoDungChuyenPage from './features/production/pages/BaoCaoDungChuyenPage';
 import BaoCaoKiemHangPage from './features/production/pages/BaoCaoKiemHangPage';
 import BaoCaoSuaHangPage from './features/production/pages/BaoCaoSuaHangPage';
+import BaoCaoPhanLoaiLoiPage from './features/production/pages/BaoCaoPhanLoaiLoiPage';
 import ReadyQcPage from './features/quality/pages/ReadyQcPage';
 import KcsPage from './features/quality/pages/KcsPage';
 import SuaPage from './features/quality/pages/SuaPage';
@@ -105,6 +106,7 @@ const PAGES = {
   '/san-xuat/bao-cao-dung-chuyen': <BaoCaoDungChuyenPage />,
   '/san-xuat/bao-cao-kiem-hang': <BaoCaoKiemHangPage />,
   '/san-xuat/bao-cao-sua-hang': <BaoCaoSuaHangPage />,
+  '/san-xuat/bao-cao-phan-loai-loi': <BaoCaoPhanLoaiLoiPage />,
   '/san-xuat/kcs': <KcsPage />,
   '/san-xuat/sua': <SuaPage />,
   '/san-xuat/phan-loai-loi': <PhanLoaiLoiPage />,

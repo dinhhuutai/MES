@@ -64,24 +64,25 @@ const COT_SO = [
   so('ng_phan_xong'), so('ng_sl_xong'), so('ng_phan_chua'), so('ng_sl_chua'),
 ];
 
-// Tiêu đề 3 tầng gộp ô của sheet chính (cột 1 = Dây chuyền, 2..18 = COT_SO).
-function tieuDeBaTang(ws) {
+// Tiêu đề 3 tầng gộp ô (các cột thông tin bên trái `nhanTrai`, sau đó 17 cột COT_SO). Sheet chính: 1 cột "Dây chuyền".
+function tieuDeBaTang(ws, nhanTrai = ['Dây chuyền']) {
   const r1 = ws.rowCount + 1;
   const r2 = r1 + 1;
   const r3 = r1 + 2;
+  const k = nhanTrai.length - 1; // số cột lệch so với bố cục 1 cột trái
   const gop = (hang1, cot1, hang2, cot2, v) => {
     if (hang1 !== hang2 || cot1 !== cot2) ws.mergeCells(hang1, cot1, hang2, cot2);
     oTieuDe(ws.getCell(hang1, cot1), v);
   };
-  gop(r1, 1, r3, 1, 'Dây chuyền');
-  gop(r1, 2, r2, 5, 'Kết quả sửa');
-  gop(r1, 6, r2, 10, 'Kết quả kiểm hàng sửa');
-  gop(r1, 11, r3, 11, 'Tồn Sửa');
-  gop(r1, 12, r1, 18, 'Nghẽn');
-  gop(r2, 12, r2, 14, 'Hiện trạng');
-  gop(r2, 15, r2, 18, 'Kết quả xử lý');
-  ['Tồn đầu', 'Nhận', 'Đã sửa', 'Chưa sửa', 'Tồn đầu', 'Nhận', 'Đạt', 'Hủy', 'Chưa kiểm'].forEach((v, i) => oTieuDe(ws.getCell(r3, 2 + i), v));
-  ['Phần', 'SL', 'Thời gian nghẽn (giờ)', 'Phần xong', 'SL xong', 'Phần chưa', 'SL chưa'].forEach((v, i) => oTieuDe(ws.getCell(r3, 12 + i), v));
+  nhanTrai.forEach((v, i) => gop(r1, 1 + i, r3, 1 + i, v));
+  gop(r1, 2 + k, r2, 5 + k, 'Kết quả sửa');
+  gop(r1, 6 + k, r2, 10 + k, 'Kết quả kiểm hàng sửa');
+  gop(r1, 11 + k, r3, 11 + k, 'Tồn Sửa');
+  gop(r1, 12 + k, r1, 18 + k, 'Nghẽn');
+  gop(r2, 12 + k, r2, 14 + k, 'Hiện trạng');
+  gop(r2, 15 + k, r2, 18 + k, 'Kết quả xử lý');
+  ['Tồn đầu', 'Nhận', 'Đã sửa', 'Chưa sửa', 'Tồn đầu', 'Nhận', 'Đạt', 'Hủy', 'Chưa kiểm'].forEach((v, i) => oTieuDe(ws.getCell(r3, 2 + k + i), v));
+  ['Phần', 'SL', 'Thời gian nghẽn (giờ)', 'Phần xong', 'SL xong', 'Phần chưa', 'SL chưa'].forEach((v, i) => oTieuDe(ws.getCell(r3, 12 + k + i), v));
   [r1, r2, r3].forEach((r) => { ws.getRow(r).height = 22; });
   ws.getRow(r3).height = 32;
 }
@@ -98,10 +99,13 @@ const cotTem = (them) => [
   { header: 'Đơn hàng', width: 18, value: (x) => x.po || '' },
   { header: 'Mã hàng', width: 18, value: (x) => x.ma_hang || '' },
   { header: 'Màu vải', width: 16, value: (x) => x.mau_vai || '' },
+  { header: 'Thợ in', width: 26, value: (x) => x.tho_ds || '' },
   ...them.cuoi,
 ];
 
-export default async function exportBaoCaoSuaHang(data, { tems, luot, moTaLoc = '' } = {}) {
+// `bangChieu` (11/10/2026, tùy chọn) = bảng tổng hợp theo chiều đang xem ⇒ thêm 1 sheet "Theo <chiều>":
+//   { ten, cot: [{ l, get }] (cột thông tin bên trái đang hiện), rows, tong }.
+export default async function exportBaoCaoSuaHang(data, { tems, luot, moTaLoc = '', bangChieu = null } = {}) {
   const ExcelJS = (await import('exceljs')).default || (await import('exceljs'));
   const wb = new ExcelJS.Workbook();
   const khoang = data.tu_ngay === data.den_ngay
@@ -126,6 +130,19 @@ export default async function exportBaoCaoSuaHang(data, { tems, luot, moTaLoc = 
     'MES ghi kết quả kiểm cùng lúc xác nhận sửa ⇒ Kiểm hàng sửa: Nhận = Đã sửa, không có tồn đầu / chưa kiểm; Tồn Sửa = Chưa sửa + Chưa kiểm.',
     'Nghẽn đo theo tem từ lúc vào Sửa (KCS đầu có hư) + SLA trạm Sửa · Phần = số phần in · Chưa = còn chờ sửa cuối kỳ đã quá SLA · Xong = sửa xong trong kỳ sau khi quá SLA.',
   ].forEach((g) => { ws1.addRow([g]).getCell(1).font = { italic: true, size: 10, color: { argb: 'FF6B7280' } }; });
+
+  // ── Sheet theo CHIỀU đang xem (Chuyền / Khách hàng / Thợ in / Chi tiết phần in) ──
+  if (bangChieu && Array.isArray(bangChieu.rows) && Array.isArray(bangChieu.cot) && bangChieu.cot.length) {
+    const cotTrai = bangChieu.cot.map((c, i) => ({ header: c.l, width: i === 0 ? 24 : 18, value: (x) => (x._tong ? (i === 0 ? 'Tổng cộng' : '') : (c.get(x) || '')) }));
+    const cotC = [...cotTrai, ...COT_SO];
+    const wsC = wb.addWorksheet(`Theo ${bangChieu.ten}`.slice(0, 31));
+    wsC.columns = cotC.map((c) => ({ width: c.width }));
+    dauTrang(wsC, cotC.length, `BÁO CÁO SỬA HÀNG THEO ${bangChieu.ten.toUpperCase()}`, `${phuDe}${moTaLoc ? ` · lọc: ${moTaLoc}` : ''}`);
+    tieuDeBaTang(wsC, cotTrai.map((c) => c.header));
+    wsC.views = [{ state: 'frozen', xSplit: 1, ySplit: wsC.rowCount }];
+    bangChieu.rows.forEach((x, i) => dong(wsC, cotC, x, { nen: i % 2 ? 'FFF8F9FB' : null }));
+    if (bangChieu.tong) dong(wsC, cotC, { ...bangChieu.tong, _tong: true }, { dam: true, nen: 'FFDCE7F7' });
+  }
 
   // ── Sheet 2: Chi tiết theo tem ─────────────────────────────────────────────
   const rows2 = tems || data.chi_tiet || [];

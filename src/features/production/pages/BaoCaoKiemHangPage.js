@@ -13,6 +13,10 @@ import { getBaoCaoKiemHang } from '../../../services/productionService';
 import { ngayLocalISO, fmtNum } from '../../../utils/format';
 import { khopNhieu, chuanTuKhoa } from '../../../utils/timKiem';
 import exportBaoCaoKiemHang from '../utils/exportBaoCaoKiemHang';
+import ChonChuyenNhieu from '../components/ChonChuyenNhieu';
+import {
+  CHIEU, dsChuyen, locChuyen, gomKiemHang, tongKiemHang, dayChuyenKiemHang, soTuNhien,
+} from '../utils/gomBaoCao';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // BÁO CÁO KẾT QUẢ KIỂM HÀNG (Sản xuất › Báo cáo kiểm hàng, 02/10/2026)
@@ -22,7 +26,34 @@ import exportBaoCaoKiemHang from '../utils/exportBaoCaoKiemHang';
 //   · Bấm dòng dây chuyền = mở/đóng các chuyền bên dưới; bấm dòng chuyền/dây chuyền (ô tên) = lọc chi tiết.
 //   · Ô tìm chỉ lọc bảng chi tiết. Excel = bảng dây chuyền + chi tiết ĐANG HIỆN.
 //   · Khoảng ngày chứa hôm nay ⇒ nghe socket, tải ngầm.
+// ⚠ 11/10/2026 — CHIỀU XEM của bảng tổng hợp: Dây chuyền (khuôn tờ xưởng) · Chuyền · Khách hàng · Thợ in · Chi tiết
+//   phần in (chuyền × code phần — như bảng "Chi tiết phần in" của Báo cáo sản xuất) + BỘ CHỌN CHUYỀN. Chọn chuyền
+//   ⇒ số tổng, bảng tổng hợp lẫn chi tiết đều tính lại trên các chuyền đó (gom từ `chi_tiet` bằng `utils/gomBaoCao`).
+//   "Thợ in" = thợ phụ trách của phiếu in ra tem (người đầu danh sách; chuyền Máy lấy chuyền trưởng).
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Chiều xem bảng tổng hợp. `tienTo` = tiền tố khóa lọc chi tiết khi bấm 1 dòng.
+const DS_CHIEU = [
+  { v: 'DC', label: 'Dây chuyền' },
+  { v: 'CH', label: 'Chuyền', tienTo: 'C' },
+  { v: 'KH', label: 'Khách hàng', tienTo: 'K' },
+  { v: 'TH', label: 'Thợ in', tienTo: 'T' },
+  { v: 'CT', label: 'Chi tiết phần in', tienTo: 'P' },
+];
+const khoaPhan = (r) => `${r.ma_chuyen || '—'}|${r.ma_phan || '—'}`;
+// Dòng chi tiết có khớp khóa lọc `loc` ('N:nhóm' | 'C:chuyền' | 'K:khách' | 'T:thợ' | 'P:chuyền|code phần') không.
+const hopLoc = (r, loc) => {
+  if (!loc) return true;
+  const gt = loc.slice(2);
+  switch (loc[0]) {
+    case 'N': return (r.nhom || 'KHAC') === gt;
+    case 'C': return CHIEU.CH.khoa(r) === gt;
+    case 'K': return CHIEU.KH.khoa(r) === gt;
+    case 'T': return CHIEU.TH.khoa(r) === gt;
+    case 'P': return khoaPhan(r) === gt;
+    default: return true;
+  }
+};
 
 const doiNgay = (iso, soNgay) => {
   const [y, m, d] = iso.split('-').map(Number);
@@ -154,12 +185,127 @@ function BangDayChuyen({ data, mo, onMo, loc, onLoc }) {
   );
 }
 
+// Bảng tổng hợp theo 1 chiều (Chuyền · Khách hàng · Thợ in): 1 dòng / khóa, bấm dòng = lọc chi tiết bên dưới.
+function BangTheoChieu({ tieuDe, nhan, rows, tong, tienTo, loc, onLoc }) {
+  return (
+    <div className="overflow-hidden rounded-card border border-line bg-surface">
+      <div className="flex items-center gap-2 border-b border-line px-4 py-3">
+        <Icon name="factory" size={16} className="text-primary" />
+        <h3 className="text-sm font-semibold text-ink">{tieuDe}</h3>
+        <span className="ml-auto text-xs text-ink-soft">Bấm 1 dòng để lọc chi tiết</span>
+      </div>
+      <div className="max-h-[52vh] overflow-auto">
+        <table className="w-full text-sm">
+          <thead className="sticky top-0 z-10 bg-surface-muted text-xs text-ink-soft">
+            <tr>
+              <th className="px-3 py-2 text-left font-medium">{nhan}</th>
+              <th className={TH}>SL kiểm</th><th className={TH}>SL đạt</th><th className={TH}>%Đạt</th>
+              <th className={TH}>SL sửa</th><th className={TH}>%Sửa</th><th className={TH}>SL hủy</th>
+              <th className={TH}>%Hủy</th><th className={TH}>% K.đạt</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 && (
+              <tr><td colSpan={9} className="px-4 py-8 text-center text-sm text-ink-soft">Không có lượt kiểm nào trong khoảng ngày này</td></tr>
+            )}
+            {rows.map((d) => {
+              const khoa = `${tienTo}:${d.key}`;
+              return (
+                <tr key={d.key} onClick={() => onLoc(loc === khoa ? null : khoa)}
+                  className={`cursor-pointer border-t border-line/60 transition-colors ${loc === khoa ? 'bg-primary-wash text-primary' : 'hover:bg-surface-muted/60'}`}>
+                  <td className="px-3 py-2">
+                    <span className="font-medium">{d.ten}</span>
+                    <span className="ml-1.5 text-[11px] text-ink-soft">{d.so_luot} lượt · {d.so_tem} tem</span>
+                  </td>
+                  <OSoDong x={d} />
+                </tr>
+              );
+            })}
+          </tbody>
+          {rows.length > 0 && (
+            <tfoot className="sticky bottom-0 border-t-2 border-line bg-surface-muted font-semibold text-ink">
+              <tr><td className="px-3 py-2">Tổng</td><OSoDong x={tong} /></tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// "Chi tiết phần in" — 1 dòng / (chuyền × code phần), ô Chuyền gộp dọc (khuôn bảng chi tiết Báo cáo sản xuất).
+function BangChiTietPhan({ rows, tong, loc, onLoc }) {
+  const span = useMemo(() => {
+    const sp = new Array(rows.length).fill(0);
+    for (let i = 0; i < rows.length;) {
+      let j = i;
+      while (j < rows.length && rows[j].ma_chuyen === rows[i].ma_chuyen) j += 1;
+      sp[i] = j - i; i = j;
+    }
+    return sp;
+  }, [rows]);
+  const td = 'px-3 py-2 max-w-[180px] truncate';
+  return (
+    <div className="overflow-hidden rounded-card border border-line bg-surface">
+      <div className="flex items-center gap-2 border-b border-line px-4 py-3">
+        <Icon name="list" size={16} className="text-primary" />
+        <h3 className="text-sm font-semibold text-ink">Kết quả kiểm hàng — chi tiết phần in</h3>
+        <span className="ml-auto text-xs text-ink-soft">Bấm 1 dòng để lọc các lượt kiểm</span>
+      </div>
+      <div className="max-h-[52vh] overflow-auto">
+        <table className="w-full min-w-max text-sm">
+          <thead className="sticky top-0 z-10 bg-surface-muted text-xs text-ink-soft">
+            <tr>
+              {['Chuyền', 'Khách hàng', 'PO', 'Mã hàng', 'Màu vải', 'Kích vải', 'Kích phim', 'Code phần', 'Thợ in'].map((c) => (
+                <th key={c} className="px-3 py-2 text-left font-medium whitespace-nowrap">{c}</th>
+              ))}
+              <th className={TH}>SL kiểm</th><th className={TH}>SL đạt</th><th className={TH}>%Đạt</th>
+              <th className={TH}>SL sửa</th><th className={TH}>%Sửa</th><th className={TH}>SL hủy</th>
+              <th className={TH}>%Hủy</th><th className={TH}>% K.đạt</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 && (
+              <tr><td colSpan={17} className="px-4 py-8 text-center text-sm text-ink-soft">Không có lượt kiểm nào trong khoảng ngày này</td></tr>
+            )}
+            {rows.map((d, i) => {
+              const khoa = `P:${d.key}`;
+              return (
+                <tr key={d.key} onClick={() => onLoc(loc === khoa ? null : khoa)}
+                  className={`cursor-pointer border-t border-line/60 transition-colors ${loc === khoa ? 'bg-primary-wash' : 'hover:bg-surface-muted/60'}`}>
+                  {span[i] > 0 && <td rowSpan={span[i]} className="border-r border-line/60 bg-surface px-3 py-2 align-middle font-semibold text-ink">{d.ma_chuyen || '—'}</td>}
+                  <td className={td} title={d.khach || ''}>{d.khach || '—'}</td>
+                  <td className={td} title={d.po || ''}>{d.po || '—'}</td>
+                  <td className={td} title={d.ma_hang || ''}>{d.ma_hang || '—'}</td>
+                  <td className={td} title={d.mau_vai || ''}>{d.mau_vai || '—'}</td>
+                  <td className={td}>{d.kich_vai || '—'}</td>
+                  <td className={td}>{d.kich_phim || '—'}</td>
+                  <td className={td} title={d.ma_phan || ''}>{d.ma_phan || '—'}</td>
+                  <td className={td} title={d.tho_ds || ''}>{d.tho_ds || '—'}</td>
+                  <OSoDong x={d} />
+                </tr>
+              );
+            })}
+          </tbody>
+          {rows.length > 0 && (
+            <tfoot className="sticky bottom-0 border-t-2 border-line bg-surface-muted font-semibold text-ink">
+              <tr><td colSpan={9} className="px-3 py-2">Tổng</td><OSoDong x={tong} /></tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export default function BaoCaoKiemHangPage() {
   const { toast, show } = useToast();
   const homNay = ngayLocalISO(new Date());
   const [khoang, setKhoang] = useState(() => NHANH[0].tinh(homNay));
   const [search, setSearch] = useState('');
-  const [loc, setLoc] = useState(null);      // 'N:<nhóm>' | 'C:<mã chuyền>'
+  const [loc, setLoc] = useState(null);      // 'N:<nhóm>' | 'C:<chuyền>' | 'K:<khách>' | 'T:<thợ>' | 'P:<chuyền|code phần>'
+  const [chieu, setChieu] = useState('DC');  // chiều xem bảng tổng hợp
+  const [chuyenChon, setChuyenChon] = useState([]); // bộ chọn chuyền — rỗng = mọi chuyền
   const [mo, setMo] = useState(() => new Set());
   const [data, setData] = useState(null);
   const [dangTai, setDangTai] = useState(false);
@@ -198,23 +344,55 @@ export default function BaoCaoKiemHangPage() {
   const cuKhoang = !!data && (data.tu_ngay !== tu || data.den_ngay !== den);
   const tenNhom = useMemo(() => new Map((data ? data.theo_day_chuyen : []).map((d) => [d.nhom, d.ten])), [data]);
   const kw = chuanTuKhoa(search);
-  const chiTiet = useMemo(() => (data ? data.chi_tiet : [])
-    .map((r) => ({ ...r, ten_nhom: tenNhom.get(r.nhom) || r.nhom }))
-    .filter((r) => (
-      (!loc || (loc.startsWith('N:') ? `N:${r.nhom}` === loc : `C:${r.ma_chuyen || '—'}` === loc))
-      && (!kw || khopNhieu([r.ma_tem, r.ma_chuyen, r.ma_lenh_san_xuat, r.ma_phan, r.khach, r.po, r.ma_hang, r.mau_vai, r.nguoi_kiem], kw))
-    )), [data, tenNhom, loc, kw]);
+  // Tập gốc sau BỘ CHỌN CHUYỀN — mọi bảng tổng hợp + ô số tổng tính trên tập này.
+  const chuyens = useMemo(() => dsChuyen(data ? data.chi_tiet : []), [data]);
+  const chonHopLe = useMemo(() => chuyenChon.filter((ma) => chuyens.some((c) => c.ma === ma)), [chuyenChon, chuyens]);
+  const goc = useMemo(() => locChuyen(data ? data.chi_tiet : [], chonHopLe)
+    .map((r) => ({ ...r, ten_nhom: tenNhom.get(r.nhom) || r.nhom })), [data, chonHopLe, tenNhom]);
+  const tongGoc = useMemo(() => tongKiemHang(goc), [goc]);
+  const bangDayChuyen = useMemo(() => ({ theo_day_chuyen: dayChuyenKiemHang(goc), tong: tongGoc }), [goc, tongGoc]);
+  const bangChieu = useMemo(() => {
+    if (chieu === 'CT') {
+      const thongTin = new Map();
+      goc.forEach((r) => {
+        const k = khoaPhan(r);
+        const x = thongTin.get(k) || { ...r, thoSet: new Set() };
+        (r.tho_ds || '').split(',').map((t) => t.trim()).filter(Boolean).forEach((t) => x.thoSet.add(t));
+        thongTin.set(k, x);
+      });
+      return gomKiemHang(goc, khoaPhan).map((d) => {
+        const x = thongTin.get(d.key) || {};
+        return {
+          ...d, ma_chuyen: x.ma_chuyen, khach: x.khach, po: x.po, ma_hang: x.ma_hang, mau_vai: x.mau_vai,
+          kich_vai: x.kich_vai, kich_phim: x.kich_phim, ma_phan: x.ma_phan, tho_ds: [...(x.thoSet || [])].join(', '),
+        };
+      }).sort((a, b) => soTuNhien(a.ma_chuyen, b.ma_chuyen) || soTuNhien(a.khach, b.khach) || soTuNhien(a.ma_phan, b.ma_phan));
+    }
+    return CHIEU[chieu] ? gomKiemHang(goc, CHIEU[chieu].khoa) : [];
+  }, [goc, chieu]);
+  const chiTiet = useMemo(() => goc.filter((r) => (
+    hopLoc(r, loc)
+    && (!kw || khopNhieu([r.ma_tem, r.ma_chuyen, r.ma_lenh_san_xuat, r.ma_phan, r.khach, r.po, r.ma_hang, r.mau_vai, r.nguoi_kiem, r.tho_ds], kw))
+  )), [goc, loc, kw]);
   const tongLoc = useMemo(() => chiTiet.reduce((s, r) => ({
     kiem: s.kiem + r.sl_kiem, khongDat: s.khongDat + r.sl_sua + r.sl_huy,
   }), { kiem: 0, khongDat: 0 }), [chiTiet]);
   const dangLoc = !!(loc || kw);
-  const nhanLoc = loc ? (loc.startsWith('N:') ? `Dây chuyền ${tenNhom.get(loc.slice(2)) || loc.slice(2)}` : `Chuyền ${loc.slice(2)}`) : '';
+  const NHAN_LOC = { N: 'Dây chuyền', C: 'Chuyền', K: 'Khách', T: 'Thợ in', P: 'Phần in' };
+  const nhanLoc = loc ? `${NHAN_LOC[loc[0]] || ''} ${loc[0] === 'N' ? (tenNhom.get(loc.slice(2)) || loc.slice(2)) : loc.slice(2).replace('|', ' · ')}` : '';
+  const doiChieu = (v) => { setChieu(v); setLoc(null); };
+  const chieuDang = DS_CHIEU.find((c) => c.v === chieu) || DS_CHIEU[0];
 
   const doExcel = async () => {
     if (!data) return;
     setDangXuat(true);
     try {
-      await exportBaoCaoKiemHang(data, { chiTiet, moTaLoc: [nhanLoc, search && `tìm: ${search}`].filter(Boolean).join(' · ') });
+      await exportBaoCaoKiemHang({ ...data, ...bangDayChuyen }, {
+        chiTiet,
+        moTaLoc: [chonHopLe.length ? `chuyền: ${chonHopLe.join(', ')}` : '', nhanLoc, search && `tìm: ${search}`].filter(Boolean).join(' · '),
+        // Bảng tổng hợp theo chiều đang xem (Chuyền / Khách hàng / Thợ in / Chi tiết phần in) ⇒ thêm 1 sheet.
+        bangChieu: chieu === 'DC' ? null : { ten: chieuDang.label, laChiTietPhan: chieu === 'CT', rows: bangChieu, tong: tongGoc },
+      });
     } catch (e) {
       show(e.message || 'Xuất Excel thất bại', 'error');
     } finally {
@@ -259,10 +437,11 @@ export default function BaoCaoKiemHangPage() {
     { key: 'sl_huy', header: 'Hủy', className: 'text-right tabular-nums', render: (r) => (
       <span className={r.sl_huy ? 'text-rose-600 dark:text-rose-400' : 'text-ink-soft'}>{fmtNum(r.sl_huy)}</span>
     ) },
+    { key: 'tho_ds', header: 'Thợ in', render: (r) => <span className="block max-w-[180px] truncate" title={r.tho_ds || ''}>{r.tho_ds || '—'}</span> },
     { key: 'nguoi_kiem', header: 'Người kiểm', render: (r) => r.nguoi_kiem || '—' },
   ];
 
-  const tong = data && !cuKhoang ? data.tong : null;
+  const tong = data && !cuKhoang ? tongGoc : null;
 
   return (
     <div>
@@ -278,6 +457,7 @@ export default function BaoCaoKiemHangPage() {
           ))}
         </div>
         <div className="w-60"><DateRangePicker value={khoang} onChange={doiKhoang} placeholder="Khoảng ngày SX" /></div>
+        <ChonChuyenNhieu ds={chuyens} value={chonHopLe} onChange={(v) => { setChuyenChon(v); setLoc(null); }} />
         <Button chiXemOk variant="secondary" icon="download" onClick={doExcel} loading={dangXuat} disabled={!data || cuKhoang}>
           Excel
         </Button>
@@ -306,7 +486,34 @@ export default function BaoCaoKiemHangPage() {
                 phu={tong ? `${fmtNum(tong.sl_huy)} pcs · K.đạt ${pt(tong.ty_le_khong_dat)}` : null} />
             </div>
 
-            <BangDayChuyen data={data} mo={mo} onMo={doiMo} loc={loc} onLoc={setLoc} />
+            {/* CHIỀU XEM bảng tổng hợp (11/10/2026) */}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-medium text-ink-soft">Xem theo</span>
+              <div className="flex h-9 items-center gap-1 rounded-control border border-line bg-surface-muted p-1">
+                {DS_CHIEU.map((c) => (
+                  <button key={c.v} type="button" onClick={() => doiChieu(c.v)}
+                    className={`h-7 whitespace-nowrap rounded-[10px] px-3 text-xs font-medium transition-colors ${
+                      chieu === c.v ? 'bg-surface text-primary shadow-sm ring-1 ring-line' : 'text-ink-soft hover:text-ink'}`}>
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+              {chonHopLe.length > 0 && (
+                <button type="button" onClick={() => { setChuyenChon([]); setLoc(null); }}
+                  className="inline-flex items-center gap-1 rounded-full bg-primary-wash px-3 py-1 text-xs font-medium text-primary hover:text-danger">
+                  Chỉ chuyền: {chonHopLe.join(', ')}
+                  <Icon name="x" size={12} />
+                </button>
+              )}
+            </div>
+
+            {chieu === 'DC' && <BangDayChuyen data={bangDayChuyen} mo={mo} onMo={doiMo} loc={loc} onLoc={setLoc} />}
+            {(chieu === 'CH' || chieu === 'KH' || chieu === 'TH') && (
+              <BangTheoChieu tieuDe={`Kết quả kiểm tra CLSP theo ${chieuDang.label.toLowerCase()}`}
+                nhan={chieu === 'TH' ? 'Thợ in (phụ trách)' : chieuDang.label}
+                rows={bangChieu} tong={tongGoc} tienTo={chieuDang.tienTo} loc={loc} onLoc={setLoc} />
+            )}
+            {chieu === 'CT' && <BangChiTietPhan rows={bangChieu} tong={tongGoc} loc={loc} onLoc={setLoc} />}
 
             <div>
               <div className="mb-2 flex flex-wrap items-center gap-2">

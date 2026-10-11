@@ -14,3 +14,5 @@ export const suaDotVaiGn = (id, patch) => client.patch(`/sua-thong-tin/dot-vai/$
 // Dự phòng khi lệnh hủy CHƯA tới được ERP: gửi (lại) lệnh hủy / xác nhận lại tay (ERP đã nhận ⇒ 409 CHO_ERP).
 export const guiHuyErpGn = (phanInId) => client.post(`/sua-thong-tin/${phanInId}/gui-huy-erp`);
 export const xacNhanLaiGn = (phanInId, body) => client.post(`/sua-thong-tin/${phanInId}/xac-nhan`, body);
+// Lượt đang chờ mang đề nghị "Hủy vải không in" ⇒ xóa mềm đợt vải + đóng lượt (11/10/2026).
+export const huyVaiGn = (phanInId) => client.post(`/sua-thong-tin/${phanInId}/huy-vai`);

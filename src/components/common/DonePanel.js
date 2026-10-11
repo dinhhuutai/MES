@@ -54,6 +54,7 @@ const FILTER_FIELDS = [
 //                                kich_phim, so_luong, tg, nguoi }] }.
 // maHeader: nhãn cột mã (Tem / Phần in / Lệnh / Set...). columns: override toàn bộ cột nếu cần.
 // showChuyen: chèn thêm cột "Chuyền" NGAY SAU "Tính chất in" (cả bảng lẫn Excel) — cần fetcher trả `ten_chuyen`.
+// showLoaiDotVai: cột "Loại đợt vải" sau "Tính chất in" (QC READY, 11/10/2026) — cần fetcher trả `loai_dot_vai`.
 // extraColumns / extraExcelColumns: cột PHỤ nối vào CUỐI bộ cột mặc định. Nhận mảng HOẶC hàm (rows)=>mảng
 // (dùng khi số cột phụ thuộc dữ liệu — vd "Lần test 1..N" ở Test Run).
 //
@@ -65,7 +66,7 @@ const FILTER_FIELDS = [
 //   · `footerChon` : ({ rows, clear }) => JSX — thanh hành động ở CHÂN panel (vd nút "In tem (N)")
 export default function DonePanel({
   open, onClose, title = 'Đã hoàn thành', maHeader = 'Mã', fetcher, columns, excelColumns, showChuyen = false,
-  extraColumns, extraExcelColumns, showPhuongAnIn = false,
+  extraColumns, extraExcelColumns, showPhuongAnIn = false, showLoaiDotVai = false,
   chonNhieu = false, toiDaChon = 0, chonDuoc, footerChon,
 }) {
   const { toast, show } = useToast();
@@ -138,6 +139,7 @@ export default function DonePanel({
     { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
     { key: 'tinh_chat_in', header: 'Tính chất in', render: (r) => <TinhChatInCell value={r.tinh_chat_in} /> },
+    ...(showLoaiDotVai ? [{ key: 'loai_dot_vai', header: 'Loại đợt vải', render: (r) => r.loai_dot_vai || '—' }] : []),
     // Phương án in (HSKT đang hoạt động) — bật ở panel READY Kỹ thuật (15/09/2026). Cần fetcher trả `phuong_an_in`.
     ...(showPhuongAnIn ? [{ key: 'phuong_an_in', header: 'Phương án in', render: (r) => <PhuongAnInBadge value={r.phuong_an_in} /> }] : []),
     ...(showChuyen ? [{ key: 'ten_chuyen', header: 'Chuyền', merge: true, render: (r) => r.ten_chuyen || '—' }] : []),
@@ -161,6 +163,7 @@ export default function DonePanel({
     { header: 'Kích vải', value: (r) => r.kich_vai || '' },
     { header: 'Kích phim', value: (r) => r.kich_phim || '' },
     { header: 'Tính chất in', value: (r) => r.tinh_chat_in || '' },
+    ...(showLoaiDotVai ? [{ header: 'Loại đợt vải', value: (r) => r.loai_dot_vai || '' }] : []),
     ...(showPhuongAnIn ? [{ header: 'Phương án in', value: (r) => (r.phuong_an_in != null ? (PHUONG_AN_IN[Number(r.phuong_an_in)] || String(r.phuong_an_in)) : '') }] : []),
     ...(showChuyen ? [{ header: 'Chuyền', value: (r) => r.ten_chuyen || '' }] : []),
     { header: 'SL', value: (r) => (r.so_luong != null ? Number(r.so_luong) : ''), num: true },

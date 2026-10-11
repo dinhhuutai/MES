@@ -13,6 +13,10 @@ import { danhMucTraVeGn, traVeGn } from '../../services/suaThongTinService';
 // Gửi xong: phần in RỜI màn đang đứng (lệnh GIỮ NGUYÊN, chỉ tạm khóa), sang *Đơn hàng › Phần in chờ sửa
 // thông tin*; GN sửa rồi xác nhận lại là quay về ĐÚNG màn cũ. Danh mục mục do BACKEND trả — thêm mục không sửa FE.
 // `dsPhanIn` (tùy chọn): lệnh gom set có NHIỀU phần in ⇒ cho chọn phần in nào sai (mặc định phần in đầu).
+// `dotVaiIds` (11/10/2026, tùy chọn): modal mở từ 1 DÒNG ĐỢT VẢI (READY / QC READY / Release 1) ⇒ phạm vi trả về
+//   = đúng các đợt đó; không truyền ⇒ backend tự lấy đợt của lệnh (`lenhId`) hoặc mọi đợt chưa vào sản xuất.
+// ⚠ Mục "Hủy vải không in" (`HUY_VAI`) = XÓA MỀM đợt vải trong phạm vi NGAY lúc gửi — phần in KHÔNG sang trang
+//   chờ sửa thông tin (người dùng chốt 11/10/2026). Khôi phục ở Hệ thống › Hủy lệnh xác nhận › Mở đợt vải.
 // ─────────────────────────────────────────────────────────────────────────────
 
 let cacheDanhMuc = null; // danh mục gần như không đổi ⇒ tải 1 lần / phiên trang
@@ -21,7 +25,7 @@ const TEN_MAN = {
   KT: 'READY', QC: 'QC READY', RELEASE1: 'Release 1', TEST_RUN: 'Test Run', RELEASE2: 'Release 2', CHO_CHAY: 'Chờ sản xuất',
 };
 
-export default function TraVeGnModal({ open, onClose, phanIn, dsPhanIn, lenhId, nguon = 'KT', onDone, onToast }) {
+export default function TraVeGnModal({ open, onClose, phanIn, dsPhanIn, lenhId, dotVaiIds, nguon = 'KT', onDone, onToast }) {
   const [danhMuc, setDanhMuc] = useState(cacheDanhMuc || []);
   const [chon, setChon] = useState(() => new Set());
   const [coKhac, setCoKhac] = useState(false);
@@ -68,16 +72,26 @@ export default function TraVeGnModal({ open, onClose, phanIn, dsPhanIn, lenhId, 
 
   const bat = (ma) => setChon((s) => { const n = new Set(s); if (n.has(ma)) n.delete(ma); else n.add(ma); return n; });
   const hopLe = chon.size > 0 || (coKhac && khac.trim());
+  const huyVai = chon.has('HUY_VAI');
 
   const gui = async () => {
     if (!hopLe || !pin) return;
     if (coKhac && !khac.trim()) { setLoi('Đã tích "Khác" thì ghi rõ thông tin sai là gì.'); return; }
     setSaving(true); setLoi('');
     try {
-      await traVeGn({
+      const r = await traVeGn({
         phanInId: pin.id, thongTin: [...chon], khac: coKhac ? khac.trim() : '', nguon, lenhId: lenhId || undefined,
+        // Đợt của DÒNG đang mở (lệnh gom set chọn phần in khác thì để backend tự lấy đợt theo lệnh).
+        dotVaiIds: !nhieuPhanIn && Array.isArray(dotVaiIds) && dotVaiIds.length ? dotVaiIds : undefined,
       });
-      onToast?.(`Đã trả ${pin.ma_phan} về Giao nhận sửa thông tin`);
+      const hv = r?.data?.huy_vai;
+      if (hv && hv.ok) {
+        onToast?.(`Đã hủy vải ${pin.ma_phan} — xóa mềm ${hv.so_dot} đợt vải${hv.so_lenh_huy ? `, hủy ${hv.so_lenh_huy} lệnh chưa chạy` : ''}`);
+      } else if (hv) {
+        onToast?.(`Chưa hủy được vải ${pin.ma_phan}: ${(hv.loi || []).map((x) => x.ly_do).join(' · ') || 'không rõ lý do'} — phần in nằm ở trang chờ sửa thông tin`, 'error');
+      } else {
+        onToast?.(`Đã trả ${pin.ma_phan} về Giao nhận sửa thông tin`);
+      }
       onDone?.();
       onClose?.();
     } catch (e) {
@@ -163,6 +177,13 @@ export default function TraVeGnModal({ open, onClose, phanIn, dsPhanIn, lenhId, 
             </div>
           )}
         </div>
+        {huyVai && (
+          <p className="rounded-control border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-200">
+            <b>Hủy vải không in = xóa mềm đợt vải</b>{Array.isArray(dotVaiIds) && dotVaiIds.length && !nhieuPhanIn ? ' của dòng này' : ' chưa vào sản xuất của phần in'}
+            {sauReady ? ' (lệnh chưa chạy đang giữ đợt bị hủy theo)' : ''}. Phần in <b>không</b> sang trang chờ sửa thông tin;
+            hết đợt vải thì phần in ẩn luôn. Mở lại ở Hệ thống › Hủy lệnh xác nhận › Mở đợt vải.
+          </p>
+        )}
         {loi && <div className="text-sm text-danger">{loi}</div>}
       </div>
     </Modal>

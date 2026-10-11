@@ -818,6 +818,7 @@ export default function Release1Page() {
       </SidePanel>
 
       <TraVeGnModal open={gnOpen} onClose={() => setGnOpen(false)} nguon="RELEASE1"
+        dotVaiIds={detail?.dot_vai_id ? [detail.dot_vai_id] : undefined}
         phanIn={detail ? { id: detail.phan_in_id, ma_phan: detail.ma_phan } : null}
         onToast={(m) => show(m)} onDone={() => { setDetail(null); load(true); }} />
 
