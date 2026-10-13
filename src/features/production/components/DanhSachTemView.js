@@ -111,6 +111,7 @@ const nhanTuHang = (t) => ({
   nha_gia_cong: t.nha_gia_cong,
   gc_mau_vai: t.gc_mau_vai,
   ma_ngay_ca: t.ma_ngay_ca,
+  ma_lo: t.ma_lo,
   gio_sx_bd: t.gio_sx_bd,
   gio_sx_kt: t.gio_sx_kt,
   nguoi_in: t.nguoi_in,
@@ -186,6 +187,7 @@ export default function DanhSachTemView({
             value: (r) => (r.created_date ? new Date(r.created_date).toLocaleString('vi-VN') : '') },
           ...(laGiaCong ? [] : [
             { header: 'Ngày ca', width: 14, value: (r) => (r.ma_ngay_ca == null ? '' : String(r.ma_ngay_ca)) },
+            { header: 'Mã lô', width: 22, value: (r) => (r.ma_lo == null ? '' : String(r.ma_lo)) },
             { header: 'Giờ SX', width: 16, center: true,
               value: (r) => [r.gio_sx_bd, r.gio_sx_kt].filter(Boolean).join(' → ') },
           ]),
@@ -357,6 +359,7 @@ function TemPanel({ tem, onClose, laGiaCong, layNhan }) {
             <h4 className="mb-2 text-sm font-semibold text-ink">Lượt in</h4>
             <div className="grid grid-cols-2 gap-3 rounded-control border border-line p-3">
               <O nhan="Mã ngày ca">{chu(t.ma_ngay_ca)}</O>
+              <O nhan="Mã lô">{chu(t.ma_lo)}</O>
               <O nhan="Giờ sản xuất">{t.gio_sx_bd || t.gio_sx_kt ? `${chu(t.gio_sx_bd)} → ${chu(t.gio_sx_kt)}` : '—'}</O>
               <O nhan="GC màu vải">{chu(t.gc_mau_vai)}</O>
               <div>
