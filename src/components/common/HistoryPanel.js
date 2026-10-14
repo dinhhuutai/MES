@@ -5,15 +5,17 @@ import Button from './Button';
 import Toast from './Toast';
 import exportPanelExcel from './exportPanelExcel';
 import useToast from '../../hooks/useToast';
+import { ngayLocalISO } from '../../utils/format';
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const todayStr = () => ngayLocalISO(new Date());
 const fmtTime = (t) => (t ? new Date(t).toLocaleTimeString('vi-VN') : '');
 
 // Panel lịch sử theo ngày dùng chung. fetcher(dateStr) -> [{ tg, nguoi, hanh_dong, doi_tuong, chi_tiet }].
 // `extraColumns`: cột PHỤ nối vào CUỐI bảng (vd nút "In lại phiếu" ở màn Giao hàng). Nhận mảng HOẶC
 // hàm (rows)=>mảng. Mặc định KHÔNG có ⇒ mọi màn đang dùng panel này giữ nguyên như cũ.
 // ⚠ Cột phụ CỐ Ý không vào Excel: nó thường là NÚT, xuất ra file chỉ được một ô trống.
-export default function HistoryPanel({ open, onClose, title = 'Lịch sử', fetcher, extraColumns }) {
+// `taiLai` (14/10/2026): số đếm do trang cha tăng lên để panel TẢI LẠI (vd sau khi bấm "Hủy" ở 1 dòng).
+export default function HistoryPanel({ open, onClose, title = 'Lịch sử', fetcher, extraColumns, taiLai = 0 }) {
   const { toast, show } = useToast();
   const [date, setDate] = useState(todayStr);
   const [rows, setRows] = useState([]);
@@ -40,7 +42,7 @@ export default function HistoryPanel({ open, onClose, title = 'Lịch sử', fet
     }
   }, [open, date, show]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, [load, taiLai]);
 
   const them = typeof extraColumns === 'function' ? (extraColumns(rows) || []) : (extraColumns || []);
   const columns = [

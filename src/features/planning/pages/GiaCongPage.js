@@ -579,7 +579,8 @@ export default function GiaCongPage() {
         )}
       </Modal>
 
-      <GiaCongHistoryPanel open={histOpen} onClose={() => setHistOpen(false)} onPrint={printVe} />
+      <GiaCongHistoryPanel open={histOpen} onClose={() => setHistOpen(false)} onPrint={printVe}
+        onChanged={() => load(true)} />
 
       <TraVeListModal open={traVeOpen} onClose={() => setTraVeOpen(false)}
         tenMan="Gia công" loais={TRA_VE_THEO_MAN.KH_GIA_CONG} tenFile="tra-ve-gia-cong" />

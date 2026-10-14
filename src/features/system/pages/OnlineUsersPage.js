@@ -9,8 +9,9 @@ import useToast from '../../../hooks/useToast';
 import useNow from '../../../hooks/useNow';
 import useSocketReload from '../../../hooks/useSocketReload';
 import { getOnline, getHistory } from '../../../services/presenceService';
+import { ngayLocalISO } from '../../../utils/format';
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const todayStr = () => ngayLocalISO(new Date());
 const fmtTime = (t) => (t ? new Date(t).toLocaleTimeString('vi-VN') : '—');
 const fmtDt = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '—');
 

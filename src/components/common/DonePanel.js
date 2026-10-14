@@ -10,10 +10,10 @@ import HanGiaoCell from './HanGiaoCell';
 import PhuongAnInBadge, { PHUONG_AN_IN } from './PhuongAnInBadge';
 import exportPanelExcel from './exportPanelExcel';
 import useToast from '../../hooks/useToast';
-import { fmtNum } from '../../utils/format';
+import { fmtNum, ngayLocalISO } from '../../utils/format';
 import { chuanTim } from '../../utils/timKiem';
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const todayStr = () => ngayLocalISO(new Date());
 const fmtTime = (t) => (t ? new Date(t).toLocaleTimeString('vi-VN') : '');
 
 // Cột Excel "Giờ HT" (giờ hoàn thành) — ĐỨNG NGAY SAU cột "Hạn giao".
@@ -64,10 +64,12 @@ const FILTER_FIELDS = [
 //                    những dòng chưa chọn bị KHÓA + hiện nhắc, không âm thầm bỏ qua lượt bấm
 //   · `chonDuoc`   : (row) => true | 'lý do' — dòng không chọn được thì khóa ô + tooltip lý do
 //   · `footerChon` : ({ rows, clear }) => JSX — thanh hành động ở CHÂN panel (vd nút "In tem (N)")
+// XUẤT EXCEL THEO KHUÔN RIÊNG (14/10/2026): `xuatExcel({ rows, date })` (async) thay hẳn bộ xuất mặc định — vd màn OQC
+//   xuất đúng tờ "DANH SÁCH KIỂM TRA CHẤT LƯỢNG ĐẦU RA QCO". `rows` = danh sách ĐANG LỌC (như bộ xuất mặc định).
 export default function DonePanel({
   open, onClose, title = 'Đã hoàn thành', maHeader = 'Mã', fetcher, columns, excelColumns, showChuyen = false,
   extraColumns, extraExcelColumns, showPhuongAnIn = false, showLoaiDotVai = false,
-  chonNhieu = false, toiDaChon = 0, chonDuoc, footerChon,
+  chonNhieu = false, toiDaChon = 0, chonDuoc, footerChon, xuatExcel,
 }) {
   const { toast, show } = useToast();
   const [date, setDate] = useState(todayStr);
@@ -212,6 +214,7 @@ export default function DonePanel({
   const doExport = async () => {
     setExporting(true);
     try {
+      if (xuatExcel) { await xuatExcel({ rows: viewRows, date }); return; }
       // Xuất ĐÚNG danh sách đang lọc (không phải toàn bộ ngày) + ghi bộ lọc vào phụ đề để biết file lọc gì.
       const moTa = [
         q.trim() ? `tìm "${q.trim()}"` : '',

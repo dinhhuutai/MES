@@ -11,12 +11,14 @@ import { laChuyenGiaCong, tenChuyen } from '../utils/chuyenGiaCong';
 import TimeSelect from '../../../components/common/TimeSelect';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
+import ThoInField from '../components/ThoInField';
 import ReleaseListModal from '../components/ReleaseListModal';
 import useToast from '../../../hooks/useToast';
 import taiHetTrang, { LIMIT_TAI_LON } from '../../../utils/taiHetTrang';
 import useSocketReload from '../../../hooks/useSocketReload';
 import usePermissions from '../../../hooks/usePermissions';
 import { listRelease1Candidates, createDotSanXuat, listChuyen } from '../../../services/planningService';
+import { listUserOptions } from '../../../services/userService';
 import { fmtNum, fmtDate } from '../../../utils/format';
 
 // Ngày mai (giờ máy) dạng YYYY-MM-DD — mặc định cho ô "Ngày kế hoạch".
@@ -28,8 +30,9 @@ const tomorrowStr = () => {
   return `${d.getFullYear()}-${m}-${day}`;
 };
 
-// Màn "Tạo đợt sản xuất": chọn nhiều đợt vải CÙNG PHẦN IN (code phần) để gộp, hoặc 1 đợt nhập một phần (tách),
-// nhập SL từng đợt (≤ còn đưa), rồi Xác nhận → tạo 1 đợt SX (lenh_san_xuat) + so_luong junction.
+// Màn "GOM ĐỢT VẢI" (13/10/2026 đổi tên — trước là "Tạo đợt sản xuất"; route + tên file giữ nguyên): chọn nhiều đợt
+// vải CÙNG PHẦN IN (code phần) để gộp, hoặc 1 đợt nhập một phần (tách), nhập SL từng đợt (≤ còn đưa), rồi Xác nhận
+// → tạo 1 đợt SX (lenh_san_xuat) + so_luong junction. Có ô THỢ IN kế hoạch như Release 1 (13/10/2026).
 // Gom nhiều PHẦN IN khác nhau (cùng màu) là việc của Gom set ở READY — KHÔNG làm ở đây.
 export default function TaoDotSanXuatPage() {
   const { can } = usePermissions();
@@ -45,6 +48,8 @@ export default function TaoDotSanXuatPage() {
   const [ngayKeHoach, setNgayKeHoach] = useState(tomorrowStr());
   const [gioBd, setGioBd] = useState('');
   const [gioKt, setGioKt] = useState('');
+  const [thoIn, setThoIn] = useState('');      // thợ in kế hoạch — chuỗi tên ngăn dấu phẩy (mig 111)
+  const [users, setUsers] = useState([]);
   const [busy, setBusy] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const [releaseOpen, setReleaseOpen] = useState(false);
@@ -70,6 +75,7 @@ export default function TaoDotSanXuatPage() {
   // thay bằng spinner) và KHÔNG xóa dòng đang tích. Nhiều sự kiện trong 400ms gộp thành 1 lần tải.
   useSocketReload(['ready:confirmed', 'workflow:updated'], () => load(true));
   useEffect(() => { listChuyen().then((r) => setChuyen(r.data || [])).catch(() => {}); }, []);
+  useEffect(() => { listUserOptions({ limit: 500 }).then((r) => setUsers(r.data || [])).catch(() => {}); }, []);
 
   const basketIds = useMemo(() => new Set(basket.map((b) => b.dot_vai_id)), [basket]);
   const basketPin = basket.length ? basket[0].phan_in_id : null;
@@ -112,15 +118,16 @@ export default function TaoDotSanXuatPage() {
       const res = await createDotSanXuat({
         items: basket.map((b) => ({ dotVaiId: b.dot_vai_id, soLuong: Number(b.soLuong) })),
         chuyenId, ngayKeHoach: ngayKeHoach || null,
-        tgBdKh: mkTs(gioBd), tgKtKh: mkTs(gioKt),
+        tgBdKh: mkTs(gioBd), tgKtKh: mkTs(gioKt), thoIn: thoIn || null,
       });
       const skip = res.data?.skipped_test;
-      if (res.data?.chi_tam) show(`Phần in chưa Ready → đã lưu Kế hoạch tạm (${res.data.ke_hoach_tam_count || 0} đợt). Xác nhận lại ở màn Kế hoạch tạm khi Ready xong.`, 'success');
-      else show(skip ? 'Đã tạo đợt sản xuất — bỏ Test Run (vào thẳng Release 2)' : 'Đã tạo đợt sản xuất — chờ Test Run');
-      setBasket([]); setChuyenId(''); setNgayKeHoach(tomorrowStr()); setGioBd(''); setGioKt('');
+      const chuaLuuTho = res.data?.tho_in_chua_luu ? ' · CHƯA lưu thợ in (hệ thống chưa cập nhật cơ sở dữ liệu)' : '';
+      if (res.data?.chi_tam) show(`Phần in chưa Ready → đã lưu Kế hoạch tạm (${res.data.ke_hoach_tam_count || 0} đợt). Xác nhận lại ở màn Kế hoạch tạm khi Ready xong.${chuaLuuTho}`, chuaLuuTho ? 'error' : 'success');
+      else show(`${skip ? 'Đã gom đợt vải thành 1 đợt sản xuất — bỏ Test Run (vào thẳng Release 2)' : 'Đã gom đợt vải thành 1 đợt sản xuất — chờ Test Run'}${chuaLuuTho}`, chuaLuuTho ? 'error' : 'success');
+      setBasket([]); setChuyenId(''); setNgayKeHoach(tomorrowStr()); setGioBd(''); setGioKt(''); setThoIn('');
       load();
     } catch (e) {
-      show(e.message || 'Tạo đợt sản xuất thất bại', 'error');
+      show(e.message || 'Gom đợt vải thất bại', 'error');
     } finally {
       setBusy(false);
     }
@@ -128,7 +135,7 @@ export default function TaoDotSanXuatPage() {
 
   return (
     <div>
-      <Toolbar title="Tạo đợt sản xuất" subtitle="Gộp nhiều đợt vải CÙNG PHẦN IN (code phần) / tách một đợt, nhập SL từng đợt rồi đưa xuống sản xuất. (Gom nhiều phần in cùng màu → Gom set ở READY.)">
+      <Toolbar title="Gom đợt vải" subtitle="Gộp nhiều đợt vải CÙNG PHẦN IN (code phần) / tách một đợt, nhập SL từng đợt rồi đưa xuống sản xuất. (Gom nhiều phần in cùng màu → Gom set ở READY.)">
         <Button chiXemOk variant="secondary" icon="list" onClick={() => setReleaseOpen(true)}>Danh sách release</Button>
         <div className="relative w-full sm:w-64">
           <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" />
@@ -256,6 +263,7 @@ export default function TaoDotSanXuatPage() {
                 <TimeSelect value={gioKt} onChange={setGioKt} />
               </Field>
             </div>
+            <ThoInField value={thoIn} onChange={setThoIn} users={users} label="Thợ in (tùy chọn)" />
             <Button className="w-full" onClick={submit} loading={busy}
               disabled={!canRelease || basket.length === 0 || !chuyenId || !!overRow}>
               Xác nhận &amp; đưa xuống sản xuất
@@ -267,7 +275,7 @@ export default function TaoDotSanXuatPage() {
       <ScanCollectModal
         open={scanOpen}
         onClose={() => setScanOpen(false)}
-        title="Quét / tích mã — Tạo đợt sản xuất"
+        title="Quét / tích mã — Gom đợt vải"
         help="Chọn QR (code phần) hoặc Mã vạch ở trên rồi đưa vào khung camera. 1 code phần → thêm HẾT đợt vải của phần in đó vào đợt đang soạn (chỉ CÙNG phần in)."
         rows={rows}
         getId={(r) => r.dot_vai_id}

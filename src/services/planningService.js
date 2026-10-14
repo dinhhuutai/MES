@@ -115,3 +115,5 @@ export const listLanTestCancelable = (params) => client.get('/planning/huy-lan-t
 export const huyLanTest = (testRunId, body) => client.post(`/planning/huy-lan-test/${testRunId}`, body);
 export const release2Done = (date) => client.get('/planning/release2/done', { params: { date } });
 export const replanDone = (date) => client.get('/planning/replan/done', { params: { date } });
+// Hủy tem gia công ngay tại "Lịch sử chuyển" (14/10/2026) — chỉ cần quyền công đoạn, lý do bắt buộc, báo ERP hủy theo IDMES.
+export const huyGiaCongTemLichSu = (temId, lyDo) => client.post(`/planning/gia-cong/tem/${temId}/huy-lich-su`, { lyDo });

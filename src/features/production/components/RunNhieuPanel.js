@@ -15,7 +15,7 @@ import {
 import { listUserOptions } from '../../../services/userService';
 import printTemLabel, { printTemLabelNhieu, moSanCuaSoIn, dongCuaSoIn } from '../utils/printTemLabel';
 import { fmtNum } from '../../../utils/format';
-import { TemMetaFields, PhanCongInline, META_MAC_DINH, metaGuiDi, gioHienTai } from './RunPanel';
+import { TemMetaFields, PhanCongInline, META_MAC_DINH, metaGuiDi, gioHienTai, thieuNgayCaCt } from './RunPanel';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SẢN XUẤT NHIỀU LỆNH CÙNG LÚC (08/10/2026, người dùng chốt) — mở từ nút "Mở (N)" của bảng Đang chạy khi đã
@@ -149,8 +149,12 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh })
         try { return (await getRun(id)).data; } catch (e) { return { loi: e.message || 'Lỗi tải', lenh: { id } }; }
       }));
       setRuns(ds);
-      const g = (ds.find(dangChay) || {}).goi_y_tem;
-      if (g) setTemMeta((m) => ({ ...m, ngayCa: m.ngayCa || g.ngay_ca || '', gioBd: m.gioBd || g.gio_bd || '', gioKt: m.gioKt || g.gio_kt || '' }));
+      // Ngày ca + Ngày chứng từ NHẬP ĐẦU CA (13/10/2026): BE nhớ theo lượt ca của TỪNG nhóm chuyền ⇒ chỉ điền lại
+      // khi MỌI lệnh đang mở có cùng một giá trị đã nhớ; lệch nhau / chưa ai nhập ⇒ để trống, bắt nhập.
+      const dsG = ds.filter(dangChay).map((r) => r.goi_y_tem).filter(Boolean);
+      const g = dsG[0];
+      const chung = (k) => (dsG.length && dsG.every((x) => (x[k] || '') === (g[k] || '')) ? (g[k] || '') : '');
+      if (g) setTemMeta((m) => ({ ...m, ngayCa: m.ngayCa || chung('ngay_ca'), ngayCt: m.ngayCt || chung('ngay_ct'), gioBd: m.gioBd || g.gio_bd || '', gioKt: m.gioKt || g.gio_kt || '' }));
     } finally {
       setLoading(false);
     }
@@ -221,6 +225,8 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh })
 
   // `dong` = các dòng có số lượng của modal. ⚠ Mở SẴN cửa sổ in TRƯỚC mọi await (xin mã ERP xong mới mở là bị chặn popup).
   const doInNhieu = async (dong) => {
+    const thieu = thieuNgayCaCt(temMeta);
+    if (thieu) { show(thieu, 'error'); return; }
     let w = null;
     if (!chiLuu) {
       try { w = moSanCuaSoIn(); } catch (e) { show(e.message, 'error'); return; }
@@ -239,7 +245,8 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh })
     for (const g of theoPhieu) {
       try {
         // eslint-disable-next-line no-await-in-loop
-        const res = await printTemBatch(g.run.phieu.id, g.items, meta);
+        // `khoaCa` theo TỪNG lệnh (mỗi nhóm chuyền một lượt ca riêng) — BE chặn khi đã sang ca mới.
+        const res = await printTemBatch(g.run.phieu.id, g.items, { ...meta, khoaCa: g.run.goi_y_tem?.khoa_ca || '' });
         tems.push(...(res.data?.tems_in || []));
       } catch (e) {
         loi.push(`${tenLenh(g.run)}: ${e.message || 'lỗi'}`);

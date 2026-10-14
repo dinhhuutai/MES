@@ -18,16 +18,16 @@ import { searchPhanInForCancel, huyPhanIn, listDeletedPhanIn, moPhanIn,
   searchDotVaiForCancel, huyDotVai, listDeletedDotVai, moDotVai } from '../../../services/orderService';
 import { listCancelableLenh, cancelLenh, listLanTestChoHuy, giaCongTemCancelable, huyGiaCongTem,
   listLanTestCancelable, huyLanTest } from '../../../services/planningService';
-import { listCancelableTem, cancelPrintTem, listCloseCandidates, closeProduction, listReopenCandidates, reopenProduction, listUndoStartCandidates, undoStartProduction } from '../../../services/productionService';
+import { listCancelableTem, cancelPrintTem, listReopenableTem, moLaiTem, listCloseCandidates, closeProduction, listReopenCandidates, reopenProduction, listUndoStartCandidates, undoStartProduction } from '../../../services/productionService';
 import { listCancelKcs, cancelKcs, listCancelSua, cancelSua, listCancelOqc, cancelOqc,
   listTemSuaCancelable, listTemSuaDeleted, huyTemSua, moTemSua } from '../../../services/qualityService';
 import { listPhieuGiaoCancelable, huyPhieuGiao, listTemChoTich, boTichTemGiao } from '../../../services/deliveryService';
-import { fmtNum, fmtDateTime } from '../../../utils/format';
+import { fmtNum, fmtDateTime, ngayLocalISO } from '../../../utils/format';
 import Spinner from '../../../components/common/Spinner';
 import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import { khopNhieu, chuanTuKhoa } from '../../../utils/timKiem';
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const todayStr = () => ngayLocalISO(new Date());
 const fmtTime = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '—');
 
 // ─── CỘT "NGÀY XÁC NHẬN" DÙNG CHUNG MỌI TAB (02/10/2026) ─────────────────────────────────────
@@ -637,11 +637,109 @@ function TemCancelSection({ show }) {
       >
         <div className="mb-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
           Tem <b>{target?.ma_tem}</b> ({fmtNum(target?.so_luong)} cái) sẽ bị <b>hủy</b> và <b>gỡ khỏi xe phơi</b>.
-          Số lượng này được trả về lệnh <b>{target?.ma_lenh_san_xuat}</b> để có thể in lại. Thao tác không tự phục hồi tem đã hủy.
+          Số lượng này được trả về lệnh <b>{target?.ma_lenh_san_xuat}</b> để có thể in lại. Hủy nhầm thì khôi phục ở tab
+          <b> Mở lại tem in</b>.
         </div>
         <Field label="Lý do (khuyến nghị)">
           <Textarea rows={2} value={lyDo} onChange={(e) => setLyDo(e.target.value)}
             placeholder="Vd: in nhầm số lượng, sai phần in..." />
+        </Field>
+      </Modal>
+    </div>
+  );
+}
+
+// ─── Mở lại tem in (14/10/2026) ─────────────────────────────────────────────
+// Tem bị hủy bằng "Hủy lệnh in tem" / nút Hủy ở "Tem đã in" (và chưa bị đụng sau đó, lệnh/phiếu còn sống) ⇒ mở lại về
+// trạng thái trước khi hủy, SL tính lại vào đã in (≤ 110% SL release), phiếu in tem bên ERP được gửi lại cùng IDMES.
+// Danh sách + guard do backend tính (`production.repository MO_LAI_DUOC_SQL`) — không tự suy ở đây.
+function TemReopenSection({ show }) {
+  const [rows, setRows] = useState([]);
+  const [meta, setMeta] = useState({ page: 1, totalPages: 1, total: 0 });
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [target, setTargetRow] = useState(null);
+  const [lyDo, setLyDo] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listReopenableTem({ search, page, limit: 20 });
+      setRows(res.data.items);
+      setMeta(res.data.meta);
+    } catch (e) {
+      show(e.message || 'Lỗi tải', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [search, page, show]);
+
+  useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
+
+  const doReopen = async () => {
+    if (!lyDo.trim()) return;
+    setBusy(true);
+    try {
+      const res = await moLaiTem(target.id, lyDo.trim());
+      const d = res.data || {};
+      show(`Đã mở lại tem ${d.ma_tem} (${fmtNum(d.so_luong)} cái) — tính lại vào lệnh ${d.ma_lenh_san_xuat}${d.gui_lai_erp ? ', đang gửi lại phiếu in tem sang ERP' : ''}.`);
+      setTargetRow(null); setLyDo('');
+      load();
+    } catch (e) {
+      show(e.message || 'Mở lại tem thất bại', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const columns = [
+    cotNgayXacNhan((r) => r.tg_huy, () => 'Hủy in tem'),
+    { key: 'ma_tem', header: 'Mã tem', render: (r) => <Badge tone="default">{r.ma_tem}</Badge> },
+    { key: 'so_luong', header: 'SL in', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
+    { key: 'ma_lenh_san_xuat', header: 'Mã lệnh', render: (r) => r.ma_lenh_san_xuat || '—' },
+    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
+    { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
+    { key: 'ma_phan', header: 'Code phần', render: (r) => r.ma_phan || '—' },
+    { key: 'mau_vai', header: 'Màu · Kích', render: (r) => [r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—' },
+    { key: 'nguoi_huy', header: 'Người hủy', render: (r) => r.nguoi_huy || '—' },
+    { key: 'ly_do_huy', header: 'Lý do hủy', render: (r) => r.ly_do_huy || '—' },
+    { key: 'actions', header: '', className: 'text-right whitespace-nowrap', render: (r) =>
+      <Button className="px-2.5 py-1 text-xs" onClick={() => { setTargetRow(r); setLyDo(''); }}>Mở lại tem</Button> },
+  ];
+
+  return (
+    <div>
+      <Toolbar title="Mở lại tem in (khôi phục tem đã hủy)"
+        search={search} onSearch={(v) => { setSearch(v); setPage(1); }}
+        searchPlaceholder="Tìm mã tem, mã lệnh, code phần, mã hàng, màu/kích...">
+        <Badge tone="default">{meta.total} tem mở lại được</Badge>
+      </Toolbar>
+
+      <DataTable columns={columns} rows={rows} loading={loading} rowKey="id" sttStart={(meta.page - 1) * 20}
+        emptyText="Không có tem in nào đã hủy mà mở lại được" />
+      <Pagination page={meta.page} totalPages={meta.totalPages} total={meta.total} onPage={setPage} />
+
+      <Modal
+        open={!!target}
+        onClose={() => setTargetRow(null)}
+        title={`Mở lại tem ${target?.ma_tem || ''}`}
+        footer={
+          <>
+            <Button chiXemOk variant="ghost" onClick={() => setTargetRow(null)}>Đóng</Button>
+            <Button onClick={doReopen} loading={busy} disabled={!lyDo.trim()}>Xác nhận mở lại tem</Button>
+          </>
+        }
+      >
+        <div className="mb-3 rounded-control border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700">
+          Tem <b>{target?.ma_tem}</b> ({fmtNum(target?.so_luong)} cái) về lại trạng thái <b>trước khi hủy</b> (đang phơi / chờ
+          kiểm) và tính lại vào số đã in của lệnh <b>{target?.ma_lenh_san_xuat}</b> — không được vượt 110% SL release (lệnh
+          đã in bù tem khác thì hủy bớt tem đó trước). Phiếu in tem bên ERP được gửi lại cùng IDMES.
+        </div>
+        <Field label="Lý do mở lại" required>
+          <Textarea rows={2} value={lyDo} onChange={(e) => setLyDo(e.target.value)}
+            placeholder="Vd: hủy nhầm tem..." />
         </Field>
       </Modal>
     </div>
@@ -2191,6 +2289,7 @@ export default function LichSuTrangThaiPage() {
     (can('TESTRUN_QA') || can('RELEASE1') || can('RELEASE2') || can('LENH_CANCEL_ANY')) && { key: 'huytest', label: 'Hủy test run' },
     (can('RELEASE1') || can('RELEASE2')) && { key: 'huytemgiacong', label: 'Hủy tem gia công' },
     can('PROD_RUN') && { key: 'tem', label: 'Hủy lệnh in tem' },
+    can('PROD_RUN') && { key: 'motem', label: 'Mở lại tem in' },
     can('PROD_RUN') && { key: 'dong', label: 'Đóng lệnh sản xuất' },
     can('PROD_RUN') && { key: 'huychay', label: 'Hủy lệnh đang chạy' },
     can('KCS') && { key: 'huykcs', label: 'Hủy xác nhận KCS' },
@@ -2235,6 +2334,7 @@ export default function LichSuTrangThaiPage() {
       {tab === 'huytest' && <TestRunCancelSection show={show} />}
       {tab === 'huytemgiacong' && <GiaCongTemCancelSection show={show} />}
       {tab === 'tem' && <TemCancelSection show={show} />}
+      {tab === 'motem' && <TemReopenSection show={show} />}
       {tab === 'dong' && <CloseProductionSection show={show} />}
       {tab === 'huychay' && <UndoStartSection show={show} />}
       {tab === 'huykcs' && <QcCancelSection show={show} kind="kcs" />}

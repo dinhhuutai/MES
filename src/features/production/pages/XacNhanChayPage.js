@@ -33,7 +33,7 @@ import { LOAI_TABS, hopChipChuyen, nhanChip, demChip, locSiSoTheoChip } from '..
 import RunPanel from '../components/RunPanel';
 import RunNhieuPanel from '../components/RunNhieuPanel';
 import ChoChayModal, { LocLenhPanel } from '../components/ChoChayModal';
-import { locLenhChay, coLoc, LOC_TRONG, timLenhTheoMa } from '../utils/locLenhChay';
+import { locLenhChay, coLoc, LOC_TRONG, timLenhTheoMa, gomTheoCodePhan, lenhCuaDong } from '../utils/locLenhChay';
 import useOTimKiem from '../../../hooks/useOTimKiem';
 import TheoDoiChuyenPage from './TheoDoiChuyenPage';
 import XePhoiPage from './XePhoiPage';
@@ -274,6 +274,9 @@ export default function XacNhanChayPage() {
     }),
   });
 
+  // Số trên nút "Chờ chạy (N)" = số DÒNG của modal (lệnh cùng code phần đã gom 1 dòng — 13/10/2026).
+  const soDongChoChay = useMemo(() => gomTheoCodePhan(candidates).length, [candidates]);
+
   // Mở hộp xác nhận: kế thừa chuyền kế hoạch, cho đổi chuyền thực tế.
   const openConfirm = (lenh) => { setConfirmRun(lenh); setRunChuyenId(lenh.chuyen_id || ''); };
 
@@ -337,9 +340,14 @@ export default function XacNhanChayPage() {
     if (!lyDo) { show('Nhập lý do trả về Kỹ thuật', 'error'); return; }
     setBusy(true);
     try {
-      const res = await traVeKyThuatSanXuat(traVe.id, lyDo);
-      const d = res.data || {};
-      show(`Đã trả về Kỹ thuật — ${fmtNum(d.phan_in || 1)} phần in quay lại READY`);
+      // Dòng gom code phần (13/10/2026) = nhiều lệnh của CÙNG phần in ⇒ trả về mọi lệnh (tuần tự).
+      const ds = lenhCuaDong(traVe);
+      let d = {};
+      for (const l of ds) {
+        // eslint-disable-next-line no-await-in-loop
+        d = (await traVeKyThuatSanXuat(l.id, lyDo)).data || {};
+      }
+      show(`Đã trả về Kỹ thuật${ds.length > 1 ? ` ${fmtNum(ds.length)} lệnh` : ''} — ${fmtNum(d.phan_in || 1)} phần in quay lại READY`);
       setTraVe(null); setTraVeReason('');
       load();
     } catch (e) {
@@ -388,7 +396,7 @@ export default function XacNhanChayPage() {
       <Toolbar title="Xác nhận chạy" search={search} onSearch={setSearch} searchRef={oTim.ref} onSearchEnter={quetRun}
         searchPlaceholder="Quét mã vạch rồi Enter để chọn — gõ để tìm code phần, mã hàng, màu/kích, đơn...">
         <Button chiXemOk icon="list" onClick={() => setChoChayOpen(true)}>
-          Chờ chạy ({fmtNum(candidates.length)})
+          Chờ chạy ({fmtNum(soDongChoChay)})
         </Button>
         {can('PROD_MONITOR') && (
           <Button chiXemOk variant="ghost" icon="activity" onClick={() => setMoTrang('theo-doi-chuyen')}>Theo dõi chuyền</Button>
@@ -491,7 +499,9 @@ export default function XacNhanChayPage() {
         )}
       </Modal>
 
-      <TraVeGnModal open={!!gnLenh} onClose={() => setGnLenh(null)} nguon="CHO_CHAY" lenhId={gnLenh?.id}
+      {/* Dòng gom nhiều lệnh cùng code phần ⇒ không gửi `lenhId`: phạm vi = mọi đợt chưa vào sản xuất của phần in. */}
+      <TraVeGnModal open={!!gnLenh} onClose={() => setGnLenh(null)} nguon="CHO_CHAY"
+        lenhId={lenhCuaDong(gnLenh).length > 1 ? undefined : gnLenh?.id}
         phanIn={dsPhanInCuaLenh(gnLenh)[0] || null} dsPhanIn={dsPhanInCuaLenh(gnLenh)}
         onToast={(m) => show(m)} onDone={() => load(true)} />
 

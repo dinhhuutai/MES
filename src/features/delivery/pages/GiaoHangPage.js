@@ -14,19 +14,23 @@ import Modal from '../../../components/common/Modal';
 import useToast from '../../../hooks/useToast';
 import useSocketReload from '../../../hooks/useSocketReload';
 import usePermissions from '../../../hooks/usePermissions';
+import useHuyLichSu from '../../../hooks/useHuyLichSu';
 import useNow from '../../../hooks/useNow';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 import useLyDoNghen from '../../../hooks/useLyDoNghen';
 import { trangThaiSla } from '../../../utils/nghen';
 import {
   listTemSanSang, createGiaoHang, listGiaoHang, getGiaoHang,
-  listTemChoTich, tichTemGiao, traCuuTemTich, historyGiao, doneGiao, datGiaoHangTai, datKlgPhieu,
+  listTemChoTich, tichTemGiao, traCuuTemTich, historyGiao, doneGiao, datGiaoHangTai, datKlgPhieu, huyPhieuGiao,
 } from '../../../services/deliveryService';
 import { Input, Select, Field, Textarea } from '../../../components/common/controls';
 import DateRangePicker from '../../../components/common/DateRangePicker';
 import { fmtNum, fmtDate, fmtDateTime, temCode, maTemNhan, laMaTemRieng } from '../../../utils/format';
-import exportCheckpointExcel, { cotTemChung, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
+import exportCheckpointExcel, { moTaBoLoc } from '../../../utils/exportCheckpointExcel';
+import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import GiaoHangPanel from '../components/GiaoHangPanel';
+import TonKcsModal from '../components/TonKcsModal';
+import exportBaoCaoGiaoHang from '../utils/exportBaoCaoGiaoHang';
 import { printPhieuGiao, laHangRcs, klgSo } from '../utils/printPhieuGiao';
 import TemJourneyPanel from '../../../components/common/TemJourneyPanel';
 import Icon from '../../../components/common/Icon';
@@ -73,7 +77,6 @@ const FILTER_FIELDS = [
   { key: 'kichPhim', label: 'Kích phim' },
 ];
 const FIELD_LABEL = { ...Object.fromEntries(FILTER_FIELDS.map((f) => [f.key, f.label])), ngayTu: 'Từ ngày', ngayDen: 'Đến ngày' };
-
 const TT_PHIEU = {
   TAO: ['Chờ giao', 'warning'],
   DA_GIAO: ['Đã giao', 'success'],
@@ -117,6 +120,10 @@ export default function GiaoHangPage() {
   const [hisOpen, setHisOpen] = useState(false);
   const [doneOpen, setDoneOpen] = useState(false);
   const [range, setRange] = useState(() => ({ from: '', to: '' }));
+  // NGÀY GIAO (= hạn giao sớm nhất của lệnh) — 14/10/2026. Lọc ở backend (`hanTu`/`hanDen`), là khoảng ngày ghi trên
+  //   tiêu đề Excel "BÁO CÁO GIAO HÀNG".
+  const [hanRange, setHanRange] = useState(() => ({ from: '', to: '' }));
+  const [tonKcsOpen, setTonKcsOpen] = useState(false);
   const [filters, setFilters] = useState({});
   const [showFilters, setShowFilters] = useState(false);
   // Bộ lọc riêng của tab "Phiếu giao".
@@ -127,7 +134,9 @@ export default function GiaoHangPage() {
   // Dải "Theo dõi" (sĩ số) bám ô tìm + panel lọc của màn này.
   useSiSoLoc({ ...filters });
 
-  const rangeKey = useMemo(() => `${range.from || ''}|${range.to || ''}`, [range]);
+  const rangeKey = useMemo(
+    () => `${range.from || ''}|${range.to || ''}|${hanRange.from || ''}|${hanRange.to || ''}`, [range, hanRange]
+  );
   const filtersKey = useMemo(() => JSON.stringify(filters), [filters]);
   const activeFilters = useMemo(() => Object.entries(filters).filter(([, v]) => v), [filters]);
   const setField = (key, value) => setFilters((f) => ({ ...f, [key]: value }));
@@ -140,7 +149,10 @@ export default function GiaoHangPage() {
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const params = { ...filters, ngayTu: range.from || undefined, ngayDen: range.to || undefined };
+      const params = {
+        ...filters, ngayTu: range.from || undefined, ngayDen: range.to || undefined,
+        hanTu: hanRange.from || undefined, hanDen: hanRange.to || undefined,
+      };
       // ⚠ Danh sách "chờ tích" tải KÈM để modal quét khớp được ngay — nó là tập KHÁC (tem chưa tích),
       //   không phải bảng đang hiện. Lỗi ở nhánh này KHÔNG được chặn màn Giao ⇒ nuốt riêng.
       const [t, p] = await Promise.all([
@@ -168,6 +180,20 @@ export default function GiaoHangPage() {
 
   // ⚠ Tải NGẦM khi có sự kiện realtime: `load(true)` bỏ qua spinner và KHÔNG xóa dòng đang tích.
   useSocketReload(['delivery:updated', 'quality:updated'], () => load(true));
+
+  // NÚT "HỦY" Ở LỊCH SỬ PHIẾU GIAO (14/10/2026): nhập lý do ⇒ backend hủy phiếu (trả sổ cái tem về chờ giao) rồi báo
+  // ERP hủy phiếu theo IDMES đã gửi. Mỗi phiếu có nhiều dòng lịch sử (tạo · xác nhận giao) ⇒ nút chỉ hiện ở dòng MỚI
+  // NHẤT của phiếu còn hiệu lực (xem `extraColumns` của HistoryPanel bên dưới).
+  const huyLs = useHuyLichSu({
+    goiHuy: (r, ly) => huyPhieuGiao(r.id, ly),
+    show,
+    coQuyen: canManage,
+    tieuDe: 'Hủy phiếu giao',
+    moTa: (r) => <>Phiếu <b>{r.doi_tuong}</b>{r.chi_tiet ? <> · {r.chi_tiet}</> : null}</>,
+    hauQua: 'Tem của phiếu quay lại danh sách chờ giao (vẫn giữ dấu đã tích).',
+    baoXong: (r) => `Đã hủy phiếu giao ${r.doi_tuong || ''}`,
+    sauKhiHuy: () => load(true),
+  });
 
   const selectedList = useMemo(() => Object.values(selected), [selected]);
   // Dòng hàng RCS cần nhập KLG trong modal in: lúc TẠO lấy từ dòng đang chọn, lúc IN LẠI lấy từ phiếu.
@@ -335,22 +361,13 @@ export default function GiaoHangPage() {
   // ⚠ Mỗi tab xuất ĐÚNG tập đang hiện của nó: tab "Tem chờ giao" dùng `displayRows` (1 tem TÁCH 2
   //   dòng theo nguồn KCS/Sửa — giống hệt bảng và nút Nghẽn), tab "Phiếu giao" dùng `phieus`.
   //   Lấy `tems` cho tab đầu là ra ÍT dòng hơn bảng; gộp 2 tab vào 1 nút thì cột của 2 tập khác hẳn nhau.
-  const doExcelTem = () => exportCheckpointExcel({
-    cols: [
-      ...cotTemChung((r) => r.ma_tem_display || r.ma_tem),
-      { header: 'Nguồn', width: 14, value: (r) => (r.la_sua ? 'Sửa (tem 17)' : 'KCS (tem 15)') },
-      { header: 'Người tích', width: 18, value: (r) => (r.nguoi_tich_giao == null ? '' : String(r.nguoi_tich_giao)) },
-      { header: 'SL in', width: 12, num: true, value: (r) => (r.so_luong == null ? null : Number(r.so_luong)) },
-      { header: 'Còn giao', width: 12, num: true, value: (r) => (r.con_src == null ? null : Number(r.con_src)) },
-    ],
-    rows: displayRows,
-    title: 'Giao hàng — tem chờ giao',
-    fileName: 'giao-hang-tem-cho-giao',
-    moTaLoc: moTaBoLoc({
-      'ngày in tem': [range.from, range.to].filter(Boolean).join(' → '),
-      ...filters,
-    }),
-  });
+  // ⚠ 14/10/2026: Excel tab "Tem chờ giao" theo ĐÚNG khuôn "BÁO CÁO GIAO HÀNG" người dùng gửi (16 cột Muc…sophu,
+  //   `utils/exportBaoCaoGiaoHang.js`); khoảng ngày trên tiêu đề = bộ lọc "Ngày giao". Bộ cột cũ không còn dùng.
+  const doExcelTem = async () => {
+    try {
+      await exportBaoCaoGiaoHang(displayRows, { tuNgay: hanRange.from || '', denNgay: hanRange.to || '' });
+    } catch (e) { show(e.message || 'Xuất Excel thất bại', 'error'); }
+  };
 
   const doExcelPhieu = () => exportCheckpointExcel({
     cols: [
@@ -406,6 +423,7 @@ export default function GiaoHangPage() {
     // Nhà gia công (ERP NGC, mig 072) — theo đợt nhận vải, BE gộp DISTINCT theo lệnh của tem.
     { key: 'nha_gia_cong', header: 'Nhà gia công', render: (r) => r.nha_gia_cong || '—' },
     { key: 'nguoi_tich_giao', header: 'Người tích', render: (r) => r.nguoi_tich_giao || '—' },
+    { key: 'han_giao_hang', header: 'Ngày giao', render: (r) => <HanGiaoCell value={r.han_giao_hang} /> },
     { key: 'so_luong', header: 'SL in', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
     { key: 'con_src', header: 'Còn giao', className: 'text-right tabular-nums font-medium text-primary', render: (r) => fmtNum(r.con_src) },
     { key: 'giao_qty', header: 'SL giao lần này', className: 'w-32', render: (r) => (
@@ -480,6 +498,8 @@ export default function GiaoHangPage() {
           disabled={tab === 'tem' ? !displayRows.length : !phieus.length}>
           Excel ({tab === 'tem' ? displayRows.length : phieus.length})
         </Button>
+        {/* Tem đã kiểm phẩm (KCS) mà chưa giao — chia theo chặng Chờ sửa · Chờ OQC · Chờ GN tích · Chờ giao (14/10/2026). */}
+        <Button chiXemOk variant="secondary" icon="package" onClick={() => setTonKcsOpen(true)}>Tồn từ KCS</Button>
         <Button chiXemOk variant="ghost" icon="history" onClick={() => setHisOpen(true)}>Lịch sử</Button>
         <Button chiXemOk variant="ghost" icon="check" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
       </Toolbar>
@@ -516,6 +536,12 @@ export default function GiaoHangPage() {
               <span>Ngày in tem</span>
               <div className="w-64"><DateRangePicker value={range} onChange={setRange} placeholder="Chọn khoảng ngày in tem" /></div>
               {(range.from || range.to) && <button type="button" onClick={() => setRange({ from: '', to: '' })} className="text-ink-soft hover:text-danger" aria-label="Bỏ lọc ngày"><Icon name="x" size={14} /></button>}
+            </div>
+            {/* NGÀY GIAO = hạn giao sớm nhất của lệnh (14/10/2026) — cũng là khoảng ngày trên Excel "BÁO CÁO GIAO HÀNG". */}
+            <div className="flex items-center gap-1.5 text-xs text-ink-soft">
+              <span>Ngày giao</span>
+              <div className="w-64"><DateRangePicker value={hanRange} onChange={setHanRange} placeholder="Chọn khoảng ngày giao (hạn giao)" /></div>
+              {(hanRange.from || hanRange.to) && <button type="button" onClick={() => setHanRange({ from: '', to: '' })} className="text-ink-soft hover:text-danger" aria-label="Bỏ lọc ngày giao"><Icon name="x" size={14} /></button>}
             </div>
             <Button chiXemOk variant={showFilters || activeFilters.length ? 'secondary' : 'ghost'} icon="filter"
               onClick={() => setShowFilters((v) => !v)}>Bộ lọc{activeFilters.length ? ` (${activeFilters.length})` : ''}</Button>
@@ -598,6 +624,7 @@ export default function GiaoHangPage() {
       )}
 
       {sel && <GiaoHangPanel giaoHangId={sel} onClose={() => setSel(null)} onChanged={load} />}
+      <TonKcsModal open={tonKcsOpen} onClose={() => setTonKcsOpen(false)} show={show} />
       {journey && (
         <TemJourneyPanel temId={journey.temId} maTem={journey.maTem}
           fetcher={getTemHanhTrinh} onClose={() => setJourney(null)} />
@@ -631,7 +658,17 @@ export default function GiaoHangPage() {
 
       <HistoryPanel open={hisOpen} onClose={() => setHisOpen(false)} title="Lịch sử phiếu giao"
         fetcher={historyGiao}
-        extraColumns={[{ key: 'in', header: '', className: 'text-right', render: (r) => (r.id ? nutInLai(r.id) : null) }]} />
+        taiLai={huyLs.taiLai}
+        extraColumns={(ds) => {
+          // Dòng mới nhất của từng phiếu (bảng xếp mới → cũ) — chỉ dòng đó có nút Hủy.
+          const dau = new Set(); const thay = new Set();
+          ds.forEach((r) => { if (r.id && !thay.has(r.id)) { thay.add(r.id); dau.add(r._k); } });
+          return [
+            { key: 'in', header: '', className: 'text-right', render: (r) => (r.id ? nutInLai(r.id) : null) },
+            ...huyLs.taoCot((r) => !!r.id && dau.has(r._k) && r.trang_thai_phieu !== 'HUY'),
+          ];
+        }} />
+      {huyLs.modal}
 
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)} title="Phiếu giao đã hoàn thành"
         maHeader="Mã phiếu" fetcher={doneGiao} columns={doneCols} excelColumns={doneExcelCols} />

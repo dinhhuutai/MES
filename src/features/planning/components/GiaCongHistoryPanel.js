@@ -5,10 +5,12 @@ import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import Toast from '../../../components/common/Toast';
 import useToast from '../../../hooks/useToast';
-import { giaCongHistory } from '../../../services/planningService';
-import { fmtNum } from '../../../utils/format';
+import usePermissions from '../../../hooks/usePermissions';
+import useHuyLichSu from '../../../hooks/useHuyLichSu';
+import { giaCongHistory, huyGiaCongTemLichSu } from '../../../services/planningService';
+import { fmtNum, ngayLocalISO } from '../../../utils/format';
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const todayStr = () => ngayLocalISO(new Date());
 const fmtTime = (t) => (t ? new Date(t).toLocaleTimeString('vi-VN') : '');
 
 // 3 loại sự kiện trong lịch sử gia công (audit_log.hanh_dong). Chỉ lượt NHẬN HÀNG mới in được tem TH VỀ.
@@ -19,9 +21,12 @@ const LOAI = {
 };
 
 // Lịch sử gia công theo ngày: nhận hàng → OQC · OQC trả về · trả lại nhà gia công.
-// Dòng NHẬN HÀNG có nút "In tem" (tem TH VỀ, đầu 13).
-export default function GiaCongHistoryPanel({ open, onClose, onPrint }) {
+// Dòng NHẬN HÀNG có nút "In tem" (tem TH VỀ, đầu 13) + nút "Hủy" (14/10/2026): nhập lý do ⇒ backend hủy tem 13
+// (SL trả lại cho lệnh gia công) rồi báo ERP hủy phiếu theo IDMES. Chỉ hiện khi tem còn sống và CHƯA qua OQC / giao.
+// `onChanged` = trang cha tải lại bảng Gia công sau khi hủy.
+export default function GiaCongHistoryPanel({ open, onClose, onPrint, onChanged }) {
   const { toast, show } = useToast();
+  const { can } = usePermissions();
   const [date, setDate] = useState(todayStr);
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -43,7 +48,20 @@ export default function GiaCongHistoryPanel({ open, onClose, onPrint }) {
     }
   }, [open, date, show]);
 
-  useEffect(() => { load(); }, [load]);
+  const huyLs = useHuyLichSu({
+    goiHuy: (r, ly) => huyGiaCongTemLichSu(r.tem_id, ly),
+    show,
+    coQuyen: can('RELEASE1') || can('RELEASE2'),
+    tieuDe: 'Hủy lượt nhận hàng gia công',
+    moTa: (r) => <>Tem <b>{r.ma_tem}</b> · {r.ma_phan || r.ma_lenh_san_xuat} · {fmtNum(r.so_luong_lan_nay != null ? r.so_luong_lan_nay : r.so_luong_release)} pcs</>,
+    hauQua: 'Tem 13 của lượt nhận bị hủy; số lượng trả lại cho lệnh gia công để nhận lại.',
+    nhanNut: 'Hủy lượt nhận',
+    baoXong: (r) => `Đã hủy lượt nhận hàng ${r.ma_tem || ''}`,
+    sauKhiHuy: () => { if (onChanged) onChanged(); },
+  });
+  const { taiLai } = huyLs;
+
+  useEffect(() => { load(); }, [load, taiLai]);
 
   const columns = [
     { key: 'tg', header: 'Giờ', className: 'whitespace-nowrap tabular-nums', render: (r) => fmtTime(r.tg) },
@@ -75,6 +93,8 @@ export default function GiaCongHistoryPanel({ open, onClose, onPrint }) {
         </Button>
       ) : null
     ) },
+    // Hủy được khi: là lượt NHẬN HÀNG, tem 13 còn sống, chưa có lượt OQC / chưa giao (backend chặn lại lần nữa).
+    ...huyLs.taoCot((r) => r.loai === 'GIA_CONG_CHUYEN_OQC' && !!r.tem_id && r.tem_trang_thai !== 'HUY' && !r.tem_da_xu_ly),
   ];
 
   return (
@@ -88,6 +108,7 @@ export default function GiaCongHistoryPanel({ open, onClose, onPrint }) {
       </div>
       <DataTable columns={columns} rows={rows} loading={loading} rowKey="_k" sttStart={0}
         emptyText="Không có hoạt động gia công nào trong ngày" />
+      {huyLs.modal}
       <Toast toast={toast} />
     </SidePanel>
   );

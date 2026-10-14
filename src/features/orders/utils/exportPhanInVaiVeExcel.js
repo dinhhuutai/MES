@@ -2,6 +2,7 @@
 // Bám ĐÚNG bố cục bảng trên màn: mỗi phần in tách max(đợt vải, đợt SX) hàng;
 // khối định danh (Khách→SL đơn) GỘP Ô (rowspan); khối đợt vải & khối đợt SX theo từng hàng.
 // Lazy import exceljs để không phình bundle chính.
+import { ngayLocalISO } from '../../../utils/format';
 
 const HEADERS = [
   'STT', 'Khách hàng', 'Đơn hàng', 'Mã hàng', 'Màu vải', 'Kích vải', 'Kích phim', 'SL đơn hàng',
@@ -115,7 +116,7 @@ export default async function exportPhanInVaiVeExcel(rows, fileName = 'danh-sach
   const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  const stamp = new Date().toISOString().slice(0, 10);
+  const stamp = ngayLocalISO(new Date());
   a.href = url; a.download = `${fileName}-${stamp}.xlsx`; a.click();
   URL.revokeObjectURL(url);
 }

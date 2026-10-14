@@ -24,7 +24,7 @@ import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import CanhBaoGiaCong from '../components/CanhBaoGiaCong';
 import { laChuyenGiaCong, tenChuyen } from '../utils/chuyenGiaCong';
 import TimeSelect from '../../../components/common/TimeSelect';
-import NhieuNguoiSelect from '../../../components/common/NhieuNguoiSelect';
+import ThoInField from '../components/ThoInField';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import TraVeGnModal from '../../../components/common/TraVeGnModal';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
@@ -60,18 +60,6 @@ function SelectAllCheckbox({ checked, indeterminate, onChange }) {
   return (
     <input ref={ref} type="checkbox" checked={checked} onChange={onChange}
       className="h-4 w-4 rounded border-line text-primary focus:ring-primary" />
-  );
-}
-
-// Ô chọn THỢ IN KẾ HOẠCH (mig 111, 07/10/2026) — giá trị = 1 chuỗi tên ngăn dấu phẩy, cùng định dạng phân công
-// lúc chạy; gõ tên ngoài danh sách rồi Enter được (thợ khoán). Lưu vào lệnh (hoặc kế hoạch tạm nếu đợt chưa Ready).
-const timNguoi = (u) => `${u.ho_ten || ''} ${u.ten_dang_nhap || ''}`;
-function ThoInField({ value, onChange, users }) {
-  return (
-    <Field label="Thợ in">
-      <NhieuNguoiSelect value={value} onChange={onChange} options={users} getSearch={timNguoi}
-        placeholder="Gõ tên hoặc MSNV để tìm rồi chọn / Enter..." />
-    </Field>
   );
 }
 

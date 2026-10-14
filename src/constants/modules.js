@@ -36,7 +36,7 @@ export const MODULES = [
     perm: 'RELEASE1',
     mau: 'bg-violet-50 text-violet-600',
     children: [
-      { ten: 'Tạo đợt sản xuất', route: '/ke-hoach/tao-dot-san-xuat', perm: 'RELEASE1' },
+      { ten: 'Gom đợt vải', route: '/ke-hoach/tao-dot-san-xuat', perm: 'RELEASE1' },
       { ten: 'Release 1', route: '/ke-hoach/release-1', perm: 'RELEASE1', siSo: 'KH_RELEASE1' },
       { ten: 'Release 2', route: '/ke-hoach/release-2', perm: 'RELEASE2', siSo: 'KH_RELEASE2' },
       { ten: 'Gia công', route: '/ke-hoach/gia-cong', perm: ['RELEASE1', 'RELEASE2'], siSo: 'KH_GIA_CONG' },

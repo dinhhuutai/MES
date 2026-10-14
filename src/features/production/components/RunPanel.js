@@ -11,7 +11,8 @@ import TimeSelect from '../../../components/common/TimeSelect';
 import { Field, Input, Textarea, Select } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
-import { getRun, printTem, printTemBatch, reprintTem, getTemLabel, getTemLogs, finishRun, stopLine, resumeLine, addVaiHuy, savePhanCong, pauseLenhChay, listProductionCandidates, startProduction, vuotSanXuat, doiChuyen, traVeKyThuatSanXuat, listChuyen, listLyDoNgung, listToIn, luuLyDoBoSungDotVai } from '../../../services/productionService';
+import useHuyLichSu from '../../../hooks/useHuyLichSu';
+import { getRun, printTem, printTemBatch, reprintTem, getTemLabel, getTemLogs, finishRun, stopLine, resumeLine, addVaiHuy, savePhanCong, pauseLenhChay, listProductionCandidates, startProduction, vuotSanXuat, doiChuyen, traVeKyThuatSanXuat, listChuyen, listLyDoNgung, listToIn, luuLyDoBoSungDotVai, huyTemTaiLichSu, moLaiTemTaiLichSu } from '../../../services/productionService';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import { listUserOptions } from '../../../services/userService';
 import printTemLabel, { printTemLabelNhieu, moSanCuaSoIn, dongCuaSoIn } from '../utils/printTemLabel';
@@ -61,37 +62,54 @@ const INFO_HEADERS = ['STT', 'Khách hàng', 'Đơn hàng', 'Mã hàng', 'Code p
 // ⚠ Đặt ở MỨC MODULE (không lồng trong RunPanel/PrintSetModal) — component lồng bị remount mỗi lần
 // cha render ⇒ ô nhập mất focus khi đang gõ (cùng luật với `PhanInInfoCells`).
 //
-// NGÀY CA là Ô CHỮ dạng `YYMMDD` + mã ca (`260805D2` = 05/08/2026 ca Dài 2 · `C2` ca Ngắn 2 · `HC`
-// hành chính). BE gợi ý sẵn theo **GIỜ HIỆN TẠI lúc mở sidebar** + loại ca của tuần (`goi_y_tem`),
-// người dùng sửa được.
+// NGÀY CA là Ô CHỮ dạng `YYMMDD` + mã ca (`260805D2` = 05/08/2026 ca Dài 2 · `C2` ca Ngắn 2 · `HC` hành chính).
+// `ngayCt` = NGÀY CHỨNG TỪ gửi lên ERP (`@pNgayct`).
+// ⚠⚠ "NHẬP ĐẦU CA" (13/10/2026, người dùng chốt): 2 ô này KHÔNG còn điền sẵn theo giờ / hôm nay — để TRỐNG, thiếu
+//   là KHÔNG cho in tem (FE báo + BE 422 `THIEU_NGAY_CA`). Người in nhập 1 lần đầu ca; BE nhớ theo LƯỢT CA
+//   (`goi_y_tem.ngay_ca` / `ngay_ct` / `khoa_ca`) nên các lượt in sau trong ca tự điền lại; hết ca ⇒ trống lại.
+//   `_khoaCa` = lượt ca mà giá trị đang gõ thuộc về — gửi kèm (`khoaCa`) để BE chặn 409 `HET_CA` khi sidebar mở
+//   sẵn từ ca trước.
 // GIỜ dùng `TimeSelect` (0h–23h + phút) chứ KHÔNG `<input type="time">` — ô đó hiện AM/PM theo locale máy.
-// `ngayCt` = NGÀY CHỨNG TỪ gửi lên ERP (`@pNgayct`). Mặc định = HÔM NAY, sửa được khi muốn ghi lượt in
-// vào ngày khác (in bù, chốt sổ cuối ngày). Bỏ trống ⇒ backend dùng `now()` y như trước.
-// ⚠ Tính theo giờ LOCAL, KHÔNG `toISOString().slice(0,10)` — giờ VN (UTC+7) trước 07:00 sáng sẽ ra
-//   NGÀY HÔM QUA (bẫy đã ghi ở CLAUDE.md §6).
-const homNayLocal = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
-export const META_MAC_DINH = () => ({ ngayCa: '', gioBd: '', gioKt: '', btpTruoc: false, btpCuoi: false, gcMauVai: '', ngayCt: homNayLocal(), _suaGioKt: false });
+export const META_MAC_DINH = () => ({ ngayCa: '', gioBd: '', gioKt: '', btpTruoc: false, btpCuoi: false, gcMauVai: '', ngayCt: '', _suaGioKt: false, _khoaCa: '' });
 export const gioHienTai = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+// Thiếu Ngày ca / Ngày chứng từ ⇒ câu báo (rỗng = đủ). Gọi TRƯỚC khi mở cửa sổ in.
+export const thieuNgayCaCt = (m) => {
+  const thieu = [!String(m?.ngayCa || '').trim() && 'Ngày ca', !m?.ngayCt && 'Ngày chứng từ'].filter(Boolean);
+  return thieu.length ? `Chưa nhập ${thieu.join(' và ')} — nhập 1 lần đầu ca rồi mới in tem được` : '';
+};
+// Đưa gợi ý của BE vào ô: chỉ điền ô người dùng CHƯA gõ; lượt ca đã đổi so với lúc gõ ⇒ bỏ ngày ca / ngày chứng
+// từ của ca cũ trước (để trống lại cho ca mới).
+export const apGoiYTem = (m, g) => {
+  if (!g) return m;
+  const sangCa = !!m._khoaCa && !!g.khoa_ca && m._khoaCa !== g.khoa_ca;
+  const b = sangCa ? { ...m, ngayCa: '', ngayCt: '' } : m;
+  return {
+    ...b,
+    ngayCa: b.ngayCa || g.ngay_ca || '',
+    ngayCt: b.ngayCt || g.ngay_ct || '',
+    gioBd: b.gioBd || g.gio_bd || '',
+    gioKt: b.gioKt || g.gio_kt || '',
+    _khoaCa: g.khoa_ca || '',
+  };
+};
 // ⚠⚠ "ĐẾN GIỜ" CHẠY THEO ĐỒNG HỒ tới khi người dùng TỰ SỬA (30/09/2026): bản cũ điền giờ LÚC MỞ SIDEBAR rồi
 //   đứng yên ⇒ để sidebar mở lâu rồi bấm In là gửi ERP giờ kết thúc cũ. Cờ `_suaGioKt` bật khi người dùng
 //   chọn giờ ở ô đó; chưa bật ⇒ vòng 20s + lúc bấm In đều cập nhật về giờ hiện tại (ô hiện gì = gửi nấy).
-export const metaGuiDi = (m) => (m._suaGioKt ? m : { ...m, gioKt: gioHienTai() });
+export const metaGuiDi = (m) => ({ ...(m._suaGioKt ? m : { ...m, gioKt: gioHienTai() }), khoaCa: m._khoaCa || '' });
 
 // `anGcMauVai`: lệnh GOM SET nhập GC màu vải RIÊNG từng dòng trong bảng → ẩn ô chung ở đây cho khỏi lẫn.
-export function TemMetaFields({ meta, setMeta, goiY, anGcMauVai = false }) {
+export function TemMetaFields({ meta, setMeta, anGcMauVai = false }) {
   const set = (k, v) => setMeta((m) => ({ ...m, [k]: v, ...(k === 'gioKt' ? { _suaGioKt: true } : {}) }));
   const chk = 'h-4 w-4 rounded border-line text-primary focus:ring-primary/30';
-  const khacGoiY = goiY?.ngay_ca && meta.ngayCa && meta.ngayCa !== goiY.ngay_ca;
+  const batBuoc = <span className="text-danger"> *</span>;
+  const thieuCa = !String(meta.ngayCa || '').trim();
   return (
     <div className="rounded-control border border-line bg-surface-muted/40 p-2.5">
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <label className="block">
-          <span className="mb-1 block text-xs font-medium text-ink-soft">Ngày ca</span>
+          <span className="mb-1 block text-xs font-medium text-ink-soft">Ngày ca{batBuoc}</span>
           <Input value={meta.ngayCa} onChange={(e) => set('ngayCa', e.target.value)}
-            placeholder={goiY?.ngay_ca || 'vd: 260805D2'} className="tabular-nums" />
+            placeholder="vd: 260805D2" className={`tabular-nums ${thieuCa ? 'border-danger' : ''}`} />
         </label>
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-ink-soft">Từ giờ</span>
@@ -102,21 +120,12 @@ export function TemMetaFields({ meta, setMeta, goiY, anGcMauVai = false }) {
           <TimeSelect value={meta.gioKt} onChange={(v) => set('gioKt', v)} minuteStep={1} />
         </label>
       </div>
-      {khacGoiY && (
-        <button type="button" onClick={() => set('ngayCa', goiY.ngay_ca)}
-          className="mt-1.5 text-xs font-medium text-primary hover:underline">
-          ↺ Về mã theo giờ hiện tại ({goiY.ngay_ca})
-        </button>
-      )}
-      {/* NGÀY CHỨNG TỪ — con số gửi lên ERP (`Ngayct`). Mặc định hôm nay; sửa khi muốn ghi lượt in này
-          vào ngày khác. Đây là NGÀY CHỨNG TỪ, KHÔNG phải ngày ca (ô trên) — 2 thứ khác nhau. */}
+      {/* NGÀY CHỨNG TỪ — con số gửi lên ERP (`Ngayct`), KHÔNG phải ngày ca (ô trên) — 2 thứ khác nhau.
+          Cũng nhập đầu ca như Ngày ca: để trống, bắt buộc, các lượt in sau trong ca tự điền lại. */}
       <label className="mt-2 block">
-        <span className="mb-1 block text-xs font-medium text-ink-soft">Ngày chứng từ (gửi ERP)</span>
-        <Input type="date" value={meta.ngayCt || ''} onChange={(e) => set('ngayCt', e.target.value)} />
-        {meta.ngayCt && meta.ngayCt !== homNayLocal() && (
-          <button type="button" onClick={() => set('ngayCt', homNayLocal())}
-            className="mt-1 text-xs font-medium text-primary hover:underline">↺ Về hôm nay</button>
-        )}
+        <span className="mb-1 block text-xs font-medium text-ink-soft">Ngày chứng từ (gửi ERP){batBuoc}</span>
+        <Input type="date" value={meta.ngayCt || ''} onChange={(e) => set('ngayCt', e.target.value)}
+          className={meta.ngayCt ? '' : 'border-danger'} />
       </label>
       {!anGcMauVai && (
         <label className="mt-2 block">
@@ -494,6 +503,10 @@ function PrintSetModal({ open, onClose, rows, onPrintRow, busy, meta, setMeta, g
 
 // `truocXacNhan()` (26/09/2026) — Promise<bool>: trang hỏi LÝ DO NGHẼN khi "Chạy hoàn tất" một lệnh
 // đang quá SLA (mig 106). Không truyền ⇒ như cũ.
+// Tem còn HỦY được ở "Tem đã in": chưa qua kiểm (gương guard backend `production.service.cancelPrintTem`).
+const TEM_CHUA_KIEM = ['IN', 'DANG_PHOI', 'DA_KHO'];
+const temHuyDuoc = (t) => TEM_CHUA_KIEM.includes(t.trang_thai) && !t.da_kiem;
+
 export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
   const { can } = usePermissions();
   const { toast, show } = useToast();
@@ -556,15 +569,9 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
     try {
       const res = await getRun(lenhId);
       setData(res.data);
-      // Điền sẵn ngày ca (theo KẾ HOẠCH) + giờ SX (từ mốc kết thúc lượt in trước → bây giờ).
-      // ⚠ Chỉ điền ô nào người dùng CHƯA gõ, để không đè mất thứ họ đang sửa dở khi màn tự tải lại.
-      const g = res.data?.goi_y_tem;
-      if (g) setTemMeta((m) => ({
-        ...m,
-        ngayCa: m.ngayCa || g.ngay_ca || '',
-        gioBd: m.gioBd || g.gio_bd || '',
-        gioKt: m.gioKt || g.gio_kt || '',
-      }));
+      // Điền lại Ngày ca + Ngày chứng từ ĐÃ NHẬP ĐẦU CA (chưa ai nhập ⇒ để trống) + giờ SX (từ mốc kết thúc
+      // lượt in trước → bây giờ). ⚠ Chỉ điền ô nào người dùng CHƯA gõ (`apGoiYTem`).
+      setTemMeta((m) => apGoiYTem(m, res.data?.goi_y_tem));
     } catch (e) {
       show(e.message || 'Lỗi tải', 'error');
     } finally {
@@ -573,6 +580,37 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
   }, [lenhId, show]);
 
   useEffect(() => { load(); }, [load]);
+
+  // NÚT "HỦY" Ở TỪNG TEM ĐÃ IN (14/10/2026): nhập lý do ⇒ backend hủy tem (gỡ khỏi xe phơi, trả SL cho lệnh)
+  // rồi báo ERP hủy phiếu in tem theo IDMES của lượt in đó. Chỉ tem CHƯA kiểm mới hủy được (`temHuyDuoc`).
+  const huyTem = useHuyLichSu({
+    goiHuy: (t, ly) => huyTemTaiLichSu(t.id, ly),
+    show,
+    coQuyen: canRun,
+    tieuDe: 'Hủy tem đã in',
+    moTa: (t) => <>Tem <b>{t.ma_tem}</b> · {fmtNum(t.so_luong)} pcs</>,
+    hauQua: 'Tem bị hủy và gỡ khỏi xe phơi; số lượng trả lại cho lệnh để in lại.',
+    nhanNut: 'Hủy tem',
+    baoXong: (t) => `Đã hủy tem ${t.ma_tem}`,
+    sauKhiHuy: () => { load(); onChanged?.(); },
+  });
+  // NÚT "MỞ LẠI" Ở TEM ĐÃ HỦY (14/10/2026): chỉ tem hủy bằng nút Hủy / "Hủy lệnh in tem" (`mo_lai_duoc` do backend tính —
+  // cùng điều kiện với guard). Mở lại ⇒ tem về trạng thái trước khi hủy, SL tính lại vào đã in, ERP được gửi lại phiếu.
+  const moLaiTem = useHuyLichSu({
+    goiHuy: (t, ly) => moLaiTemTaiLichSu(t.id, ly),
+    show,
+    coQuyen: canRun,
+    tieuDe: 'Mở lại tem đã hủy',
+    moTa: (t) => <>Tem <b>{t.ma_tem}</b> · {fmtNum(t.so_luong)} pcs</>,
+    hauQua: 'Tem về lại trạng thái trước khi hủy (chờ khô / chờ kiểm); số lượng tính lại vào "đã in" của lệnh (không vượt 110% SL release).',
+    nhanNut: 'Mở lại tem',
+    baoXong: (t) => `Đã mở lại tem ${t.ma_tem}`,
+    sauKhiHuy: () => { load(); onChanged?.(); },
+    modalProps: {
+      nhanLyDo: 'Lý do mở lại', kieuNut: 'primary', goiY: 'Vì sao mở lại (vd: hủy nhầm tem)...',
+      ghiChuErp: 'Mở xong hệ thống tự gửi lại phiếu in tem sang ERP (cùng IDMES của lượt in).',
+    },
+  });
   // "Đến giờ" chưa bị người dùng sửa ⇒ nhích theo đồng hồ (xem `metaGuiDi`).
   useEffect(() => {
     const t = setInterval(() => setTemMeta((m) => (m._suaGioKt || m.gioKt === gioHienTai() ? m : metaGuiDi(m))), 20000);
@@ -629,7 +667,21 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
     try { return moSanCuaSoIn(); } catch (e) { show(e.message, 'error'); return undefined; }
   };
 
+  // Thiếu Ngày ca / Ngày chứng từ ⇒ báo và KHÔNG in (kiểm trước khi mở cửa sổ in).
+  const thieuDauCa = () => {
+    const loi = thieuNgayCaCt(temMeta);
+    if (loi) show(loi, 'error');
+    return !!loi;
+  };
+  // BE báo đã sang ca mới (sidebar mở từ ca trước) ⇒ bỏ giá trị ca cũ, tải lại gợi ý của ca này.
+  const neuHetCa = (e) => {
+    if (e?.errorCode !== 'HET_CA') return;
+    setTemMeta((m) => ({ ...m, ngayCa: '', ngayCt: '', _khoaCa: '' }));
+    load();
+  };
+
   const doPrint = async () => {
+    if (thieuDauCa()) return;
     const n = soTemHopLe(soTem);
     const w = moCuaSo();
     if (w === undefined) return; // popup bị chặn — chưa tạo tem nào
@@ -659,6 +711,7 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
     } catch (e) {
       dongCuaSoIn(w);
       show(e.message || 'In tem thất bại', 'error');
+      neuHetCa(e);
     } finally {
       setBusy(false);
     }
@@ -669,6 +722,7 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
   // `temMeta` (ngày ca/giờ áp chung cho cả lượt đứng máy — còn in tiếp các dòng khác).
   // ⚠ Vải hủy/thiếu chỉ gắn vào DÒNG ĐẦU — backend ghi sổ vải theo từng dòng, lặp N dòng là ghi N lần.
   const doPrintRow = async (item, soTemDong = 1) => {
+    if (thieuDauCa()) return false;
     const n = item.soLuong > 0 ? soTemHopLe(soTemDong) : 1;
     const w = item.soLuong > 0 ? moCuaSo() : null;
     if (w === undefined) return false;
@@ -696,6 +750,7 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
     } catch (e) {
       dongCuaSoIn(w);
       show(e.message || 'In tem thất bại', 'error');
+      neuHetCa(e);
       return false;
     } finally {
       setBusy(false);
@@ -1198,7 +1253,15 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
                               className="text-ink-soft hover:text-primary"><Icon name="printer" size={15} /></button>
                             <button onClick={() => { setReprint(t); setReprintReason(''); }}
                               className="text-xs font-medium text-primary hover:underline">In lại</button>
+                            {temHuyDuoc(t) && (
+                              <button onClick={() => huyTem.moHuy(t)} title="Hủy tem này (nhập lý do) — báo ERP hủy phiếu in tem"
+                                className="text-xs font-medium text-danger hover:underline">Hủy</button>
+                            )}
                           </>
+                        )}
+                        {canRun && huy && t.mo_lai_duoc && (
+                          <button onClick={() => moLaiTem.moHuy(t)} title="Mở lại tem đã hủy (nhập lý do) — gửi lại phiếu in tem sang ERP"
+                            className="text-xs font-medium text-primary hover:underline">Mở lại</button>
                         )}
                       </div>
                     </div>
@@ -1476,6 +1539,8 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
         )}
       </Modal>
 
+      {huyTem.modal}
+      {moLaiTem.modal}
       <Toast toast={toast} />
     </SidePanel>
   );

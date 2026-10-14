@@ -4,6 +4,7 @@ import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import Icon from '../../../components/common/Icon';
 import { Field, Input, Select } from '../../../components/common/controls';
+import { ngayLocalISO } from '../../../utils/format';
 
 // Cấu hình 1 KHỐI DANH SÁCH đặt tại ô neo `oKey`:
 //   ds = { nguon, loc:{...}, cot:[key...], gioi_han }
@@ -73,7 +74,7 @@ export default function DatasetBlockModal({ open, onClose, oKey, value, datasets
                   ) : f.kieu === 'ngay' ? (
                     <div className="space-y-1">
                       <Select value={/^\d{4}-/.test(ds.loc[f.ma] || '') ? 'CU_THE' : (ds.loc[f.ma] || '')}
-                        onChange={(e) => setLoc(f.ma, e.target.value === 'CU_THE' ? new Date().toISOString().slice(0, 10) : e.target.value)}>
+                        onChange={(e) => setLoc(f.ma, e.target.value === 'CU_THE' ? ngayLocalISO(new Date()) : e.target.value)}>
                         <option value="">— mọi ngày —</option>
                         <option value="HOM_NAY">Hôm nay (tự đổi)</option>
                         <option value="CU_THE">Ngày cụ thể…</option>

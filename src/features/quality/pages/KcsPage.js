@@ -25,8 +25,9 @@ import { Field, Input } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import useSocketReload from '../../../hooks/useSocketReload';
 import usePermissions from '../../../hooks/usePermissions';
+import useHuyLichSu from '../../../hooks/useHuyLichSu';
 import useOTimKiem from '../../../hooks/useOTimKiem';
-import { listKcsCandidates, recordKcs, gopTem, kcsHistory, kcsDone, getTemHanhTrinh } from '../../../services/qualityService';
+import { listKcsCandidates, recordKcs, gopTem, kcsHistory, kcsDone, getTemHanhTrinh, huyKcsLichSu } from '../../../services/qualityService';
 import { redryTem, getTemLabel } from '../../../services/productionService';
 import { printKcsGiaoTem } from '../../production/utils/printTemLabel';
 import { fmtNum, fmtDateTime, timTheoMaTem } from '../../../utils/format';
@@ -202,6 +203,19 @@ export default function KcsPage() {
   // ⚠ Tải NGẦM khi có sự kiện realtime: `load(true)` bỏ qua `setLoading(true)` (bảng không bị
   // thay bằng spinner) và KHÔNG xóa dòng đang tích. Nhiều sự kiện trong 400ms gộp thành 1 lần tải.
   useSocketReload(['quality:updated', 'drying:updated'], () => load(true));
+  // NÚT "HỦY" Ở TỪNG DÒNG LỊCH SỬ (14/10/2026): nhập lý do ⇒ backend đảo sổ cái lượt đó rồi báo ERP hủy chứng từ
+  // theo IDMES. Chỉ cần quyền công đoạn của màn này (người dùng chốt).
+  const huyLs = useHuyLichSu({
+    goiHuy: (r, ly) => huyKcsLichSu(r.id, ly),
+    show,
+    coQuyen: canKcs,
+    tieuDe: 'Hủy xác nhận KCS',
+    moTa: (r) => <>Tem <b>{r.doi_tuong}</b> · {r.chi_tiet}</>,
+    nhanNut: 'Hủy xác nhận',
+    hauQua: 'Số lượng của lượt này quay về chờ KCS.',
+    baoXong: (r) => `Đã hủy lượt KCS của tem ${r.doi_tuong || ''}`,
+    sauKhiHuy: () => load(true),
+  });
 
   // Tự làm mới ngầm mỗi 30s: tem phơi xong (BE tự chuyển sang chờ KCS) sẽ hiện lên mà không cần bấm.
   useEffect(() => {
@@ -516,7 +530,8 @@ export default function KcsPage() {
       </Modal>
 
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}
-        title="Lịch sử KCS" fetcher={kcsHistory} />
+        title="Lịch sử KCS" fetcher={kcsHistory} extraColumns={huyLs.cotHuy} taiLai={huyLs.taiLai} />
+      {huyLs.modal}
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
         title="Tem đã KCS" maHeader="Tem" fetcher={kcsDone} columns={doneColumns}
         excelColumns={[

@@ -12,3 +12,6 @@ export const listBienPhap = (params) => client.get('/quality/bien-phap', { param
 export const createBienPhap = (body) => client.post('/quality/bien-phap', body);
 export const updateBienPhap = (id, body) => client.patch(`/quality/bien-phap/${id}`, body);
 export const toggleBienPhap = (id, active) => client.patch(`/quality/bien-phap/${id}/active`, { active });
+
+// Hủy phân loại lỗi (14/10/2026): tem về "chưa phân loại" + báo ERP hủy phiếu đã gửi. Lý do bắt buộc.
+export const huyPhanLoaiLoi = (temId, lyDo) => client.post(`/quality/phan-loai-loi/${temId}/huy`, { lyDo });

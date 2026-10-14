@@ -9,7 +9,8 @@ import Button from '../../../components/common/Button';
 import SidePanel from '../../../components/common/SidePanel';
 import Toast from '../../../components/common/Toast';
 import HistoryPanel from '../../../components/common/HistoryPanel';
-import DonePanel, { COT_EXCEL_GIO_HT } from '../../../components/common/DonePanel';
+import DonePanel from '../../../components/common/DonePanel';
+import exportDanhSachOqc from '../utils/exportDanhSachOqc';
 import { Field, Input, Textarea } from '../../../components/common/controls';
 import SearchableSelect from '../../../components/common/SearchableSelect';
 import QrScanner from '../../../components/common/QrScanner';
@@ -26,8 +27,9 @@ import { evalSla, slaRowClass } from '../../../utils/sla';
 import useLyDoNghen from '../../../hooks/useLyDoNghen';
 import { trangThaiSla } from '../../../utils/nghen';
 import usePermissions from '../../../hooks/usePermissions';
+import useHuyLichSu from '../../../hooks/useHuyLichSu';
 import useOTimKiem from '../../../hooks/useOTimKiem';
-import { listOqcCandidates, recordOqc, oqcHistory, oqcDone, returnOqcToKcs } from '../../../services/qualityService';
+import { listOqcCandidates, recordOqc, oqcHistory, oqcDone, returnOqcToKcs, huyOqcLichSu } from '../../../services/qualityService';
 import { listUserOptions } from '../../../services/userService';
 import { fmtNum, timTheoMaTem, maTemNhan } from '../../../utils/format';
 
@@ -115,6 +117,19 @@ export default function OqcPage() {
   // ⚠ Tải NGẦM khi có sự kiện realtime: `load(true)` bỏ qua `setLoading(true)` (bảng không bị
   // thay bằng spinner) và KHÔNG xóa dòng đang tích. Nhiều sự kiện trong 400ms gộp thành 1 lần tải.
   useSocketReload(['quality:updated'], () => load(true));
+  // NÚT "HỦY" Ở TỪNG DÒNG LỊCH SỬ (14/10/2026): nhập lý do ⇒ backend đảo sổ cái lượt đó rồi báo ERP hủy chứng từ
+  // theo IDMES. Chỉ cần quyền công đoạn của màn này (người dùng chốt).
+  const huyLs = useHuyLichSu({
+    goiHuy: (r, ly) => huyOqcLichSu(r.id, ly),
+    show,
+    coQuyen: canOqc,
+    tieuDe: 'Hủy xác nhận OQC',
+    moTa: (r) => <>Tem <b>{r.doi_tuong}</b> · {r.chi_tiet}</>,
+    nhanNut: 'Hủy xác nhận',
+    hauQua: 'Số lượng của lượt này quay về chờ OQC.',
+    baoXong: (r) => `Đã hủy lượt OQC của tem ${r.doi_tuong || ''}`,
+    sauKhiHuy: () => load(true),
+  });
 
   // row = display-row đã tách nguồn (có nguon + con_src + ma_tem_display).
   const open = (row) => {
@@ -379,7 +394,8 @@ export default function OqcPage() {
       </SidePanel>
 
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}
-        title="Lịch sử OQC" fetcher={oqcHistory} />
+        title="Lịch sử OQC" fetcher={oqcHistory} extraColumns={huyLs.cotHuy} taiLai={huyLs.taiLai} />
+      {huyLs.modal}
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
         title="Tem đã OQC" maHeader="Tem" fetcher={oqcDone}
         columns={[
@@ -398,22 +414,8 @@ export default function OqcPage() {
           { key: 'tg', header: 'Giờ HT', className: 'whitespace-nowrap tabular-nums', render: (r) => (r.tg ? new Date(r.tg).toLocaleTimeString('vi-VN') : '') },
           { key: 'nguoi', header: 'Người', render: (r) => r.nguoi || '—' },
         ]}
-        excelColumns={[
-          { header: 'Tem', value: (r) => maHienDone(r) },
-          { header: 'Nguồn', value: (r) => (r.nguon === 'SUA' ? 'Sửa' : 'KCS') },
-          { header: 'Khách hàng', value: (r) => r.ten_khach_hang || '' },
-          { header: 'Đơn hàng', value: (r) => r.ma_don_hang || '' },
-          { header: 'Mã hàng', value: (r) => r.ma_hang || '' },
-          { header: 'Màu vải', value: (r) => r.mau_vai || '' },
-          { header: 'Kích vải', value: (r) => r.kich_vai || '' },
-          { header: 'Kích phim', value: (r) => r.kich_phim || '' },
-          { header: 'Tính chất in', value: (r) => r.tinh_chat_in || '' },
-          { header: 'SL đạt', value: (r) => Number(r.so_luong) || 0, num: true },
-          { header: 'SL qua giao', value: (r) => Number(r.sl_qua_giao) || 0, num: true },
-          { header: 'Hạn giao', value: (r) => r.han_giao_hang || '', type: 'date' },
-          COT_EXCEL_GIO_HT,
-          { header: 'Người', value: (r) => r.nguoi || '' },
-        ]} />
+        // Excel theo ĐÚNG khuôn tờ "DANH SÁCH KIỂM TRA CHẤT LƯỢNG ĐẦU RA QCO" (14/10/2026) — `utils/exportDanhSachOqc.js`.
+        xuatExcel={({ rows: ds, date }) => exportDanhSachOqc(ds, { tuNgay: date, maTem: maHienDone })} />
 
       {/* OQC quét MÃ VẠCH trên tem là chính ⇒ mở ra đã ở chế độ mã vạch (vẫn bấm đổi sang QR được). */}
       <QrScanner open={scanOpen} onClose={() => setScanOpen(false)} onResult={onScan} cheDoMacDinh="barcode" />

@@ -181,6 +181,37 @@ function BangLuat({ thay, onDoi }) {
   );
 }
 
+// LẤY PHẦN TỬ CỦA TRƯỜNG DANH SÁCH (14/10/2026) — "nếu là danh sách thì lấy đầy đủ hay lấy item thứ mấy". Lưu `phan_tu`
+// trên mảnh trường / ô mã: vắng = toàn bộ · n = phần tử thứ n · -1 = phần tử cuối (luật ở `renderMauTem.layPhanTu`).
+const SO_PHAN_TU_CHON = 10;
+const moTaPhanTu = (n) => {
+  const v = Math.trunc(Number(n) || 0);
+  if (!v) return '';
+  return v === -1 ? 'phần tử cuối' : `phần tử thứ ${v}`;
+};
+// ⚠ Mức MODULE (như `BangLuat`) — lồng trong `TemOPanel` thì <select> tự đóng mỗi lần cha render.
+function ChonPhanTu({ value, onDoi }) {
+  const v = Math.trunc(Number(value) || 0);
+  return (
+    <div className="space-y-1">
+      <div className="text-[11px] text-ink-soft">
+        Dữ liệu là <b>danh sách</b> (nhiều giá trị ngăn dấu phẩy — vd thợ in) thì lấy:
+      </div>
+      <select value={String(v)} className={`${SEL_NHO} w-full`}
+        onChange={(e) => onDoi(Number(e.target.value) || null)}>
+        <option value="0">Toàn bộ danh sách</option>
+        {Array.from({ length: SO_PHAN_TU_CHON }, (_, i) => i + 1).map((n) => (
+          <option key={n} value={String(n)}>Phần tử thứ {n}</option>
+        ))}
+        <option value="-1">Phần tử cuối cùng</option>
+      </select>
+      {v !== 0 && (
+        <div className="text-[11px] text-ink-soft">Danh sách ít hơn {v > 0 ? v : 1} phần tử ⇒ ô in TRỐNG.</div>
+      )}
+    </div>
+  );
+}
+
 // TRƯỜNG DỰ PHÒNG (11/10/2026) — "không có dữ liệu trường này thì lấy trường khác": danh sách theo THỨ TỰ ƯU TIÊN,
 // dùng chung cho mảnh trường của ô chữ và ô QR/mã vạch. Lưu kèm `kieu` của trường (bộ render tự đủ, không tra danh mục).
 // ⚠ Khai ở MỨC MODULE (như `BangLuat`) — lồng trong `TemOPanel` thì <select> tự đóng mỗi lần cha render.
@@ -300,6 +331,9 @@ export default function TemOPanel({
             <BangDuPhong duPhong={o?.du_phong} maChinh={o?.ma_qr || 'ma_tem'} nhomTruong={nhomTruong} truongMap={truongMap}
               onDoi={(list) => onDoiO({ du_phong: list })} />
           </div>
+          <div className="rounded-control border border-line px-2 py-1.5">
+            <ChonPhanTu value={o?.phan_tu} onDoi={(n) => onDoiO({ phan_tu: n })} />
+          </div>
           {/* ⚠ Mặc định KHÁC NHAU giữa 2 loại — luật chung ở `renderMauTem.hienChuMa`:
               mã vạch mặc định KHÔNG hiện số (vạch đã đủ dữ liệu, đỡ tốn chỗ), QR thì có. */}
           <label className="flex items-center gap-2 text-sm text-ink">
@@ -333,8 +367,8 @@ export default function TemOPanel({
               <div className="mt-2 rounded-control bg-surface-muted px-2 py-1.5 text-[11px]">
                 <div className="text-ink-soft">Với dữ liệu mẫu:</div>
                 <div className="mt-0.5 break-all font-mono text-ink">
-                  {giaTriMa({ ...o, thay: null }, data) || '—'}
-                  {(o?.thay || []).length > 0 && (
+                  {giaTriMa({ ...o, thay: null, phan_tu: null }, data) || '—'}
+                  {((o?.thay || []).length > 0 || !!o?.phan_tu) && (
                     <> → <span className="font-semibold text-primary">{giaTriMa(o, data) || '(rỗng)'}</span></>
                   )}
                 </div>
@@ -374,8 +408,8 @@ export default function TemOPanel({
                       : <><Icon name="database" size={12} className="text-primary" /><span className="text-ink">{truongMap[p.ma]?.ten || p.ma}</span></>}
                     <div className="ml-auto flex items-center gap-0.5">
                       {p.loai === 'truong' && (
-                        <button type="button" title="Trường dự phòng khi không có dữ liệu · đổi cách hiển thị (thay chữ / thay theo vị trí / thêm đầu-cuối)"
-                          className={coLuat.length || duPhong.length ? 'text-primary' : 'text-ink-soft hover:text-primary'}
+                        <button type="button" title="Trường dự phòng khi không có dữ liệu · lấy toàn bộ / 1 phần tử của danh sách · đổi cách hiển thị (thay chữ / thay theo vị trí / thêm đầu-cuối)"
+                          className={coLuat.length || duPhong.length || p.phan_tu ? 'text-primary' : 'text-ink-soft hover:text-primary'}
                           onClick={() => setMoThay(moThay === i ? null : i)}><Icon name="pencil" size={12} /></button>
                       )}
                       <button type="button" title="Lên" className="text-ink-soft hover:text-primary disabled:opacity-30"
@@ -393,6 +427,9 @@ export default function TemOPanel({
                       trống thì lấy: {duPhong.map((d) => truongMap[d.ma]?.ten || d.ma).join(' → ')}
                     </div>
                   )}
+                  {p.loai === 'truong' && !!p.phan_tu && moThay !== i && (
+                    <div className="mt-0.5 text-[11px] text-primary">danh sách: chỉ lấy {moTaPhanTu(p.phan_tu)}</div>
+                  )}
                   {p.loai === 'truong' && coLuat.length > 0 && moThay !== i && (
                     <div className="mt-0.5 text-[11px] text-primary">
                       đổi hiển thị: {coLuat.map(moTaLuat).join(' · ')}
@@ -406,6 +443,10 @@ export default function TemOPanel({
                       {/* TRƯỜNG DỰ PHÒNG — trường chính trống thì in trường khác (11/10/2026). */}
                       <BangDuPhong duPhong={p.du_phong} maChinh={p.ma} nhomTruong={nhomTruong} truongMap={truongMap}
                         onDoi={(list) => doiPhan(i, { du_phong: list })} />
+                      {/* LẤY TOÀN BỘ / 1 PHẦN TỬ của trường danh sách (14/10/2026). */}
+                      <div className="border-t border-line pt-1.5">
+                        <ChonPhanTu value={p.phan_tu} onDoi={(n) => doiPhan(i, { phan_tu: n })} />
+                      </div>
                       <div className="border-t border-line pt-1.5 text-[11px] text-ink-soft">
                         Đổi cách hiển thị khi in (dữ liệu gốc giữ nguyên). Các luật chạy lần lượt từ trên xuống.
                       </div>
@@ -416,7 +457,7 @@ export default function TemOPanel({
                       {data && (() => {
                         const kt = p.kieu || (p.dinh_dang ? 'ngay' : 'chu');
                         const cu = giaTriTruong(data, p.ma, p.dinh_dang, kt, null, p.du_phong);
-                        const moi = giaTriTruong(data, p.ma, p.dinh_dang, kt, thay, p.du_phong);
+                        const moi = giaTriTruong(data, p.ma, p.dinh_dang, kt, thay, p.du_phong, p.phan_tu);
                         const dung = chonTruong(data, p.ma, p.dinh_dang, kt, p.du_phong);
                         return (
                           <div className="rounded-control bg-surface-muted px-2 py-1.5 text-[11px]">

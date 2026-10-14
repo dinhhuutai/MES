@@ -6,6 +6,7 @@ import Toast from '../../../components/common/Toast';
 import { Select } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import { listReports, getReport } from '../../../services/dashboardService';
+import { ngayLocalISO } from '../../../utils/format';
 
 function exportCsv(report) {
   const head = report.columns.map((c) => `"${c.header}"`).join(',');
@@ -16,7 +17,7 @@ function exportCsv(report) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `${report.ma}_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `${report.ma}_${ngayLocalISO(new Date())}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }

@@ -99,8 +99,9 @@ export default function NhieuNguoiSelect({
             anchor="bottom start"
             className="z-[70] max-h-64 w-[var(--input-width)] overflow-auto rounded-input border border-line bg-surface shadow-card [--anchor-gap:4px]"
           >
-            {filtered.map((o) => (
-              <ComboboxOption key={getLabel(o)} value={getLabel(o)}
+            {/* Khóa kèm id / MSNV: có 2 tài khoản TRÙNG HỌ TÊN (đo prod 12/10/2026) ⇒ khóa chỉ theo tên bị React báo trùng. */}
+            {filtered.map((o, i) => (
+              <ComboboxOption key={`${getLabel(o)}|${o.id ?? o.ten_dang_nhap ?? i}`} value={getLabel(o)}
                 className="cursor-pointer px-3 py-2 text-sm text-ink data-[focus]:bg-primary-wash data-[focus]:text-primary">
                 {getLabel(o)}
               </ComboboxOption>

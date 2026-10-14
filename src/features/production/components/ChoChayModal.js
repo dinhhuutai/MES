@@ -12,7 +12,7 @@ import { slaRowClass } from '../../../utils/sla';
 import { fmtNum, fmtDate } from '../../../utils/format';
 import { LOAI_TABS, nhanChip, demChip } from '../../../utils/khuChuyen';
 import exportCheckpointExcel, { COT_LENH, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
-import { locLenhChay, coLoc, LOC_TRONG, timLenhTheoMa, chonLenhDeTich, khoaPinLenh } from '../utils/locLenhChay';
+import { locLenhChay, coLoc, LOC_TRONG, timLenhTheoMa, chonLenhDeTich, khoaPinLenh, gomTheoCodePhan, lenhCuaDong } from '../utils/locLenhChay';
 
 // Trần số lệnh 1 lần xác nhận chạy — gương BE `production.service TOI_DA_CHAY_MOT_LUOT`.
 export const TOI_DA_CHAY_MOT_LUOT = 100;
@@ -76,6 +76,12 @@ const subRows = (r) => (r.phan_in_list ? r.phan_in_list.map((p) => ({ ...p, __su
 //     — đóng modal không mất, trang gỡ dòng đã chạy được và giữ dòng lỗi.
 //   · Dòng đã tích LUÔN hiện ở đầu bảng, kể cả khi bộ lọc/chip/ngày đang loại nó (quét không phụ thuộc bộ lọc).
 //   · `datConTro` (số đếm) — trang tăng khi hộp xác nhận đóng mà chưa chạy ⇒ con trỏ quay lại ô tìm.
+//
+// ⚠⚠ GOM DÒNG TRÙNG CODE PHẦN (13/10/2026, người dùng chốt): các lệnh chờ chạy CÙNG code phần hiện thành 1 dòng,
+//   "SL release" = tổng (`utils/locLenhChay.js gomTheoCodePhan`, tính SAU bộ lọc — bộ lọc vẫn xét từng lệnh).
+//   Trang vẫn giữ danh sách tích theo ID LỆNH; ở đây mọi thao tác của dòng gom áp cho mọi lệnh của nó: ô tích /
+//   quét mã tích cả nhóm một lần (bản 08/10 tích từng lệnh, quét lại mới tích lệnh kế), "Xác nhận chạy" mở hộp chạy
+//   nhiều lệnh, "Trả về Kỹ thuật" trả mọi lệnh, "Trả về GN" theo phần in. Số trên tiêu đề / chip / Excel = số DÒNG.
 export default function ChoChayModal({
   open, onClose, rows, loading, chuyen, canRun, statusLenh, onConfirm, onTraVe, onTraVeGn,
   chon = [], setChon, loiChay = {}, onToast, onChayNhieu, datConTro = 0,
@@ -119,22 +125,31 @@ export default function ChoChayModal({
   // chỉ là các lệnh mã đó khớp (bỏ qua bộ lọc khác — quét tìm trên TOÀN BỘ danh sách).
   const bang = useMemo(() => {
     const nen = locQuet ? (rows || []).filter((r) => locQuet.ids.has(r.id)) : hien;
-    return [...daChon, ...nen.filter((r) => !chonSet.has(r.id))];
+    return gomTheoCodePhan([...daChon, ...nen.filter((r) => !chonSet.has(r.id))]);
   }, [locQuet, rows, hien, daChon, chonSet]);
+  // Số DÒNG (đã gom code phần) của tập đang lọc / của cả danh sách — hiện ở tiêu đề + nút Excel.
+  const hienGom = useMemo(() => gomTheoCodePhan(hien), [hien]);
+  const soDongTatCa = useMemo(() => gomTheoCodePhan(rows).length, [rows]);
+  // Dòng (đã gom) có ≥ 1 lệnh đang tích — đếm ở chân modal.
+  const soDongTich = useMemo(() => gomTheoCodePhan(daChon).length, [daChon]);
 
   const dat = useCallback((ids) => setChon && setChon(ids), [setChon]);
-  const tichLenh = useCallback((r) => {
-    if (chonSet.has(r.id)) { dat([r.id, ...chon.filter((x) => x !== r.id)]); return true; }
-    if (chon.length >= TOI_DA_CHAY_MOT_LUOT) {
+  // Tích MỌI lệnh của 1 dòng (dòng gom = nhiều lệnh). Trả số lệnh vừa tích thêm; -1 = vượt trần 1 lượt chạy.
+  const tichNhieu = useCallback((ds) => {
+    const ids = ds.map((r) => r.id);
+    const them = ids.filter((id) => !chonSet.has(id));
+    if (chon.length + them.length > TOI_DA_CHAY_MOT_LUOT) {
       toast(`Tối đa ${TOI_DA_CHAY_MOT_LUOT} lệnh mỗi lần xác nhận chạy`, 'error');
-      return false;
+      return -1;
     }
-    dat([r.id, ...chon]);
-    return true;
+    dat([...ids, ...chon.filter((x) => !ids.includes(x))]);
+    return them.length;
   }, [chon, chonSet, dat, toast]);
+  const daTichHet = (r) => lenhCuaDong(r).every((l) => chonSet.has(l.id));
   const doiTich = (r) => {
-    if (chonSet.has(r.id)) dat(chon.filter((x) => x !== r.id));
-    else tichLenh(r);
+    const ds = lenhCuaDong(r);
+    if (daTichHet(r)) { const bo = new Set(ds.map((l) => l.id)); dat(chon.filter((x) => !bo.has(x))); }
+    else tichNhieu(ds);
     datConTroTim(); // bấm ô tích xong ⇒ con trỏ về ô tìm cho lần quét kế
   };
 
@@ -158,26 +173,23 @@ export default function ChoChayModal({
       return;
     }
     setLocQuet(null);
-    const ten = `${kq.lenh.ma_lenh_san_xuat || ''}${kq.lenh.ma_phan ? ` · ${kq.lenh.ma_phan}` : ''}`;
-    if (kq.kieu === 'DA_TICH') {
-      tichLenh(kq.lenh);
-      toast(`${ten} đã tích rồi`, 'info');
-      return;
-    }
-    if (tichLenh(kq.lenh)) {
-      toast(`Đã tích ${ten}${kq.conLai ? ` — phần in còn ${kq.conLai} lệnh chờ chạy khác, quét lại để tích tiếp` : ''}`);
-    }
+    // Mọi lệnh khớp thuộc CÙNG phần in ⇒ là 1 dòng (đã gom) ⇒ tích cả dòng trong 1 lần quét.
+    const ten = `${kq.lenh.ma_phan || kq.lenh.ma_lenh_san_xuat || ''}${ds.length > 1 ? ` (${ds.length} lệnh)` : ` · ${kq.lenh.ma_lenh_san_xuat || ''}`}`;
+    const them = tichNhieu(ds);
+    if (them < 0) return;
+    if (kq.kieu === 'DA_TICH' || them === 0) toast(`${ten} đã tích rồi`, 'info');
+    else toast(`Đã tích ${ten}`);
   };
   // Số trên chip = tập đã qua mọi bộ lọc TRỪ chính chip.
   const soChip = useMemo(
-    () => demChip(locLenhChay(rows, { search, loc, chuyen, boChip: true, ngay: [{ cot: 'ngay_ke_hoach', ...ngay }] })),
+    () => demChip(gomTheoCodePhan(locLenhChay(rows, { search, loc, chuyen, boChip: true, ngay: [{ cot: 'ngay_ke_hoach', ...ngay }] }))),
     [rows, search, loc, chuyen, ngay]
   );
 
   const selChuyen = (chuyen || []).find((x) => x.id === loc.chuyenId);
   const doExcel = () => exportCheckpointExcel({
     cols: [...COT_LENH, { header: 'Đã in trước đó', width: 13, num: true, value: (r) => r.da_in_truoc || null }],
-    rows: hien, title: 'Đang chờ chạy', fileName: 'cho-chay',
+    rows: hienGom, title: 'Đang chờ chạy', fileName: 'cho-chay',
     moTaLoc: moTaBoLoc({
       'tìm kiếm': search, khách: loc.khach, đơn: loc.don, 'mã hàng': loc.maHang, 'màu vải': loc.mauVai,
       'kích vải': loc.kichVai, 'kích phim': loc.kichPhim, chuyền: selChuyen ? (selChuyen.ten_chuyen || selChuyen.ma_chuyen) : '',
@@ -188,14 +200,17 @@ export default function ChoChayModal({
   const cols = [
     ...(canRun ? [{ key: 'chon', header: '', selection: true, render: (r) => (
       <input type="checkbox" className="h-4 w-4 cursor-pointer accent-primary" aria-label="Tích để xác nhận chạy"
-        checked={chonSet.has(r.id)} onChange={() => doiTich(r)} />
+        checked={daTichHet(r)} onChange={() => doiTich(r)} />
     ) }] : []),
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => (
       <div>
         <div className="text-ink">{r.ma_hang || '—'}</div>
-        {!r.__sub && loiChay[r.id] && <Badge tone="danger">Chưa chạy được: {loiChay[r.id]}</Badge>}
+        {!r.__sub && lenhCuaDong(r).length > 1 && <Badge tone="info">Gom {lenhCuaDong(r).length} lệnh cùng code phần</Badge>}
+        {!r.__sub && lenhCuaDong(r).filter((l) => loiChay[l.id]).map((l) => (
+          <Badge key={l.id} tone="danger">Chưa chạy được{lenhCuaDong(r).length > 1 ? ` (${l.ma_lenh_san_xuat})` : ''}: {loiChay[l.id]}</Badge>
+        ))}
         {!r.__sub && r.giai_doan === 'EP_UI' && <Badge tone="info">Ép ủi (in kiếng)</Badge>}
         {!r.__sub && <GomBadge soDotVai={r.so_dot_vai} soPhanIn={r.so_phan_in} />}
         {!r.__sub && Number(r.da_in_truoc) > 0 && (
@@ -213,13 +228,23 @@ export default function ChoChayModal({
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
     { key: 'ma_chuyen', header: 'Chuyền', merge: true, render: (r) => r.ten_chuyen || '—' },
     { key: 'nha_gia_cong', header: 'Nhà gia công', merge: true, render: (r) => r.nha_gia_cong || '—' },
-    { key: 'so_luong_release', header: 'SL release', className: 'text-right tabular-nums', merge: true, render: (r) => fmtNum(r.so_luong_release) },
+    { key: 'so_luong_release', header: 'SL release', className: 'text-right tabular-nums', merge: true, render: (r) => (
+      lenhCuaDong(r).length > 1 ? (
+        <div title={lenhCuaDong(r).map((l) => `${l.ma_lenh_san_xuat}: ${fmtNum(l.so_luong_release)}`).join(' · ')}>
+          <div className="font-semibold text-ink">{fmtNum(r.so_luong_release)}</div>
+          <div className="text-[11px] text-ink-soft">{lenhCuaDong(r).map((l) => fmtNum(l.so_luong_release)).join(' + ')}</div>
+        </div>
+      ) : fmtNum(r.so_luong_release)
+    ) },
     { key: 'ngay_ke_hoach', header: 'Ngày SX KH', merge: true, render: (r) => fmtDate(r.ngay_ke_hoach) },
     { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => fmtDate(r.han_giao_hang) },
     { key: 'actions', header: '', className: 'text-right whitespace-nowrap', merge: true, render: (r) =>
       canRun && (
         <div className="flex flex-col items-stretch gap-1">
-          <Button className="px-2.5 py-1 text-xs" onClick={() => onConfirm(r)}>Xác nhận chạy</Button>
+          {/* Dòng gom nhiều lệnh ⇒ hộp chạy NHIỀU lệnh (chuyền thực tế từng lệnh); dòng lẻ ⇒ hộp 1 lệnh như cũ.
+              Trả về KT / GN nhận nguyên dòng — trang tự áp cho mọi lệnh trong `_lenh`. */}
+          <Button className="px-2.5 py-1 text-xs"
+            onClick={() => (lenhCuaDong(r).length > 1 ? onChayNhieu && onChayNhieu(lenhCuaDong(r)) : onConfirm(lenhCuaDong(r)[0]))}>Xác nhận chạy</Button>
           <Button variant="secondary" className="px-2.5 py-1 text-xs" onClick={() => onTraVe(r)}>Trả về Kỹ thuật</Button>
           {onTraVeGn && (
             <Button variant="secondary" className="px-2.5 py-1 text-xs text-danger" onClick={() => onTraVeGn(r)}>Trả về GN</Button>
@@ -229,12 +254,20 @@ export default function ChoChayModal({
   ];
 
   // Đã tích: nền xanh nhạt — trừ khi đang nghẽn/sắp nghẽn (giữ màu SLA, sắp phải nhập lý do).
-  const lopDong = (r) => slaRowClass(statusLenh(r.id)) || (chonSet.has(r.id) ? 'bg-primary/5' : '');
+  // Dòng gom: lấy tình trạng SLA NẶNG nhất trong các lệnh của nó (1 lệnh nghẽn là cả dòng đỏ).
+  const lopDong = (r) => {
+    const ds = lenhCuaDong(r);
+    const lop = ds.map((l) => slaRowClass(statusLenh(l.id))).filter(Boolean);
+    const nghen = ds.find((l) => statusLenh(l.id) === 'NGHEN');
+    return (nghen ? slaRowClass('NGHEN') : lop[0]) || (ds.some((l) => chonSet.has(l.id)) ? 'bg-primary/5' : '');
+  };
 
   const chanModal = canRun && (
     <div className="flex w-full flex-wrap items-center justify-between gap-2">
       <span className="text-sm text-ink-soft">
-        {daChon.length ? <>Đã tích <b className="text-ink">{fmtNum(daChon.length)}</b> lệnh</> : 'Chưa tích lệnh nào'}
+        {daChon.length
+          ? <>Đã tích <b className="text-ink">{fmtNum(soDongTich)}</b> dòng{soDongTich !== daChon.length ? <> · {fmtNum(daChon.length)} lệnh</> : null}</>
+          : 'Chưa tích dòng nào'}
       </span>
       <div className="flex flex-wrap gap-2">
         {daChon.length > 0 && (
@@ -249,7 +282,7 @@ export default function ChoChayModal({
 
   return (
     <Modal open={open} onClose={onClose} size="full" canhTren={8} lapDay footer={chanModal}
-      title={`Chờ chạy (${hien.length}${hien.length !== (rows || []).length ? `/${(rows || []).length}` : ''})`}>
+      title={`Chờ chạy (${hienGom.length}${hienGom.length !== soDongTatCa ? `/${soDongTatCa}` : ''})`}>
       <div className="flex h-full min-h-0 flex-col">
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <div className="min-w-[16rem] flex-1">
@@ -263,8 +296,8 @@ export default function ChoChayModal({
           <Button chiXemOk variant={moLoc || coLoc(loc) ? 'secondary' : 'ghost'} icon="filter" onClick={() => setMoLoc((v) => !v)}>
             Bộ lọc{coLoc(loc) ? ' ●' : ''}
           </Button>
-          <Button chiXemOk variant="secondary" icon="download" onClick={doExcel} disabled={!hien.length}>
-            Excel ({hien.length})
+          <Button chiXemOk variant="secondary" icon="download" onClick={doExcel} disabled={!hienGom.length}>
+            Excel ({hienGom.length})
           </Button>
         </div>
         {moLoc && <LocLenhPanel loc={loc} setLoc={setLoc} chuyen={chuyen} />}

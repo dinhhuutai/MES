@@ -1,6 +1,8 @@
 import client from './axiosClient';
 
 export const listTemSanSang = (params) => client.get('/giao-hang/tem-san-sang', { params });
+// Tem tồn từ KCS — đã kiểm phẩm, chưa giao (modal màn Giao hàng, 14/10/2026).
+export const listTonKcs = () => client.get('/giao-hang/ton-kcs');
 export const createGiaoHang = (body) => client.post('/giao-hang', body);
 export const listGiaoHang = (params) => client.get('/giao-hang', { params });
 export const getGiaoHang = (id) => client.get(`/giao-hang/${id}`);

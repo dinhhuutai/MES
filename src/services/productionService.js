@@ -115,3 +115,9 @@ export const listDrying = (params) => client.get('/production/drying', { params 
 export const confirmDry = (temId) => client.post(`/production/drying/${temId}/confirm`);
 // Phơi lại 1 tem (từ KCS)
 export const redryTem = (temId, phut) => client.post(`/production/tem/${temId}/phoi-lai`, { phut });
+// Hủy ngay tại "Tem đã in" của màn Xác nhận chạy (14/10/2026) — lý do bắt buộc; backend hủy tem rồi báo ERP hủy theo IDMES.
+export const huyTemTaiLichSu = (temId, lyDo) => client.post(`/production/huy-tem/${temId}/lich-su`, { lyDo });
+// MỞ LẠI TEM IN ĐÃ HỦY (14/10/2026) — lý do bắt buộc. Trang Hủy lệnh xác nhận (đòi thêm HUY_XAC_NHAN) · "Tem đã in" (PROD_RUN).
+export const listReopenableTem = (params) => client.get('/production/mo-lai-tem/candidates', { params });
+export const moLaiTem = (temId, lyDo) => client.post(`/production/mo-lai-tem/${temId}`, { lyDo });
+export const moLaiTemTaiLichSu = (temId, lyDo) => client.post(`/production/mo-lai-tem/${temId}/lich-su`, { lyDo });

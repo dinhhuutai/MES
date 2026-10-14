@@ -171,12 +171,30 @@ export function chonTruong(data, ma, dinhDang, kieuTruong, duPhong) {
   return d ? { ma: d.ma, kieu: d.kieu || 'chu', dinh_dang: d.dinh_dang || dinhDang, la_du_phong: true } : chinh;
 }
 
+// LẤY 1 PHẦN TỬ CỦA TRƯỜNG DANH SÁCH (14/10/2026, người dùng yêu cầu: "dữ liệu nếu là danh sách thì cho lựa chọn lấy
+//   đầy đủ hay lấy item thứ mấy"). Trường mang NHIỀU giá trị ngăn dấu phẩy / chấm phẩy / xuống dòng — vd `tho_in`
+//   "NEÀNG BÔI, NEÀNG SÓC" — mảnh trường / ô mã có thể đặt `phan_tu`:
+//     · vắng / 0  = lấy TOÀN BỘ danh sách (như trước)
+//     · n ≥ 1     = chỉ lấy phần tử THỨ n (đếm từ 1, đã cắt khoảng trắng 2 đầu)
+//     · -1        = lấy phần tử CUỐI
+//   Danh sách ít phần tử hơn n ⇒ RỖNG (cố ý — ô "Thợ in 2" khi chuyền chỉ có 1 thợ phải trống, không lặp người đầu).
+//   Giá trị không phải danh sách = danh sách 1 phần tử (phần tử 1 = chính nó). Chạy SAU trường dự phòng, TRƯỚC định dạng
+//   + luật `thay`.
+export const TACH_DANH_SACH = /[,;\n]/;
+export function layPhanTu(v, phanTu) {
+  const n = Math.trunc(Number(phanTu) || 0);
+  if (!n || v == null) return v;
+  const ds = String(v).split(TACH_DANH_SACH).map((x) => x.trim()).filter(Boolean);
+  if (n === -1) return ds.length ? ds[ds.length - 1] : '';
+  return n > 0 && n <= ds.length ? ds[n - 1] : '';
+}
+
 // Giá trị 1 trường dữ liệu, đã định dạng theo kiểu ô.
 // ⚠ EXPORT để panel thiết kế xem trước "cũ → mới" bằng ĐÚNG hàm của đường IN — tự tính lại ở panel là
 //   sớm muộn 2 bên lệch nhau (xem một kiểu in một kiểu).
-export function giaTriTruong(data, ma, dinhDang, kieuTruong, thay, duPhong) {
+export function giaTriTruong(data, ma, dinhDang, kieuTruong, thay, duPhong, phanTu) {
   const t = chonTruong(data, ma, dinhDang, kieuTruong, duPhong);
-  const v = data ? data[t.ma] : '';
+  const v = layPhanTu(data ? data[t.ma] : '', phanTu);
   let out;
   if (t.kieu === 'ngay') out = dinhDangNgay(v, t.dinh_dang);
   else if (t.kieu === 'so') out = fmtSo(v);
@@ -193,7 +211,7 @@ export function giaTriTruong(data, ma, dinhDang, kieuTruong, thay, duPhong) {
 // Ô mã cũng có trường dự phòng (`cell.du_phong`, cùng nghĩa với mảnh trường) — luôn mã hóa dạng CHỮ thô.
 export function giaTriMa(cell, data) {
   const duPhong = cell && Array.isArray(cell.du_phong) ? cell.du_phong.map((d) => ({ ma: d && d.ma, kieu: 'chu' })) : null;
-  return giaTriTruong(data, (cell && cell.ma_qr) || 'ma_tem', null, 'chu', cell && cell.thay, duPhong);
+  return giaTriTruong(data, (cell && cell.ma_qr) || 'ma_tem', null, 'chu', cell && cell.thay, duPhong, cell && cell.phan_tu);
 }
 
 // Nội dung 1 ô = nối các mảnh `phan` (chữ cố định + trường dữ liệu).
@@ -211,7 +229,7 @@ export function noiDungO(o, data, truongMap) {
       const kieu = p.kieu
         || (truongMap && truongMap[p.ma] ? truongMap[p.ma].kieu : null)
         || (p.dinh_dang ? 'ngay' : 'chu');
-      return giaTriTruong(data, p.ma, p.dinh_dang, kieu, p.thay, p.du_phong);
+      return giaTriTruong(data, p.ma, p.dinh_dang, kieu, p.thay, p.du_phong, p.phan_tu);
     }
     return '';
   }).join('');

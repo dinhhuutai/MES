@@ -66,3 +66,8 @@ export const toggleGiaoDacBiet = (id, active) => client.patch(`/quality/giao-dac
 // Danh sách TRẢ VỀ theo loại (modal "Danh sách trả về" ở từng màn). `loai` = chuỗi ngăn bằng dấu phẩy,
 // vd 'READY,RELEASE1,TEST_RUN_KT'. tuNgay/denNgay = khoảng NGÀY TRẢ VỀ (để trống = mọi ngày).
 export const listTraVe = (params) => client.get('/quality/tra-ve/danh-sach', { params });
+// Hủy ngay tại panel "Lịch sử" của màn KCS / Sửa / OQC (14/10/2026) — lý do bắt buộc; backend đảo sổ cái
+// rồi báo ERP hủy chứng từ theo IDMES của lượt đó.
+export const huyKcsLichSu = (id, lyDo) => client.post(`/quality/kcs/${id}/huy-lich-su`, { lyDo });
+export const huySuaLichSu = (id, lyDo) => client.post(`/quality/sua/${id}/huy-lich-su`, { lyDo });
+export const huyOqcLichSu = (id, lyDo) => client.post(`/quality/oqc/${id}/huy-lich-su`, { lyDo });

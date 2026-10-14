@@ -72,6 +72,49 @@ export function timLenhTheoMa(rows, ma) {
 // Khóa "cùng phần in" của 1 lệnh (lệnh gom set cũ = bộ nhiều phần in).
 export const khoaPinLenh = (r) => dsPin(r).map((p) => p.phan_in_id || p.ma_phan || '').sort().join('|');
 
+// ─────────────────────────────────────────────────────────────────────────────
+// GOM DÒNG CHỜ CHẠY THEO CODE PHẦN (13/10/2026, người dùng chốt: "có 2 code phần trùng nhau thì gom số lượng
+// release lại"). 1 phần in có 2–3 lệnh chờ chạy (mỗi đợt vải release ra 1 lệnh) ⇒ bảng Chờ chạy hiện 1 DÒNG, SL
+// release = TỔNG các lệnh. Chỉ là cách HIỆN: mỗi lệnh vẫn là 1 lệnh riêng (`_lenh` giữ đủ) — tích / xác nhận chạy
+// / trả về của dòng gom áp cho MỌI lệnh trong `_lenh`.
+//   · Chỉ gom lệnh ĐÚNG 1 phần in; lệnh gom set cũ (nhiều phần in) đứng riêng.
+//   · Thứ tự: dòng gom đứng ở vị trí lệnh ĐẦU của nó. Dòng trả về luôn có `_lenh` (dòng lẻ = mảng 1 phần tử).
+//   · Số gộp: SL release · đã in trước đó · số đợt vải = tổng; ngày SX KH · hạn giao = SỚM nhất; mã lệnh · tên
+//     chuyền · nhà gia công = danh sách không trùng. `ma_chuyen` / `ma_loai_chuyen` / `id` giữ của lệnh đầu.
+const tongCot = (ds, k) => ds.reduce((a, r) => a + (Number(r[k]) || 0), 0);
+const khacNhau = (ds, k) => [...new Set(ds.map((r) => r[k]).filter(Boolean))];
+const somNhat = (ds, k) => ds.map((r) => r[k]).filter(Boolean).sort((a, b) => new Date(a) - new Date(b))[0] || null;
+export function gomTheoCodePhan(rows) {
+  const nhom = new Map();
+  const out = [];
+  for (const r of rows || []) {
+    const motPin = !(r.phan_in_list && r.phan_in_list.length > 1);
+    const k = motPin ? (r.phan_in_id || r.ma_phan || '') : '';
+    const g = k ? nhom.get(k) : null;
+    if (g) { g._lenh.push(r); continue; }
+    const moi = { ...r, _lenh: [r] };
+    if (k) nhom.set(k, moi);
+    out.push(moi);
+  }
+  return out.map((g) => {
+    const ds = g._lenh;
+    if (ds.length === 1) return g;
+    return {
+      ...g,
+      so_luong_release: tongCot(ds, 'so_luong_release'),
+      da_in_truoc: tongCot(ds, 'da_in_truoc'),
+      so_dot_vai: tongCot(ds, 'so_dot_vai') || g.so_dot_vai,
+      ma_lenh_san_xuat: khacNhau(ds, 'ma_lenh_san_xuat').join(', '),
+      ten_chuyen: khacNhau(ds, 'ten_chuyen').join(' · '),
+      nha_gia_cong: khacNhau(ds, 'nha_gia_cong').join(', '),
+      ngay_ke_hoach: somNhat(ds, 'ngay_ke_hoach'),
+      han_giao_hang: somNhat(ds, 'han_giao_hang'),
+    };
+  });
+}
+// Các lệnh của 1 dòng bảng Chờ chạy (dòng gom hoặc dòng lẻ / dòng lệnh thô).
+export const lenhCuaDong = (r) => (r && r._lenh && r._lenh.length ? r._lenh : (r ? [r] : []));
+
 // `daChon` = Set id lệnh đã tích. Trả { lenh, conLai, kieu }:
 //   kieu 'TICH' (lenh = lệnh sẽ tích, conLai = số lệnh cùng phần in còn chưa tích sau lệnh này) ·
 //   'DA_TICH' (mọi lệnh khớp đã tích — lenh = lệnh đầu) · 'NHIEU' (khớp lệnh của nhiều phần in) · 'KHONG'.

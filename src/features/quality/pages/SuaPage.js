@@ -27,8 +27,9 @@ import { evalSla, slaRowClass } from '../../../utils/sla';
 import useLyDoNghen from '../../../hooks/useLyDoNghen';
 import { trangThaiSla } from '../../../utils/nghen';
 import usePermissions from '../../../hooks/usePermissions';
+import useHuyLichSu from '../../../hooks/useHuyLichSu';
 import useOTimKiem from '../../../hooks/useOTimKiem';
-import { listSuaCandidates, recordSua, suaHistory, suaDone, luuNguoiSua, guiLaiErpSua } from '../../../services/qualityService';
+import { listSuaCandidates, recordSua, suaHistory, suaDone, luuNguoiSua, guiLaiErpSua, huySuaLichSu } from '../../../services/qualityService';
 import { getTemLabel } from '../../../services/productionService';
 import { listUserOptions } from '../../../services/userService';
 import { printSuaOqcTem, moSanCuaSoIn, dongCuaSoIn } from '../../production/utils/printTemLabel';
@@ -249,6 +250,19 @@ export default function SuaPage() {
   // ⚠ Tải NGẦM khi có sự kiện realtime: `load(true)` bỏ qua `setLoading(true)` (bảng không bị
   // thay bằng spinner) và KHÔNG xóa dòng đang tích. Nhiều sự kiện trong 400ms gộp thành 1 lần tải.
   useSocketReload(['quality:updated'], () => load(true));
+  // NÚT "HỦY" Ở TỪNG DÒNG LỊCH SỬ (14/10/2026): nhập lý do ⇒ backend đảo sổ cái lượt đó rồi báo ERP hủy chứng từ
+  // theo IDMES. Chỉ cần quyền công đoạn của màn này (người dùng chốt).
+  const huyLs = useHuyLichSu({
+    goiHuy: (r, ly) => huySuaLichSu(r.id, ly),
+    show,
+    coQuyen: canSua,
+    tieuDe: 'Hủy xác nhận Sửa',
+    moTa: (r) => <>Tem <b>{r.doi_tuong}</b> · {r.chi_tiet}</>,
+    nhanNut: 'Hủy xác nhận',
+    hauQua: 'Số lượng của lượt này quay về chờ sửa; tem 17 của lượt (nếu có) bị gỡ.',
+    baoXong: (r) => `Đã hủy lượt Sửa của tem ${r.doi_tuong || ''}`,
+    sauKhiHuy: () => load(true),
+  });
 
   const save = async () => {
     if (!(await hoiLyDoNghen([editing]))) return; // tem quá SLA ⇒ nhập lý do nghẽn (mig 106)
@@ -416,7 +430,8 @@ export default function SuaPage() {
       </SidePanel>
 
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}
-        title="Lịch sử Sửa" fetcher={suaHistory} />
+        title="Lịch sử Sửa" fetcher={suaHistory} extraColumns={huyLs.cotHuy} taiLai={huyLs.taiLai} />
+      {huyLs.modal}
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
         title="Tem đã sửa" maHeader="Tem" fetcher={suaDone} columns={doneColumns}
         chonNhieu

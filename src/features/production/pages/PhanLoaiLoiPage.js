@@ -8,10 +8,12 @@ import QrScanner from '../../../components/common/QrScanner';
 import Toast from '../../../components/common/Toast';
 import useToast from '../../../hooks/useToast';
 import useOTimKiem from '../../../hooks/useOTimKiem';
+import usePermissions from '../../../hooks/usePermissions';
+import useHuyLichSu from '../../../hooks/useHuyLichSu';
 import PhanLoaiLoiPanel from '../components/PhanLoaiLoiPanel';
 import { listLoaiLoi } from '../../../services/qualityService';
 import {
-  listPhanLoaiLoi, traTemPhanLoai, luuPhanLoaiLoi, listBienPhap,
+  listPhanLoaiLoi, traTemPhanLoai, luuPhanLoaiLoi, listBienPhap, huyPhanLoaiLoi,
 } from '../../../services/phanLoaiLoiService';
 import { fmtDateTime, temCode } from '../../../utils/format';
 import exportCheckpointExcel, { cotTemChung, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
@@ -42,6 +44,7 @@ const O_MA = 'h-11 w-full rounded-input border border-line bg-surface px-3.5 tex
 
 export default function PhanLoaiLoiPage() {
   const { toast, show } = useToast();
+  const { can } = usePermissions();
   const [ngay, setNgay] = useState(homNay());
   const [search, setSearch] = useState('');
   // Vào trang con trỏ nằm sẵn ở ô tìm; lưu phân loại xong thì xóa ô + đặt con trỏ lại (quét tem kế).
@@ -75,6 +78,20 @@ export default function PhanLoaiLoiPage() {
   }, [ngay, search, tinhTrang, page, show]);
 
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
+
+  // NÚT "HỦY" Ở DÒNG ĐÃ PHÂN LOẠI (14/10/2026): nhập lý do ⇒ backend xóa phiếu phân loại lỗi, trả số sửa / hủy
+  // của tem về như TRƯỚC khi phân loại (tem quay lại chip "Chưa phân loại lỗi") rồi báo ERP hủy phiếu theo IDMES.
+  const huyLs = useHuyLichSu({
+    goiHuy: (r, ly) => huyPhanLoaiLoi(r.tem_id, ly),
+    show,
+    coQuyen: can('PHAN_LOAI_LOI'),
+    tieuDe: 'Hủy phân loại lỗi',
+    moTa: (r) => <>Tem <b>{temCode(r.ma_tem, 16)}</b> · {r.ma_phan || '—'} · sửa {Number(r.sl_kcs_sua) || 0} · hủy {Number(r.sl_kcs_huy) || 0}</>,
+    hauQua: 'Phiếu phân loại lỗi bị xóa; tem quay về "Chưa phân loại lỗi" để phân loại lại.',
+    nhanNut: 'Hủy phân loại',
+    baoXong: (r) => `Đã hủy phân loại lỗi tem ${temCode(r.ma_tem, 16)}`,
+    sauKhiHuy: () => load(),
+  });
 
   // Danh mục nạp 1 lần, dùng cho dropdown trong bảng nhập.
   useEffect(() => {
@@ -176,6 +193,7 @@ export default function PhanLoaiLoiPage() {
     { header: 'Hủy', render: (r) => <span className="text-danger">{Number(r.sl_kcs_huy || 0)}</span>, center: true },
     { header: 'Lỗi đã phân loại', render: (r) => <span className="text-xs text-ink-soft">{r.cac_loi || '—'}</span> },
     { header: 'Người nhập', key: 'nguoi' },
+    ...huyLs.taoCot((r) => !!r.da_phan_loai && !!r.tem_id),
   ];
 
   return (
@@ -231,6 +249,7 @@ export default function PhanLoaiLoiPage() {
         open={!!chon} onClose={() => setChon(null)} data={chon}
         loaiLoi={loaiLoi} bienPhap={bienPhap} onLuu={doLuu} dangLuu={dangLuu} />
 
+      {huyLs.modal}
       <Toast toast={toast} />
     </div>
   );
