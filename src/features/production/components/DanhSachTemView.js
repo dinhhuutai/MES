@@ -11,6 +11,7 @@ import { Input } from '../../../components/common/controls';
 import FieldFilters, { FilterToggle } from '../../../components/common/FieldFilters';
 import DateRangePicker from '../../../components/common/DateRangePicker';
 import useToast from '../../../hooks/useToast';
+import useHuyLichSu from '../../../hooks/useHuyLichSu';
 import { fmtNum, fmtDateTime, temCode } from '../../../utils/format';
 import exportCheckpointExcel, { cotTemChung, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
 import taiHetTrang, { LIMIT_TAI_LON } from '../../../utils/taiHetTrang';
@@ -42,6 +43,13 @@ const FIELDS_CHUNG = [
   { key: 'codePhan', label: 'Code phần' },
 ];
 const FIELD_CHUYEN = { key: 'chuyen', label: 'Chuyền' };
+// Mã ngày ca (14/10/2026) — gõ 1 phần cũng được: `261013` (cả ngày) · `261013D2` (đúng ca) · `D2` (mọi ngày ca D2).
+const FIELD_MA_NGAY_CA = { key: 'maNgayCa', label: 'Mã ngày ca' };
+
+// Tem còn HỦY được: chưa qua kiểm (gương guard backend `production.service.cancelPrintTem` — cùng luật nút Hủy ở
+// "Tem đã in" của RunPanel). `da_kiem` + `mo_lai_duoc` do backend `listTemDaIn` tính.
+const TEM_CHUA_KIEM = ['IN', 'DANG_PHOI', 'DA_KHO'];
+const temHuyDuoc = (r) => TEM_CHUA_KIEM.includes(r.trang_thai) && !r.da_kiem;
 
 // Trạng thái tem: IN → DANG_PHOI → DA_KHO → CHO_SUA/CHO_OQC/LOAI → OQC_DAT → DA_GIAO; HUY.
 const TT = {
@@ -129,8 +137,10 @@ const SO_CAI = [
   ['OQC đạt', 'sl_oqc_dat'], ['Đã giao', 'sl_da_giao'], ['Chênh lệch', 'sl_chenh_lech'],
 ];
 
+// `huyTem(temId, lyDo)` / `moLaiTem(temId, lyDo)` (14/10/2026, chỉ trang Sản xuất truyền, kèm `coQuyenHuy`): nút
+//   "Hủy" ở dòng tem chưa kiểm · "Mở lại" ở tem đã hủy mở lại được — lý do bắt buộc; backend hủy rồi báo ERP theo IDMES.
 export default function DanhSachTemView({
-  title, subtitle, fetcher, laGiaCong = false, layNhan = null,
+  title, subtitle, fetcher, laGiaCong = false, layNhan = null, huyTem = null, moLaiTem = null, coQuyenHuy = false,
 }) {
   const { toast, show } = useToast();
 
@@ -156,16 +166,49 @@ export default function DanhSachTemView({
 
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
 
+  // NÚT HỦY / MỞ LẠI Ở TỪNG DÒNG (14/10/2026) — cùng hộp lý do + cùng route với "Tem đã in" của màn Xác nhận chạy.
+  const huy = useHuyLichSu({
+    goiHuy: (t, ly) => huyTem(t.id, ly),
+    show,
+    coQuyen: !!(huyTem && coQuyenHuy),
+    tieuDe: 'Hủy tem đã in',
+    moTa: (t) => <>Tem <b>{t.ma_tem}</b> · {fmtNum(t.so_luong)} pcs · {t.ma_lenh_san_xuat || ''}</>,
+    hauQua: 'Tem bị hủy và gỡ khỏi xe phơi; số lượng trả lại cho lệnh để in lại.',
+    nhanNut: 'Hủy tem',
+    baoXong: (t) => `Đã hủy tem ${t.ma_tem}`,
+    sauKhiHuy: () => load(),
+  });
+  const moLai = useHuyLichSu({
+    goiHuy: (t, ly) => moLaiTem(t.id, ly),
+    show,
+    coQuyen: !!(moLaiTem && coQuyenHuy),
+    tieuDe: 'Mở lại tem đã hủy',
+    moTa: (t) => <>Tem <b>{t.ma_tem}</b> · {fmtNum(t.so_luong)} pcs · {t.ma_lenh_san_xuat || ''}</>,
+    hauQua: 'Tem về lại trạng thái trước khi hủy; số lượng tính lại vào "đã in" của lệnh (không vượt 110% SL release).',
+    nhanNut: 'Mở lại tem',
+    baoXong: (t) => `Đã mở lại tem ${t.ma_tem}`,
+    sauKhiHuy: () => load(),
+    modalProps: {
+      nhanLyDo: 'Lý do mở lại', kieuNut: 'primary', goiY: 'Vì sao mở lại (vd: hủy nhầm tem)...',
+      ghiChuErp: 'Mở xong hệ thống tự gửi lại phiếu in tem sang ERP (cùng IDMES của lượt in).',
+    },
+  });
+  const coNutHuy = !laGiaCong && !!huyTem && coQuyenHuy;
+
   // Đổi ô lọc / ô tìm → về trang 1 (đang ở trang 5 mà lọc còn 2 trang thì bảng ra rỗng).
   const setField = (k, v) => { setFilters((s) => ({ ...s, [k]: v })); setPage(1); };
   const setNgay = ({ from, to }) => {
     setFilters((s) => ({ ...s, ngayTu: from || '', ngayDen: to || '' })); setPage(1);
   };
+  // NGÀY CA (14/10/2026) = `tem.ngay_ca` — ngày sản xuất nhập lúc in (ca đêm / in bù khác ngày in tem).
+  const setNgayCa = ({ from, to }) => {
+    setFilters((s) => ({ ...s, ngayCaTu: from || '', ngayCaDen: to || '' })); setPage(1);
+  };
   const clearFilters = () => { setFilters({}); setPage(1); };
-  // Bỏ `ngayDen` khi đếm: khoảng ngày là MỘT bộ lọc, không phải hai.
-  const filterCount = Object.entries(filters).filter(([k, v]) => v && k !== 'ngayDen').length;
+  // Bỏ `ngayDen` / `ngayCaDen` khi đếm: khoảng ngày là MỘT bộ lọc, không phải hai.
+  const filterCount = Object.entries(filters).filter(([k, v]) => v && k !== 'ngayDen' && k !== 'ngayCaDen').length;
 
-  const fields = laGiaCong ? FIELDS_CHUNG : [...FIELDS_CHUNG, FIELD_CHUYEN];
+  const fields = laGiaCong ? FIELDS_CHUNG : [...FIELDS_CHUNG, FIELD_CHUYEN, FIELD_MA_NGAY_CA];
   const textFilters = Object.fromEntries(fields.map((f) => [f.key, filters[f.key] || '']));
 
   // ⚠⚠ Phân trang Ở SERVER (20 dòng/trang) ⇒ tải hết mọi trang rồi mới xuất; lấy `rows` là chỉ ra
@@ -199,6 +242,7 @@ export default function DanhSachTemView({
         moTaLoc: moTaBoLoc({
           'tìm kiếm': search,
           [laGiaCong ? 'ngày nhận về' : 'ngày in tem']: [filters.ngayTu, filters.ngayDen].filter(Boolean).join(' → '),
+          'ngày ca': [filters.ngayCaTu, filters.ngayCaDen].filter(Boolean).join(' → '),
           ...Object.fromEntries(fields.map((f) => [f.label.toLowerCase(), filters[f.key] || ''])),
         }),
       });
@@ -227,6 +271,22 @@ export default function DanhSachTemView({
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => chu(r.ma_hang) },
     { key: 'ma_phan', header: 'Code phần', render: (r) => chu(r.ma_phan) },
     { key: 'mau_vai', header: 'Màu · Kích (vải/phim)', render: (r) => <HaiDong tren={r.mau_vai} duoi={`${chu(r.kich_vai)} / ${chu(r.kich_phim)}`} /> },
+    // Cột thao tác (header rỗng ⇒ DataTable ghim phải). `stopPropagation` để bấm nút không mở SidePanel của dòng.
+    ...(coNutHuy ? [{
+      key: '_thao_tac', header: '', className: 'text-right whitespace-nowrap',
+      render: (r) => {
+        if (r.trang_thai === 'HUY') {
+          return r.mo_lai_duoc ? (
+            <Button className="px-2.5 py-1 text-xs" title="Mở lại tem đã hủy — gửi lại phiếu in tem sang ERP"
+              onClick={(e) => { e.stopPropagation(); moLai.moHuy(r); }}>Mở lại</Button>
+          ) : null;
+        }
+        return temHuyDuoc(r) ? (
+          <Button variant="danger" className="px-2.5 py-1 text-xs" title="Hủy tem (nhập lý do) — báo ERP hủy phiếu in tem"
+            onClick={(e) => { e.stopPropagation(); huy.moHuy(r); }}>Hủy</Button>
+        ) : null;
+      },
+    }] : []),
   ];
 
   return (
@@ -240,6 +300,11 @@ export default function DanhSachTemView({
             hôm nay sẽ giấu tem của ngày khác mà người dùng không biết vì sao. */}
         <DateRangePicker value={{ from: filters.ngayTu || '', to: filters.ngayDen || '' }}
           onChange={setNgay} placeholder={laGiaCong ? 'Ngày nhận về' : 'Ngày in tem'} />
+        {/* NGÀY CA (14/10/2026) — tem gia công không có ngày ca nên chỉ trang Sản xuất. */}
+        {!laGiaCong && (
+          <DateRangePicker value={{ from: filters.ngayCaTu || '', to: filters.ngayCaDen || '' }}
+            onChange={setNgayCa} placeholder="Ngày ca" />
+        )}
         <FilterToggle open={showFilter} count={filterCount} onClick={() => setShowFilter((v) => !v)} />
         <Button chiXemOk variant="secondary" icon="download" onClick={doExcel}
           loading={dangXuat} disabled={!meta.total}>Excel ({fmtNum(meta.total)})</Button>
@@ -261,6 +326,8 @@ export default function DanhSachTemView({
       <Pagination page={meta.page} totalPages={meta.totalPages} total={meta.total} onPage={setPage} />
 
       <TemPanel tem={tem} onClose={() => setTem(null)} laGiaCong={laGiaCong} layNhan={layNhan} />
+      {huy.modal}
+      {moLai.modal}
       <Toast toast={toast} />
     </div>
   );

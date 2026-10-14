@@ -1,5 +1,8 @@
 import DanhSachTemView from '../components/DanhSachTemView';
-import { listTemDaIn, getTemLabel } from '../../../services/productionService';
+import usePermissions from '../../../hooks/usePermissions';
+import {
+  listTemDaIn, getTemLabel, huyTemTaiLichSu, moLaiTemTaiLichSu,
+} from '../../../services/productionService';
 
 // *Sản xuất › Danh sách tem in* — XEM thông tin tem đã in mà không phải in ra giấy (nhiệm vụ #8).
 // Chỉ tem SẢN XUẤT (lệnh KHÔNG trên chuyền loại `GIA_CONG`); tem gia công có trang riêng bên Kế hoạch.
@@ -7,13 +10,18 @@ import { listTemDaIn, getTemLabel } from '../../../services/productionService';
 // ⚠ Bố cục/bộ lọc nằm ở `DanhSachTemView` (dùng chung 2 trang) — sửa ở đó, đừng chép ra đây.
 // ⚠ `getTemLabel` chỉ truyền Ở TRANG NÀY: route `/production/tem/:temId/label` gác `PROD_RUN`/
 //   `PROD_MONITOR`, trang gia công (quyền RELEASE1/RELEASE2) gọi vào sẽ 403.
+// Nút Hủy / Mở lại ở từng dòng (14/10/2026): cùng route với "Tem đã in" của màn Xác nhận chạy — quyền `PROD_RUN`.
 export default function DanhSachTemPage() {
+  const { can } = usePermissions();
   return (
     <DanhSachTemView
       title="Danh sách tem in"
       subtitle="Tra cứu tem đã in của sản xuất — bấm 1 dòng để xem thông tin tem, ngày ca, phân công và sổ cái số lượng."
       fetcher={listTemDaIn}
       layNhan={getTemLabel}
+      huyTem={huyTemTaiLichSu}
+      moLaiTem={moLaiTemTaiLichSu}
+      coQuyenHuy={can('PROD_RUN')}
     />
   );
 }

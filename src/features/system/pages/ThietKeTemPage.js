@@ -28,7 +28,7 @@ const DATA_XEM_TRUOC = {
   tg_bd_phoi: new Date().toISOString(), tg_kt_phoi: new Date(Date.now() + 36e5).toISOString(),
   gio_sx_bd: '07:30', gio_sx_kt: '11:45', ngay_ca: new Date().toISOString(),
   // Phân công (nhập ở khối Phân công màn Sản xuất)
-  ca_truong: 'Trần Thị B', chuyen_truong: 'Lê Văn C', tho_in: 'Phạm D, Hoàng E',
+  ca_truong: 'Trần Thị B', chuyen_truong: 'Lê Văn C', tho_in: 'Phạm D, Hoàng E', ma_to: 'C1',
   // Nhóm "Sửa" — CHỈ có giá trị thật ở vị trí in SUA_IN_TEM_OQC (tem 17 của trang Sửa).
   // Để dữ liệu mẫu ở đây cho người thiết kế xem trước thấy ngay, khỏi phải in thử mới biết.
   nguoi_sua: 'Nguyễn Văn Sửa', sl_sua: 42, sl_sua_dat: 38, sl_sua_huy: 4,

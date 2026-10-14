@@ -28,6 +28,7 @@ import DateRangePicker from '../../../components/common/DateRangePicker';
 import { fmtNum, fmtDate, fmtDateTime, temCode, maTemNhan, laMaTemRieng } from '../../../utils/format';
 import exportCheckpointExcel, { moTaBoLoc } from '../../../utils/exportCheckpointExcel';
 import HanGiaoCell from '../../../components/common/HanGiaoCell';
+import exportPanelExcel from '../../../components/common/exportPanelExcel';
 import GiaoHangPanel from '../components/GiaoHangPanel';
 import TonKcsModal from '../components/TonKcsModal';
 import exportBaoCaoGiaoHang from '../utils/exportBaoCaoGiaoHang';
@@ -65,6 +66,45 @@ const maQuetCuaTem = (r) => {
   const ma = String(r.ma_tem);
   if (r.la_tem_sua || laMaTemRieng(ma)) return [ma];
   return [...new Set([ma, ...[13, 15, 16, 17].map((p) => temCode(ma, p))].filter(Boolean))];
+};
+
+// SIDEBAR "ĐÃ HOÀN THÀNH" — CHI TIẾT TỪNG DÒNG PHIẾU (14/10/2026, người dùng yêu cầu thêm màu vải, kích vải, kích phim…):
+// backend `doneGiaoByDate` trả `dong` (tem × nguồn) ⇒ đưa vào `phan_in_list` để DonePanel tách 1 dòng / tem (ô mức
+// PHIẾU hợp nhất `merge`) + bộ lọc/tìm soi được từng dòng. Phiếu chỉ 1 dòng thì trải luôn trường của dòng đó lên phiếu
+// (DonePanel không tách khi chỉ 1 dòng con). ⚠ Mức module — DonePanel giữ fetcher trong ref.
+const chiTietPhieuGiao = (r) => {
+  const dong = (Array.isArray(r.dong) ? r.dong : []).map((x) => ({ ...x, ma_tem_hien: maHien(x, x.nguon) }));
+  return { ...r, ...(dong.length === 1 ? dong[0] : {}), phan_in_list: dong };
+};
+const doneGiaoChiTiet = async (ngay) => {
+  const res = await doneGiao(ngay);
+  return { ...res, data: (res.data || []).map(chiTietPhieuGiao) };
+};
+// Excel "Đã hoàn thành": 1 dòng / TEM của phiếu (lặp lại mã phiếu · khách · đơn · giờ · người).
+const COT_EXCEL_DONE = [
+  { header: 'Mã phiếu', width: 16, value: (r) => r.ma || '' },
+  { header: 'Khách hàng', width: 14, value: (r) => r.ten_khach_hang || '' },
+  { header: 'Đơn hàng', width: 18, value: (r) => r.ma_don_hang || '' },
+  { header: 'Tem', width: 15, value: (r) => r.ma_tem_hien || '' },
+  { header: 'Nguồn', width: 12, value: (r) => (r.la_tem_sua || r.nguon === 'SUA' ? 'Sửa (tem 17)' : 'KCS (tem 15)') },
+  { header: 'Code phần', width: 24, value: (r) => r.ma_phan || '' },
+  { header: 'Mã hàng', width: 20, value: (r) => r.ma_hang || '' },
+  { header: 'Màu vải', width: 16, value: (r) => r.mau_vai || '' },
+  { header: 'Kích vải', width: 12, value: (r) => r.kich_vai || '' },
+  { header: 'Kích phim', width: 14, value: (r) => r.kich_phim || '' },
+  { header: 'Tính chất in', width: 12, value: (r) => r.tinh_chat_in || '' },
+  { header: 'Hạn giao', width: 12, type: 'date', center: true, value: (r) => r.han_giao_hang || '' },
+  { header: 'SL giao', width: 10, num: true, value: (r) => Number(r.so_luong_giao) || 0 },
+  { header: 'Giờ giao', width: 11, center: true, value: (r) => (r.tg ? new Date(r.tg).toLocaleTimeString('vi-VN') : '') },
+  { header: 'Người xác nhận', width: 20, value: (r) => r.nguoi || '' },
+];
+const xuatExcelDone = ({ rows, date }) => {
+  const dong = rows.flatMap((p) => (p.phan_in_list && p.phan_in_list.length
+    ? p.phan_in_list.map((x) => ({ ...p, ...x })) : [p]));
+  return exportPanelExcel({
+    cols: COT_EXCEL_DONE, rows: dong, title: 'PHIẾU GIAO ĐÃ HOÀN THÀNH — CHI TIẾT',
+    subtitle: `Ngày ${date} · ${rows.length} phiếu · ${dong.length} dòng tem`, fileName: 'giao-hang-da-hoan-thanh',
+  });
 };
 
 const FILTER_FIELDS = [
@@ -458,25 +498,26 @@ export default function GiaoHangPage() {
     ) },
   ];
 
-  // Cột "Đã hoàn thành" (1 dòng = 1 PHIẾU đã xác nhận giao trong ngày).
+  // Cột "Đã hoàn thành": 1 PHIẾU đã xác nhận giao trong ngày, tách 1 dòng / TEM (cột `merge` = mức phiếu, hợp nhất).
+  // Cột chi tiết (14/10/2026): Tem · Code phần · Mã hàng · Màu vải · Kích vải · Kích phim · Tính chất in · SL giao.
   const doneCols = [
-    { key: 'ma', header: 'Mã phiếu', render: (r) => <Badge tone="info">{r.ma}</Badge> },
-    { key: 'ten_khach_hang', header: 'Khách hàng', render: (r) => r.ten_khach_hang || '—' },
-    { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
-    { key: 'so_tem', header: 'Số tem', className: 'text-right tabular-nums' },
-    { key: 'so_luong', header: 'Tổng SL giao', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
-    { key: 'tg', header: 'Giờ giao', className: 'whitespace-nowrap', render: (r) => (r.tg ? new Date(r.tg).toLocaleTimeString('vi-VN') : '—') },
-    { key: 'nguoi', header: 'Người xác nhận', render: (r) => r.nguoi || '—' },
-    { key: 'in', header: '', className: 'text-right', render: (r) => nutInLai(r.id) },
-  ];
-  const doneExcelCols = [
-    { header: 'Mã phiếu', value: (r) => r.ma || '' },
-    { header: 'Khách hàng', value: (r) => r.ten_khach_hang || '' },
-    { header: 'Đơn hàng', value: (r) => r.ma_don_hang || '' },
-    { header: 'Số tem', value: (r) => Number(r.so_tem) || 0, num: true },
-    { header: 'Tổng SL giao', value: (r) => Number(r.so_luong) || 0, num: true },
-    { header: 'Giờ giao', value: (r) => (r.tg ? new Date(r.tg).toLocaleTimeString('vi-VN') : ''), center: true },
-    { header: 'Người xác nhận', value: (r) => r.nguoi || '' },
+    { key: 'ma', header: 'Mã phiếu', merge: true, className: 'whitespace-nowrap', render: (r) => <Badge tone="info">{r.ma}</Badge> },
+    { key: 'ten_khach_hang', header: 'Khách hàng', merge: true, render: (r) => r.ten_khach_hang || '—' },
+    { key: 'ma_don_hang', header: 'Đơn hàng', merge: true, render: (r) => r.ma_don_hang || '—' },
+    { key: 'ma_tem_hien', header: 'Tem', className: 'whitespace-nowrap', render: (r) => (r.ma_tem_hien
+      ? <Badge tone={r.la_tem_sua || r.nguon === 'SUA' ? 'warning' : 'default'}>{r.ma_tem_hien}</Badge> : '—') },
+    { key: 'ma_phan', header: 'Code phần', className: 'whitespace-nowrap', render: (r) => r.ma_phan || '—' },
+    { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
+    { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
+    { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
+    { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
+    { key: 'tinh_chat_in', header: 'Tính chất in', render: (r) => r.tinh_chat_in || '—' },
+    { key: 'so_luong_giao', header: 'SL giao', className: 'text-right tabular-nums', render: (r) => (r.so_luong_giao != null ? fmtNum(r.so_luong_giao) : '—') },
+    { key: 'so_tem', header: 'Số tem', merge: true, className: 'text-right tabular-nums' },
+    { key: 'so_luong', header: 'Tổng SL giao', merge: true, className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
+    { key: 'tg', header: 'Giờ giao', merge: true, className: 'whitespace-nowrap', render: (r) => (r.tg ? new Date(r.tg).toLocaleTimeString('vi-VN') : '—') },
+    { key: 'nguoi', header: 'Người xác nhận', merge: true, render: (r) => r.nguoi || '—' },
+    { key: 'in', header: '', merge: true, className: 'text-right', render: (r) => nutInLai(r.id) },
   ];
 
   return (
@@ -671,7 +712,7 @@ export default function GiaoHangPage() {
       {huyLs.modal}
 
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)} title="Phiếu giao đã hoàn thành"
-        maHeader="Mã phiếu" fetcher={doneGiao} columns={doneCols} excelColumns={doneExcelCols} />
+        maHeader="Mã phiếu" fetcher={doneGiaoChiTiet} columns={doneCols} xuatExcel={xuatExcelDone} />
 
       <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}
         tenMan="Giao hàng" rows={displayRows} tenFile="nghen-giao-hang"
