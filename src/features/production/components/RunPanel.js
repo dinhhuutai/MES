@@ -77,6 +77,7 @@ export const thieuNgayCaCt = (m) => {
   const thieu = [!String(m?.ngayCa || '').trim() && 'Ngày ca', !m?.ngayCt && 'Ngày chứng từ'].filter(Boolean);
   return thieu.length ? `Chưa nhập ${thieu.join(' và ')} — nhập 1 lần đầu ca rồi mới in tem được` : '';
 };
+export const CHUA_THO_IN = 'Chưa phân công thợ in — chọn thợ in ở khối Phân công rồi bấm Lưu trước khi in tem';
 // Đưa gợi ý của BE vào ô: chỉ điền ô người dùng CHƯA gõ; lượt ca đã đổi so với lúc gõ ⇒ bỏ ngày ca / ngày chứng
 // từ của ca cũ trước (để trống lại cho ca mới).
 export const apGoiYTem = (m, g) => {
@@ -563,6 +564,9 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
   // GOM SET = lệnh có NHIỀU PHẦN IN in chung 1 chuyền ⇒ in tem & ghi vải hủy/thiếu làm theo BẢNG
   // (modal In tem), nên ẩn 2 khối nhập lẻ "Vải hủy/Vải thiếu" ở sidebar.
   const coGomSet = !!data?.co_gom_set;
+  // Chưa LƯU phân công có thợ in ⇒ khóa In tem 15|16 (18/10/2026, gương BE `kiemThoInPhanCong` — thợ in kế hoạch
+  // chỉ điền sẵn ô, không tính).
+  const chuaThoIn = !!data && !String(data.phan_cong?.tho_in || '').trim();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -669,7 +673,7 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
 
   // Thiếu Ngày ca / Ngày chứng từ ⇒ báo và KHÔNG in (kiểm trước khi mở cửa sổ in).
   const thieuDauCa = () => {
-    const loi = thieuNgayCaCt(temMeta);
+    const loi = chuaThoIn ? CHUA_THO_IN : thieuNgayCaCt(temMeta);
     if (loi) show(loi, 'error');
     return !!loi;
   };
@@ -1057,9 +1061,14 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
               </h3>
               {/* Ngày ca · giờ SX · BTP: nhập 1 lần, áp cho mọi tem in ở lượt này (mig 066).
                   Với gom set thì bảng in tem cũng hiện lại khối này để nhập ngay trước khi in. */}
+              {chuaThoIn && (
+                <p className="mb-2 rounded-input border border-danger/30 bg-danger/5 px-3 py-2 text-xs text-danger">
+                  {CHUA_THO_IN} (khối Phân công bên dưới).
+                </p>
+              )}
               {!coGomSet && <div className="mb-2"><TemMetaFields meta={temMeta} setMeta={setTemMeta} goiY={goiYTem} /></div>}
               {coGomSet ? (
-                <Button className="w-full" icon={chiLuu ? 'save' : 'printer'} onClick={() => setPrintSetOpen(true)} disabled={busy || remain === 0}>
+                <Button className="w-full" icon={chiLuu ? 'save' : 'printer'} onClick={() => setPrintSetOpen(true)} disabled={busy || remain === 0 || chuaThoIn}>
                   Nhập số lượng &amp; {chiLuu ? 'lưu' : 'in tem'}…
                 </Button>
               ) : (
@@ -1079,7 +1088,7 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
                     </div>
                     {/* BTP trước → chỉ LƯU (không mở cửa sổ in nhãn), nút đổi hẳn nhãn cho khỏi hiểu nhầm. */}
                     <Button onClick={doPrint} loading={busy} icon={chiLuu ? 'save' : undefined}
-                      disabled={!soLuong || Number(soLuong) <= 0 || overMax || remain === 0}>
+                      disabled={!soLuong || Number(soLuong) <= 0 || overMax || remain === 0 || chuaThoIn}>
                       {chiLuu ? 'Lưu' : (nTem > 1 ? `In ${nTem} tem` : 'In tem')}
                     </Button>
                   </div>

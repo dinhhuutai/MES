@@ -15,6 +15,13 @@ import { chuanTim } from '../../utils/timKiem';
 
 const todayStr = () => ngayLocalISO(new Date());
 const fmtTime = (t) => (t ? new Date(t).toLocaleTimeString('vi-VN') : '');
+// Ngày + giờ ngắn "dd/mm/yyyy HH:mm" — cột "Giờ lên MES" (đợt có thể lên MES từ ngày trước ngày hoàn thành).
+const fmtNgayGio = (t) => {
+  if (!t) return '';
+  const d = new Date(t);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;
+};
 
 // Cột Excel "Giờ HT" (giờ hoàn thành) — ĐỨNG NGAY SAU cột "Hạn giao".
 // Export để 4 màn khai `excelColumns` RIÊNG (KCS · Sửa · OQC · Gom set) dùng CHUNG 1 định nghĩa,
@@ -55,6 +62,7 @@ const FILTER_FIELDS = [
 // maHeader: nhãn cột mã (Tem / Phần in / Lệnh / Set...). columns: override toàn bộ cột nếu cần.
 // showChuyen: chèn thêm cột "Chuyền" NGAY SAU "Tính chất in" (cả bảng lẫn Excel) — cần fetcher trả `ten_chuyen`.
 // showLoaiDotVai: cột "Loại đợt vải" sau "Tính chất in" (QC READY, 11/10/2026) — cần fetcher trả `loai_dot_vai`.
+// showGioLenMes: cột "Giờ lên MES" ngay TRƯỚC "Giờ HT" (READY KT, 18/10/2026) — cần fetcher trả `tg_len_mes`.
 // extraColumns / extraExcelColumns: cột PHỤ nối vào CUỐI bộ cột mặc định. Nhận mảng HOẶC hàm (rows)=>mảng
 // (dùng khi số cột phụ thuộc dữ liệu — vd "Lần test 1..N" ở Test Run).
 //
@@ -68,7 +76,7 @@ const FILTER_FIELDS = [
 //   xuất đúng tờ "DANH SÁCH KIỂM TRA CHẤT LƯỢNG ĐẦU RA QCO". `rows` = danh sách ĐANG LỌC (như bộ xuất mặc định).
 export default function DonePanel({
   open, onClose, title = 'Đã hoàn thành', maHeader = 'Mã', fetcher, columns, excelColumns, showChuyen = false,
-  extraColumns, extraExcelColumns, showPhuongAnIn = false, showLoaiDotVai = false,
+  extraColumns, extraExcelColumns, showPhuongAnIn = false, showLoaiDotVai = false, showGioLenMes = false,
   chonNhieu = false, toiDaChon = 0, chonDuoc, footerChon, xuatExcel,
 }) {
   const { toast, show } = useToast();
@@ -147,6 +155,7 @@ export default function DonePanel({
     ...(showChuyen ? [{ key: 'ten_chuyen', header: 'Chuyền', merge: true, render: (r) => r.ten_chuyen || '—' }] : []),
     { key: 'so_luong', header: 'SL', className: 'text-right tabular-nums', merge: true, render: (r) => (r.so_luong != null ? fmtNum(r.so_luong) : '—') },
     { key: 'han_giao_hang', header: 'Hạn giao', merge: true, render: (r) => <HanGiaoCell value={r.han_giao_hang} /> },
+    ...(showGioLenMes ? [{ key: 'tg_len_mes', header: 'Giờ lên MES', className: 'whitespace-nowrap tabular-nums', merge: true, render: (r) => fmtNgayGio(r.tg_len_mes) || '—' }] : []),
     { key: 'tg', header: 'Giờ HT', className: 'whitespace-nowrap tabular-nums', merge: true, render: (r) => fmtTime(r.tg) },
     { key: 'nguoi', header: 'Người', merge: true, render: (r) => r.nguoi || '—' },
   ];
@@ -170,6 +179,7 @@ export default function DonePanel({
     ...(showChuyen ? [{ header: 'Chuyền', value: (r) => r.ten_chuyen || '' }] : []),
     { header: 'SL', value: (r) => (r.so_luong != null ? Number(r.so_luong) : ''), num: true },
     { header: 'Hạn giao', value: (r) => r.han_giao_hang || '', type: 'date' },
+    ...(showGioLenMes ? [{ header: 'Giờ lên MES', value: (r) => fmtNgayGio(r.tg_len_mes), center: true, width: 18 }] : []),
     COT_EXCEL_GIO_HT,
     { header: 'Người', value: (r) => r.nguoi || '' },
   ];

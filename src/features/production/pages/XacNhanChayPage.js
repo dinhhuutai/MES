@@ -12,7 +12,7 @@ import Toast from '../../../components/common/Toast';
 import { Field, Textarea } from '../../../components/common/controls';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import TraVeGnModal from '../../../components/common/TraVeGnModal';
-import { dsPhanInCuaLenh } from '../../../utils/phanInTraVeGn';
+import { dsPhanInCuaLenh, ungVienTuLenh } from '../../../utils/phanInTraVeGn';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import useSocketReload from '../../../hooks/useSocketReload';
@@ -503,7 +503,7 @@ export default function XacNhanChayPage() {
       <TraVeGnModal open={!!gnLenh} onClose={() => setGnLenh(null)} nguon="CHO_CHAY"
         lenhId={lenhCuaDong(gnLenh).length > 1 ? undefined : gnLenh?.id}
         phanIn={dsPhanInCuaLenh(gnLenh)[0] || null} dsPhanIn={dsPhanInCuaLenh(gnLenh)}
-        onToast={(m) => show(m)} onDone={() => load(true)} />
+        ungVien={ungVienTuLenh(candidates)} onToast={(m, t) => show(m, t)} onDone={() => load(true)} />
 
       {/* Xác nhận thông tin chạy + chọn chuyền thực tế */}
       <Modal open={!!confirmRun} onClose={() => setConfirmRun(null)} title="Xác nhận thông tin chạy"

@@ -39,6 +39,7 @@ import { khuonRequired } from '../constants';
 import exportReadyExcel from '../utils/exportReadyExcel';
 import useLyDoNghen from '../../../hooks/useLyDoNghen';
 import { trangThaiSla } from '../../../utils/nghen';
+import { ungVienGn } from '../../../components/common/TraVeGnModal';
 
 // Khóa lý do nghẽn (mig 106) — màn này đếm theo PHẦN IN (`r.id` = phan_in_id).
 const KHOA_NGHEN = (r) => ({ phan_in_id: r.id, ma: r.ma_phan });
@@ -395,7 +396,8 @@ export default function ReadyPage() {
       {sel && (
         <ReadyPanel phanInId={sel.id} dotVaiIds={sel.dotVaiIds} loaiDotVai={sel.loai}
           truocXacNhan={() => hoiLyDoNghen(rows.filter((x) => x.id === sel.id))}
-          onClose={() => setSel(null)} onChanged={load} onToast={show} />
+          onClose={() => setSel(null)} onChanged={load} onToast={show}
+          ungVienGn={ungVienGn(viewRows, { pinId: (r) => r.id, dotIds: (r) => r.dot_vai_ids })} />
       )}
 
       <BatThuongModal open={btOpen} onClose={() => setBtOpen(false)} rows={rows} onToast={show} onChanged={taiBatThuong} />
@@ -532,7 +534,7 @@ export default function ReadyPage() {
       />
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
         title="Phần in đã hoàn tất kỹ thuật (3 mục)" maHeader="Phần in"
-        fetcher={(date) => readyDone(date, 'tech')} showPhuongAnIn />
+        fetcher={(date) => readyDone(date, 'tech')} showPhuongAnIn showGioLenMes />
 
       <TraVeListModal open={traVeOpen} onClose={() => setTraVeOpen(false)}
         tenMan="Chuẩn bị kỹ thuật — READY" loais={TRA_VE_THEO_MAN.KT_READY} tenFile="tra-ve-ready" />

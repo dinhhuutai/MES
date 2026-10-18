@@ -32,6 +32,7 @@ import TraVeBadge from '../../../components/common/TraVeBadge';
 import DateRangePicker from '../../../components/common/DateRangePicker';
 import { fmtDate, trongKhoangNgay } from '../../../utils/format';
 import { LOAI_TABS_TACH_ROBOT, hopChipChuyen as hopChip, nhanChip, demChip, locSiSoTheoChip } from '../../../utils/khuChuyen';
+import { ungVienTuLenh } from '../../../utils/phanInTraVeGn';
 import ChipTabs from '../../../components/common/ChipTabs';
 import exportCheckpointExcel, {
   COT_LENH, COT_PHUONG_AN_IN, chenCot, moTaBoLoc,
@@ -356,7 +357,7 @@ export default function TestRunPage() {
         rowClassName={(r) => `${slaRowClass(statusLenh(r.id))} ${laGomSet(r) ? 'border-l-[3px] border-l-primary' : ''}`}
         emptyText="Không có lệnh nào đang Test Run" />
 
-      {sel && <TestRunPanel lenhId={sel} onClose={() => setSel(null)} onChanged={load} onToast={show}
+      {sel && <TestRunPanel lenhId={sel} onClose={() => setSel(null)} onChanged={load} onToast={show} ungVienGn={ungVienTuLenh(filtered)}
         truocXacNhan={() => hoiLyDoNghen(rows.filter((r) => r.id === sel))} />}
 
       {/* ĐỦ `rows` (không phải `selRows`) — quét lệnh đang hiện trên bảng cũng khớp; lệnh không chọn

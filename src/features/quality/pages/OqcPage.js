@@ -31,7 +31,14 @@ import useHuyLichSu from '../../../hooks/useHuyLichSu';
 import useOTimKiem from '../../../hooks/useOTimKiem';
 import { listOqcCandidates, recordOqc, oqcHistory, oqcDone, returnOqcToKcs, huyOqcLichSu } from '../../../services/qualityService';
 import { listUserOptions } from '../../../services/userService';
-import { fmtNum, timTheoMaTem, maTemNhan } from '../../../utils/format';
+import Modal from '../../../components/common/Modal';
+import { fmtNum, timTheoMaTem, maTemNhan, trongKhoangNgay } from '../../../utils/format';
+
+const FORM_MOI = () => ({ soLuongKiem: '', soLuongDat: '', ketQua: 'DAT', ownerChoGiaoId: '', lyDoChoGiao: '' });
+// "Ngày kiểm" theo NGUỒN của dòng (18/10/2026, BE `tgKiemByTems`): nguồn Sửa (dữ liệu cũ) = lượt sửa gần nhất; còn lại
+// = lượt KCS gần nhất / lượt sửa sinh ra tem 17 / lúc nhận hàng gia công.
+const tgKiem = (r, nguon) => (nguon === 'SUA' ? (r.tg_kiem_sua || r.tg_kiem_kcs) : r.tg_kiem_kcs) || null;
+const fmtNgayGio = (t) => (t ? new Date(t).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—');
 
 // ⚠⚠ MÃ TEM HIỆN ĐÚNG NHÃN GIẤY (mig 091 — tem 17 nay là DÒNG TEM THẬT):
 //   · TEM CON (`la_tem_sua`) mang sẵn `ma_tem` `17…` ⇒ hiện THẲNG, không ghép gì.
@@ -79,6 +86,12 @@ export default function OqcPage() {
   const [returnReason, setReturnReason] = useState('');
   const [returnMode, setReturnMode] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
+  // Lọc "Ngày kiểm" (lọc tại chỗ — danh sách OQC tải trọn) + XÁC NHẬN NHANH nhiều dòng cùng 1 bộ thông tin (18/10/2026).
+  const [rangeKiem, setRangeKiem] = useState(() => ({ from: '', to: '' }));
+  const [chon, setChon] = useState(() => new Set()); // `_key` các dòng đang tích
+  const [nhanhOpen, setNhanhOpen] = useState(false);
+  const [nhanhForm, setNhanhForm] = useState(FORM_MOI);
+  const [nhanhSaving, setNhanhSaving] = useState(false);
 
   // Danh sách người để chọn owner. Dùng /users/options (chỉ cần đăng nhập) — endpoint /users cũ đòi
   // quyền USER_VIEW mà role QA/OQC không có ⇒ 403 → combobox rỗng, gõ tên không ra ai.
@@ -137,34 +150,83 @@ export default function OqcPage() {
     setReturnMode(false);
     setReturnReason('');
     // ⚠ Ô SL = SỐ BỐC MẪU người kiểm tự nhập (30/09/2026) — KHÔNG điền sẵn cả lô như trước.
-    setForm({ soLuongKiem: '', soLuongDat: '', ketQua: 'DAT', ownerChoGiaoId: '', lyDoChoGiao: '' });
+    setForm(FORM_MOI());
   };
 
   // ⚠⚠ LUẬT OQC (người dùng chốt 30/09/2026): chỉ nhập SL BỐC MẪU; "Đạt" = ĐẠT HẾT mẫu (SL đạt = SL
   //   bốc mẫu). Nhập SL đạt NHỎ HƠN mẫu (vd bốc 50 đạt 20) ⇒ TỰ nhảy sang "Không đạt"; nhập lại bằng mẫu
   //   ⇒ về "Đạt". Backend chặn "Đạt" khi đạt < mẫu (422 `DAT_THIEU`).
-  const doiBocMau = (v) => setForm((f) => ({ ...f, soLuongKiem: v, soLuongDat: f.ketQua === 'DAT' ? v : f.soLuongDat }));
-  const doiSlDat = (v) => setForm((f) => {
+  // Cùng luật cho form lẻ (SidePanel) và form "Xác nhận nhanh" — truyền setter tương ứng.
+  const doiBocMauCua = (setF) => (v) => setF((f) => ({ ...f, soLuongKiem: v, soLuongDat: f.ketQua === 'DAT' ? v : f.soLuongDat }));
+  const doiSlDatCua = (setF) => (v) => setF((f) => {
     const mau = f.soLuongKiem;
     let ketQua = f.ketQua;
     if (v !== '' && mau !== '') ketQua = Number(v) < Number(mau) ? 'KHONG_DAT' : 'DAT';
     return { ...f, soLuongDat: v, ketQua };
   });
-  const chonDat = () => setForm((f) => ({ ...f, ketQua: 'DAT', soLuongDat: f.soLuongKiem }));
+  const chonDatCua = (setF) => () => setF((f) => ({ ...f, ketQua: 'DAT', soLuongDat: f.soLuongKiem }));
+  const doiBocMau = doiBocMauCua(setForm);
+  const doiSlDat = doiSlDatCua(setForm);
+  const chonDat = chonDatCua(setForm);
 
   // Tách mỗi tem thành tối đa 2 dòng theo NGUỒN: KCS-đạt (tem 15-) & Sửa-đạt (tem 17-).
   const displayRows = rows.flatMap((r) => {
     const out = [];
     const kcs = Number(r.con_oqc_kcs) || 0;
     const sua = Number(r.con_oqc_sua) || 0;
-    if (kcs > 0) out.push({ ...r, _key: `${r.tem_id}-KCS`, nguon: 'KCS', con_src: kcs, ma_tem_display: maHien(r, 'KCS'), la_sua: !!r.la_tem_sua });
-    if (sua > 0) out.push({ ...r, _key: `${r.tem_id}-SUA`, nguon: 'SUA', con_src: sua, ma_tem_display: maHien(r, 'SUA'), la_sua: true });
+    if (kcs > 0) out.push({ ...r, _key: `${r.tem_id}-KCS`, nguon: 'KCS', con_src: kcs, ma_tem_display: maHien(r, 'KCS'), la_sua: !!r.la_tem_sua, tg_kiem: tgKiem(r, 'KCS') });
+    if (sua > 0) out.push({ ...r, _key: `${r.tem_id}-SUA`, nguon: 'SUA', con_src: sua, ma_tem_display: maHien(r, 'SUA'), la_sua: true, tg_kiem: tgKiem(r, 'SUA') });
     // Dữ liệu cũ (chưa chạy mig 047 → 2 cột null): fallback 1 dòng gộp coi như nguồn KCS.
     if (out.length === 0 && (Number(r.con_oqc) || 0) > 0) {
-      out.push({ ...r, _key: `${r.tem_id}-KCS`, nguon: 'KCS', con_src: Number(r.con_oqc), ma_tem_display: maHien(r, 'KCS'), la_sua: !!r.la_tem_sua });
+      out.push({ ...r, _key: `${r.tem_id}-KCS`, nguon: 'KCS', con_src: Number(r.con_oqc), ma_tem_display: maHien(r, 'KCS'), la_sua: !!r.la_tem_sua, tg_kiem: tgKiem(r, 'KCS') });
     }
     return out;
-  });
+  }).filter((r) => trongKhoangNgay(r.tg_kiem, rangeKiem.from, rangeKiem.to));
+
+  // ── XÁC NHẬN NHANH (ô tích đầu dòng) ──────────────────────────────────────
+  // Dòng đã tích nhưng rời danh sách (tải lại / lọc) thì không còn tính — chỉ xét dòng ĐANG HIỆN.
+  const dsChon = displayRows.filter((r) => chon.has(r._key));
+  const doiChon = (k) => setChon((s) => { const n = new Set(s); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+  const tatCaDaChon = displayRows.length > 0 && displayRows.every((r) => chon.has(r._key));
+  const chonTatCa = () => setChon(tatCaDaChon ? new Set() : new Set(displayRows.map((r) => r._key)));
+  const moNhanh = () => { setNhanhForm(FORM_MOI()); setNhanhOpen(true); };
+
+  // Áp CÙNG 1 bộ thông tin (SL bốc mẫu · SL đạt · kết quả · owner/lý do cho giao) cho mọi dòng đã tích — gọi
+  // `recordOqc` TUẦN TỰ từng dòng (backend giữ nguyên mọi luật của lượt lẻ). Mẫu vượt lô của dòng nào ⇒ chặn, báo tên.
+  const saveNhanh = async () => {
+    const f = nhanhForm;
+    const mau = Number(f.soLuongKiem);
+    if (!f.soLuongKiem || !(mau > 0)) { show('Nhập SL bốc mẫu', 'error'); return; }
+    const vuot = dsChon.filter((r) => mau > (Number(r.con_src ?? r.con_oqc) || 0));
+    if (vuot.length) {
+      show(`SL bốc mẫu (${mau}) vượt SL chờ OQC của: ${vuot.map((r) => `${r.ma_tem_display} (${fmtNum(r.con_src)})`).join(', ')} — bỏ tích các tem này hoặc giảm SL mẫu`, 'error');
+      return;
+    }
+    if (f.ketQua === 'KHONG_DAT' && (f.soLuongDat === '' || Number(f.soLuongDat) > mau)) {
+      show('Nhập SL đạt trong mẫu (không vượt SL bốc mẫu)', 'error'); return;
+    }
+    if (f.ketQua === 'KHONG_DAT' && f.ownerChoGiaoId && !f.lyDoChoGiao.trim()) { show('Cho giao ngoại lệ cần nhập lý do', 'error'); return; }
+    if (!(await hoiLyDoNghen(dsChon))) return; // tem quá SLA ⇒ nhập lý do nghẽn (mig 106)
+    setNhanhSaving(true);
+    const loi = [];
+    let ok = 0;
+    for (const r of dsChon) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        await recordOqc(r.tem_id, { ...f, nguon: r.nguon });
+        ok += 1;
+      } catch (e) {
+        loi.push(`${r.ma_tem_display || r.ma_tem}: ${e.message || 'lỗi'}`);
+      }
+    }
+    setNhanhSaving(false);
+    const kq = f.ketQua === 'DAT' ? 'đạt' : (f.ownerChoGiaoId ? 'cho giao ngoại lệ' : 'không đạt (nằm lại OQC)');
+    show(`Đã xác nhận OQC ${kq} ${ok}/${dsChon.length} tem${loi.length ? ` · LỖI: ${loi.join(' · ')}` : ''}`, loi.length ? 'error' : 'success');
+    // Dòng lỗi giữ tích để xem lại; dòng thành công tự rời danh sách khi tải lại.
+    setChon(new Set(dsChon.filter((r) => loi.some((x) => x.startsWith(`${r.ma_tem_display || r.ma_tem}:`))).map((r) => r._key)));
+    if (!loi.length) setNhanhOpen(false);
+    lamMoiSauXacNhan();
+  };
 
   // Quét QR (ma_tem) → tra tem đang chờ OQC → mở modal nhập (ưu tiên nguồn KCS nếu còn).
   const onScan = async (maTem) => {
@@ -238,7 +300,20 @@ export default function OqcPage() {
     }
   };
 
+  const colChon = {
+    key: '_chon',
+    selection: true,
+    header: (
+      <input type="checkbox" checked={tatCaDaChon} onChange={chonTatCa} title="Chọn mọi dòng đang hiện"
+        className="h-4 w-4 rounded border-line text-primary focus:ring-primary/30" />
+    ),
+    render: (r) => (
+      <input type="checkbox" checked={chon.has(r._key)} onChange={() => doiChon(r._key)}
+        className="h-4 w-4 rounded border-line text-primary focus:ring-primary/30" />
+    ),
+  };
   const columns = [
+    ...(canOqc ? [colChon] : []),
     { key: 'ma_tem', header: 'Tem', render: (r) => (
       <div className="flex items-center gap-1.5">
         {/* ⚠ `la_sua` = tem 17 THẬT (tem con, mig 091) HOẶC dòng nguồn SỬA của dữ liệu cũ. Tem con
@@ -264,6 +339,7 @@ export default function OqcPage() {
     { key: 'chuyen', header: 'Chuyền', render: (r) => r.ten_chuyen || '—' },
     { key: 'nha_gia_cong', header: 'Nhà gia công', render: (r) => r.nha_gia_cong || '—' },
     { key: 'nguoi_truoc', header: 'Người XN trạm trước', render: (r) => r.nguoi_truoc || '—' },
+    { key: 'tg_kiem', header: 'Ngày kiểm', className: 'whitespace-nowrap tabular-nums', render: (r) => fmtNgayGio(r.tg_kiem) },
     { key: 'so_luong', header: 'SL in', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
     { key: 'con_src', header: 'Còn OQC', className: 'text-right tabular-nums font-medium text-primary', render: (r) => fmtNum(r.con_src ?? r.con_oqc) },
     { key: 'actions', header: '', className: 'text-right', render: (r) =>
@@ -280,6 +356,14 @@ export default function OqcPage() {
           <div className="w-60"><DateRangePicker value={range} onChange={setRange} placeholder="Chọn khoảng ngày in tem" /></div>
           {(range.from || range.to) && <button type="button" onClick={() => setRange({ from: '', to: '' })} className="text-ink-soft hover:text-danger" aria-label="Bỏ lọc ngày"><Icon name="x" size={14} /></button>}
         </div>
+        <div className="flex items-center gap-1.5 text-xs text-ink-soft">
+          <span>Ngày kiểm</span>
+          <div className="w-60"><DateRangePicker value={rangeKiem} onChange={setRangeKiem} placeholder="Chọn khoảng ngày kiểm" /></div>
+          {(rangeKiem.from || rangeKiem.to) && <button type="button" onClick={() => setRangeKiem({ from: '', to: '' })} className="text-ink-soft hover:text-danger" aria-label="Bỏ lọc ngày kiểm"><Icon name="x" size={14} /></button>}
+        </div>
+        {canOqc && dsChon.length > 0 && (
+          <Button icon="check-circle" onClick={moNhanh}>Xác nhận nhanh ({dsChon.length})</Button>
+        )}
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
         <NghenButton rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} onClick={() => setNghenOpen(true)} />
         <Button chiXemOk variant="ghost" icon="file-spreadsheet" onClick={() => setFinishOpen(true)}>Danh sách finish</Button>
@@ -425,6 +509,80 @@ export default function OqcPage() {
         maTrang="CL_OQC" />
       {lyDoNghenModal}
       <FinishListModal open={finishOpen} onClose={() => setFinishOpen(false)} />
+
+      {/* XÁC NHẬN NHANH — 1 bộ thông tin cho mọi tem đã tích (18/10/2026). */}
+      <Modal open={nhanhOpen} onClose={() => (nhanhSaving ? null : setNhanhOpen(false))}
+        title={`Xác nhận nhanh OQC — ${dsChon.length} dòng`}
+        footer={(
+          <>
+            <Button chiXemOk variant="ghost" onClick={() => setNhanhOpen(false)} disabled={nhanhSaving}>Hủy</Button>
+            <Button onClick={saveNhanh} loading={nhanhSaving} disabled={!dsChon.length}
+              variant={nhanhForm.ketQua === 'DAT' ? 'primary' : 'danger'}>
+              {nhanhForm.ketQua === 'DAT' ? `Xác nhận đạt (${dsChon.length})`
+                : nhanhForm.ownerChoGiaoId ? `Xác nhận cho giao (${dsChon.length})` : `Xác nhận nằm lại OQC (${dsChon.length})`}
+            </Button>
+          </>
+        )}>
+        <div className="space-y-3">
+          <div className="max-h-40 overflow-auto rounded-control border border-line">
+            <table className="w-full text-xs">
+              <thead className="bg-surface-muted text-ink-soft">
+                <tr><th className="px-2 py-1 text-left">Tem</th><th className="px-2 py-1 text-left">Code phần</th><th className="px-2 py-1 text-right">Chờ OQC</th></tr>
+              </thead>
+              <tbody>
+                {dsChon.map((r) => (
+                  <tr key={r._key} className="border-t border-line">
+                    <td className="px-2 py-1 font-medium text-ink">{r.ma_tem_display || r.ma_tem} <span className="text-ink-soft">({r.la_gia_cong ? 'gia công' : r.la_sua ? 'đã sửa' : 'KCS'})</span></td>
+                    <td className="px-2 py-1">{r.phan_list || '—'}</td>
+                    <td className="px-2 py-1 text-right tabular-nums">{fmtNum(r.con_src ?? r.con_oqc)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="rounded-control border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/40 dark:text-sky-300">
+            Cùng 1 thông tin cho <b>mọi tem đã tích</b> — mỗi tem ghi 1 lượt OQC riêng. <b>Đạt</b> → toàn bộ lô của từng tem qua giao.
+          </p>
+          <div className="grid grid-cols-2 gap-x-4">
+            <Field label="SL bốc mẫu (mỗi tem)" required>
+              <Input type="number" min="1" value={nhanhForm.soLuongKiem} autoFocus
+                onChange={(e) => doiBocMauCua(setNhanhForm)(e.target.value)} />
+            </Field>
+            <Field label="SL đạt trong mẫu">
+              <Input type="number" min="0" value={nhanhForm.soLuongDat} onChange={(e) => doiSlDatCua(setNhanhForm)(e.target.value)} />
+            </Field>
+          </div>
+          <Field label="Kết quả">
+            <div className="flex gap-2">
+              <button type="button" onClick={chonDatCua(setNhanhForm)}
+                className={`flex-1 rounded-control border px-4 py-2.5 text-sm font-semibold transition ${
+                  nhanhForm.ketQua === 'DAT' ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-line text-ink-soft'
+                }`}>Đạt</button>
+              <button type="button" onClick={() => setNhanhForm((f) => ({ ...f, ketQua: 'KHONG_DAT' }))}
+                className={`flex-1 rounded-control border px-4 py-2.5 text-sm font-semibold transition ${
+                  nhanhForm.ketQua === 'KHONG_DAT' ? 'border-rose-300 bg-rose-50 text-rose-700' : 'border-line text-ink-soft'
+                }`}>Không đạt</button>
+            </div>
+          </Field>
+          {nhanhForm.ketQua === 'KHONG_DAT' && (
+            <div className="rounded-control border border-amber-200 bg-amber-50 p-3 dark:border-amber-900/60 dark:bg-amber-950/40">
+              <p className="mb-2 text-xs font-medium text-amber-700 dark:text-amber-300">
+                Muốn <b>vẫn cho giao</b> thì chọn owner + lý do. Bỏ trống owner → các tem <b>nằm lại OQC</b>.
+              </p>
+              <Field label="Owner cho giao (chịu trách nhiệm)">
+                <SearchableSelect value={nhanhForm.ownerChoGiaoId}
+                  onChange={(v) => setNhanhForm((f) => ({ ...f, ownerChoGiaoId: v }))}
+                  options={users} getValue={(u) => u.id} getLabel={(u) => u.ho_ten || u.ten_dang_nhap || ''}
+                  getSearch={(u) => `${u.ho_ten || ''} ${u.ten_dang_nhap || ''}`} placeholder="Gõ tên hoặc tên đăng nhập để tìm..." />
+              </Field>
+              <Field label="Lý do cho giao">
+                <Textarea rows={2} value={nhanhForm.lyDoChoGiao} onChange={(e) => setNhanhForm((f) => ({ ...f, lyDoChoGiao: e.target.value }))}
+                  placeholder="Vì sao cho giao dù không đạt..." />
+              </Field>
+            </div>
+          )}
+        </div>
+      </Modal>
       <Toast toast={toast} />
     </div>
   );

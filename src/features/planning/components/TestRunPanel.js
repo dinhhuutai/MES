@@ -8,6 +8,8 @@ import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import Modal from '../../../components/common/Modal';
 import TraVeGnModal from '../../../components/common/TraVeGnModal';
+import NhieuNguoiSelect from '../../../components/common/NhieuNguoiSelect';
+import { listUserOptions } from '../../../services/userService';
 import { getLenhDetail, recordTestRun, confirmQA, cancelQA, returnTestRunToReady, skipTestRun, listOwnerChoIn, testRunTraVeKeHoach } from '../../../services/planningService';
 import { fmtNum } from '../../../utils/format';
 
@@ -28,7 +30,7 @@ const ketQuaBadge = (kq) => {
 // `truocXacNhan()` (26/09/2026) — Promise<bool>: trang hỏi LÝ DO NGHẼN nếu lệnh đang quá SLA (mig 106).
 // `onToast` (tùy chọn): thông báo của TRANG — dùng cho thao tác đóng luôn panel (Trả về GN), toast của
 //   panel sẽ mất theo panel.
-export default function TestRunPanel({ lenhId, onClose, onChanged, truocXacNhan, onToast }) {
+export default function TestRunPanel({ lenhId, onClose, onChanged, truocXacNhan, onToast, ungVienGn }) {
   const { can } = usePermissions();
   const { toast, show } = useToast();
   const canQA = can('TESTRUN_QA');
@@ -50,6 +52,11 @@ export default function TestRunPanel({ lenhId, onClose, onChanged, truocXacNhan,
   const [ownerOpts, setOwnerOpts] = useState([]);
   const [ikdOwners, setIkdOwners] = useState(() => new Set());
   const [ikdLyDo, setIkdLyDo] = useState('');
+  // Ô tích "Khác" (18/10/2026): người khác cho IN (chọn tài khoản / gõ tên) + lý do khác.
+  const [ikdKhac, setIkdKhac] = useState(false);
+  const [ikdNguoiKhac, setIkdNguoiKhac] = useState('');
+  const [ikdLyDoKhac, setIkdLyDoKhac] = useState('');
+  const [userOpts, setUserOpts] = useState([]);
   const [gnOpen, setGnOpen] = useState(false); // "Trả về GN" — lệnh giữ nguyên, tạm rời Test Run
   // "Trả về Kế hoạch" (07/10/2026) — GIỮ lệnh, chỉ gắn cờ + chuông cho Kế hoạch; lệnh rời Test Run, hiện ở
   //   khối "Test Run trả về" màn Release 1 tới khi Kế hoạch xác nhận lại.
@@ -143,7 +150,8 @@ export default function TestRunPanel({ lenhId, onClose, onChanged, truocXacNhan,
 
   const moInKhongDat = async () => {
     if (!nguoiTest.trim()) { show('Bắt buộc nhập người test', 'error'); return; }
-    setIkdOwners(new Set()); setIkdLyDo(''); setIkdOpen(true);
+    setIkdOwners(new Set()); setIkdLyDo(''); setIkdKhac(false); setIkdNguoiKhac(''); setIkdLyDoKhac(''); setIkdOpen(true);
+    if (!userOpts.length) listUserOptions({ limit: 500 }).then((r) => setUserOpts(r.data || [])).catch(() => {});
     try {
       const res = await listOwnerChoIn();
       setOwnerOpts(res.data || []);
@@ -151,6 +159,9 @@ export default function TestRunPanel({ lenhId, onClose, onChanged, truocXacNhan,
       show(e.message || 'Không tải được danh sách owner', 'error');
     }
   };
+  // Đủ điều kiện xác nhận: ≥1 owner, HOẶC tích "Khác" và nhập người khác / lý do khác (gương BE `chuanHoaInKhongDat`).
+  const coKhac = ikdKhac && (ikdNguoiKhac.trim() || ikdLyDoKhac.trim());
+  const ikdDuDieuKien = ikdOwners.size > 0 || !!coKhac;
 
   const toggleOwner = (id) => setIkdOwners((s) => {
     const n = new Set(s);
@@ -160,7 +171,7 @@ export default function TestRunPanel({ lenhId, onClose, onChanged, truocXacNhan,
 
   // Xác nhận In Không Đạt → đi y như xác nhận đạt (qua bước tiếp theo), lần test ghi "Không đạt (owner cho IN)".
   const doInKhongDat = async () => {
-    if (ikdOwners.size === 0) { show('Chọn ít nhất 1 owner cho IN', 'error'); return; }
+    if (!ikdDuDieuKien) { show('Chọn ít nhất 1 owner cho IN, hoặc tích "Khác" để nhập người khác / lý do khác', 'error'); return; }
     if (truocXacNhan && !(await truocXacNhan())) return;
     setBusy('ikd');
     try {
@@ -169,7 +180,11 @@ export default function TestRunPanel({ lenhId, onClose, onChanged, truocXacNhan,
         nguoiTest: nguoiTest.trim() || null,
         loaiTest,
         ghiChu: ghiChuQA.trim() || null,
-        inKhongDat: { ownerIds: [...ikdOwners], lyDo: ikdLyDo.trim() || null },
+        inKhongDat: {
+          ownerIds: [...ikdOwners], lyDo: ikdLyDo.trim() || null,
+          nguoiKhac: ikdKhac ? ikdNguoiKhac.trim() || null : null,
+          lyDoKhac: ikdKhac ? ikdLyDoKhac.trim() || null : null,
+        },
       });
       show('Đã xác nhận in không đạt — chuyển bước tiếp theo');
       setIkdOpen(false);
@@ -448,7 +463,7 @@ export default function TestRunPanel({ lenhId, onClose, onChanged, truocXacNhan,
         footer={(
           <>
             <Button chiXemOk variant="ghost" onClick={() => setIkdOpen(false)} disabled={busy === 'ikd'}>Hủy</Button>
-            <Button onClick={doInKhongDat} loading={busy === 'ikd'} disabled={ikdOwners.size === 0}>
+            <Button onClick={doInKhongDat} loading={busy === 'ikd'} disabled={!ikdDuDieuKien}>
               Xác nhận In Không Đạt
             </Button>
           </>
@@ -469,8 +484,26 @@ export default function TestRunPanel({ lenhId, onClose, onChanged, truocXacNhan,
                   <b>{u.ho_ten}</b> <span className="text-ink-soft">@{u.ten_dang_nhap}</span>
                 </label>
               ))}
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-ink">
+                <input type="checkbox" checked={ikdKhac} onChange={(e) => setIkdKhac(e.target.checked)}
+                  className="h-4 w-4 rounded border-line text-primary focus:ring-primary" />
+                <b>Khác</b> <span className="text-ink-soft">(người khác / lý do khác)</span>
+              </label>
             </div>
           </Field>
+          {ikdKhac && (
+            <div className="space-y-3 rounded-control border border-line bg-surface-muted/50 p-3">
+              <Field label="Người khác cho IN">
+                <NhieuNguoiSelect value={ikdNguoiKhac} onChange={setIkdNguoiKhac} options={userOpts}
+                  placeholder="Chọn hoặc gõ tên rồi Enter..." />
+              </Field>
+              <Field label="Lý do khác">
+                <Textarea rows={2} value={ikdLyDoKhac} onChange={(e) => setIkdLyDoKhac(e.target.value)}
+                  maxLength={300} placeholder="Nhập lý do khác..." />
+              </Field>
+              <p className="text-xs text-ink-soft">Nhập ít nhất 1 trong 2 ô (khi không chọn owner nào ở trên).</p>
+            </div>
+          )}
           <Field label="Lý do">
             <Textarea rows={3} value={ikdLyDo} onChange={(e) => setIkdLyDo(e.target.value)}
               placeholder="vd: Khuôn sai (tùy chọn)" />
@@ -498,7 +531,7 @@ export default function TestRunPanel({ lenhId, onClose, onChanged, truocXacNhan,
       </Modal>
       <TraVeGnModal open={gnOpen} onClose={() => setGnOpen(false)} nguon="TEST_RUN" lenhId={lenhId}
         phanIn={dsPhanIn[0] || null} dsPhanIn={dsPhanIn}
-        onToast={(m) => (onToast ? onToast(m) : show(m))} onDone={() => { onChanged?.(); onClose?.(); }} />
+        ungVien={ungVienGn} onToast={(m, t) => (onToast ? onToast(m, t) : show(m, t))} onDone={() => { onChanged?.(); onClose?.(); }} />
       <Toast toast={toast} />
     </SidePanel>
   );

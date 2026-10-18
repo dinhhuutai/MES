@@ -49,7 +49,7 @@ function ReturnNote({ info, nguon }) {
 // trạng thái + nút xác nhận đều theo NHÓM đó (không truyền = như cũ, mức phần in).
 // `truocXacNhan()` (26/09/2026) — trả Promise<bool>: trang hỏi LÝ DO NGHẼN nếu phần in đang quá SLA
 // (mig 106); false ⇒ người dùng bấm Hủy, KHÔNG xác nhận. Không truyền ⇒ như cũ.
-export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, onClose, onChanged, onToast, truocXacNhan }) {
+export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, onClose, onChanged, onToast, truocXacNhan, ungVienGn }) {
   const { can } = usePermissions();
   const { toast, show } = useToast();
   const now = useNow(1000);
@@ -260,7 +260,7 @@ export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, onClose, o
       <Toast toast={toast} />
       {/* Trả về Giao nhận sửa thông tin — gửi xong phần in rời READY ⇒ đóng panel + tải lại bảng. */}
       <TraVeGnModal open={gnOpen} onClose={() => setGnOpen(false)} nguon="KT" onToast={onToast || show}
-        dotVaiIds={dotVaiIds}
+        dotVaiIds={dotVaiIds} ungVien={ungVienGn}
         phanIn={detail?.phan_in ? { id: phanInId, ma_phan: detail.phan_in.ma_phan } : null}
         onDone={() => { onChanged?.(); onClose?.(); }} />
     </SidePanel>

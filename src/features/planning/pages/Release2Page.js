@@ -26,7 +26,7 @@ import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import PhuongAnInBadge, { PHUONG_AN_IN } from '../../../components/common/PhuongAnInBadge';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import TraVeGnModal from '../../../components/common/TraVeGnModal';
-import { dsPhanInCuaLenh } from '../../../utils/phanInTraVeGn';
+import { dsPhanInCuaLenh, ungVienTuLenh } from '../../../utils/phanInTraVeGn';
 import { listRelease2Candidates, approveRelease2, approveRelease2Batch, planHistory, release2Done } from '../../../services/planningService';
 import { fmtNum, fmtDate, trongKhoangNgay } from '../../../utils/format';
 import DateRangePicker from '../../../components/common/DateRangePicker';
@@ -315,7 +315,7 @@ export default function Release2Page() {
 
       <TraVeGnModal open={!!gnLenh} onClose={() => setGnLenh(null)} nguon="RELEASE2" lenhId={gnLenh?.id}
         phanIn={dsPhanInCuaLenh(gnLenh)[0] || null} dsPhanIn={dsPhanInCuaLenh(gnLenh)}
-        onToast={(m) => show(m)} onDone={() => load(true)} />
+        ungVien={ungVienTuLenh(filtered)} onToast={(m, t) => show(m, t)} onDone={() => load(true)} />
 
       <ConfirmDialog
         open={!!confirm}

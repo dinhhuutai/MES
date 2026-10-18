@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
-import TraVeGnModal from '../../../components/common/TraVeGnModal';
+import TraVeGnModal, { ungVienGn } from '../../../components/common/TraVeGnModal';
 import TraVeListModal, { TraVeListButton, TRA_VE_THEO_MAN } from '../../../components/common/TraVeListModal';
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import Toolbar from '../../../components/common/Toolbar';
@@ -560,7 +560,7 @@ export default function ReadyQcPage() {
       <TraVeListModal open={traVeOpen} onClose={() => setTraVeOpen(false)}
         tenMan="QC chuẩn bị kỹ thuật" loais={TRA_VE_THEO_MAN.CL_QC_READY} tenFile="tra-ve-qc-ready" />
       <TraVeGnModal open={gnOpen} onClose={() => setGnOpen(false)} nguon="QC" onToast={show}
-        dotVaiIds={editing?.dot_vai_ids}
+        dotVaiIds={editing?.dot_vai_ids} ungVien={ungVienGn(viewRows, { pinId: (r) => r.id, dotIds: (r) => r.dot_vai_ids })}
         phanIn={editing ? { id: editing.id, ma_phan: editing.ma_phan } : null}
         onDone={() => { setEditing(null); load(); }} />
       <NghenListModal open={nghenOpen} onClose={() => setNghenOpen(false)}

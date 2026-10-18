@@ -26,7 +26,7 @@ import { laChuyenGiaCong, tenChuyen } from '../utils/chuyenGiaCong';
 import TimeSelect from '../../../components/common/TimeSelect';
 import ThoInField from '../components/ThoInField';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
-import TraVeGnModal from '../../../components/common/TraVeGnModal';
+import TraVeGnModal, { ungVienGn } from '../../../components/common/TraVeGnModal';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 import ReleaseListModal from '../components/ReleaseListModal';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
@@ -47,6 +47,7 @@ import exportCheckpointExcel, { COT_DOT_VAI, moTaBoLoc } from '../../../utils/ex
 // Chip lọc theo PHƯƠNG ÁN IN — nhãn dựng từ `PHUONG_AN_IN` nên không bao giờ lệch với badge.
 import { PAIN_TABS, hopChipPain, nhanChipPain, demChipPain } from '../../../components/common/PhuongAnInBadge';
 import ChipTabs from '../../../components/common/ChipTabs';
+import { gomDotCungCodePhan, dotIdsCuaDong, slaCuaDong } from '../utils/gomDotRelease1';
 
 const dateOffsetStr = (n) => {
   const d = new Date();
@@ -87,6 +88,9 @@ function DataCells({ r }) {
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-1">
           {r.qc_done ? <Badge tone="success">Đã Ready</Badge> : <Badge tone="warning">Chờ Ready → KH tạm</Badge>}
+          {r._dots && r._dots.length > 1 && (
+            <Badge tone="info" title="Các đợt vải cùng code phần được gom — release ra 1 lệnh, SL = tổng">Gom {r._dots.length} đợt</Badge>
+          )}
           {/* Badge nhóm gom set — chỉ để BIẾT, KHÔNG còn ràng buộc release chung (chốt 15/08/2026). */}
           {r.ma_set && (
             <Badge tone="info" title="Thuộc gom set — vẫn release riêng từng phần in được">
@@ -110,7 +114,15 @@ function DataCells({ r }) {
       <td className={`${TD} text-right tabular-nums whitespace-nowrap`}>
         <b className="text-ink">{fmtNum(r.so_luong_vai_ve)}</b><span className="text-ink-soft"> / {fmtNum(r.so_luong_don_hang)}</span>
       </td>
-      <td className={`${TD} text-right tabular-nums font-medium text-primary`}>{fmtNum(r.con_release ?? r.so_luong_vai_ve)}</td>
+      <td className={`${TD} text-right tabular-nums font-medium text-primary`}>
+        {fmtNum(r.con_release ?? r.so_luong_vai_ve)}
+        {/* Dòng gom nhiều đợt cùng code phần (18/10/2026) — số từng đợt bên dưới. */}
+        {r._dots && r._dots.length > 1 && (
+          <div className="text-[11px] font-normal text-ink-soft">
+            {r._dots.map((d) => fmtNum(d.con_release ?? d.so_luong_vai_ve)).join(' + ')}
+          </div>
+        )}
+      </td>
       <td className={TD}>{fmtDate(r.ngay_vai_ve)}</td>
       <td className={TD}>{fmtDate(r.han_giao_hang)}</td>
     </>
@@ -290,25 +302,28 @@ export default function Release1Page() {
   // thành viên còn lại xuống ngay dưới ⇒ nhìn thành 1 khối liền mạch mà KHÔNG đẩy set lên đầu bảng.
   // ⚠ Cố ý không sort theo `ma_set`: bài học 2026-07-29 ở màn QC READY — đẩy set lên đầu làm trang 1
   //   toàn hàng chưa đủ điều kiện, người dùng tưởng mất cột checkbox.
+  // ⚠ 18/10/2026: TRƯỚC khi gom tại chỗ theo gom set, các đợt CÙNG code phần được gom thành 1 DÒNG
+  //   (`utils/gomDotRelease1.js`) — mỗi dòng mang `_dots` (mọi đợt) + `_key`; release dòng ⇒ BE gộp 1 lệnh.
   const viewRowsGom = useMemo(() => {
+    const dong = gomDotCungCodePhan(viewRows);
     const daRa = new Set();
     const out = [];
-    viewRows.forEach((r) => {
-      if (daRa.has(r.dot_vai_id)) return;
-      out.push(r); daRa.add(r.dot_vai_id);
+    dong.forEach((r) => {
+      if (daRa.has(r._key)) return;
+      out.push(r); daRa.add(r._key);
       if (!r.ma_set) return;
-      viewRows.forEach((x) => {
-        if (!daRa.has(x.dot_vai_id) && x.ma_set === r.ma_set) { out.push(x); daRa.add(x.dot_vai_id); }
+      dong.forEach((x) => {
+        if (!daRa.has(x._key) && x.ma_set === r.ma_set) { out.push(x); daRa.add(x._key); }
       });
     });
     return out;
   }, [viewRows]);
 
   // Xuất Excel: TOÀN BỘ đợt vải sau bộ lọc (trang phân trang client nên `viewRowsGom` đã là
-  // "hết mọi trang"). Cột "Gom set" giữ lại để vẫn biết đợt nào vốn định in chung.
+  // "hết mọi trang"). Cột "Gom set" giữ lại để vẫn biết đợt nào vốn định in chung. Excel giữ 1 dòng / ĐỢT VẢI.
   const doExcel = () => exportCheckpointExcel({
     cols: [{ header: 'Gom set', width: 12, value: (r) => r.ma_set || '' }, ...COT_DOT_VAI],
-    rows: viewRowsGom,
+    rows: viewRowsGom.flatMap((g) => g._dots || [g]),
     title: 'Release 1 — chờ release',
     fileName: 'release-1',
     moTaLoc: moTaBoLoc({
@@ -336,17 +351,28 @@ export default function Release1Page() {
     if (next[row.dot_vai_id]) delete next[row.dot_vai_id]; else next[row.dot_vai_id] = row;
     return next;
   });
+  // Dòng gom (nhiều đợt cùng code phần): tích = tích MỌI đợt của dòng; "đã tích" khi mọi đợt đã tích.
+  const dongDaChon = (g) => (g._dots || [g]).every((d) => selected[d.dot_vai_id]);
+  const toggleDong = (g) => setSelected((s) => {
+    const n = { ...s };
+    const ds = g._dots || [g];
+    if (ds.every((d) => n[d.dot_vai_id])) ds.forEach((d) => delete n[d.dot_vai_id]);
+    else ds.forEach((d) => { n[d.dot_vai_id] = d; });
+    return n;
+  });
   // Chọn tất cả ở header = chọn MỌI đợt vải ĐANG HIỂN THỊ (sau lọc), spanning tất cả trang phân trang
   // — không chỉ trang hiện tại.
-  const allChecked = viewRowsGom.length > 0 && viewRowsGom.every((r) => selected[r.dot_vai_id]);
-  const someChecked = viewRowsGom.some((r) => selected[r.dot_vai_id]);
+  const dotDangHien = useMemo(() => viewRowsGom.flatMap((g) => g._dots || [g]), [viewRowsGom]);
+  const allChecked = dotDangHien.length > 0 && dotDangHien.every((r) => selected[r.dot_vai_id]);
+  const someChecked = dotDangHien.some((r) => selected[r.dot_vai_id]);
   const toggleAll = () => {
-    if (allChecked) setSelected((s) => { const n = { ...s }; viewRowsGom.forEach((r) => delete n[r.dot_vai_id]); return n; });
-    else setSelected((s) => { const n = { ...s }; viewRowsGom.forEach((r) => { n[r.dot_vai_id] = r; }); return n; });
+    if (allChecked) setSelected((s) => { const n = { ...s }; dotDangHien.forEach((r) => delete n[r.dot_vai_id]); return n; });
+    else setSelected((s) => { const n = { ...s }; dotDangHien.forEach((r) => { n[r.dot_vai_id] = r; }); return n; });
   };
 
   // ⚠ Panel nay LUÔN là panel thao tác đầy đủ (có nút Release + form chuyền/SL/ngày), kể cả với đợt
   //   vải thuộc gom set — trước đây đợt trong set mở ra panel CHỈ XEM vì phải release chung cả set.
+  // `row` có thể là DÒNG GOM nhiều đợt (18/10/2026) — SL mặc định = tổng còn release; release ⇒ 1 lệnh.
   const openDetail = (row) => {
     setDetail(row);
     // Mặc định release phần CÒN LẠI (SL vải về − đã release); release theo số lượng, giữ phần còn.
@@ -421,7 +447,9 @@ export default function Release1Page() {
       });
       const tam = res?.data?.ke_hoach_tam_count || 0;
       const daTao = res?.data?.created_count || 0;
-      show(`Đã tạo ${daTao} lệnh${tam > 0 ? ` · ${tam} đợt chưa Ready → lưu Kế hoạch tạm` : ''}${canhBaoThoIn(res)}`);
+      const soDot = res?.data?.so_dot_vai || daTao;
+      show(`Đã tạo ${daTao} lệnh${soDot > daTao ? ` (gom ${soDot} đợt vải cùng code phần)` : ''}`
+        + `${tam > 0 ? ` · ${tam} đợt chưa Ready → lưu Kế hoạch tạm` : ''}${canhBaoThoIn(res)}`);
       setSelected({}); setReleaseOpen(false);
       load();
     } catch (e) {
@@ -454,7 +482,7 @@ export default function Release1Page() {
         <TraVeListButton onClick={() => setDsTraVeOpen(true)} />
         <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
-        <Badge tone="info">{activeCount || loaiPain ? `${viewRowsGom.length}/` : ''}{meta.total} đợt vải</Badge>
+        <Badge tone="info">{activeCount || loaiPain ? `${viewRows.length}/` : ''}{meta.total} đợt vải · {viewRowsGom.length} dòng</Badge>
       </Toolbar>
 
       <ChipTabs tabs={PAIN_TABS} value={loaiPain} counts={countPain} onChange={setLoaiPain} />
@@ -550,16 +578,16 @@ export default function Release1Page() {
                   const dauKhoi = r.ma_set && truoc?.ma_set !== r.ma_set;
                   const cuoiKhoi = r.ma_set && sau?.ma_set !== r.ma_set;
                   return (
-                    <tr key={r.dot_vai_id} onClick={() => openDetail(r)}
+                    <tr key={r._key} onClick={() => openDetail(r)}
                       className={`cursor-pointer border-b transition hover:bg-surface-muted/40
                         ${cuoiKhoi || !r.ma_set ? 'border-line/70' : 'border-transparent'}
                         ${r.ma_set ? 'border-l-[3px] border-l-primary/60' : ''}
-                        ${slaRowClass(statusDot(r.dot_vai_id))}`}>
+                        ${slaRowClass(slaCuaDong(r, statusDot))}`}>
                       {/* Ô CHỌN: chặn ở cấp <td> (không chỉ trên <input>) — bấm vào phần đệm quanh
                           checkbox trước đây vẫn mở SidePanel. */}
                       <td className={TD} onClick={(e) => e.stopPropagation()}>
-                        <input type="checkbox" checked={!!selected[r.dot_vai_id]}
-                          onChange={() => toggle(r)}
+                        <input type="checkbox" checked={dongDaChon(r)}
+                          onChange={() => toggleDong(r)}
                           className="h-4 w-4 rounded border-line text-primary focus:ring-primary" />
                       </td>
                       <td className={`${TD} text-right tabular-nums text-ink-soft`}>
@@ -615,10 +643,15 @@ export default function Release1Page() {
         }
       >
         <div className="mb-3 rounded-control bg-surface-muted px-3 py-2 text-sm text-ink-soft">
-          <div>{looseList.length} đợt vải → <b>mỗi đợt 1 lệnh riêng</b></div>
+          <div>{looseList.length} đợt vải → <b>mỗi code phần 1 lệnh</b> (các đợt cùng code phần gom số lượng vào chung 1 lệnh)</div>
           {looseList.some((r) => r.ma_set) && (
             <div className="mt-1 text-xs">
-              Trong đó có đợt thuộc gom set — vẫn tách thành lệnh riêng, không gom chung.
+              Trong đó có đợt thuộc gom set — mỗi phần in vẫn ra lệnh riêng, không gom chung với phần in khác.
+            </div>
+          )}
+          {looseList.some((r) => ['BO_SUNG', 'MAU_SO_LUONG'].includes(r.ma_loai_dot_vai)) && (
+            <div className="mt-1 text-xs">
+              Đợt bổ sung / mẫu số lượng ra lệnh riêng (bỏ Test Run), không gom với đợt thường.
             </div>
           )}
           {looseList.some((r) => !r.qc_done) && (
@@ -676,7 +709,7 @@ export default function Release1Page() {
             )}
             {/* Thông tin phần in SAI ⇒ trả Giao nhận sửa; đợt tạm rời Release 1 tới khi GN xác nhận lại. */}
             <Button variant="secondary" icon="undo" className="text-danger" onClick={() => setGnOpen(true)}>Trả về GN</Button>
-            <Button onClick={() => submitRelease([detail.dot_vai_id])} loading={saving} disabled={!form.chuyenId}>
+            <Button onClick={() => submitRelease(dotIdsCuaDong(detail))} loading={saving} disabled={!form.chuyenId}>
               {laChuyenGiaCong(chuyen, form.chuyenId) ? 'Release vào Gia công' : 'Xác nhận Release 1'}
             </Button>
           </>
@@ -690,13 +723,27 @@ export default function Release1Page() {
                 các phần in khác trong set không bị ảnh hưởng.
               </div>
             )}
+            {detail._dots && detail._dots.length > 1 && (
+              <div className="rounded-control border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-800 dark:border-sky-900/60 dark:bg-sky-950/40 dark:text-sky-300">
+                <div className="mb-1">Gom <b>{detail._dots.length} đợt vải</b> cùng code phần → release ra <b>1 lệnh</b>, SL = tổng.
+                  Nhập SL ít hơn thì chia lần lượt từ đợt đầu.</div>
+                <ul className="space-y-0.5 text-xs">
+                  {detail._dots.map((d) => (
+                    <li key={d.dot_vai_id} className="flex justify-between gap-2">
+                      <span>{d.ma_dot_vai}{d.loai_dot_vai ? ` · ${d.loai_dot_vai}` : ''} · nhận {fmtDate(d.ngay_vai_ve)} · hạn {fmtDate(d.han_giao_hang)}</span>
+                      <b className="tabular-nums">{fmtNum(d.con_release ?? d.so_luong_vai_ve)}</b>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
               <Info label="Khách hàng" value={detail.ten_khach_hang} />
               <Info label="Đơn hàng" value={detail.ma_don_hang} />
               <Info label="Mã hàng" value={detail.ma_hang} />
               <Info label="Code phần" value={detail.ma_phan} />
               <Info label="Màu vải" value={detail.mau_vai} />
-              <Info label="Đợt vải" value={detail.ma_dot_vai} />
+              <Info label="Đợt vải" value={detail._dots && detail._dots.length > 1 ? `${detail._dots.length} đợt (danh sách ở trên)` : detail.ma_dot_vai} />
               <Info label="Kích vải" value={detail.kich_vai} />
               <Info label="Kích phim" value={detail.kich_phim} />
               <Info label="SL đơn hàng" value={fmtNum(detail.so_luong_don_hang)} />
@@ -806,9 +853,9 @@ export default function Release1Page() {
       </SidePanel>
 
       <TraVeGnModal open={gnOpen} onClose={() => setGnOpen(false)} nguon="RELEASE1"
-        dotVaiIds={detail?.dot_vai_id ? [detail.dot_vai_id] : undefined}
+        dotVaiIds={detail?.dot_vai_id ? dotIdsCuaDong(detail) : undefined} ungVien={ungVienGn(viewRows, { dotIds: (r) => (r.dot_vai_id ? [r.dot_vai_id] : null) })}
         phanIn={detail ? { id: detail.phan_in_id, ma_phan: detail.ma_phan } : null}
-        onToast={(m) => show(m)} onDone={() => { setDetail(null); load(true); }} />
+        onToast={(m, t) => show(m, t)} onDone={() => { setDetail(null); load(true); }} />
 
       {/* Trả về Kỹ thuật — lý do bắt buộc (hiện lại ở màn READY / QC READY) */}
       <Modal
