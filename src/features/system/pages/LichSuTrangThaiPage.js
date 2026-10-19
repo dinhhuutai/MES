@@ -17,7 +17,8 @@ import { listConfirmHistory, cancelReadyItem, listReopenReadyCandidates, reopenR
 import { searchPhanInForCancel, huyPhanIn, listDeletedPhanIn, moPhanIn,
   searchDotVaiForCancel, huyDotVai, listDeletedDotVai, moDotVai } from '../../../services/orderService';
 import { listCancelableLenh, cancelLenh, listLanTestChoHuy, giaCongTemCancelable, huyGiaCongTem,
-  listLanTestCancelable, huyLanTest } from '../../../services/planningService';
+  listLanTestCancelable, huyLanTest, listKeHoachTamHuy, huyKeHoachTam } from '../../../services/planningService';
+import taiHetTrang, { LIMIT_TAI_LON } from '../../../utils/taiHetTrang';
 import { listCancelableTem, cancelPrintTem, listReopenableTem, moLaiTem, listCloseCandidates, closeProduction, listReopenCandidates, reopenProduction, listUndoStartCandidates, undoStartProduction } from '../../../services/productionService';
 import { listCancelKcs, cancelKcs, listCancelSua, cancelSua, listCancelOqc, cancelOqc,
   listTemSuaCancelable, listTemSuaDeleted, huyTemSua, moTemSua } from '../../../services/qualityService';
@@ -2269,6 +2270,155 @@ function TichGiaoCancelSection({ show }) {
   );
 }
 
+// ─── Tab: Hủy kế hoạch tạm (19/10/2026) ─────────────────────────────────────
+// Phần in đã lập kế hoạch Release 1 nhưng CHƯA Ready (QC READY chưa xác nhận) ⇒ nằm ở Kế hoạch tạm. Hủy = bỏ bản
+// kế hoạch (chuyền/ngày/giờ/thợ in) — đợt vải quay về Release 1 để lập lại; chưa có lệnh nên không báo ERP.
+// Lý do BẮT BUỘC (ghi audit `HUY_KE_HOACH_TAM`). Mặc định chỉ hiện dòng "Chờ Ready" (đúng ca người dùng mô tả).
+const KHT_LOC = [
+  { v: 'CHO', label: 'Chờ Ready', khop: (r) => !r.qc_done },
+  { v: 'READY', label: 'Đã Ready', khop: (r) => !!r.qc_done },
+  { v: 'ALL', label: 'Tất cả', khop: () => true },
+];
+const gioKh = (t) => {
+  if (!t) return '';
+  const d = new Date(t);
+  return Number.isNaN(d.getTime()) ? '' : `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+
+function KeHoachTamCancelSection({ show }) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [loc, setLoc] = useState('CHO');
+  const [sel, setSel] = useState(() => new Set());
+  const [open, setOpen] = useState(false);
+  const [lyDo, setLyDo] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const { items } = await taiHetTrang((p) => listKeHoachTamHuy({ search, ...p }), { limit: LIMIT_TAI_LON });
+      setRows(items);
+      setSel(new Set());
+    } catch (e) {
+      show(e.message || 'Lỗi tải', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [search, show]);
+
+  useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
+
+  const dem = KHT_LOC.reduce((a, c) => ({ ...a, [c.v]: rows.filter(c.khop).length }), {});
+  const view = rows.filter((KHT_LOC.find((c) => c.v === loc) || KHT_LOC[2]).khop);
+  const toggle = (r) => setSel((s) => {
+    const n = new Set(s);
+    if (n.has(r.id)) n.delete(r.id); else n.add(r.id);
+    return n;
+  });
+  const allChecked = view.length > 0 && view.every((r) => sel.has(r.id));
+  const toggleAll = () => setSel(() => (allChecked ? new Set() : new Set(view.map((r) => r.id))));
+  const dangChon = rows.filter((r) => sel.has(r.id));
+
+  // Hủy TUẦN TỰ từng dòng; dòng lỗi không chặn dòng sau — giữ lý do lỗi đầu tiên để báo.
+  const doHuy = async () => {
+    const ly = lyDo.trim();
+    if (!ly || !dangChon.length) return;
+    setBusy(true);
+    let ok = 0; let loi = 0; let loiDau = '';
+    for (const r of dangChon) {
+      try { await huyKeHoachTam(r.id, ly); ok += 1; } catch (e) { loi += 1; if (!loiDau) loiDau = e.message || ''; }
+    }
+    setBusy(false);
+    setOpen(false); setLyDo('');
+    show(loi
+      ? `Đã hủy ${ok} kế hoạch tạm, ${loi} lỗi${loiDau ? ` — ${loiDau}` : ''}`
+      : `Đã hủy ${ok} kế hoạch tạm — đợt vải về lại Release 1`, loi ? 'error' : 'success');
+    load();
+  };
+
+  const columns = [
+    { key: 'sel', header: (
+      <input type="checkbox" checked={allChecked} onChange={toggleAll} disabled={!view.length}
+        className="h-4 w-4 rounded border-line text-primary focus:ring-primary" />
+    ), className: 'w-10', selection: true, render: (r) => (
+      <input type="checkbox" checked={sel.has(r.id)} onChange={() => toggle(r)}
+        className="h-4 w-4 rounded border-line text-primary focus:ring-primary" />
+    ) },
+    cotNgayXacNhan((r) => r.tg_lap, (r) => `Lập kế hoạch tạm · ${r.nguoi_lap || '—'}`),
+    { key: 'qc_done', header: 'Tình trạng', render: (r) => (
+      r.qc_done ? <Badge tone="success">Đã Ready</Badge> : <Badge tone="warning">Chờ Ready</Badge>
+    ) },
+    { key: 'ma_phan', header: 'Code phần', className: 'font-medium text-ink', render: (r) => r.ma_phan || '—' },
+    { key: 'ten_khach_hang', header: 'Khách hàng', render: (r) => r.ten_khach_hang || '—' },
+    { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
+    { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
+    { key: 'mau_vai', header: 'Màu · Kích', render: (r) => [r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—' },
+    { key: 'ma_dot_vai', header: 'Đợt vải', render: (r) => r.ma_dot_vai || '—' },
+    { key: 'so_luong', header: 'SL', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
+    { key: 'ten_chuyen', header: 'Chuyền (dự kiến)', render: (r) => r.ten_chuyen || '—' },
+    { key: 'ngay_ke_hoach', header: 'Ngày KH', className: 'whitespace-nowrap', render: (r) => (r.ngay_ke_hoach ? new Date(r.ngay_ke_hoach).toLocaleDateString('vi-VN') : '—') },
+    { key: 'gio', header: 'Giờ BĐ–KT', className: 'whitespace-nowrap', render: (r) => (r.tg_bd_kh || r.tg_kt_kh ? `${gioKh(r.tg_bd_kh) || '—'}–${gioKh(r.tg_kt_kh) || '—'}` : '—') },
+    { key: 'tho_in_kh', header: 'Thợ in', render: (r) => r.tho_in_kh || '—' },
+    { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => <HanGiaoCell value={r.han_giao_hang} /> },
+  ];
+
+  return (
+    <div>
+      <Toolbar title="Hủy kế hoạch tạm"
+        search={search} onSearch={setSearch} searchPlaceholder="Tìm code phần, mã hàng, màu, khách, đợt vải...">
+        <div className="inline-flex rounded-control border border-line bg-surface p-0.5">
+          {KHT_LOC.map((c) => (
+            <button key={c.v} type="button" onClick={() => { setLoc(c.v); setSel(new Set()); }}
+              className={`rounded-control px-3 py-1 text-sm font-medium transition ${
+                loc === c.v ? 'bg-primary-wash text-primary' : 'text-ink-soft hover:text-ink'}`}>
+              {c.label} ({fmtNum(dem[c.v] || 0)})
+            </button>
+          ))}
+        </div>
+      </Toolbar>
+
+      <div className="mb-3 rounded-control border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700">
+        Hủy = bỏ bản kế hoạch tạm (chuyền / ngày / giờ / thợ in đã lập). Đợt vải quay về <b>Kế hoạch › Release 1</b> để
+        lập lại; xác nhận READY của phần in <b>không bị đụng</b>. Chưa có lệnh sản xuất nên không gửi gì sang ERP.
+      </div>
+
+      <DataTable columns={columns} rows={view} loading={loading} rowKey="id"
+        emptyText="Không có kế hoạch tạm nào" />
+
+      {sel.size > 0 && (
+        <div className="sticky bottom-4 mt-4 flex items-center justify-between rounded-card border border-line bg-surface px-5 py-3 shadow-card-hover">
+          <span className="text-sm text-ink">Đã chọn <b>{sel.size}</b> kế hoạch tạm</span>
+          <div className="flex gap-2">
+            <Button chiXemOk variant="ghost" onClick={() => setSel(new Set())}>Bỏ chọn</Button>
+            <Button variant="danger" icon="x" onClick={() => { setLyDo(''); setOpen(true); }}>Hủy kế hoạch tạm ({sel.size})</Button>
+          </div>
+        </div>
+      )}
+
+      <Modal open={open} onClose={() => !busy && setOpen(false)} size="sm"
+        title={`Hủy kế hoạch tạm — ${dangChon.length} dòng`}
+        footer={(
+          <>
+            <Button chiXemOk variant="ghost" onClick={() => setOpen(false)} disabled={busy}>Đóng</Button>
+            <Button variant="danger" onClick={doHuy} loading={busy} disabled={!lyDo.trim()}>Hủy kế hoạch tạm</Button>
+          </>
+        )}>
+        <ul className="mb-3 max-h-40 list-disc overflow-auto pl-5 text-xs text-ink-soft">
+          {dangChon.map((r) => (
+            <li key={r.id}>{r.ma_phan}{r.ma_dot_vai ? ` · ${r.ma_dot_vai}` : ''}{r.ten_chuyen ? ` · ${r.ten_chuyen}` : ''}</li>
+          ))}
+        </ul>
+        <Field label="Lý do hủy" required>
+          <Textarea rows={3} value={lyDo} onChange={(e) => setLyDo(e.target.value)}
+            placeholder="Vì sao hủy kế hoạch tạm (vd: đổi kế hoạch, phần in chưa làm kịp...)" />
+        </Field>
+      </Modal>
+    </div>
+  );
+}
+
 export default function LichSuTrangThaiPage() {
   const { can: canGoc } = usePermissions();
   // Quyền "xem module Hệ thống" (30/09/2026) thấy ĐỦ mọi tab — nút thao tác tự khóa qua `useChiXem`.
@@ -2285,6 +2435,8 @@ export default function LichSuTrangThaiPage() {
     can('READY_CANCEL') && { key: 'modotvai', label: 'Mở đợt vải' },
     // `LENH_CANCEL_ANY` (mig 065) vào được tab này dù không có RELEASE1/2 — quyền hủy tùy chọn.
     (can('RELEASE1') || can('RELEASE2') || can('LENH_CANCEL_ANY')) && { key: 'lenh', label: 'Hủy lệnh sản xuất' },
+    // Kế hoạch Release 1 của phần in CHƯA Ready (nằm ở Kế hoạch tạm) — 19/10/2026, gương quyền route.
+    (can('RELEASE1') || can('RELEASE2')) && { key: 'huykht', label: 'Hủy kế hoạch tạm' },
     // Gỡ 1 lượt test QA xác nhận nhầm phần in (02/10/2026) — gương quyền route `/planning/huy-lan-test`.
     (can('TESTRUN_QA') || can('RELEASE1') || can('RELEASE2') || can('LENH_CANCEL_ANY')) && { key: 'huytest', label: 'Hủy test run' },
     (can('RELEASE1') || can('RELEASE2')) && { key: 'huytemgiacong', label: 'Hủy tem gia công' },
@@ -2331,6 +2483,7 @@ export default function LichSuTrangThaiPage() {
       {tab === 'huydotvai' && <DotVaiCancelSection show={show} />}
       {tab === 'modotvai' && <DotVaiReopenSection show={show} />}
       {tab === 'lenh' && <LenhCancelSection show={show} />}
+      {tab === 'huykht' && <KeHoachTamCancelSection show={show} />}
       {tab === 'huytest' && <TestRunCancelSection show={show} />}
       {tab === 'huytemgiacong' && <GiaCongTemCancelSection show={show} />}
       {tab === 'tem' && <TemCancelSection show={show} />}

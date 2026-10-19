@@ -78,6 +78,8 @@ export const thieuNgayCaCt = (m) => {
   return thieu.length ? `Chưa nhập ${thieu.join(' và ')} — nhập 1 lần đầu ca rồi mới in tem được` : '';
 };
 export const CHUA_THO_IN = 'Chưa phân công thợ in — chọn thợ in ở khối Phân công rồi bấm Lưu trước khi in tem';
+// Phân công chưa đủ để in tem: chưa có thợ in, hoặc ca này chuyền chưa phân công (gương BE `kiemThoInPhanCong`).
+export const chuaPhanCongThoIn = (pc) => !!pc?.can_phan_cong_lai || !String(pc?.tho_in || '').trim();
 // Đưa gợi ý của BE vào ô: chỉ điền ô người dùng CHƯA gõ; lượt ca đã đổi so với lúc gõ ⇒ bỏ ngày ca / ngày chứng
 // từ của ca cũ trước (để trống lại cho ca mới).
 export const apGoiYTem = (m, g) => {
@@ -254,8 +256,32 @@ function LyDoBoSungInline({ dot, canRun, onSave }) {
 //   tên người chưa có tài khoản (thợ khoán) — xem `NhieuNguoiSelect`.
 // `thoInKh` (mig 111) = thợ in KẾ HOẠCH chọn lúc Release 1 — chưa phân công thì điền sẵn vào ô Thợ in (vẫn phải
 //   bấm Lưu mới thành phân công thật, vì phân công là thứ gửi ERP).
+// Dòng chú thích PHÂN CÔNG ĐẦU CA (19/10/2026): BE nhớ phân công theo CHUYỀN × LƯỢT CA (`production.service
+//   phanCongCaHienTai`). `pc.tu_dau_ca` = chuyền đã phân công trong ca này (lưu ở lệnh nào cũng được) · `pc.can_phan_cong_lai`
+//   = ca này chưa ai phân công cho chuyền ⇒ phải nhập + Lưu (đổ sẵn người cũ của phiếu).
+const gioPhut = (t) => { const d = t ? new Date(t) : null; return d && !Number.isNaN(d.getTime()) ? `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : ''; };
+function GhiChuDauCa({ pc }) {
+  const dc = pc?.dau_ca;
+  if (!dc) return null;
+  if (pc.can_phan_cong_lai) {
+    return (
+      <p className="mb-2 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
+        <b>Ca {dc.ma_ngay_ca}</b>: chuyền này chưa phân công — chọn người rồi bấm <b>Lưu phân công</b>. Lưu 1 lần là áp cho
+        mọi lệnh của chuyền trong ca này.
+      </p>
+    );
+  }
+  return (
+    <p className="mb-2 text-xs text-ink-soft">
+      Phân công đầu ca <b className="text-ink">{dc.ma_ngay_ca}</b> của chuyền{dc.nguoi ? ` — ${dc.nguoi} lưu lúc ${gioPhut(dc.tg)}` : ''}.
+      Áp cho mọi lệnh của chuyền trong ca; sang ca mới phân công lại.
+    </p>
+  );
+}
+
 export function PhanCongInline({ pc, users, toIns = [], onSave, busy, canRun, thoInKh = '' }) {
-  const daLuu = !!(pc?.ca_truong_id || pc?.chuyen_truong || pc?.tho_in || pc?.to_in_id);
+  // Sang ca mới (`can_phan_cong_lai`) ⇒ coi như CHƯA lưu: mở ô nhập, đổ sẵn người của ca trước.
+  const daLuu = !pc?.can_phan_cong_lai && !!(pc?.ca_truong_id || pc?.chuyen_truong || pc?.tho_in || pc?.to_in_id);
   const [sua, setSua] = useState(false);
   const [form, setForm] = useState({ caTruongId: '', chuyenTruong: '', thoIn: '', toInId: '' });
   // Danh mục rỗng = chưa chạy mig 084 (hoặc xưởng chưa nhập tổ nào) ⇒ ẩn hẳn ô, đừng hiện ô chọn trống.
@@ -274,6 +300,8 @@ export function PhanCongInline({ pc, users, toIns = [], onSave, busy, canRun, th
 
   if (!dangSua) {
     return (
+      <>
+      <GhiChuDauCa pc={pc} />
       <div className="rounded-control border border-line px-3 py-2.5 text-sm">
         <div className="grid grid-cols-1 gap-y-1">
           <div><span className="text-ink-soft">Ca trưởng:</span> <b className="text-ink">{pc?.ca_truong_ten || '—'}</b></div>
@@ -295,11 +323,13 @@ export function PhanCongInline({ pc, users, toIns = [], onSave, busy, canRun, th
           </Button>
         )}
       </div>
+      </>
     );
   }
 
   return (
     <div className="space-y-2">
+      <GhiChuDauCa pc={pc} />
       <Field label="Ca trưởng">
         <SearchableSelect
           value={form.caTruongId}
@@ -565,8 +595,8 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
   // (modal In tem), nên ẩn 2 khối nhập lẻ "Vải hủy/Vải thiếu" ở sidebar.
   const coGomSet = !!data?.co_gom_set;
   // Chưa LƯU phân công có thợ in ⇒ khóa In tem 15|16 (18/10/2026, gương BE `kiemThoInPhanCong` — thợ in kế hoạch
-  // chỉ điền sẵn ô, không tính).
-  const chuaThoIn = !!data && !String(data.phan_cong?.tho_in || '').trim();
+  // chỉ điền sẵn ô, không tính). 19/10/2026: sang ca mới mà chuyền chưa phân công (`can_phan_cong_lai`) cũng khóa.
+  const chuaThoIn = !!data && chuaPhanCongThoIn(data.phan_cong);
 
   const load = useCallback(async () => {
     setLoading(true);

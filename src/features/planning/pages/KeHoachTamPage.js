@@ -16,6 +16,9 @@ import DonePanel from '../../../components/common/DonePanel';
 import SidePanel from '../../../components/common/SidePanel';
 import Modal from '../../../components/common/Modal';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
+import TimeSelect from '../../../components/common/TimeSelect';
+import ThoInField from '../components/ThoInField';
+import { listUserOptions } from '../../../services/userService';
 import { Field, Input, Textarea } from '../../../components/common/controls';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 import CanhBaoGiaCong from '../components/CanhBaoGiaCong';
@@ -94,7 +97,8 @@ export default function KeHoachTamPage() {
   const [saving, setSaving] = useState(false);
   const [chuyen, setChuyen] = useState([]);
   const [edit, setEdit] = useState(null); // dòng đang sửa
-  const [editForm, setEditForm] = useState({ chuyenId: '', soLuongRelease: '', ngayKeHoach: '' });
+  const [editForm, setEditForm] = useState({ chuyenId: '', soLuongRelease: '', ngayKeHoach: '', gioBd: '', gioKt: '', thoIn: '' });
+  const [users, setUsers] = useState([]); // tài khoản cho ô "Thợ in" (mig 111)
   const [traVeOpen, setTraVeOpen] = useState(false); // modal "Trả về Kỹ thuật" (lý do bắt buộc)
   const [traVeReason, setTraVeReason] = useState('');
   const [filters, setFilters] = useState({});
@@ -134,13 +138,17 @@ export default function KeHoachTamPage() {
   useSocketReload(['ready:confirmed', 'workflow:updated'], () => load(true));
 
   useEffect(() => { listChuyen().then((r) => setChuyen(r.data)).catch(() => {}); }, []);
+  // `/users/options` chỉ cần đăng nhập. Lỗi ⇒ ô Thợ in vẫn gõ tay được.
+  useEffect(() => { listUserOptions({ limit: 500 }).then((r) => setUsers(r.data || [])).catch(() => {}); }, []);
 
+  // Panel sửa đổ sẵn ĐỦ kế hoạch đã lập (chuyền/SL/ngày + giờ BĐ/KT + thợ in) — cùng bộ ô với panel Release 1 (19/10/2026).
   const openEdit = (r) => {
     setEdit(r);
     setEditForm({
       chuyenId: r.chuyen_id || '',
       soLuongRelease: r.so_luong != null ? String(r.so_luong) : '',
       ngayKeHoach: toDateInput(r.ngay_ke_hoach),
+      gioBd: hhmm(r.tg_bd_kh), gioKt: hhmm(r.tg_kt_kh), thoIn: r.tho_in_kh || '',
     });
   };
 
@@ -148,12 +156,17 @@ export default function KeHoachTamPage() {
     if (!edit) return;
     setSaving(true);
     try {
-      await updateKeHoachTam(edit.id, {
+      // Giờ BĐ/KT ghép với ngày kế hoạch như Release 1 (KT < BĐ ⇒ BE tự +1 ngày). Thiếu ngày ⇒ không lưu giờ.
+      const mkTs = (gio) => (editForm.ngayKeHoach && gio ? `${editForm.ngayKeHoach}T${gio}:00` : null);
+      const res = await updateKeHoachTam(edit.id, {
         chuyenId: editForm.chuyenId || null,
         soLuong: editForm.soLuongRelease ? Number(editForm.soLuongRelease) : null,
         ngayKeHoach: editForm.ngayKeHoach || null,
+        tgBdKh: mkTs(editForm.gioBd), tgKtKh: mkTs(editForm.gioKt),
+        thoIn: editForm.thoIn || null,
       });
-      show(`Đã cập nhật kế hoạch tạm ${edit.ma_phan || ''}`);
+      show(`Đã cập nhật kế hoạch tạm ${edit.ma_phan || ''}${res?.data?.tho_in_chua_luu
+        ? ' · CHƯA lưu thợ in (hệ thống chưa cập nhật cơ sở dữ liệu)' : ''}`);
       setEdit(null);
       load();
     } catch (e) {
@@ -417,7 +430,11 @@ export default function KeHoachTamPage() {
               <Info label="Code phần" value={edit.ma_phan} />
               <Info label="Màu vải" value={edit.mau_vai} />
               <Info label="Đợt vải" value={edit.ma_dot_vai} />
+              <Info label="Kích vải" value={edit.kich_vai} />
+              <Info label="Kích phim" value={edit.kich_phim} />
+              <Info label="SL đơn hàng" value={fmtNum(edit.so_luong_don_hang)} />
               <Info label="SL nhận vải" value={fmtNum(edit.so_luong_vai_ve)} />
+              <Info label="Ngày nhận vải" value={fmtDate(edit.ngay_vai_ve)} />
               <Info label="Hạn giao" value={fmtDate(edit.han_giao_hang)} />
             </div>
             <div className="space-y-3 border-t border-line pt-4">
@@ -437,8 +454,15 @@ export default function KeHoachTamPage() {
                 <Field label="Ngày kế hoạch">
                   <Input type="date" value={editForm.ngayKeHoach} onChange={(e) => setEditForm((f) => ({ ...f, ngayKeHoach: e.target.value }))} />
                 </Field>
+                <Field label="Giờ bắt đầu">
+                  <TimeSelect value={editForm.gioBd} onChange={(v) => setEditForm((f) => ({ ...f, gioBd: v }))} minuteStep={5} />
+                </Field>
+                <Field label="Giờ kết thúc">
+                  <TimeSelect value={editForm.gioKt} onChange={(v) => setEditForm((f) => ({ ...f, gioKt: v }))} minuteStep={5} />
+                </Field>
               </div>
-              <p className="text-xs text-ink-soft">Giờ bắt đầu/kết thúc kế hoạch giữ nguyên như đã lập.</p>
+              <ThoInField value={editForm.thoIn} users={users}
+                onChange={(v) => setEditForm((f) => ({ ...f, thoIn: v }))} />
             </div>
           </div>
         )}

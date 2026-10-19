@@ -7,6 +7,7 @@ import Button from '../../../components/common/Button';
 import Icon from '../../../components/common/Icon';
 import ChipTabs from '../../../components/common/ChipTabs';
 import DateRangePicker from '../../../components/common/DateRangePicker';
+import VuaQuet from '../../../components/common/VuaQuet';
 import { Field, Input } from '../../../components/common/controls';
 import { slaRowClass } from '../../../utils/sla';
 import { fmtNum, fmtDate } from '../../../utils/format';
@@ -92,6 +93,8 @@ export default function ChoChayModal({
   const [loai, setLoai] = useState('');
   const [ngay, setNgay] = useState({ from: '', to: '' });
   const [locQuet, setLocQuet] = useState(null); // { ma, ids:Set } — mã quét khớp lệnh của nhiều phần in
+  // Lần quét gần nhất (19/10/2026): ô tìm tự xóa sau Enter ⇒ giữ mã + kết quả ở dòng "Vừa quét" dưới ô.
+  const [vuaQuet, setVuaQuet] = useState(null);
   const oTimRef = useRef(null);
   const henRef = useRef([]);
   const toast = useCallback((m, t) => { if (onToast) onToast(m, t); }, [onToast]);
@@ -110,7 +113,7 @@ export default function ChoChayModal({
   useEffect(() => { if (open) datConTroTim(); }, [open, datConTroTim]);
   useEffect(() => { if (open && datConTro) datConTroTim(); }, [datConTro, open, datConTroTim]);
   useEffect(() => () => henRef.current.forEach(clearTimeout), []);
-  useEffect(() => { if (!open) setLocQuet(null); }, [open]);
+  useEffect(() => { if (!open) { setLocQuet(null); setVuaQuet(null); } }, [open]);
 
   const chonSet = useMemo(() => new Set(chon), [chon]);
   const theoId = useMemo(() => new Map((rows || []).map((r) => [r.id, r])), [rows]);
@@ -163,12 +166,14 @@ export default function ChoChayModal({
     datConTroTim();
     if (kq.kieu === 'KHONG') {
       setLocQuet(null);
+      setVuaQuet({ ma, tone: 'loi', chu: 'Không có lệnh chờ chạy nào khớp mã này' });
       toast(`Không có lệnh chờ chạy nào khớp «${ma}»`, 'error');
       return;
     }
     if (kq.kieu === 'NHIEU') {
       const soPin = new Set(ds.map(khoaPinLenh)).size;
       setLocQuet({ ma, ids: new Set(ds.map((r) => r.id)) });
+      setVuaQuet({ ma, tone: 'info', chu: `Khớp ${ds.length} lệnh của ${soPin} phần in — tích tay dòng cần chạy` });
       toast(`«${ma}» khớp ${ds.length} lệnh của ${soPin} phần in${luot === 2 ? ' (mã HSKT dùng chung)' : ''} — tích tay dòng cần chạy`, 'info');
       return;
     }
@@ -176,9 +181,14 @@ export default function ChoChayModal({
     // Mọi lệnh khớp thuộc CÙNG phần in ⇒ là 1 dòng (đã gom) ⇒ tích cả dòng trong 1 lần quét.
     const ten = `${kq.lenh.ma_phan || kq.lenh.ma_lenh_san_xuat || ''}${ds.length > 1 ? ` (${ds.length} lệnh)` : ` · ${kq.lenh.ma_lenh_san_xuat || ''}`}`;
     const them = tichNhieu(ds);
-    if (them < 0) return;
-    if (kq.kieu === 'DA_TICH' || them === 0) toast(`${ten} đã tích rồi`, 'info');
-    else toast(`Đã tích ${ten}`);
+    if (them < 0) { setVuaQuet({ ma, tone: 'loi', chu: `Chưa tích — tối đa ${TOI_DA_CHAY_MOT_LUOT} lệnh mỗi lần xác nhận chạy` }); return; }
+    if (kq.kieu === 'DA_TICH' || them === 0) {
+      setVuaQuet({ ma, tone: 'info', chu: `${ten} — đã tích từ trước` });
+      toast(`${ten} đã tích rồi`, 'info');
+    } else {
+      setVuaQuet({ ma, tone: 'ok', chu: `Đã tích ${ten}` });
+      toast(`Đã tích ${ten}`);
+    }
   };
   // Số trên chip = tập đã qua mọi bộ lọc TRỪ chính chip.
   const soChip = useMemo(
@@ -300,6 +310,7 @@ export default function ChoChayModal({
             Excel ({hienGom.length})
           </Button>
         </div>
+        <VuaQuet ket={vuaQuet} className="mb-2" />
         {moLoc && <LocLenhPanel loc={loc} setLoc={setLoc} chuyen={chuyen} />}
         <ChipTabs tabs={LOAI_TABS} value={loai} counts={soChip} onChange={setLoai} />
         {locQuet && (

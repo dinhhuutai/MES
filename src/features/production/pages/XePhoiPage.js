@@ -5,12 +5,13 @@ import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
 import Icon from '../../../components/common/Icon';
 import Toast from '../../../components/common/Toast';
+import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import { Field, Select, Input } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import useNow, { fmtRemain } from '../../../hooks/useNow';
 import {
-  getXePhoi, listTemChoPhoi, addTemToXe, adjustPhoi,
+  getXePhoi, listTemChoPhoi, addTemToXe, adjustPhoi, confirmDry,
 } from '../../../services/productionService';
 import { fmtNum } from '../../../utils/format';
 
@@ -30,6 +31,7 @@ export default function XePhoiPage() {
   const [saving, setSaving] = useState(false);
   const [adjust, setAdjust] = useState(null); // { tem_xe_id, ma_tem } đang chỉnh giờ
   const [adjustMin, setAdjustMin] = useState('60');
+  const [kho, setKho] = useState(null); // tem đang hỏi "Xác nhận khô" (khô sớm hơn giờ phơi dự kiến)
 
   // silent=true: làm mới nền (interval / sau thao tác) — KHÔNG bật loading để tránh chớp cả lưới.
   const load = useCallback(async (silent = false) => {
@@ -95,6 +97,22 @@ export default function XePhoiPage() {
     }
   };
 
+  // XÁC NHẬN KHÔ TAY (19/10/2026): tem khô sớm / trường hợp ngoài mong muốn ⇒ chuyển ngay sang chờ KCS, không đợi hết
+  //   giờ phơi (BE `production.service confirmDry` — kẹp giờ phơi xong về bây giờ + ghi audit `XAC_NHAN_KHO`).
+  const doKho = async () => {
+    setSaving(true);
+    try {
+      await confirmDry(kho.tem_id);
+      show(`Đã xác nhận khô tem ${kho.ma_tem} — tem chuyển sang chờ KCS`);
+      setKho(null);
+      load(true);
+    } catch (e) {
+      show(e.message || 'Thất bại', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div>
       <Toolbar title="Tình trạng xe phơi" subtitle="Đưa tem vào xe, đếm ngược thời gian phơi (tự làm mới 15s)">
@@ -145,8 +163,12 @@ export default function XePhoiPage() {
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-medium text-ink">SL {fmtNum(t.so_luong_phoi)} pcs</span>
                         {canXe && (
-                          <button onClick={() => openAdjust(t)}
-                            className="text-xs font-medium text-primary hover:underline">Chỉnh giờ</button>
+                          <span className="flex items-center gap-3">
+                            <button onClick={() => openAdjust(t)}
+                              className="text-xs font-medium text-primary hover:underline">Chỉnh giờ</button>
+                            <button onClick={() => setKho(t)} title="Tem đã khô — chuyển ngay sang chờ KCS, không đợi hết giờ phơi"
+                              className="text-xs font-semibold text-emerald-700 hover:underline dark:text-emerald-400">Xác nhận khô</button>
+                          </span>
                         )}
                       </div>
                     </div>
@@ -224,6 +246,18 @@ export default function XePhoiPage() {
         </Field>
         <p className="text-xs text-ink-soft">Đếm ngược sẽ được đặt lại = bây giờ + số phút nhập.</p>
       </Modal>
+
+      <ConfirmDialog
+        open={!!kho}
+        onClose={() => setKho(null)}
+        onConfirm={doKho}
+        loading={saving}
+        title="Xác nhận khô"
+        confirmText="Xác nhận khô"
+        message={kho
+          ? `Tem ${kho.ma_tem} (${fmtNum(kho.so_luong_phoi)} pcs) đã khô? Tem rời xe phơi và chuyển ngay sang chờ KCS — không đợi hết giờ phơi (còn ${fmtRemain(new Date(kho.tg_kt_phoi).getTime() - now)}).`
+          : ''}
+      />
 
       <Toast toast={toast} />
     </div>

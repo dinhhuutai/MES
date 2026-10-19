@@ -104,6 +104,9 @@ export const keHoachTamDone = (date) => client.get('/planning/ke-hoach-tam/done'
 // Danh sach ke hoach tam: MOI dot vai TUNG di qua ke hoach tam + tinh trang (da release 1 that su /
 // chua release vi chua Ready). Nguon `audit_log` — xem `planning.repository.keHoachTamTheoDoi`.
 export const keHoachTamTheoDoi = (params) => client.get('/planning/ke-hoach-tam/danh-sach', { params });
+// Tab "Hủy kế hoạch tạm" ở *Hủy lệnh xác nhận* (19/10/2026) — lý do bắt buộc.
+export const listKeHoachTamHuy = (params) => client.get('/planning/ke-hoach-tam/huy/candidates', { params });
+export const huyKeHoachTam = (id, lyDo) => client.post(`/planning/ke-hoach-tam/${id}/huy`, { lyDo });
 
 // Hủy lệnh / hoàn tác release
 export const listCancelableLenh = (params) => client.get('/planning/huy-lenh/candidates', { params });

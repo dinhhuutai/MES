@@ -26,6 +26,12 @@ const HEAD_TONE = {
 };
 const clock = (t) => (t ? new Date(t).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '');
 const mins = (a, b) => (a && b ? Math.max(0, Math.round((new Date(b) - new Date(a)) / 60000)) : null);
+const ngay = (t) => (t ? new Date(t).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '');
+// Khoảng phơi kèm NGÀY (19/10/2026): cùng ngày ⇒ "12:54–16:03 · 16/10/2026"; qua ngày ⇒ ghi ngày ở cả 2 đầu.
+const khoangPhoi = (bd, kt) => {
+  if (!kt) return `${clock(bd)} ${ngay(bd)}`;
+  return ngay(bd) === ngay(kt) ? `${clock(bd)}–${clock(kt)} · ${ngay(bd)}` : `${clock(bd)} ${ngay(bd)} → ${clock(kt)} ${ngay(kt)}`;
+};
 const pct = (num, den) => (den > 0 ? Math.round((num / den) * 100) : 0);
 
 // ---- Nguyên thô SƠ ĐỒ CÂY ----
@@ -270,7 +276,7 @@ function TemNode({ tem }) {
       {tem.ten_chuyen && <div className="text-[10px] text-ink-soft">{tem.ten_chuyen}</div>}
       {tem.tg_bd_phoi && (
         <div className="mt-1 border-t border-line/60 pt-1 text-[10px] text-ink-soft">
-          🕒 Phơi {clock(tem.tg_bd_phoi)}{tem.tg_kt_phoi ? `–${clock(tem.tg_kt_phoi)}` : ''}{dur != null ? ` (${dur}′)` : ''}
+          🕒 Phơi {khoangPhoi(tem.tg_bd_phoi, tem.tg_kt_phoi)}{dur != null ? ` (${dur}′)` : ''}
         </div>
       )}
     </Node>
@@ -317,29 +323,62 @@ function GiaoNode({ nguon, lan = 0, qty, nguoi, tg, phieu }) {
   );
 }
 
-// Đoạn OQC → các LẦN GIAO (giao trước/giao sau) của 1 nguồn: nhiều lần giao → rẽ nhánh từ OQC.
-function oqcGiaoSeg(nguon, oqcProps, giaoRecs) {
+// Phần đã QUA OQC mà CHƯA GIAO (19/10/2026): trước đây sơ đồ dừng ở ô OQC, không biết hàng đang nằm đâu. `daTich` =
+//   Giao nhận đã tích (chờ in phiếu giao) / chưa tích (đang ở hàng đợi Chờ GN tích).
+function ChoGiaoNode({ nguon, qty, daTich }) {
+  return (
+    <Node title={`Chờ giao (${nguon})`} tone="slate" w={150}>
+      <Q label="Chờ giao" v={qty} tone="text-amber-600" />
+      <div className="text-[10px] text-ink-soft">{daTich ? 'GN đã tích · chờ in phiếu giao' : 'Chờ Giao nhận tích tem'}</div>
+    </Node>
+  );
+}
+
+// Đoạn OQC → các LẦN GIAO (giao trước/giao sau) của 1 nguồn: nhiều lần giao → rẽ nhánh từ OQC. `choGiao` = { qty, daTich }:
+//   còn hàng đã qua OQC chưa giao ⇒ thêm 1 nhánh "Chờ giao".
+function oqcGiaoSeg(nguon, oqcProps, giaoRecs, choGiao = null) {
   const oqcNode = <OqcNode nguon={nguon} {...oqcProps} />;
-  if (!giaoRecs.length) return oqcNode;
   const giaoNodes = giaoRecs.map((g, i) => (
     <GiaoNode key={i} nguon={nguon} lan={giaoRecs.length > 1 ? i + 1 : 0}
       qty={g.so_luong_giao} nguoi={g.nguoi} tg={g.tg} phieu={g.ma_phieu_giao} />
   ));
+  if (choGiao && choGiao.qty > 0) giaoNodes.push(<ChoGiaoNode key="cho" nguon={nguon} qty={choGiao.qty} daTich={choGiao.daTich} />);
+  if (!giaoNodes.length) return oqcNode;
   return <Fork parent={oqcNode} items={giaoNodes} />;
 }
+const tongGiao = (recs) => recs.reduce((s, g) => s + (Number(g.so_luong_giao) || 0), 0);
 
-// Nhánh Sửa → OQC(Sửa) → các lần giao (dùng chung cho cả 2 chế độ).
-function suaBranch(suaQty, suaDat, suaHuy, nguoi, tg, oqcSuaProps, giaoRecSua, traVeSua) {
+// HÀNG SỬA ĐẠT từ mig 091 nằm trên TEM 17 riêng (tem con — BE gắn vào `tem.tem_con`): OQC / tích / giao ghi trên chính
+// tem 17 (OQC `nguon='KCS'` của tem 17), KHÔNG còn ở `sl_oqc_dat_sua` của tem gốc. Gộp số của danh sách tem con `cons`
+// (+ phần cũ ghi trên tem gốc `oqcCu` / `giaoCu` cho dữ liệu trước mig 091) thành props cho nhánh Sửa.
+function suaTuTemCon(cons, oqcCu, giaoCu) {
+  const oqcQty = (oqcCu.qty || 0) + cons.reduce((s, c) => s + (Number(c.sl_oqc_dat) || 0), 0);
+  const cuoi = [...cons].filter((c) => c.oqc_kcs_tg).sort((a, b) => new Date(b.oqc_kcs_tg) - new Date(a.oqc_kcs_tg))[0];
+  const bocMau = (oqcCu.bocMau || 0) + cons.reduce((s, c) => s + (Number(c.oqc_kcs_boc_mau) || 0), 0);
+  const bocMauDat = (oqcCu.bocMauDat || 0) + cons.reduce((s, c) => s + (Number(c.oqc_kcs_boc_mau_dat) || 0), 0);
+  const giao = [...giaoCu, ...cons.flatMap((c) => c.giao_records || [])];
+  const conCho = cons.filter((c) => (Number(c.sl_oqc_dat) || 0) > tongGiao(c.giao_records || []));
+  return {
+    oqc: { qty: oqcQty, bocMau, bocMauDat, nguoi: cuoi ? cuoi.oqc_kcs_nguoi : oqcCu.nguoi, tg: cuoi ? cuoi.oqc_kcs_tg : oqcCu.tg },
+    giao,
+    choGiao: { qty: Math.max(oqcQty - tongGiao(giao), 0), daTich: conCho.length > 0 && conCho.every((c) => c.da_tich_giao) },
+    maTem: cons.map((c) => c.ma_tem),
+  };
+}
+
+// Nhánh Sửa → OQC(Sửa) → các lần giao / chờ giao (dùng chung cho cả 2 chế độ). `maTem17` = mã tem 17 của lượt sửa đạt.
+function suaBranch(suaQty, suaDat, suaHuy, nguoi, tg, oqcSuaProps, giaoRecSua, traVeSua, choGiao = null, maTem17 = []) {
   return (
     <Chain nodes={[
-      <Node key="s" title="Sửa" tone="amber" w={140}>
+      <Node key="s" title="Sửa" tone="amber" w={150}>
         <Q label="SL sửa" v={suaQty} />
         {suaDat != null && <Q label="Sửa đạt" v={suaDat} tone="text-emerald-600" />}
         {suaHuy > 0 && <Q label="Sửa hủy" v={suaHuy} tone="text-danger" />}
+        {maTem17.length > 0 && <div className="font-mono text-[10px] text-ink-soft">Tem 17: {maTem17.join(', ')}</div>}
         <Who nguoi={nguoi} tg={tg} />
         <ReturnBack items={traVeSua} />
       </Node>,
-      oqcGiaoSeg('Sửa', oqcSuaProps, giaoRecSua),
+      oqcGiaoSeg('Sửa', oqcSuaProps, giaoRecSua, choGiao),
     ]} />
   );
 }
@@ -359,6 +398,7 @@ function TemTree({ tem, reg }) {
   const trv = tem.tra_ve || [];
   const traVeKcs = trv.filter((r) => r.loai !== 'OQC_SUA'); // OQC trả về → kiểm KCS lại
   const traVeSua = trv.filter((r) => r.loai === 'OQC_SUA'); // OQC trả về → sửa lại
+  const cons = tem.tem_con || []; // tem 17 (sửa đạt) của tem này — xem `suaTuTemCon`
 
   if (kcsRecs.length >= 2) {
     // Gán các lần giao cho từng lần kiểm theo THỨ TỰ thời gian (kiểm trước ↔ giao trước).
@@ -400,7 +440,13 @@ function TemTree({ tem, reg }) {
           ret={<ReturnBox item={traVeKcs[i]} />}
           retRef={R(`ret-${tem.tem_id}-${i}`)} />
       ) : (dat > 0 ? oqcGiaoSeg('KCS', { qty: dat, nguoi: tem.oqc_kcs_nguoi, tg: tem.oqc_kcs_tg }, gm.kcs) : null);
-      const sBranch = sua > 0 ? suaBranch(sua, null, 0, tem.sua_nguoi, tem.sua_tg, { qty: sua, nguoi: tem.oqc_sua_nguoi, tg: tem.oqc_sua_tg }, gm.sua) : null;
+      // Tem 17 gán cho các lần kiểm có hàng sửa theo THỨ TỰ (như giao) — lần cuối nhận phần dư.
+      const iSua = suaRecs.indexOf(r);
+      const consR = iSua < 0 ? [] : cons.filter((c, j) => Math.min(j, suaRecs.length - 1) === iSua);
+      const sx = consR.length ? suaTuTemCon(consR, {}, gm.sua) : null;
+      const sBranch = sua > 0 ? (sx
+        ? suaBranch(sua, null, 0, tem.sua_nguoi, tem.sua_tg, sx.oqc, sx.giao, undefined, sx.choGiao, sx.maTem)
+        : suaBranch(sua, null, 0, tem.sua_nguoi, tem.sua_tg, { qty: sua, nguoi: tem.oqc_sua_nguoi, tg: tem.oqc_sua_tg }, gm.sua)) : null;
       if (!dBranch && !sBranch) return conNode;
       return <Fork key={i} parent={conNode} items={[dBranch, sBranch]} />;
     });
@@ -415,11 +461,13 @@ function TemTree({ tem, reg }) {
 
   // Kiểm 1 lần (mặc định)
   const branchKcs = tem.sl_kcs_dat > 0
-    ? oqcGiaoSeg('KCS', { qty: oqcKcs, bocMau: tem.oqc_kcs_boc_mau, bocMauDat: tem.oqc_kcs_boc_mau_dat, nguoi: tem.oqc_kcs_nguoi, tg: tem.oqc_kcs_tg }, giaoRecKcs)
+    ? oqcGiaoSeg('KCS', { qty: oqcKcs, bocMau: tem.oqc_kcs_boc_mau, bocMauDat: tem.oqc_kcs_boc_mau_dat, nguoi: tem.oqc_kcs_nguoi, tg: tem.oqc_kcs_tg },
+      giaoRecKcs, { qty: Math.max(oqcKcs - tongGiao(giaoRecKcs), 0), daTich: !!tem.da_tich_giao })
     : null;
+  const sx = suaTuTemCon(cons,
+    { qty: oqcSua, bocMau: tem.oqc_sua_boc_mau, bocMauDat: tem.oqc_sua_boc_mau_dat, nguoi: tem.oqc_sua_nguoi, tg: tem.oqc_sua_tg }, giaoRecSua);
   const branchSua = tem.sl_kcs_sua > 0
-    ? suaBranch(tem.sl_kcs_sua, tem.sl_sua_dat, tem.sl_sua_huy, tem.sua_nguoi, tem.sua_tg,
-      { qty: oqcSua, bocMau: tem.oqc_sua_boc_mau, bocMauDat: tem.oqc_sua_boc_mau_dat, nguoi: tem.oqc_sua_nguoi, tg: tem.oqc_sua_tg }, giaoRecSua, traVeSua)
+    ? suaBranch(tem.sl_kcs_sua, tem.sl_sua_dat, tem.sl_sua_huy, tem.sua_nguoi, tem.sua_tg, sx.oqc, sx.giao, traVeSua, sx.choGiao, sx.maTem)
     : null;
 
   return (
@@ -517,6 +565,8 @@ export default function TinhTrangTramPage() {
       a.sua_dat += t.sl_sua_dat || 0; a.oqc_dat += t.sl_oqc_dat || 0; a.giao += t.sl_da_giao || 0;
       a.huy += (t.sl_kcs_huy || 0) + (t.sl_sua_huy || 0);
       a.tra_ve += (t.tra_ve || []).length;
+      // Hàng sửa đạt đi OQC / giao trên tem 17 (tem con) — cộng vào cho dải tổng khớp sơ đồ.
+      (t.tem_con || []).forEach((c) => { a.oqc_dat += c.sl_oqc_dat || 0; a.giao += c.sl_da_giao || 0; });
     });
     return a;
   }, { release: 0, in: 0, kcs_dat: 0, sua: 0, sua_dat: 0, oqc_dat: 0, giao: 0, huy: 0, tra_ve: 0 }) : null;

@@ -15,7 +15,7 @@ import {
 import { listUserOptions } from '../../../services/userService';
 import printTemLabel, { printTemLabelNhieu, moSanCuaSoIn, dongCuaSoIn } from '../utils/printTemLabel';
 import { fmtNum } from '../../../utils/format';
-import { TemMetaFields, PhanCongInline, META_MAC_DINH, metaGuiDi, gioHienTai, thieuNgayCaCt, CHUA_THO_IN } from './RunPanel';
+import { TemMetaFields, PhanCongInline, META_MAC_DINH, metaGuiDi, gioHienTai, thieuNgayCaCt, CHUA_THO_IN, chuaPhanCongThoIn } from './RunPanel';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SẢN XUẤT NHIỀU LỆNH CÙNG LÚC (08/10/2026, người dùng chốt) — mở từ nút "Mở (N)" của bảng Đang chạy khi đã
@@ -227,8 +227,8 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh })
   const doInNhieu = async (dong) => {
     const thieu = thieuNgayCaCt(temMeta);
     if (thieu) { show(thieu, 'error'); return; }
-    // Lệnh chưa LƯU phân công có thợ in ⇒ không in (18/10/2026, gương BE `kiemThoInPhanCong`).
-    const chuaTho = [...new Set(dong.map((d) => d.run))].filter((r) => !String(r?.phan_cong?.tho_in || '').trim());
+    // Lệnh chưa LƯU phân công có thợ in (hoặc ca này chuyền chưa phân công) ⇒ không in (gương BE `kiemThoInPhanCong`).
+    const chuaTho = [...new Set(dong.map((d) => d.run))].filter((r) => chuaPhanCongThoIn(r?.phan_cong));
     if (chuaTho.length) {
       show(`${CHUA_THO_IN}: ${chuaTho.map(tenLenh).join(', ')}`, 'error');
       return;

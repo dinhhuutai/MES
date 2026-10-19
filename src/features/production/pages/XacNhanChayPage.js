@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import Toolbar from '../../../components/common/Toolbar';
+import VuaQuet from '../../../components/common/VuaQuet';
 import DataTable from '../../../components/common/DataTable';
 import Badge from '../../../components/common/Badge';
 import GomBadge from '../../../components/common/GomBadge';
@@ -78,6 +79,8 @@ export default function XacNhanChayPage() {
   const [chuyen, setChuyen] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  // Lần quét gần nhất ở ô tìm (19/10/2026) — ô tự xóa sau Enter nên giữ mã + kết quả ở dòng "Vừa quét".
+  const [vuaQuet, setVuaQuet] = useState(null);
   const [showFilter, setShowFilter] = useState(false);
   const [filters, setFilters] = useState(LOC_TRONG);
   const [sel, setSel] = useState(null);
@@ -174,24 +177,30 @@ export default function XacNhanChayPage() {
     const { luot, ds } = timLenhTheoMa(running, ma);
     if (!ds.length) {
       show(`Không có lệnh đang chạy nào khớp «${ma}»`, 'error');
+      setVuaQuet({ ma, tone: 'loi', chu: 'Không có lệnh đang chạy nào khớp mã này' });
       setSearch('');
       oTim.datConTro();
       return;
     }
     if (luot === 3 && ds.length > 1) {
       show(`«${ma}» khớp ${ds.length} lệnh — quét mã vạch chính xác hoặc tích tay`, 'info');
+      setVuaQuet({ ma, tone: 'info', chu: `Khớp ${ds.length} lệnh — tích tay dòng cần mở` });
       return;
     }
     const ids = ds.map((r) => r.phieu_id);
     const moi = ids.filter((id) => !chonRunSet.has(id));
     if (chonRunSet.size + moi.length > TOI_DA_MO_CHUNG) {
       show(`Tối đa ${TOI_DA_MO_CHUNG} lệnh mỗi lần mở chung`, 'error');
+      setVuaQuet({ ma, tone: 'loi', chu: `Chưa chọn — tối đa ${TOI_DA_MO_CHUNG} lệnh mỗi lần mở chung` });
       return;
     }
     setChonRun((c) => [...ids, ...c.filter((x) => !ids.includes(x))]);
     const ten = ds.length === 1 ? (ds[0].ma_phan || ds[0].phan_list || ds[0].ma_lenh_san_xuat) : `${ds.length} lệnh`;
     show(moi.length ? `Đã thêm ${ten}${ds.length > 1 && luot === 2 ? ' (mã HSKT dùng chung)' : ''}` : `${ten} đã có trong danh sách`,
       moi.length ? 'success' : 'info');
+    setVuaQuet(moi.length
+      ? { ma, tone: 'ok', chu: `Đã chọn ${ten}${ds.length === 1 && ds[0].ma_lenh_san_xuat ? ` · ${ds[0].ma_lenh_san_xuat}` : ''}` }
+      : { ma, tone: 'info', chu: `${ten} — đã chọn từ trước` });
     setSearch('');
     oTim.datConTro();
   };
@@ -413,6 +422,7 @@ export default function XacNhanChayPage() {
           onClick={() => setNghenOpen(true)} />
       </Toolbar>
 
+      <VuaQuet ket={vuaQuet} className="mb-2" />
       {showFilter && <LocLenhPanel loc={filters} setLoc={setFilters} chuyen={chuyen} />}
 
       <ChipTabs tabs={LOAI_TABS} value={loai} counts={countChip} onChange={setLoai} />
