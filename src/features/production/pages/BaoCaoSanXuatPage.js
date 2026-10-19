@@ -9,7 +9,7 @@ import {
 } from '../components/BangBaoCaoSanXuat';
 import ChonChuyenNhieu from '../components/ChonChuyenNhieu';
 import {
-  CHIEU, dsChuyen, locChuyen, gomSanXuat, gomSanXuatTheoNhom, tongSanXuat,
+  CHIEU, dsChuyen, locChuyen, gomSanXuat, gomSanXuatTheoNhom, gomSanXuatTheoTho, tongSanXuat,
 } from '../utils/gomBaoCao';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -19,9 +19,9 @@ import {
 //                             (07/10/2026 bỏ cột Tổ — trước đó tách theo tổ in).
 //   · "Theo khách hàng"     : cùng khuôn, 1 dòng / khách (09/10/2026). Thành phần bảng ở
 //                             `components/BangBaoCaoSanXuat.js` (khối trên Dashboard đã gỡ 09/10/2026).
-//   · "Theo chuyền"         : 1 dòng / chuyền · "Theo thợ in": 1 dòng / THỢ PHỤ TRÁCH của phiếu (người đầu danh
-//                             sách thợ; chuyền Máy lấy chuyền trưởng) — 11/10/2026.
-//   · "Chi tiết phần in"    : 1 dòng / (chuyền × phần in × thợ phụ trách).
+//   · "Theo chuyền"         : 1 dòng / chuyền · "Theo thợ in": 1 dòng / THỢ — 19/10/2026 lấy CẢ danh sách thợ in
+//                             phân công (mọi loại chuyền), số của mỗi dòng chi tiết chia đều cho số người.
+//   · "Chi tiết phần in"    : 1 dòng / (chuyền × phần in × nhóm thợ in).
 // BỘ CHỌN CHUYỀN (11/10/2026): chọn 1/nhiều chuyền ⇒ MỌI bảng tính lại trên các chuyền đó. Vì vậy trang tự gom mọi
 // bảng từ `chi_tiet` (`utils/gomBaoCao.js`, cùng phép cộng với backend) thay vì đọc `theo_nhom`/`theo_khach` có sẵn.
 // Mỗi cột-nhóm (Tổng · HC · CA1 · CA2 · CA3): SL kế hoạch · SL in thực tế · % (= TT / KH) · Số giờ KH ·
@@ -48,7 +48,7 @@ const COT_CT = [
   { k: 'mau_vai', l: 'Màu vải', w: 'min-w-[90px] max-w-[130px]' },
   { k: 'kich_vai', l: 'Kích vải', w: 'min-w-[80px]' },
   { k: 'kich_phim', l: 'Kích phim', w: 'min-w-[80px]' },
-  // Cả nhóm thợ của các lượt chạy (thợ phụ trách đứng đầu) — chuyền Máy là chuyền trưởng.
+  // Cả danh sách thợ in phân công của lượt chạy (19/10/2026 — chuyền Máy cũng vậy).
   { k: 'tho_ds', l: 'Thợ in', w: 'min-w-[120px] max-w-[220px]' },
 ];
 
@@ -151,7 +151,7 @@ export default function BaoCaoSanXuatPage() {
     TO: gomSanXuatTheoNhom(rows),
     CH: gomSanXuat(rows, CHIEU.CH.khoa),
     KH: gomSanXuat(rows, CHIEU.KH.khoa),
-    TH: gomSanXuat(rows, CHIEU.TH.khoa),
+    TH: gomSanXuatTheoTho(rows),
   }), [rows]);
 
   return (
@@ -199,7 +199,7 @@ export default function BaoCaoSanXuatPage() {
             {bang === 'TO' && <BangTong dong={bangGom.TO} tong={tong} nhan="Khu chuyền" />}
             {bang === 'CH' && <BangTong dong={bangGom.CH} tong={tong} nhan="Chuyền" rongNhan="w-[110px] min-w-[110px] max-w-[110px]" />}
             {bang === 'KH' && <BangTong dong={bangGom.KH} tong={tong} nhan="Khách hàng" rongNhan="w-[150px] min-w-[150px] max-w-[150px]" />}
-            {bang === 'TH' && <BangTong dong={bangGom.TH} tong={tong} nhan="Thợ in (phụ trách)" rongNhan="w-[190px] min-w-[190px] max-w-[190px]" />}
+            {bang === 'TH' && <BangTong dong={bangGom.TH} tong={tong} nhan="Thợ in" rongNhan="w-[190px] min-w-[190px] max-w-[190px]" />}
             {bang === 'CT' && <BangChiTiet rows={rows} tong={tong} />}
           </div>
         ) : null}

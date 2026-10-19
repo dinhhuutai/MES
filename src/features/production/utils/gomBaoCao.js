@@ -58,6 +58,39 @@ export function gomSanXuat(rows, khoa) {
   });
   return [...m.entries()].sort((a, b) => soTuNhien(a[0], b[0])).map(([key, mm]) => ({ key, label: key, m: mm }));
 }
+const tachThoDs = (v) => String(v || '').split(',').map((s) => s.trim()).filter(Boolean);
+// BÁO CÁO SẢN XUẤT "Theo thợ in" (19/10/2026 người dùng chốt): dòng chi tiết mang CẢ danh sách thợ in phân công
+// (`tho_ds`) ⇒ số của dòng CHIA ĐỀU cho số người — KH + giờ chia thẳng; SL in TT chia số nguyên, phần lẻ của ca sau
+// tiếp từ người kế người nhận lẻ cuối của ca trước (tổng mỗi người chênh ≤ 1 pcs); cột Tổng = Σ các ca đã chia.
+// Gương BE `utils/baoCaoSanXuat.js chiaBo` (chia trên CÙNG dòng chi tiết).
+export function gomSanXuatTheoTho(rows) {
+  const out = new Map();
+  (rows || []).forEach((r) => {
+    const ds = tachThoDs(r.tho_ds);
+    const tho = ds.length ? ds : [r.tho || 'Chưa phân công'];
+    const n = tho.length;
+    const phan = tho.map(() => mRong());
+    let ke = 0;
+    ['HC', 'CA1', 'CA2', 'CA3'].forEach((c) => {
+      const o = (r.m || {})[c] || {};
+      const tt = Number(o.tt) || 0;
+      const nguyen = Number.isInteger(tt) && tt >= 0;
+      const co = Math.floor(tt / n);
+      const du = nguyen ? tt - co * n : 0;
+      phan.forEach((p, i) => {
+        p[c].tt = nguyen ? co + ((i - ke + n) % n < du ? 1 : 0) : tt / n;
+        ['kh', 'gk', 'gt'].forEach((f) => { p[c][f] = (Number(o[f]) || 0) / n; });
+        ['kh', 'tt', 'gk', 'gt'].forEach((f) => { p.TONG[f] += p[c][f]; });
+      });
+      ke = (ke + du) % n;
+    });
+    tho.forEach((t, i) => {
+      if (!out.has(t)) out.set(t, mRong());
+      congM(out.get(t), phan[i]);
+    });
+  });
+  return [...out.entries()].sort((a, b) => soTuNhien(a[0], b[0])).map(([key, mm]) => ({ key, label: key, m: mm }));
+}
 // Bảng "Theo khu chuyền": đủ 6 dây chuyền (kể cả dòng trống) + "Khác" khi có số.
 export function gomSanXuatTheoNhom(rows) {
   const theo = new Map(gomSanXuat(rows, (r) => r.nhom || 'KHAC').map((x) => [x.key, x.m]));
