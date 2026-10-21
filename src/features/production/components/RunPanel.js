@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import SidePanel from '../../../components/common/SidePanel';
 import Modal from '../../../components/common/Modal';
 import Button from '../../../components/common/Button';
@@ -17,6 +17,7 @@ import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import { listUserOptions } from '../../../services/userService';
 import printTemLabel, { printTemLabelNhieu, moSanCuaSoIn, dongCuaSoIn } from '../utils/printTemLabel';
 import { fmtNum, fmtDate } from '../../../utils/format';
+import { getSocket } from '../../../services/socket';
 
 // Ô "Số tem" (07/10/2026): in N tem cùng SL trong 1 lần bấm — mỗi tem 1 tờ (15 trái · 16 phải), mọi tờ trong
 // 1 cửa sổ in. Trần khớp backend `printTemBatch TOI_DA_TEM_MOT_LUOT`.
@@ -79,7 +80,29 @@ export const thieuNgayCaCt = (m) => {
 };
 export const CHUA_THO_IN = 'Chưa phân công thợ in — chọn thợ in ở khối Phân công rồi bấm Lưu trước khi in tem';
 // Phân công chưa đủ để in tem: chưa có thợ in, hoặc ca này chuyền chưa phân công (gương BE `kiemThoInPhanCong`).
-export const chuaPhanCongThoIn = (pc) => !!pc?.can_phan_cong_lai || !String(pc?.tho_in || '').trim();
+// TẢI NGẦM khi lệnh đang mở đổi ở MÁY KHÁC (21/10/2026): sidebar trước đây chỉ tải lúc mở ⇒ chuyền vừa được phân
+//   công ở máy khác mà máy này vẫn hiện "chưa phân công + Lưu phân công" (khóa In tem). Nghe `production:updated`,
+//   chỉ tải khi `lenhId` của sự kiện thuộc các lệnh đang mở; gộp sự kiện dồn trong 600 ms; không spinner, lỗi nuốt.
+export function useTaiNgamKhiLenhDoi(lenhIds, taiLai) {
+  const ref = useRef(taiLai);
+  ref.current = taiLai;
+  const khoa = (lenhIds || []).filter(Boolean).join(',');
+  useEffect(() => {
+    const s = getSocket();
+    if (!s || !khoa) return undefined;
+    const ds = khoa.split(',');
+    let hen = null;
+    const nghe = (p) => {
+      if (!p || !ds.includes(p.lenhId)) return;
+      if (hen) clearTimeout(hen);
+      hen = setTimeout(() => { hen = null; Promise.resolve(ref.current()).catch(() => {}); }, 600);
+    };
+    s.on('production:updated', nghe);
+    return () => { if (hen) clearTimeout(hen); s.off('production:updated', nghe); };
+  }, [khoa]);
+}
+
+export const chuaPhanCongThoIn = (pc) =>!!pc?.can_phan_cong_lai || !String(pc?.tho_in || '').trim();
 // Đưa gợi ý của BE vào ô: chỉ điền ô người dùng CHƯA gõ; lượt ca đã đổi so với lúc gõ ⇒ bỏ ngày ca / ngày chứng
 // từ của ca cũ trước (để trống lại cho ca mới).
 export const apGoiYTem = (m, g) => {
@@ -271,10 +294,12 @@ function GhiChuDauCa({ pc }) {
       </p>
     );
   }
+  // 21/10/2026 (người dùng): lệnh thừa hưởng phân công của chuyền phải trông như ĐÃ LƯU — ghi rõ "Đã phân công",
+  //   không cần bấm Lưu ở lệnh này.
   return (
-    <p className="mb-2 text-xs text-ink-soft">
-      Phân công đầu ca <b className="text-ink">{dc.ma_ngay_ca}</b> của chuyền{dc.nguoi ? ` — ${dc.nguoi} lưu lúc ${gioPhut(dc.tg)}` : ''}.
-      Áp cho mọi lệnh của chuyền trong ca; sang ca mới phân công lại.
+    <p className="mb-2 rounded-control border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300">
+      <b>✓ Đã phân công ca {dc.ma_ngay_ca}</b> cho chuyền{dc.nguoi ? ` — ${dc.nguoi} lưu lúc ${gioPhut(dc.tg)}` : ''}.
+      Mọi lệnh của chuyền trong ca dùng chung, không cần Lưu lại; sang ca mới mới phân công lại.
     </p>
   );
 }
@@ -614,6 +639,11 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
   }, [lenhId, show]);
 
   useEffect(() => { load(); }, [load]);
+  useTaiNgamKhiLenhDoi([lenhId], async () => {
+    const res = await getRun(lenhId);
+    setData(res.data);
+    setTemMeta((m) => apGoiYTem(m, res.data?.goi_y_tem));
+  });
 
   // NÚT "HỦY" Ở TỪNG TEM ĐÃ IN (14/10/2026): nhập lý do ⇒ backend hủy tem (gỡ khỏi xe phơi, trả SL cho lệnh)
   // rồi báo ERP hủy phiếu in tem theo IDMES của lượt in đó. Chỉ tem CHƯA kiểm mới hủy được (`temHuyDuoc`).

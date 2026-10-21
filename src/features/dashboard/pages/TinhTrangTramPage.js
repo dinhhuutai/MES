@@ -190,46 +190,102 @@ function OqcRejectedBranch({ oqc, ret, retRef }) {
   );
 }
 
-function ReadyNode({ checklists, lan = 0 }) {
+// ---- TRẢ VỀ TRƯỚC SẢN XUẤT (19/10/2026) — BE `tinhTrangGraph.tra_ve`: mỗi lần 1 khối đỏ đặt tại NƠI bị trả về
+//   (READY của chu kỳ lúc đó / lệnh đang vẽ). Trả về Kỹ thuật có `t_cycle` ⇒ lớp SVG vẽ mũi tên đỏ nét đứt từ khối
+//   này về ô READY được làm lại. Về Kế hoạch / GN không có ô đích trong cây ⇒ chỉ ghi "→ …" trong khối.
+function tenTraVe(r) {
+  switch (r.loai) {
+    case 'READY': return 'QC READY trả về Kỹ thuật';
+    case 'RELEASE1': return r.o_lenh ? 'Sản xuất trả về Kỹ thuật' : 'Release 1 trả về Kỹ thuật';
+    case 'TEST_RUN_KT': return 'Test Run không đạt → Kỹ thuật';
+    case 'TEST_RUN_KH': return 'Test Run trả về Kế hoạch';
+    case 'OQC_GIA_CONG': return 'OQC trả về Kế hoạch (gia công)';
+    case 'TRA_VE_GN': return `${r.gn_nguon || 'READY'} trả về Giao nhận`;
+    default: return 'Trả về';
+  }
+}
+function diemVe(r) {
+  if (r.kieu === 'KT') return r.t_cycle != null ? `→ làm lại READY lần ${r.t_cycle + 1}` : '→ về READY (Kỹ thuật)';
+  if (r.kieu === 'KH') return '→ về Release 1, giữ lệnh';
+  if (r.kieu === 'GN') {
+    if (r.gn_xu_ly === 'GN_HUY_DOT_VAI') return '→ GN: hủy vải không in';
+    if (r.da_xu_ly) return `→ GN xác nhận lại${r.gn_ve_man ? `, về ${r.gn_ve_man}` : ''}`;
+    return '→ đang chờ GN sửa thông tin';
+  }
+  return '';
+}
+function TraVeKhoi({ r, refFn }) {
+  return (
+    <div ref={refFn} className="mt-1 rounded-control border border-dashed border-danger/60 bg-danger/5 px-1.5 py-1 text-[10px] leading-tight text-danger">
+      <div className="flex items-center gap-1 font-bold"><BackArrow /> {tenTraVe(r)}</div>
+      {r.checklist_list && <div className="whitespace-normal">Mục: {r.checklist_list}</div>}
+      {r.ly_do && <div className="whitespace-normal">Lý do: {r.ly_do}</div>}
+      <div className="font-semibold">{diemVe(r)}{r.kieu !== 'GN' && !r.da_xu_ly ? ' · đang chờ' : ''}</div>
+      {(r.nguoi || r.tg) && (
+        <div className="text-[9px] text-danger/70">{[r.nguoi, r.tg ? fmtDateTime(r.tg) : ''].filter(Boolean).join(' · ')}</div>
+      )}
+    </div>
+  );
+}
+const dsTraVe = (ds, reg) => (ds || []).map((r) => <TraVeKhoi key={r.id} r={r} refFn={reg ? reg(`tv-${r.id}`) : undefined} />);
+
+function ReadyNode({ checklists, lan = 0, traVe, reg, nodeRef }) {
   const byMa = Object.fromEntries((checklists || []).map((c) => [c.ma_checkpoint, c]));
   return (
-    <Node title={`READY${lan ? ` · lần ${lan}` : ''} · Chuẩn bị KT`} tone="primary" w={190}>
-      <div className="space-y-1">
-        {['KHUON', 'FILM', 'MUC', 'QC_XAC_NHAN'].map((ma) => {
-          const c = byMa[ma];
-          return (
-            <div key={ma} className="flex items-start gap-1.5 text-[11px]">
-              <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${c ? 'bg-emerald-500' : 'bg-line'}`} />
-              <div className="min-w-0 flex-1">
-                <span className="font-semibold text-ink">{CL_LABEL[ma]}</span>
-                {c ? <span className="ml-1 text-[10px] text-ink-soft">{c.nguoi || ''}{c.tg ? ` · ${fmtDateTime(c.tg)}` : ''}</span>
-                  : <span className="ml-1 text-[10px] text-ink-soft">chưa XN</span>}
+    <span ref={nodeRef} className="inline-flex shrink-0 self-center">
+      <Node title={`READY${lan ? ` · lần ${lan}` : ''} · Chuẩn bị KT`} tone="primary" w={190}>
+        <div className="space-y-1">
+          {['KHUON', 'FILM', 'MUC', 'QC_XAC_NHAN'].map((ma) => {
+            const c = byMa[ma];
+            return (
+              <div key={ma} className="flex items-start gap-1.5 text-[11px]">
+                <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${c ? 'bg-emerald-500' : 'bg-line'}`} />
+                <div className="min-w-0 flex-1">
+                  <span className="font-semibold text-ink">{CL_LABEL[ma]}</span>
+                  {c ? <span className="ml-1 text-[10px] text-ink-soft">{c.nguoi || 'Hệ thống (tự động)'}{c.tg ? ` · ${fmtDateTime(c.tg)}` : ''}</span>
+                    : <span className="ml-1 text-[10px] text-ink-soft">chưa XN</span>}
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
-    </Node>
+            );
+          })}
+        </div>
+        {dsTraVe(traVe, reg)}
+      </Node>
+    </span>
   );
 }
 
+const DA_R2 = ['RELEASE_2', 'SAN_XUAT', 'HOAN_TAT', 'CHO_IN_XONG'];
+// Lệnh ra Release 2 mà không có QA đạt ⇒ bỏ Test Run (§5.3): loại đợt Bổ sung / Mẫu SL · QA bấm "Không test run" ·
+//   còn lại = SL < 100 hoặc phần in đang in tem lúc release.
+function boTestRun(l) {
+  if (l.test_qa || l.test?.qa || !DA_R2.includes(l.trang_thai)) return null;
+  if (l.qa_bo_test) return 'QA bấm "Không test run"';
+  const f = (l.feeds || []).find((x) => x.ma_loai_dot === 'BO_SUNG' || x.ma_loai_dot === 'MAU_SO_LUONG');
+  if (f) return `Đợt ${f.loai_dot || (f.ma_loai_dot === 'BO_SUNG' ? 'bổ sung' : 'mẫu số lượng')}`;
+  return 'SL < 100 / phần in đang in tem';
+}
 function lenhStages(l) {
   const tt = l.trang_thai;
-  const daR2 = tt === 'RELEASE_2' || tt === 'SAN_XUAT';
-  const test = (l.test_qa || l.test?.qa) ? { st: 'done', note: 'đạt' } : daR2 ? { st: 'skip', note: 'bỏ' } : { st: 'cur', note: 'chờ' };
+  const bo = boTestRun(l);
+  const test = (l.test_qa || l.test?.qa) ? { st: 'done', note: 'đạt' } : bo ? { st: 'skip', note: 'không qua', sub: bo } : { st: 'cur', note: 'chờ' };
+  const sxXong = tt === 'HOAN_TAT';
   return [
-    { key: 'R1', label: 'Release 1', st: 'done', who: l.r1 },
-    { key: 'TEST', label: 'Test Run', st: test.st, note: test.note, who: l.test?.qa || l.test?.cnsp },
-    { key: 'R2', label: 'Release 2', st: tt === 'SAN_XUAT' ? 'done' : tt === 'RELEASE_2' ? 'cur' : 'pending', who: l.r2 },
-    { key: 'SX', label: 'Sản xuất', st: tt === 'SAN_XUAT' ? 'cur' : 'pending' },
+    ...(l.vao_thang ? [{ key: 'KT', label: 'READY (Kỹ thuật)', st: 'skip', note: 'không qua', sub: 'ERP không cần KT · hệ thống tự xác nhận' }] : []),
+    { key: 'R1', label: 'Release 1', st: 'done', who: l.vao_thang ? null : l.r1, sub: l.vao_thang ? 'Hệ thống tự release' : null },
+    { key: 'TEST', label: 'Test Run', st: test.st, note: test.note, sub: test.sub, who: l.test?.qa || l.test?.cnsp },
+    { key: 'R2', label: 'Release 2', st: tt === 'SAN_XUAT' || sxXong ? 'done' : tt === 'RELEASE_2' ? 'cur' : 'pending', who: l.r2 },
+    { key: 'SX', label: 'Sản xuất', st: tt === 'SAN_XUAT' ? 'cur' : sxXong ? 'done' : 'pending' },
   ];
 }
 const ST_DOT = { done: 'bg-emerald-500', cur: 'bg-primary', skip: 'bg-amber-400', pending: 'bg-line' };
 const ST_TXT = { done: 'text-ink', cur: 'text-primary font-semibold', skip: 'text-amber-600', pending: 'text-ink-soft' };
 
-function LenhNode({ lenh }) {
+function LenhNode({ lenh, traVe, reg }) {
+  const bo = boTestRun(lenh);
+  const nhanThang = lenh.vao_thang ? (bo ? 'Vào thẳng SX · không qua KT + Test Run' : 'Vào thẳng KH · không qua KT') : bo ? 'Bỏ Test Run' : null;
   return (
-    <Node title={`Đợt SX · ${lenh.ma_lenh_san_xuat}`} tone="sky" w={186}>
+    <Node title={`Đợt SX · ${lenh.ma_lenh_san_xuat}`} tone="sky" w={196}>
       {lenh.feeds.map((f) => (
         <div key={f.dot_vai_ve_id} className="text-[11px]">
           <span className="text-ink-soft">Vải về </span><b>{fmtNum(f.so_luong_vai_ve)}</b>
@@ -237,6 +293,7 @@ function LenhNode({ lenh }) {
         </div>
       ))}
       <div className="my-1 flex flex-wrap gap-1">
+        {nhanThang && <Badge tone="warning">{nhanThang}</Badge>}
         {lenh.feeds.length >= 2 && <Badge tone="info">Gộp {lenh.feeds.length} đợt</Badge>}
         {lenh.giai_doan === 'EP_UI' && <Badge tone="warning">Ép ủi</Badge>}
       </div>
@@ -249,6 +306,7 @@ function LenhNode({ lenh }) {
               <span className={ST_TXT[s.st]}>{s.label}</span>
               {s.note && <span className={`ml-auto ${s.st === 'skip' ? 'text-amber-600' : s.st === 'done' ? 'text-emerald-600' : 'text-ink-soft'}`}>{s.note}</span>}
             </div>
+            {s.sub && <div className="pl-3 text-[9px] leading-tight text-amber-600">{s.sub}</div>}
             {(s.who?.nguoi || s.who?.tg) && (
               <div className="pl-3 text-[9px] leading-tight text-ink-soft">
                 {s.who.nguoi ? <span className="text-ink">{s.who.nguoi}</span> : null}
@@ -257,6 +315,26 @@ function LenhNode({ lenh }) {
             )}
           </div>
         ))}
+      </div>
+      {dsTraVe(traVe, reg)}
+    </Node>
+  );
+}
+
+// Ô "VÀO THẲNG" (19/10/2026): các đợt vải ERP báo KHÔNG cần kiểm tra KT, hệ thống tự xác nhận READY + tự release
+//   ⇒ nhánh riêng từ ô Phần in, KHÔNG treo dưới READY. `sx` = mọi lệnh của nhánh cũng bỏ Test Run ⇒ vào thẳng SX.
+function VaoThangNode({ dots, sx }) {
+  return (
+    <Node title={`Vào thẳng ${sx ? 'Sản xuất' : 'Kế hoạch'} · không qua KT`} tone="amber" w={196}>
+      {(dots || []).map((d) => (
+        <div key={d.id} className="text-[11px]">
+          <span className="text-ink-soft">Vải về </span><b>{fmtNum(d.so_luong_vai_ve)}</b>
+          {d.loai_dot && <span className="text-ink-soft"> · {d.loai_dot}</span>}
+          {d.tg_ready && <span className="text-[10px] text-ink-soft"> · {fmtDateTime(d.tg_ready)}</span>}
+        </div>
+      ))}
+      <div className="mt-1 border-t border-line/60 pt-1 text-[10px] leading-tight text-amber-700 dark:text-amber-300">
+        ERP: không cần kiểm tra KT — hệ thống tự xác nhận READY{sx ? ', bỏ Test Run' : ''}
       </div>
     </Node>
   );
@@ -496,12 +574,30 @@ export default function TinhTrangTramPage() {
   const reg = useCallback((key) => (el) => {
     if (el) boxRefs.current[key] = el; else delete boxRefs.current[key];
   }, []);
+  const tvDich = useRef({}); // id lần trả về → chỉ số chu kỳ READY được làm lại (mũi tên `tv-` → `rd-`)
   const recomputeArrows = useCallback(() => {
     const wrap = graphWrapRef.current;
     if (!wrap) return;
     const wr = wrap.getBoundingClientRect();
     const boxes = boxRefs.current;
     const lines = [];
+    // Trả về TRƯỚC SX → READY được làm lại: từ cạnh trái khối trả về sang trái 1 nấc, đi dọc tới trên ô READY,
+    //   ngang tới giữa ô rồi xuống (đầu mũi tên chỉ vào ô). Mỗi mũi tên lệch 5px để không chồng nhau.
+    let k = 0;
+    Object.keys(boxes).forEach((key) => {
+      if (!key.startsWith('tv-')) return;
+      const dich = tvDich.current[key.slice(3)];
+      const fromEl = boxes[key]; const toEl = dich != null ? boxes[`rd-${dich}`] : null;
+      if (!fromEl || !toEl) return;
+      const fb = fromEl.getBoundingClientRect(); const tb = toEl.getBoundingClientRect();
+      // Ô READY đích nằm BÊN PHẢI khối (khối đặt ở ô Phần in, sát mép trái sơ đồ) ⇒ thoát ra cạnh PHẢI, không thì trái.
+      const tx = tb.left - wr.left + tb.width / 2; const ty = tb.top - wr.top;
+      const benPhai = tx > fb.right - wr.left;
+      const fx = (benPhai ? fb.right : fb.left) - wr.left; const fy = fb.top - wr.top + fb.height / 2;
+      const lx = benPhai ? fx + 10 + k * 5 : fx - 10 - k * 5; const ly = Math.max(2, ty - 12 - k * 5);
+      lines.push({ key, pts: `${fx},${fy} ${lx},${fy} ${lx},${ly} ${tx},${ly} ${tx},${ty}` });
+      k += 1;
+    });
     Object.keys(boxes).forEach((key) => {
       if (!key.startsWith('ret-')) return;
       const rest = key.slice(4); // "<temId>-<i>"
@@ -517,7 +613,9 @@ export default function TinhTrangTramPage() {
       // Trả về (đỉnh) → lên → sang trái → xuống VÀO KCS tổng (đầu mũi tên chỉ xuống).
       lines.push({ key, pts: `${retCx},${retTop} ${retCx},${topY} ${ktCx},${topY} ${ktCx},${ktTop}` });
     });
-    const w = wrap.scrollWidth; const h = wrap.scrollHeight;
+    // ⚠ offset* (khung bố cục) chứ KHÔNG scroll*: scroll* tính cả chính lớp SVG ⇒ xem 1 sơ đồ cao rồi sang sơ đồ thấp,
+    //   SVG giữ chiều cao cũ mãi mãi ⇒ khung hiện thanh cuộn dọc thừa (đo 19/10/2026: 1.143px trên khung 229px).
+    const w = wrap.offsetWidth; const h = wrap.offsetHeight;
     setSvg((prev) => (JSON.stringify(prev) === JSON.stringify({ w, h, lines }) ? prev : { w, h, lines }));
   }, []);
 
@@ -557,7 +655,13 @@ export default function TinhTrangTramPage() {
   // Quét QR code phần → điền ô tìm kiếm → ra phần in.
   const onScan = (code) => { setScanOpen(false); const c = baseMaTem((code || '').trim()); if (c) setSearch(c); };
 
-  const allLenh = graph ? graph.ready_cycles.flatMap((c) => c.lenh) : [];
+  const vaoThang = graph ? graph.vao_thang : null;
+  const traVe = graph ? graph.tra_ve || [] : [];
+  tvDich.current = Object.fromEntries(traVe.filter((r) => r.t_cycle != null).map((r) => [r.id, r.t_cycle]));
+  const traVeLenh = (id) => traVe.filter((r) => r.o_lenh === id);
+  const traVeCycle = (ci) => traVe.filter((r) => !r.o_lenh && r.o_cycle === ci);
+  const traVeLe = traVe.filter((r) => !r.o_lenh && r.o_cycle == null); // trước lần READY đầu / không có READY để gắn
+  const allLenh = graph ? [...graph.ready_cycles.flatMap((c) => c.lenh), ...(vaoThang ? vaoThang.lenh : [])] : [];
   const agg = graph ? allLenh.reduce((a, l) => {
     a.release += l.so_luong_release || 0;
     l.tems.forEach((t) => {
@@ -584,28 +688,36 @@ export default function TinhTrangTramPage() {
 
   // 1 đợt SX → cây tem.
   const lenhTree = (l) => (
-    <Fork key={l.id} parent={<LenhNode lenh={l} />}
+    <Fork key={l.id} parent={<LenhNode lenh={l} traVe={traVeLenh(l.id)} reg={reg} />}
       items={(l.tems.length ? l.tems : [null]).map((t, i) => <TemTree key={t ? t.tem_id : `x${i}`} tem={t} reg={reg} />)} />
+  );
+  const choRelease = (d, note) => (
+    <Node key={d.id} title="Đợt vải chờ release" tone="slate" w={170}>
+      <Q label="Vải về" v={d.so_luong_vai_ve} />
+      <div className="text-[11px] text-amber-600">{note}</div>
+    </Node>
   );
   // Mỗi CHU KỲ READY = 1 nhánh: ReadyNode → các đợt SX của chu kỳ đó (+ đợt vải chờ release).
   const cycleBranches = graph ? graph.ready_cycles.map((cy, ci) => (
-    <Fork key={ci} parent={<ReadyNode checklists={cy.checklists} lan={graph.ready_cycles.length > 1 ? ci + 1 : 0} />}
-      items={[
-        ...cy.lenh.map(lenhTree),
-        ...(cy.pending || []).map((d) => (
-          <Node key={d.id} title="Đợt vải chờ release" tone="slate" w={170}>
-            <Q label="Vải về" v={d.so_luong_vai_ve} />
-            <div className="text-[11px] text-amber-600">Chờ release (READY)</div>
-          </Node>
-        )),
-      ]} />
+    <Fork key={ci}
+      parent={<ReadyNode checklists={cy.checklists} lan={graph.ready_cycles.length > 1 ? ci + 1 : 0}
+        traVe={traVeCycle(ci)} reg={reg} nodeRef={reg(`rd-${ci}`)} />}
+      items={[...cy.lenh.map(lenhTree), ...(cy.pending || []).map((d) => choRelease(d, 'Chờ release (READY)'))]} />
   )) : [];
+  // Nhánh VÀO THẲNG (đợt ERP không cần KT) — đứng TRƯỚC các chu kỳ READY, nối thẳng từ ô Phần in.
+  const thangBranch = vaoThang ? (
+    <Fork key="thang"
+      parent={<VaoThangNode dots={vaoThang.dots} sx={vaoThang.lenh.length > 0 && vaoThang.lenh.every((l) => boTestRun(l))} />}
+      items={[...vaoThang.lenh.map(lenhTree), ...vaoThang.pending.map((d) => choRelease(d, 'Chờ hệ thống release'))]} />
+  ) : null;
+  const rootItems = [thangBranch, ...cycleBranches].filter(Boolean);
+  const soDotThang = vaoThang ? vaoThang.dots.length : 0;
 
   return (
     <div>
       <div className="mb-4">
         <h1 className="text-xl font-bold text-ink">Sơ đồ phần in</h1>
-        <p className="text-sm text-ink-soft">Nhập/quét QR code phần để xem sơ đồ cây: phần in → READY (theo từng lần) → đợt sản xuất → tem → KCS → (OQC-KCS / Sửa→OQC-Sửa) → Giao.</p>
+        <p className="text-sm text-ink-soft">Nhập/quét QR code phần để xem sơ đồ cây: phần in → READY (theo từng lần) hoặc vào thẳng Kế hoạch → đợt sản xuất → tem → KCS → (OQC-KCS / Sửa→OQC-Sửa) → Giao.</p>
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -645,6 +757,8 @@ export default function TinhTrangTramPage() {
               <Badge tone="info">{graph.dot_vai.length} đợt vải</Badge>
               <Badge tone="default">{allLenh.length} đợt SX</Badge>
               {graph.ready_cycles.length > 1 && <Badge tone="warning">{graph.ready_cycles.length} lần READY</Badge>}
+              {soDotThang > 0 && <Badge tone="warning">{soDotThang} đợt vào thẳng · không qua KT</Badge>}
+              {traVe.length > 0 && <Badge tone="danger">↩ Trả về trước SX {traVe.length} lần</Badge>}
             </div>
           </div>
 
@@ -666,7 +780,16 @@ export default function TinhTrangTramPage() {
           )}
 
           {/* SƠ ĐỒ CÂY */}
-          {cycleBranches.length === 0 ? (
+          {/* Chú thích ký hiệu */}
+          {rootItems.length > 0 && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-ink-soft">
+              <span className="inline-flex items-center gap-1.5"><Link /> Đi tiếp</span>
+              <span className="inline-flex items-center gap-1.5"><BackArrow /> <span className="text-danger">Bị trả về (nét đứt đỏ)</span></span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-amber-400" /> Không qua bước này</span>
+            </div>
+          )}
+
+          {rootItems.length === 0 ? (
             <div className="py-4 text-center text-sm text-ink-soft">Phần in chưa có đợt sản xuất.</div>
           ) : (
             <div className="overflow-x-auto pb-3">
@@ -689,9 +812,10 @@ export default function TinhTrangTramPage() {
                       <div className="text-[10px] text-ink-soft">{graph.phan_in.mau_vai || ''}</div>
                       <Q label="Đợt vải" v={graph.dot_vai.length} />
                       <Q label="Đợt SX" v={allLenh.length} />
+                      {dsTraVe(traVeLe, reg)}
                     </Node>
                   )}
-                  items={cycleBranches}
+                  items={rootItems}
                 />
               </div>
             </div>

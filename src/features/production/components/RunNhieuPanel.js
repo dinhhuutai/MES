@@ -10,12 +10,12 @@ import { Textarea } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import {
-  getRun, printTemBatch, getTemLabel, savePhanCong, listToIn, listLyDoNgung, stopLine, resumeLine,
+  getRun, printTemBatch, getTemLabel, savePhanCong, listToIn, listLyDoNgung, stopLine, resumeLine, addVaiHuy,
 } from '../../../services/productionService';
 import { listUserOptions } from '../../../services/userService';
 import printTemLabel, { printTemLabelNhieu, moSanCuaSoIn, dongCuaSoIn } from '../utils/printTemLabel';
 import { fmtNum } from '../../../utils/format';
-import { TemMetaFields, PhanCongInline, META_MAC_DINH, metaGuiDi, gioHienTai, thieuNgayCaCt, CHUA_THO_IN, chuaPhanCongThoIn } from './RunPanel';
+import { TemMetaFields, PhanCongInline, META_MAC_DINH, metaGuiDi, gioHienTai, thieuNgayCaCt, CHUA_THO_IN, chuaPhanCongThoIn, useTaiNgamKhiLenhDoi } from './RunPanel';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SẢN XUẤT NHIỀU LỆNH CÙNG LÚC (08/10/2026, người dùng chốt) — mở từ nút "Mở (N)" của bảng Đang chạy khi đã
@@ -25,6 +25,8 @@ import { TemMetaFields, PhanCongInline, META_MAC_DINH, metaGuiDi, gioHienTai, th
 //     trước transaction) ⇒ MỌI tem in trong 1 cửa sổ mở sẵn ngay trong cú bấm, mỗi tem 1 tờ cặp 15 | 16
 //     (`printTemLabelNhieu` = bố cục SX). Lệnh gom set cũ (nhiều phần in / 1 lệnh) tách 1 dòng / đợt vải.
 //     Phiếu lỗi không chặn phiếu khác: tem đã tạo vẫn in, dòng lỗi giữ số để sửa.
+//     19/10/2026: thêm cột SL HỦY / SL THIẾU mỗi dòng (= 2 ô Vải hủy / Vải thiếu của RunPanel) — đi kèm
+//     `printTemBatch` (BE ghi sổ vải + báo ERP cùng đúng tem của dòng); lệnh chỉ nhập hủy/thiếu ⇒ `addVaiHuy`.
 //   · PHÂN CÔNG: lưu 1 lần ⇒ `savePhanCong` mọi phiếu.
 //   · NGỪNG CHUYỀN: ghi 1 lần ⇒ `stopLine` mọi phiếu chưa ngừng; "Hoạt động lại" ⇒ `resumeLine` mọi phiếu đang ngừng.
 //   · Việc riêng từng lệnh (vải hủy/thiếu, bổ sung, tem đã in, đổi chuyền, trả về KT, chạy hoàn tất) ⇒ nút "Mở".
@@ -61,11 +63,17 @@ function dongInTem(runs) {
 }
 
 // ⚠ MỨC MODULE (không lồng trong panel) — lồng là ô nhập mất focus khi đang gõ (luật §9).
+// 19/10/2026: thêm cột SL HỦY + SL THIẾU (= 2 ô "Vải hủy / Vải thiếu" của RunPanel) ngay sau Số lượng — ghi sổ vải
+//   theo đợt của dòng (lệnh thường ⇒ đợt đầu của lệnh); dòng có in tem thì số này đi ERP cùng ĐÚNG tem đó.
+const soNguyen = (v) => Math.max(0, Math.trunc(Number(v) || 0));
 function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn }) {
-  const [sl, setSl] = useState({}); // key dòng → số lượng (chuỗi)
+  const [sl, setSl] = useState({}); // key dòng → { sl, huy, thieu } (chuỗi)
   useEffect(() => { if (open) setSl({}); }, [open]);
   const dong = dongInTem(runs);
-  const so = (k) => Math.max(0, Math.trunc(Number(sl[k]) || 0));
+  const o = (k, f) => soNguyen((sl[k] || {})[f]);
+  const so = (k) => o(k, 'sl');
+  const datO = (k, f, v) => setSl((s) => ({ ...s, [k]: { ...(s[k] || {}), [f]: v } }));
+  const coVai = (k) => o(k, 'huy') > 0 || o(k, 'thieu') > 0;
   // Trần: Σ dòng của 1 lệnh ≤ còn in được của lệnh; dòng đợt vải ≤ 110% SL vào SX của đợt (backend chặn lại y vậy).
   const tongLenh = (lenhId) => dong.filter((d) => d.run.lenh.id === lenhId).reduce((s, d) => s + so(d.key), 0);
   const vuot = (d) => {
@@ -73,16 +81,23 @@ function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn 
     return (con != null && tongLenh(d.run.lenh.id) > con) || (d.capDot > 0 && so(d.key) > d.capDot);
   };
   const coSo = dong.filter((d) => so(d.key) > 0);
+  const coNhap = dong.filter((d) => so(d.key) > 0 || coVai(d.key));
   const coVuot = coSo.some(vuot);
   const chiLuu = !!meta.btpTruoc;
+  const chiVai = coNhap.length - coSo.length; // dòng chỉ ghi hủy/thiếu, không in tem
+  const nhanNut = coSo.length
+    ? `${chiLuu ? 'Lưu' : 'In'} ${fmtNum(coSo.length)} tem${chiVai ? ` + ghi vải ${fmtNum(chiVai)} dòng` : ''}`
+    : `Ghi vải hủy/thiếu (${fmtNum(chiVai)} dòng)`;
 
   return (
     <Modal open={open} onClose={onClose} size="xl" title={`${chiLuu ? 'Lưu' : 'In tem'} — ${fmtNum(dong.length)} phần in`}
       footer={<>
         <Button chiXemOk variant="ghost" onClick={onClose}>Đóng</Button>
-        <Button icon={chiLuu ? 'save' : 'printer'} loading={busy} disabled={busy || !coSo.length || coVuot}
-          onClick={() => onIn(coSo.map((d) => ({ ...d, soLuong: so(d.key) })))}>
-          {chiLuu ? `Lưu ${fmtNum(coSo.length)} tem` : `In ${fmtNum(coSo.length)} tem`}
+        <Button icon={coSo.length ? (chiLuu ? 'save' : 'printer') : 'save'} loading={busy} disabled={busy || !coNhap.length || coVuot}
+          onClick={() => onIn(coNhap.map((d) => ({
+            ...d, soLuong: so(d.key), soLuongHuy: o(d.key, 'huy'), soLuongThieu: o(d.key, 'thieu'),
+          })))}>
+          {nhanNut}
         </Button>
       </>}>
       <div className="mb-3"><TemMetaFields meta={meta} setMeta={setMeta} goiY={goiY} /></div>
@@ -93,6 +108,8 @@ function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn 
               {['STT', 'Đơn hàng', 'Mã hàng', 'Code phần', 'Màu vải', 'Kích vải', 'Kích phim'].map((h) => <th key={h} className={TH}>{h}</th>)}
               <th className={`${TH} text-right`}>Còn in được</th>
               <th className={`${TH} text-right`}>Số lượng</th>
+              <th className={`${TH} text-right`}>SL hủy</th>
+              <th className={`${TH} text-right`}>SL thiếu</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
@@ -109,10 +126,18 @@ function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn 
                   <td className={TD}>{d.info.kich_phim || '—'}</td>
                   <td className={`${TD} text-right tabular-nums text-ink-soft`}>{con == null ? '—' : fmtNum(con)}</td>
                   <td className={`${TD} text-right`}>
-                    <input type="number" min="0" value={sl[d.key] || ''} placeholder="0"
-                      onChange={(e) => setSl((s) => ({ ...s, [d.key]: e.target.value }))}
+                    <input type="number" min="0" value={(sl[d.key] || {}).sl || ''} placeholder="0"
+                      onChange={(e) => datO(d.key, 'sl', e.target.value)}
                       className={`${numCls} ${vuot(d) ? 'border-danger focus:border-danger' : ''}`} />
                     {vuot(d) && <div className="mt-0.5 text-[11px] text-danger">Vượt phần còn in được</div>}
+                  </td>
+                  <td className={`${TD} text-right`}>
+                    <input type="number" min="0" value={(sl[d.key] || {}).huy || ''} placeholder="0" aria-label="SL hủy"
+                      onChange={(e) => datO(d.key, 'huy', e.target.value)} className={numCls} />
+                  </td>
+                  <td className={`${TD} text-right`}>
+                    <input type="number" min="0" value={(sl[d.key] || {}).thieu || ''} placeholder="0" aria-label="SL thiếu"
+                      onChange={(e) => datO(d.key, 'thieu', e.target.value)} className={numCls} />
                   </td>
                 </tr>
               );
@@ -160,6 +185,7 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh })
     }
   }, [khoaLenh]);
   useEffect(() => { load(); }, [load]);
+  useTaiNgamKhiLenhDoi(lenhIds, load);
   useEffect(() => {
     const t = setInterval(() => setTemMeta((m) => (m._suaGioKt || m.gioKt === gioHienTai() ? m : metaGuiDi(m))), 20000);
     return () => clearInterval(t);
@@ -223,49 +249,70 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh })
     }
   };
 
-  // `dong` = các dòng có số lượng của modal. ⚠ Mở SẴN cửa sổ in TRƯỚC mọi await (xin mã ERP xong mới mở là bị chặn popup).
+  // `dong` = các dòng CÓ NHẬP của modal (số lượng in và/hoặc SL hủy / SL thiếu).
+  // ⚠ Mở SẴN cửa sổ in TRƯỚC mọi await (xin mã ERP xong mới mở là bị chặn popup).
   const doInNhieu = async (dong) => {
-    const thieu = thieuNgayCaCt(temMeta);
-    if (thieu) { show(thieu, 'error'); return; }
-    // Lệnh chưa LƯU phân công có thợ in (hoặc ca này chuyền chưa phân công) ⇒ không in (gương BE `kiemThoInPhanCong`).
-    const chuaTho = [...new Set(dong.map((d) => d.run))].filter((r) => chuaPhanCongThoIn(r?.phan_cong));
-    if (chuaTho.length) {
-      show(`${CHUA_THO_IN}: ${chuaTho.map(tenLenh).join(', ')}`, 'error');
-      return;
-    }
-    let w = null;
-    if (!chiLuu) {
-      try { w = moSanCuaSoIn(); } catch (e) { show(e.message, 'error'); return; }
-    }
-    setBusy(true);
-    // Gom theo phiếu, giữ thứ tự dòng ⇒ 1 lượt `printTemBatch` / phiếu.
+    // Gom theo phiếu, giữ thứ tự dòng ⇒ phiếu CÓ in tem: 1 lượt `printTemBatch` (dòng chỉ có hủy/thiếu đi kèm với
+    //   SL 0 — BE ghi sổ vải, không tạo tem); phiếu CHỈ ghi vải: `addVaiHuy` như 2 ô Vải hủy / thiếu của RunPanel.
     const theoPhieu = [];
     dong.forEach((d) => {
       let g = theoPhieu.find((x) => x.run === d.run);
-      if (!g) { g = { run: d.run, items: [] }; theoPhieu.push(g); }
-      g.items.push(d.dotVaiId ? { dotVaiId: d.dotVaiId, soLuong: d.soLuong } : { soLuong: d.soLuong });
+      if (!g) { g = { run: d.run, items: [], coTem: false }; theoPhieu.push(g); }
+      if (d.soLuong > 0) g.coTem = true;
+      g.items.push({ ...(d.dotVaiId ? { dotVaiId: d.dotVaiId } : {}), soLuong: d.soLuong,
+        soLuongHuy: d.soLuongHuy || 0, soLuongThieu: d.soLuongThieu || 0, dotVaiGhi: d.dotVaiId || d.info?.dot_vai_ve_id || null });
     });
+    const inTem = theoPhieu.filter((g) => g.coTem);
+    if (inTem.length) {
+      const thieu = thieuNgayCaCt(temMeta);
+      if (thieu) { show(thieu, 'error'); return; }
+      // Lệnh chưa LƯU phân công có thợ in (hoặc ca này chuyền chưa phân công) ⇒ không in (gương BE `kiemThoInPhanCong`).
+      const chuaTho = inTem.map((g) => g.run).filter((r) => chuaPhanCongThoIn(r?.phan_cong));
+      if (chuaTho.length) {
+        show(`${CHUA_THO_IN}: ${chuaTho.map(tenLenh).join(', ')}`, 'error');
+        return;
+      }
+    }
+    let w = null;
+    if (inTem.length && !chiLuu) {
+      try { w = moSanCuaSoIn(); } catch (e) { show(e.message, 'error'); return; }
+    }
+    setBusy(true);
     const tems = [];
     const loi = [];
+    let soVai = 0;
     const meta = metaGuiDi(temMeta);
     for (const g of theoPhieu) {
       try {
-        // eslint-disable-next-line no-await-in-loop
-        // `khoaCa` theo TỪNG lệnh (mỗi nhóm chuyền một lượt ca riêng) — BE chặn khi đã sang ca mới.
-        const res = await printTemBatch(g.run.phieu.id, g.items, { ...meta, khoaCa: g.run.goi_y_tem?.khoa_ca || '' });
-        tems.push(...(res.data?.tems_in || []));
+        if (g.coTem) {
+          // `khoaCa` theo TỪNG lệnh (mỗi nhóm chuyền một lượt ca riêng) — BE chặn khi đã sang ca mới.
+          // eslint-disable-next-line no-await-in-loop
+          const res = await printTemBatch(g.run.phieu.id, g.items.map(({ dotVaiGhi, ...it }) => it),
+            { ...meta, khoaCa: g.run.goi_y_tem?.khoa_ca || '' });
+          tems.push(...(res.data?.tems_in || []));
+          soVai += g.items.filter((it) => it.soLuongHuy || it.soLuongThieu).length;
+        } else {
+          for (const it of g.items) {
+            for (const [loai, sl] of [['HUY', it.soLuongHuy], ['THIEU', it.soLuongThieu]]) {
+              if (!(sl > 0)) continue;
+              // eslint-disable-next-line no-await-in-loop
+              await addVaiHuy(g.run.phieu.id, { dotVaiId: it.dotVaiGhi, soLuong: sl, lyDo: 'Ghi khi in tem', loai });
+            }
+            soVai += 1;
+          }
+        }
       } catch (e) {
         loi.push(`${tenLenh(g.run)}: ${e.message || 'lỗi'}`);
       }
     }
     try {
-      if (!chiLuu) await inNhan(tems, w);
-      if (tems.length) {
-        show(`${chiLuu ? 'Đã lưu' : 'Đã in'} ${fmtNum(tems.length)} tem${chiLuu ? ' (BTP trước — không in nhãn)' : ''} — tự vào xe phơi${loi.length ? ` · LỖI: ${loi.join(' · ')}` : ''}`,
-          loi.length ? 'error' : 'success');
-      } else {
-        show(`Chưa in được tem nào — ${loi.join(' · ')}`, 'error');
-      }
+      if (inTem.length && !chiLuu) await inNhan(tems, w);
+      const phan = [
+        tems.length ? `${chiLuu ? 'Đã lưu' : 'Đã in'} ${fmtNum(tems.length)} tem${chiLuu ? ' (BTP trước — không in nhãn)' : ''} — tự vào xe phơi` : null,
+        soVai ? `đã ghi vải hủy/thiếu ${fmtNum(soVai)} dòng` : null,
+      ].filter(Boolean).join(' · ');
+      if (phan) show(`${phan}${loi.length ? ` · LỖI: ${loi.join(' · ')}` : ''}`, loi.length ? 'error' : 'success');
+      else show(`Chưa ghi được gì — ${loi.join(' · ')}`, 'error');
       if (!loi.length) { setInOpen(false); setTemMeta(META_MAC_DINH()); }
       await load();
       onChanged?.();

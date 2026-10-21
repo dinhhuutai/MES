@@ -13,8 +13,11 @@ import useChiXem, { NHAC_CHI_XEM } from '../../../hooks/useChiXem';
 import { fmtNum, fmtDate } from '../../../utils/format';
 import {
   traCuuPhanIn, getQuanTriPhanIn, suaPhanIn, suaDotVai,
-  datGiaiDoan, huyDotVaiQt, moDotVaiQt, huyMucReady,
+  datGiaiDoan, huyDotVaiQt, moDotVaiQt, huyMucReady, datKhoaErp, huyPhanInQt, moPhanInQt,
 } from '../../../services/quanTriPhanInService';
+import { listUserOptions } from '../../../services/userService';
+import { listToIn } from '../../../services/productionService';
+import { ToanCanhLenh, LuiVeModal, HuyLeModal, PhanCongModal } from '../components/QuanTriToanCanh';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // QUẢN TRỊ PHẦN IN — một chỗ gỡ rối mọi thứ của 1 phần in (mig 078, quyền `PHAN_IN_ADMIN`).
@@ -25,11 +28,10 @@ import {
 //   CLAUDE.md §7 + DATABASE.md §11.5 trước khi đổi gì ở đây.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Đợt vải CHƯA có lệnh (đang ở READY / Release 1) — đợt đã có lệnh thì dùng "Lùi về trạm" theo lệnh (`LuiVeModal`).
 const DICH_LIST = [
-  { v: 'READY_KT', ten: 'READY (Kỹ thuật)', mo_ta: 'Hủy lệnh + hủy CẢ Khuôn/Film/Mực + QC — kỹ thuật làm lại từ đầu' },
-  { v: 'READY_QA', ten: 'READY (QA)', mo_ta: 'Hủy lệnh + hủy QC, GIỮ 3 mục kỹ thuật — chỉ QC xác nhận lại' },
-  { v: 'RELEASE_1', ten: 'Release 1', mo_ta: 'Hủy lệnh, GIỮ nguyên xác nhận READY — đợt vải về lại pool Release 1' },
-  { v: 'TEST_RUN', ten: 'Test Run', mo_ta: 'Hạ lệnh Release 2 → Release 1 (giữ lệnh) — chỉ dùng khi lệnh đang ở Release 2' },
+  { v: 'READY_KT', ten: 'READY (Kỹ thuật)', mo_ta: 'Hủy CẢ Khuôn/Film/Mực + QC — kỹ thuật làm lại từ đầu' },
+  { v: 'READY_QA', ten: 'READY (QA)', mo_ta: 'Hủy QC, GIỮ 3 mục kỹ thuật — chỉ QC xác nhận lại' },
 ];
 
 const TONE_GIAI_DOAN = (g) => {
@@ -88,6 +90,18 @@ export default function QuanTriPhanInPage() {
   const [giaiDoanModal, setGiaiDoanModal] = useState(null); // { dot, dich, lyDo }
   const [huyModal, setHuyModal] = useState(null);           // { dot, lyDo }
   const [xacNhanMo, setXacNhanMo] = useState(null);         // dot
+  // 19/10/2026: lùi lệnh về trạm · hủy lẻ · phân công · hủy/mở cả phần in · khóa ERP.
+  const [luiLenh, setLuiLenh] = useState(null);             // lệnh (từ toan_canh)
+  const [huyLe, setHuyLe] = useState(null);                 // { loai, id, nhan }
+  const [phanCongPhieu, setPhanCongPhieu] = useState(null); // phiếu
+  const [huyPinModal, setHuyPinModal] = useState(null);     // { lyDo }
+  const [xacNhanMoPin, setXacNhanMoPin] = useState(false);
+  const [users, setUsers] = useState([]);
+  const [toIns, setToIns] = useState([]);
+  useEffect(() => {
+    listUserOptions({ limit: 500 }).then((r) => setUsers(r.data || [])).catch(() => {});
+    listToIn().then((r) => setToIns(r.data || [])).catch(() => setToIns([]));
+  }, []);
 
   const tim = useCallback(async () => {
     setDangTim(true);
@@ -105,16 +119,44 @@ export default function QuanTriPhanInPage() {
 
   const pin = data?.phan_in;
 
+  // Lưu sửa tay ⇒ BE tự KHÓA đồng bộ ERP của phần in (mig 116) — báo rõ trong toast.
   const luuPhanIn = async (v) => {
     setDangLuu(true);
-    try { await suaPhanIn(chon, v); show('Đã cập nhật phần in'); await tai(chon, true); }
-    catch (e) { show(e.message || 'Lưu thất bại', 'error'); } finally { setDangLuu(false); }
+    try {
+      const r = await suaPhanIn(chon, v);
+      show(`Đã cập nhật phần in${r.data?.khoa_erp ? ' — đã KHÓA đồng bộ ERP' : ''}`); await tai(chon, true);
+    } catch (e) { show(e.message || 'Lưu thất bại', 'error'); } finally { setDangLuu(false); }
   };
   const luuDotVai = async (id, v) => {
     setDangLuu(true);
-    try { await suaDotVai(id, v); show('Đã cập nhật đợt vải'); await tai(chon, true); }
-    catch (e) { show(e.message || 'Lưu thất bại', 'error'); } finally { setDangLuu(false); }
+    try {
+      const r = await suaDotVai(id, v);
+      show(`Đã cập nhật đợt vải${r.data?.khoa_erp ? ' — đã KHÓA đồng bộ ERP' : ''}`); await tai(chon, true);
+    } catch (e) { show(e.message || 'Lưu thất bại', 'error'); } finally { setDangLuu(false); }
   };
+  const doiKhoa = async (khoa) => {
+    setDangLuu(true);
+    try { const r = await datKhoaErp(chon, khoa); show(r.message || 'Đã đổi'); await tai(chon, true); }
+    catch (e) { show(e.message || 'Không đổi được khóa ERP', 'error'); } finally { setDangLuu(false); }
+  };
+  const doHuyPin = async () => {
+    if (!String(huyPinModal?.lyDo || '').trim()) { show('Nhập lý do', 'error'); return; }
+    setDangLuu(true);
+    try { await huyPhanInQt(chon, huyPinModal.lyDo); show('Đã hủy phần in'); setHuyPinModal(null); await tai(chon, true); }
+    catch (e) { show(e.message || 'Hủy thất bại', 'error'); } finally { setDangLuu(false); }
+  };
+  const doMoPin = async () => {
+    setDangLuu(true);
+    try { await moPhanInQt(chon); show('Đã mở lại phần in'); setXacNhanMoPin(false); await tai(chon, true); }
+    catch (e) { show(e.message || 'Mở lại thất bại', 'error'); } finally { setDangLuu(false); }
+  };
+  const xongViec = () => { setHuyLe(null); setPhanCongPhieu(null); tai(chon, true); };
+  // Đợt đã có lệnh ⇒ lùi theo lệnh (mọi trạm); chưa có lệnh ⇒ modal cũ (READY KT / QA).
+  const moDatGiaiDoan = (d) => {
+    const l = d.lenh_id && (data?.toan_canh?.lenh || []).find((x) => x.id === d.lenh_id);
+    if (l) setLuiLenh(l); else setGiaiDoanModal({ dot: d, dich: '', lyDo: '' });
+  };
+  const khoa = data?.khoa_erp;
 
   const doDatGiaiDoan = async () => {
     const { dot, dich, lyDo } = giaiDoanModal || {};
@@ -226,6 +268,29 @@ export default function QuanTriPhanInPage() {
                 <div className="mt-1 text-sm text-ink-soft">
                   {[pin.ten_khach_hang, pin.ma_don_hang, pin.ma_hang].filter(Boolean).join(' · ')}
                 </div>
+                {/* Khóa đồng bộ ERP (mig 116) + hủy / mở cả phần in (19/10/2026). */}
+                <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3">
+                  {khoa?.co_cot === false ? (
+                    <Badge tone="default">Khóa ERP: chưa chạy migration 116</Badge>
+                  ) : khoa?.dang_khoa ? (
+                    <>
+                      <Badge tone="warning">🔒 Đang khóa đồng bộ ERP</Badge>
+                      <span className="text-xs text-ink-soft">
+                        {[khoa.nguoi, khoa.tg ? fmtDate(khoa.tg) : null].filter(Boolean).join(' · ')} — ERP không ghi đè thông tin phần in + đợt vải đã có
+                      </span>
+                      <Button variant="secondary" loading={dangLuu} onClick={() => doiKhoa(false)}>Mở khóa ERP</Button>
+                    </>
+                  ) : (
+                    <>
+                      <Badge tone="success">Đồng bộ ERP: đang mở</Badge>
+                      <span className="text-xs text-ink-soft">Lưu sửa thông tin ở trang này sẽ tự khóa</span>
+                    </>
+                  )}
+                  <span className="flex-1" />
+                  {pin.dang_hoat_dong
+                    ? <Button variant="danger" onClick={() => setHuyPinModal({ lyDo: '' })}>Hủy phần in</Button>
+                    : <Button variant="secondary" onClick={() => setXacNhanMoPin(true)}>Mở lại phần in</Button>}
+                </div>
               </div>
 
               {/* 4 mục READY */}
@@ -303,8 +368,8 @@ export default function QuanTriPhanInPage() {
                           <Button variant="secondary" onClick={() => setXacNhanMo(d)}>Mở lại đợt</Button>
                         ) : (
                           <>
-                            <Button variant="secondary" onClick={() => setGiaiDoanModal({ dot: d, dich: '', lyDo: '' })}>
-                              Đặt lại giai đoạn
+                            <Button variant="secondary" onClick={() => moDatGiaiDoan(d)}>
+                              {d.lenh_id ? 'Lùi về trạm…' : 'Đặt lại giai đoạn'}
                             </Button>
                             <Button variant="danger" onClick={() => setHuyModal({ dot: d, lyDo: '' })}>Hủy đợt</Button>
                           </>
@@ -340,10 +405,36 @@ export default function QuanTriPhanInPage() {
                   </div>
                 ))}
               </div>
+
+              <ToanCanhLenh tc={data.toan_canh} onLuiVe={setLuiLenh} onHuyLe={setHuyLe} onPhanCong={setPhanCongPhieu} />
             </>
           )}
         </div>
       )}
+
+      <LuiVeModal phanInId={chon} lenh={luiLenh} dichList={data?.dich_lui || []} show={show}
+        onClose={() => setLuiLenh(null)} onDone={() => tai(chon, true)} />
+      <HuyLeModal phanInId={chon} viec={huyLe} show={show} onClose={() => setHuyLe(null)} onDone={xongViec} />
+      <PhanCongModal phanInId={chon} phieu={phanCongPhieu} users={users} toIns={toIns} show={show}
+        onClose={() => setPhanCongPhieu(null)} onDone={xongViec} />
+      <Modal open={!!huyPinModal} onClose={() => setHuyPinModal(null)} size="sm" title={`Hủy phần in — ${pin?.ma_phan || ''}`}
+        footer={(
+          <>
+            <Button chiXemOk variant="secondary" onClick={() => setHuyPinModal(null)}>Đóng</Button>
+            <Button variant="danger" loading={dangLuu} onClick={doHuyPin}>Hủy phần in</Button>
+          </>
+        )}>
+        <p className="mb-3 text-sm text-ink-soft">
+          Hủy cả phần in: mọi lệnh / phiếu / tem / đợt vải của nó bị HỦY (như tab Hủy phần in). Bị chặn khi tem đã qua KCS/OQC/giao —
+          lùi về trạm trước. ERP gửi đợt mới thì phần in tự hiện lại; mở lại được ở chính trang này.
+        </p>
+        <Field label="Lý do" required>
+          <Textarea rows={2} value={huyPinModal?.lyDo || ''} onChange={(e) => setHuyPinModal({ lyDo: e.target.value })} />
+        </Field>
+      </Modal>
+      <ConfirmDialog open={xacNhanMoPin} title="Mở lại phần in"
+        message={`Mở lại phần in ${pin?.ma_phan || ''}? Lệnh / tem / đợt vải bị hủy theo lần hủy phần in sẽ được khôi phục.`}
+        confirmText="Mở lại" onClose={() => setXacNhanMoPin(false)} onConfirm={doMoPin} />
 
       {/* Modal đặt lại giai đoạn */}
       <Modal open={!!giaiDoanModal} onClose={() => setGiaiDoanModal(null)} size="md"
