@@ -73,10 +73,24 @@ const INFO_HEADERS = ['STT', 'Khách hàng', 'Đơn hàng', 'Mã hàng', 'Code p
 // GIỜ dùng `TimeSelect` (0h–23h + phút) chứ KHÔNG `<input type="time">` — ô đó hiện AM/PM theo locale máy.
 export const META_MAC_DINH = () => ({ ngayCa: '', gioBd: '', gioKt: '', btpTruoc: false, btpCuoi: false, gcMauVai: '', ngayCt: '', _suaGioKt: false, _khoaCa: '' });
 export const gioHienTai = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
-// Thiếu Ngày ca / Ngày chứng từ ⇒ câu báo (rỗng = đủ). Gọi TRƯỚC khi mở cửa sổ in.
+// Mã ngày ca ĐÚNG 8 ký tự = YYMMDD (ngày có thật) + ca C1/C2/C3 · D1/D2 · HC, vd `261021HC` (21/10/2026 — ca thật tem
+//   152608077267 in với `2610520D1`). Gương BE `utils/ca.js maNgayCaHopLe` / `NGAY_CA_SAI`. Trống ⇒ không coi là sai
+//   (đã có câu "Chưa nhập"). Trả câu báo hoặc ''.
+export const NGAY_CA_SAI = 'Nhập ngày ca không đúng — phải đủ 8 ký tự: năm tháng ngày + ca, vd 261021HC (ca: C1 · C2 · C3 · D1 · D2 · HC)';
+export const maNgayCaSai = (ma) => {
+  const s = String(ma || '').trim();
+  if (!s) return '';
+  const m = /^(\d{2})(\d{2})(\d{2})(C1|C2|C3|D1|D2|HC)$/.exec(s);
+  if (!m) return NGAY_CA_SAI;
+  const [yy, mm, dd] = [m[1], m[2], m[3]].map(Number);
+  const d = new Date(Date.UTC(2000 + yy, mm - 1, dd));
+  return d.getUTCMonth() === mm - 1 && d.getUTCDate() === dd ? '' : NGAY_CA_SAI;
+};
+// Thiếu Ngày ca / Ngày chứng từ, hoặc ngày ca sai dạng ⇒ câu báo (rỗng = đủ). Gọi TRƯỚC khi mở cửa sổ in.
 export const thieuNgayCaCt = (m) => {
   const thieu = [!String(m?.ngayCa || '').trim() && 'Ngày ca', !m?.ngayCt && 'Ngày chứng từ'].filter(Boolean);
-  return thieu.length ? `Chưa nhập ${thieu.join(' và ')} — nhập 1 lần đầu ca rồi mới in tem được` : '';
+  if (thieu.length) return `Chưa nhập ${thieu.join(' và ')} — nhập 1 lần đầu ca rồi mới in tem được`;
+  return maNgayCaSai(m?.ngayCa);
 };
 export const CHUA_THO_IN = 'Chưa phân công thợ in — chọn thợ in ở khối Phân công rồi bấm Lưu trước khi in tem';
 // Phân công chưa đủ để in tem: chưa có thợ in, hoặc ca này chuyền chưa phân công (gương BE `kiemThoInPhanCong`).
@@ -129,13 +143,18 @@ export function TemMetaFields({ meta, setMeta, anGcMauVai = false }) {
   const chk = 'h-4 w-4 rounded border-line text-primary focus:ring-primary/30';
   const batBuoc = <span className="text-danger"> *</span>;
   const thieuCa = !String(meta.ngayCa || '').trim();
+  const caSai = maNgayCaSai(meta.ngayCa);
   return (
     <div className="rounded-control border border-line bg-surface-muted/40 p-2.5">
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-ink-soft">Ngày ca{batBuoc}</span>
-          <Input value={meta.ngayCa} onChange={(e) => set('ngayCa', e.target.value)}
-            placeholder="vd: 260805D2" className={`tabular-nums ${thieuCa ? 'border-danger' : ''}`} />
+          {/* Viết HOA + bỏ khoảng trắng ngay lúc gõ (`261021hc` → `261021HC`). KHÔNG `maxLength`: cắt cụt chuỗi dán
+              9 ký tự có thể ra mã đúng dạng mà sai ngày — để nguyên cho người nhập thấy lỗi. */}
+          <Input value={meta.ngayCa}
+            onChange={(e) => set('ngayCa', e.target.value.replace(/\s+/g, '').toUpperCase())}
+            placeholder="vd: 261021HC" className={`tabular-nums ${thieuCa || caSai ? 'border-danger' : ''}`} />
+          {caSai && <span className="mt-0.5 block text-[11px] leading-snug text-danger">{caSai}</span>}
         </label>
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-ink-soft">Từ giờ</span>

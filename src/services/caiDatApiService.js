@@ -18,3 +18,9 @@ export const thuKetNoiApi = (ma) => client.post(`/cai-dat-api/thu/${ma}`);
 export const lichSuApi = (ma, params) => client.get(`/cai-dat-api/lich-su/${ma}`, { params });
 // Gửi lại 1 dòng lịch sử sang ERP (5 API đẩy) — dùng lại IDMES cũ, phiếu giao phải có ID ERP.
 export const guiLaiApi = (ma, auditId) => client.post(`/cai-dat-api/lich-su/${ma}/${auditId}/gui-lai`);
+// Sửa dữ liệu đã gửi rồi gửi lại (21/10/2026): GET trả `{ audit_id, kieu_ngay, truong: [{ truong, gia_tri,
+//   kieu: 'so'|'ngay'|'chuoi', dai, khoa, guong, ma_tem, co_san }] }`; POST `{ gui: {trường: giá trị}, lyDo }`.
+//   Lỗi 422 `DU_LIEU_SAI` có `details: [{ truong, loi }]`.
+export const xemSuaGuiLaiApi = (ma, auditId) => client.get(`/cai-dat-api/lich-su/${ma}/${auditId}/sua-gui-lai`);
+export const suaGuiLaiApi = (ma, auditId, gui, lyDo) =>
+  client.post(`/cai-dat-api/lich-su/${ma}/${auditId}/sua-gui-lai`, { gui, lyDo });

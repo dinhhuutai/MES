@@ -382,7 +382,18 @@ export default function Release1Page() {
   const canhBaoThoIn = (res) => (res?.data?.tho_in_chua_luu ? ' · CHƯA lưu thợ in (hệ thống chưa cập nhật cơ sở dữ liệu)' : '');
 
   // Release 1 phần in lẻ (từ side panel chi tiết)
+  // ⚠ CHỐT BẤM ĐÚP (21/10/2026): `saving` chỉ khóa nút SAU khi React vẽ lại (và sau `await hoiLyDoNghen`) ⇒ bấm đúp
+  //   nhanh là 2 lượt release cùng đi (prod: 17 đợt bị release gấp đôi, 2 lệnh cách nhau ~0,1 s). Ref chặn ngay cú
+  //   thứ 2; backend cũng khóa đợt trong transaction (`planning.service kiemLaiConReleaseTx`).
+  const dangGui = useRef(false);
   const submitRelease = async (dotVaiIds) => {
+    if (dangGui.current) return;
+    dangGui.current = true;
+    try {
+      await submitReleaseLoi(dotVaiIds);
+    } finally { dangGui.current = false; }
+  };
+  const submitReleaseLoi = async (dotVaiIds) => {
     // Đợt vải quá SLA ⇒ nhập lý do nghẽn trước khi release (mig 106).
     if (!(await hoiLyDoNghen(rows.filter((r) => dotVaiIds.includes(r.dot_vai_id))))) return;
     setSaving(true);
@@ -435,6 +446,13 @@ export default function Release1Page() {
   // Release gộp: MỖI ĐỢT VẢI → 1 lệnh riêng (kể cả đợt thuộc gom set — chốt 15/08/2026).
   // Đợt chưa Ready thì backend tự lưu Kế hoạch tạm thay vì tạo lệnh (`createRelease1` tách 2 nhánh).
   const doReleaseAll = async () => {
+    if (dangGui.current) return; // chốt bấm đúp — xem `dangGui`
+    dangGui.current = true;
+    try {
+      await doReleaseAllLoi();
+    } finally { dangGui.current = false; }
+  };
+  const doReleaseAllLoi = async () => {
     if (!(await hoiLyDoNghen(looseList))) return; // mig 106
     setSaving(true);
     try {

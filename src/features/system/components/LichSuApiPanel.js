@@ -11,6 +11,7 @@ import Toast from '../../../components/common/Toast';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import { lichSuApi, guiLaiApi } from '../../../services/caiDatApiService';
+import SuaGuiLaiModal from './SuaGuiLaiModal';
 
 // 5 API ĐẨY dữ liệu có nút "Gửi lại ERP" từng dòng (gương backend `caidatapi/guiLai.js` MA_GUI_LAI).
 // API XIN SỐ (mã tem, ID phiếu giao) KHÔNG có — gọi lại là tiêu thêm 1 số của ERP.
@@ -71,6 +72,7 @@ export default function LichSuApiPanel({ open, onClose, ma, ten, laGhiInTem }) {
   const [loading, setLoading] = useState(false);
   const [chon, setChon] = useState(null); // dòng đang mở chi tiết
   const [dangGui, setDangGui] = useState(null); // id dòng đang gửi lại
+  const [dongSua, setDongSua] = useState(null); // dòng đang mở hộp "Sửa & gửi lại" (21/10/2026)
   const { toast, show } = useToast();
   const { can } = usePermissions();
   const guiLaiDuoc = CO_GUI_LAI.has(ma) && can('WORKFLOW_MANAGE');
@@ -168,11 +170,20 @@ export default function LichSuApiPanel({ open, onClose, ma, ten, laGhiInTem }) {
     ...(guiLaiDuoc ? [{
       key: 'gui_lai', header: '', className: 'text-right',
       render: (r) => (
-        <Button variant={r.thanh_cong ? 'ghost' : 'secondary'} icon="rotate-cw" className="whitespace-nowrap px-2.5 py-1 text-xs"
-          loading={dangGui === r.id} disabled={!!dangGui}
-          onClick={(e) => { e.stopPropagation(); guiLai(r); }}>
-          Gửi lại ERP
-        </Button>
+        <div className="flex justify-end gap-1">
+          {/* Sửa & gửi lại: chỉ dòng có lưu thân đã gửi (dòng "chưa gửi" chỉ có 1 trường thì backend báo 409). */}
+          {(r.chi_tiet?.gui || r.chi_tiet?.payload) && (
+            <Button variant="ghost" icon="pencil" className="whitespace-nowrap px-2.5 py-1 text-xs"
+              disabled={!!dangGui} onClick={(e) => { e.stopPropagation(); setDongSua(r); }}>
+              Sửa & gửi
+            </Button>
+          )}
+          <Button variant={r.thanh_cong ? 'ghost' : 'secondary'} icon="rotate-cw" className="whitespace-nowrap px-2.5 py-1 text-xs"
+            loading={dangGui === r.id} disabled={!!dangGui}
+            onClick={(e) => { e.stopPropagation(); guiLai(r); }}>
+            Gửi lại ERP
+          </Button>
+        </div>
       ),
     }] : []),
   ];
@@ -231,6 +242,21 @@ export default function LichSuApiPanel({ open, onClose, ma, ten, laGhiInTem }) {
             </div>
             {chon.url && <p className="break-all font-mono text-xs text-ink-soft">{chon.url}</p>}
 
+            {/* Lượt "Sửa & gửi lại" (21/10/2026): ai sửa (cột Người) · lý do · trường nào cũ → mới. */}
+            {chon.chi_tiet?.sua_tay && (
+              <div className="rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                <div className="text-xs uppercase tracking-wide text-amber-700">Sửa tay rồi gửi lại · {chon.nguoi || '—'}</div>
+                <div className="mt-0.5">Lý do: {chon.chi_tiet.sua_tay.ly_do}</div>
+                <ul className="mt-1 space-y-0.5 font-mono text-xs">
+                  {Object.entries(chon.chi_tiet.sua_tay.doi || {}).map(([k, v]) => (
+                    <li key={k} className="break-all">
+                      {k}: {v?.cu == null || v.cu === '' ? '(trống)' : String(v.cu)} → {v?.moi == null || v.moi === '' ? '(trống)' : String(v.moi)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             {/* ⚠ ERP TRẢ LỜI — hiện ở CẢ 2 nhánh. `returnValue` khác 0 nghĩa là ERP nhận được nhưng
                 stored procedure không xử lý bình thường, mà router ERP vẫn báo success=true. */}
             {(chon.erp_message || chon.erp_error || chon.erp_return_value != null) && (
@@ -267,6 +293,9 @@ export default function LichSuApiPanel({ open, onClose, ma, ten, laGhiInTem }) {
 
         {loading && !rows.length && <div className="flex justify-center py-8"><Spinner size={24} /></div>}
       </div>
+    {/* Đóng hộp cũng tải lại: lượt gửi lỗi vẫn để 1 dòng lịch sử mới. */}
+    <SuaGuiLaiModal ma={ma} dong={dongSua} onClose={() => { setDongSua(null); load(); }}
+      onXong={(msg) => { setDongSua(null); show(msg); load(); }} />
     <Toast toast={toast} />
     </SidePanel>
   );
