@@ -55,11 +55,11 @@ function DongTram({ t, so, cuoi, laDay, data, refDay }) {
       <div className={`mb-2 min-w-0 flex-1 rounded-control px-3 py-2 ${laDay ? 'bg-primary-wash ring-2 ring-primary' : ''}`}>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="text-[15px] font-bold text-ink">{t.ten}</span>
-          <span className={`rounded-badge px-2 py-0.5 text-[11px] font-semibold ring-1 ${MAU_PHONG[t.phong] || 'bg-surface-muted text-ink-soft ring-line'}`}>
+          <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ${MAU_PHONG[t.phong] || 'bg-surface-muted text-ink-soft ring-line'}`}>
             {t.phong}
           </span>
           {laDay && (
-            <span className="inline-flex items-center gap-1 rounded-badge bg-primary px-2 py-0.5 text-[11px] font-semibold text-white">
+            <span className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-[11px] font-semibold text-white">
               <Icon name="eye" size={12} /> Trang này
             </span>
           )}
@@ -106,10 +106,10 @@ export default function SoDoDongChayNut() {
   return (
     <>
       <button type="button" onClick={() => setMo(true)} title="Sơ đồ dòng chảy — trạm và người phụ trách"
-        className="inline-flex items-center gap-2 rounded-badge bg-primary-wash px-3 py-1.5 text-sm font-semibold text-primary ring-1 ring-primary/20 hover:bg-primary hover:text-white">
+        className="inline-flex items-center gap-2 rounded-full bg-primary-wash px-3 py-1.5 text-sm font-semibold text-primary ring-1 ring-primary/20 hover:bg-primary hover:text-white">
         <Icon name="git-branch" size={16} />
         <span className="hidden md:inline">Sơ đồ dòng chảy</span>
-        <span className="hidden rounded-badge bg-white/70 px-1.5 text-[11px] font-semibold text-primary lg:inline dark:bg-black/20">{tram.ten}</span>
+        <span className="hidden rounded-full bg-white/70 px-1.5 text-[11px] font-semibold text-primary lg:inline dark:bg-black/20">{tram.ten}</span>
       </button>
       <Modal open={mo} onClose={() => setMo(false)} size="lg" title="Sơ đồ dòng chảy">
         {loi && <p className="mb-3 rounded-control bg-danger/5 px-3 py-2 text-sm text-danger">{loi}</p>}

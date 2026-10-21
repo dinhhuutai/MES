@@ -49,7 +49,7 @@ export default function Topbar() {
       {chiXem && (
         <span
           title="Tài khoản chỉ xem — xem được mọi màn hình nhưng không lưu/xác nhận/in được gì"
-          className="mr-1 hidden items-center gap-1.5 rounded-badge bg-amber-50 px-2.5 py-1 text-xs font-semibold
+          className="mr-1 hidden items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold
             text-amber-700 ring-1 ring-amber-200 sm:inline-flex dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900/60"
         >
           <Icon name="eye" size={14} /> Chế độ chỉ xem
