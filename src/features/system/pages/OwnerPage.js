@@ -4,7 +4,7 @@ import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
 import Toast from '../../../components/common/Toast';
-import { Field, Select } from '../../../components/common/controls';
+import { Field, Select, Input } from '../../../components/common/controls';
 import SearchableSelect from '../../../components/common/SearchableSelect';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
@@ -13,6 +13,7 @@ import {
   tramOptions, listCheckpoints,
   listTramOwners, addTramOwner, removeTramOwner,
   listCheckpointOwners, addCheckpointOwner, removeCheckpointOwner,
+  suaGhiChuTramOwner, suaGhiChuCheckpointOwner,
 } from '../../../services/wfconfigService';
 import { listPhongBan, listRoleOptions } from '../../../services/systemService';
 import { listUsers } from '../../../services/userService';
@@ -21,7 +22,8 @@ import { getKpiCot } from '../../../services/kpiReadyService';
 
 const LOAI_LABEL = { CHIU_TRACH_NHIEM: 'Chịu trách nhiệm', XU_LY: 'Xử lý' };
 
-function OwnerRow({ o, canManage, onRemove }) {
+// `ghi_chu` = phạm vi phụ trách (vd "Khu máy", "Bàn, Robot") — hiện ở modal Sơ đồ dòng chảy (21/10/2026).
+function OwnerRow({ o, canManage, onRemove, onGhiChu }) {
   return (
     <div className="flex items-center justify-between rounded-control border border-line px-3 py-2 text-sm">
       <div className="flex flex-wrap items-center gap-1.5">
@@ -30,13 +32,19 @@ function OwnerRow({ o, canManage, onRemove }) {
         {o.ten_role && <Badge tone="default">Role: {o.ten_role}</Badge>}
         {o.ten_phong_ban && <Badge tone="default">PB: {o.ten_phong_ban}</Badge>}
         {o.bat_buoc && <Badge tone="danger">Bắt buộc</Badge>}
+        {o.ghi_chu && <span className="text-xs text-ink-soft">· {o.ghi_chu}</span>}
       </div>
-      {canManage && <button onClick={() => onRemove(o)} className="text-xs font-medium text-danger hover:underline">Xóa</button>}
+      {canManage && (
+        <div className="flex shrink-0 items-center gap-3">
+          <button onClick={() => onGhiChu(o)} className="text-xs font-medium text-primary hover:underline">Ghi chú</button>
+          <button onClick={() => onRemove(o)} className="text-xs font-medium text-danger hover:underline">Xóa</button>
+        </div>
+      )}
     </div>
   );
 }
 
-function OwnerList({ title, owners, onAdd, onRemove, canManage }) {
+function OwnerList({ title, owners, onAdd, onRemove, onGhiChu, canManage }) {
   const tn = owners.filter((o) => o.loai === 'CHIU_TRACH_NHIEM');
   const xl = owners.filter((o) => o.loai !== 'CHIU_TRACH_NHIEM');
   return (
@@ -49,13 +57,13 @@ function OwnerList({ title, owners, onAdd, onRemove, canManage }) {
       {tn.length > 0 && (
         <div className="mb-2">
           <div className="mb-1 text-xs font-medium text-ink-soft">Chịu trách nhiệm</div>
-          <div className="space-y-2">{tn.map((o) => <OwnerRow key={o.id} o={o} canManage={canManage} onRemove={onRemove} />)}</div>
+          <div className="space-y-2">{tn.map((o) => <OwnerRow key={o.id} o={o} canManage={canManage} onRemove={onRemove} onGhiChu={onGhiChu} />)}</div>
         </div>
       )}
       {xl.length > 0 && (
         <div>
           <div className="mb-1 text-xs font-medium text-ink-soft">Xử lý</div>
-          <div className="space-y-2">{xl.map((o) => <OwnerRow key={o.id} o={o} canManage={canManage} onRemove={onRemove} />)}</div>
+          <div className="space-y-2">{xl.map((o) => <OwnerRow key={o.id} o={o} canManage={canManage} onRemove={onRemove} onGhiChu={onGhiChu} />)}</div>
         </div>
       )}
     </div>
@@ -84,8 +92,9 @@ export default function OwnerPage() {
   // ⚠ Đích gán mang THEO MODAL (không đọc state `tramId`/`checkpointId` lúc lưu): khối "Owner cột KPI
   //   READY" gán thẳng vào trạm/checklist của CỘT được bấm, không phải cái đang chọn ở 2 ô Select.
   const [modal, setModal] = useState(null);
-  const [form, setForm] = useState({ loai: 'XU_LY', userId: '', roleId: '', phongBanId: '', batBuoc: false });
+  const [form, setForm] = useState({ loai: 'XU_LY', userId: '', roleId: '', phongBanId: '', batBuoc: false, ghiChu: '' });
   const [saving, setSaving] = useState(false);
+  const [suaGc, setSuaGc] = useState(null); // { cap: 'tram'|'checkpoint', o, ghiChu }
 
   const loadOverview = useCallback(() => {
     getFlowOwners().then((r) => setOverview(r.data || { tram: {}, checkpoint: {} })).catch(() => {});
@@ -146,15 +155,25 @@ export default function OwnerPage() {
 
   // `dich` (tùy chọn) = { tramId } hoặc { checkpointId } + `tenDich` — dùng khi gán từ khối cột KPI.
   const openAdd = (type, dich = {}) => {
-    setForm({ loai: 'XU_LY', userId: '', roleId: '', phongBanId: '', batBuoc: false });
+    setForm({ loai: 'XU_LY', userId: '', roleId: '', phongBanId: '', batBuoc: false, ghiChu: '' });
     setModal({ type, tramId, checkpointId, ...dich });
+  };
+
+  const luuGhiChu = async () => {
+    setSaving(true);
+    try {
+      if (suaGc.cap === 'tram') { await suaGhiChuTramOwner(suaGc.o.id, suaGc.ghiChu); loadTramOwners(); }
+      else { await suaGhiChuCheckpointOwner(suaGc.o.id, suaGc.ghiChu); loadCpOwners(); }
+      show('Đã lưu ghi chú'); setSuaGc(null);
+    } catch (e) { show(e.message || 'Lưu ghi chú thất bại', 'error'); }
+    finally { setSaving(false); }
   };
 
   const save = async () => {
     if (!form.userId && !form.roleId && !form.phongBanId) { show('Chọn người / vai trò / phòng ban', 'error'); return; }
     setSaving(true);
     try {
-      const base = { loai: form.loai, userId: form.userId || null, roleId: form.roleId || null, phongBanId: form.phongBanId || null };
+      const base = { loai: form.loai, userId: form.userId || null, roleId: form.roleId || null, phongBanId: form.phongBanId || null, ghiChu: form.ghiChu };
       if (modal.type === 'tram') {
         await addTramOwner({ tramId: modal.tramId, ...base });
         if (modal.tramId === tramId) loadTramOwners();
@@ -320,7 +339,8 @@ export default function OwnerPage() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <OwnerList title="Owner của checkpoint" owners={tramOwners} canManage={canManage}
-          onAdd={() => openAdd('tram')} onRemove={removeTO} />
+          onAdd={() => openAdd('tram')} onRemove={removeTO}
+          onGhiChu={(o) => setSuaGc({ cap: 'tram', o, ghiChu: o.ghi_chu || '' })} />
 
         <div>
           <div className="mb-2">
@@ -331,7 +351,8 @@ export default function OwnerPage() {
             </Select>
           </div>
           <OwnerList title="Owner của checklist" owners={cpOwners} canManage={canManage && !!checkpointId}
-            onAdd={checkpointId ? () => openAdd('checkpoint') : null} onRemove={removeCO} />
+            onAdd={checkpointId ? () => openAdd('checkpoint') : null} onRemove={removeCO}
+            onGhiChu={(o) => setSuaGc({ cap: 'checkpoint', o, ghiChu: o.ghi_chu || '' })} />
         </div>
       </div>
 
@@ -378,7 +399,22 @@ export default function OwnerPage() {
             </button>
           </Field>
         )}
+        <Field label="Ghi chú phạm vi (tùy chọn)" hint="Hiện ở Sơ đồ dòng chảy, vd: Khu máy · Khu bàn A · Bàn, Robot · Chính">
+          <Input value={form.ghiChu} maxLength={60} onChange={(e) => setForm({ ...form, ghiChu: e.target.value })} placeholder="vd: Khu máy" />
+        </Field>
         <p className="text-xs text-ink-soft">Chọn ít nhất người, vai trò, hoặc phòng ban. Owner <b>xử lý</b> dạng người sẽ được gán tự động khi đợt vải vào checkpoint.</p>
+      </Modal>
+
+      <Modal open={!!suaGc} onClose={() => setSuaGc(null)} size="sm"
+        title={`Ghi chú phạm vi — ${suaGc?.o?.ho_ten || suaGc?.o?.ten_role || suaGc?.o?.ten_phong_ban || ''}`}
+        footer={<>
+          <Button chiXemOk variant="ghost" onClick={() => setSuaGc(null)}>Hủy</Button>
+          <Button onClick={luuGhiChu} loading={saving}>Lưu</Button>
+        </>}>
+        <Field label="Ghi chú phạm vi" hint="Hiện ở Sơ đồ dòng chảy; người cùng ghi chú gom 1 dòng. Để trống = không ghi chú.">
+          <Input value={suaGc?.ghiChu || ''} maxLength={60} placeholder="vd: Khu máy"
+            onChange={(e) => setSuaGc((s) => ({ ...s, ghiChu: e.target.value }))} />
+        </Field>
       </Modal>
 
       <Toast toast={toast} />

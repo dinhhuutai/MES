@@ -1,6 +1,7 @@
 import client from './axiosClient';
 
 export const getSummary = () => client.get('/dashboard/summary');
+export const getSoDoDongChay = () => client.get('/dashboard/so-do-dong-chay');
 export const getActivity = () => client.get('/dashboard/activity');
 export const getStageCounts = () => client.get('/dashboard/stage-counts');
 export const getChartDetail = () => client.get('/dashboard/chart-detail');

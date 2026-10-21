@@ -41,6 +41,9 @@ export const removeTramOwner = (id) => client.delete(`/wf/tram-owners/${id}`);
 export const listCheckpointOwners = (checkpointId) => client.get('/wf/checkpoint-owners', { params: { checkpointId } });
 export const addCheckpointOwner = (b) => client.post('/wf/checkpoint-owners', b);
 export const removeCheckpointOwner = (id) => client.delete(`/wf/checkpoint-owners/${id}`);
+// Ghi chú phạm vi của owner (vd "Khu máy", "Bàn, Robot") — hiện ở modal Sơ đồ dòng chảy.
+export const suaGhiChuTramOwner = (id, ghiChu) => client.patch(`/wf/tram-owners/${id}`, { ghiChu });
+export const suaGhiChuCheckpointOwner = (id, ghiChu) => client.patch(`/wf/checkpoint-owners/${id}`, { ghiChu });
 
 // Statuses
 export const listStatuses = (params) => client.get('/wf/statuses', { params });

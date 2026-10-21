@@ -3,6 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { Menu } from '@headlessui/react';
 import Icon from '../common/Icon';
 import NotificationBell from './NotificationBell';
+import SoDoDongChayNut from './SoDoDongChay';
 import { logout, selectAuth } from '../../store/authSlice';
 import { LOGO_SRC, avatarFor } from '../../utils/brand';
 import useChiXem from '../../hooks/useChiXem';
@@ -35,6 +36,11 @@ export default function Topbar() {
           </div>
         </div>
       </Link>
+
+      {/* Giữa thanh: nút "Sơ đồ dòng chảy" — tự ẩn ở trang không thuộc dòng chảy (21/10/2026). */}
+      <div className="flex min-w-0 flex-1 justify-center px-2">
+        <SoDoDongChayNut />
+      </div>
 
       <div className="flex items-center gap-1">
       {/* ⚠ TÀI KHOẢN CHỈ XEM (mig 096) — phải NÓI RÕ ngay trên đầu màn hình.
