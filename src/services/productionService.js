@@ -18,6 +18,9 @@ export const reprintTem = (temId, lyDo) => client.post(`/production/tem/${temId}
 // dotVaiId (tùy chọn) → nhãn lấy đúng phần in của đợt vải đó (in tem lệnh gom set)
 export const getTemLabel = (temId, dotVaiId) =>
   client.get(`/production/tem/${temId}/label`, { params: dotVaiId ? { dotVaiId } : undefined });
+// Vải hủy / thiếu gắn 1 tem đại diện (mig 118) — số vẫn thuộc đợt vải của phần in.
+export const getVaiTem = (temId) => client.get(`/production/tem/${temId}/vai`);
+export const suaVaiTem = (temId, body) => client.put(`/production/tem/${temId}/vai`, body);
 export const getTemLogs = (phieuId) => client.get(`/production/phieu/${phieuId}/tem-logs`);
 export const finishRun = (phieuId) => client.post(`/production/phieu/${phieuId}/finish`);
 // `gioBd`/`gioKt` dạng 'HH:MM' (tùy chọn) — giờ ngừng / hoạt động lại nhập tay; bỏ trống = giờ hệ thống.
@@ -35,6 +38,8 @@ export const toggleLyDoNgung = (id, active) => client.patch(`/production/ly-do-n
 // Danh mục TỔ IN (mig 084) — ô chọn ở khối Phân công + trang Hệ thống > Danh mục tổ in
 // Báo cáo sản xuất ngày (02/10/2026) — 2 bảng (theo tổ · chi tiết phần in) trong 1 lượt gọi.
 export const getBaoCaoSanXuat = (ngay) => client.get('/production/bao-cao-ngay', { params: { ngay } });
+// Theo dõi chuyền in › Tổng nhà máy / Theo tổ (21/10/2026) — dữ liệu mức lệnh 1 ngày (`production/theoDoiTo.js`).
+export const getTheoDoiTo = (ngay) => client.get('/production/theo-doi-to', { params: { ngay } });
 // Báo cáo bất thường dừng chuyền — khoảng ngày SX (06:00 → 06:00), 'YYYY-MM-DD'.
 export const getBaoCaoDungChuyen = (tuNgay, denNgay) =>
   client.get('/production/bao-cao-dung-chuyen', { params: { tuNgay, denNgay } });

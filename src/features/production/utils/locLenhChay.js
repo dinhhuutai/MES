@@ -112,8 +112,49 @@ export function gomTheoCodePhan(rows) {
     };
   });
 }
-// Các lệnh của 1 dòng bảng Chờ chạy (dòng gom hoặc dòng lẻ / dòng lệnh thô).
+// Các lệnh của 1 dòng bảng Chờ chạy / Đang chạy (dòng gom hoặc dòng lẻ / dòng lệnh thô).
 export const lenhCuaDong = (r) => (r && r._lenh && r._lenh.length ? r._lenh : (r ? [r] : []));
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GOM DÒNG ĐANG CHẠY THEO CODE PHẦN + CHUYỀN (21/10/2026, người dùng: "cùng code phần, cùng máy thì gom số lượng
+// lại thành 1 dòng" — ca thật SL-2609-001-A17-F02-C04: 3 đợt vải release 3 lần ⇒ 3 lệnh, bấm chạy chung 1 lượt từ
+// dòng gom Chờ chạy ⇒ bảng Đang chạy hiện 3 dòng). Chỉ là cách HIỆN — mỗi lệnh vẫn là 1 lệnh + 1 phiếu riêng.
+//   · Khóa = phần in + CHUYỀN THỰC TẾ của phiếu (`chuyen_id`) — cùng code phần chạy 2 máy khác nhau vẫn 2 dòng.
+//   · Chỉ gom lệnh ĐÚNG 1 phần in; lệnh gom set cũ đứng riêng. Dòng trả về luôn có `_lenh`.
+//   · Số gộp: đã in · SL release · số tem · vải hủy · đợt vải = tổng; ngừng = BẤT KỲ phiếu đang ngừng; xác nhận chạy ·
+//     ngày SX KH · hạn giao = sớm nhất; mã lệnh = danh sách. `phieu_id` / `lenh_id` giữ của lệnh đầu (khóa dòng).
+export function gomDangChayTheoCodePhan(rows) {
+  const nhom = new Map();
+  const out = [];
+  for (const r of rows || []) {
+    const motPin = !(r.phan_in_list && r.phan_in_list.length > 1);
+    const pin = r.phan_in_id || r.ma_phan || '';
+    const k = motPin && pin ? `${pin}|${r.chuyen_id || r.ma_chuyen || ''}` : '';
+    const g = k ? nhom.get(k) : null;
+    if (g) { g._lenh.push(r); continue; }
+    const moi = { ...r, _lenh: [r] };
+    if (k) nhom.set(k, moi);
+    out.push(moi);
+  }
+  return out.map((g) => {
+    const ds = g._lenh;
+    if (ds.length === 1) return g;
+    return {
+      ...g,
+      printed: tongCot(ds, 'printed'),
+      target: tongCot(ds, 'target'),
+      so_tem: tongCot(ds, 'so_tem'),
+      sl_vai_huy: tongCot(ds, 'sl_vai_huy'),
+      so_dot_vai: tongCot(ds, 'so_dot_vai') || g.so_dot_vai,
+      dang_ngung: ds.some((r) => r.dang_ngung),
+      ma_lenh_san_xuat: khacNhau(ds, 'ma_lenh_san_xuat').join(', '),
+      nha_gia_cong: khacNhau(ds, 'nha_gia_cong').join(', '),
+      tg_bd: somNhat(ds, 'tg_bd'),
+      ngay_ke_hoach: somNhat(ds, 'ngay_ke_hoach'),
+      han_giao_hang: somNhat(ds, 'han_giao_hang'),
+    };
+  });
+}
 
 // `daChon` = Set id lệnh đã tích. Trả { lenh, conLai, kieu }:
 //   kieu 'TICH' (lenh = lệnh sẽ tích, conLai = số lệnh cùng phần in còn chưa tích sau lệnh này) ·

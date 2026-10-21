@@ -9,10 +9,13 @@ import { Field, Input, Select } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import {
-  listChuyen, createChuyen, updateChuyen, setChuyenActive, listLoaiChuyen, createLoaiChuyen,
+  listChuyen, createChuyen, updateChuyen, setChuyenActive, listLoaiChuyen, createLoaiChuyen, listToChuyen,
 } from '../../../services/chuyenService';
 
-const empty = { maChuyen: '', tenChuyen: '', loaiChuyenId: '', dinhMucGio: '', soPass: '' };
+// `toInId` (mig 117, 21/10/2026) = TỔ cố định của chuyền — dùng cho thống kê theo tổ ở Theo dõi chuyền in.
+const empty = { maChuyen: '', tenChuyen: '', loaiChuyenId: '', dinhMucGio: '', soPass: '', toInId: '' };
+// "TO 1" (tên tổ phòng CSX) ⇒ "Tổ 1" — cùng cách hiện với Theo dõi chuyền in.
+const tenTo = (r) => (r && (r.ten_to || r.ma_to) ? String(r.ten_to || r.ma_to).replace(/^TO\s*/i, 'Tổ ') : '');
 
 export default function ChuyenPage() {
   const { can } = usePermissions();
@@ -29,8 +32,12 @@ export default function ChuyenPage() {
   const [saving, setSaving] = useState(false);
   const [loaiModal, setLoaiModal] = useState(false);
   const [loaiForm, setLoaiForm] = useState({ maLoai: '', tenLoai: '' });
+  const [dsTo, setDsTo] = useState({ co_cot: false, items: [] });
 
-  const loadLoai = useCallback(() => { listLoaiChuyen().then((r) => setLoai(r.data)).catch(() => {}); }, []);
+  const loadLoai = useCallback(() => {
+    listLoaiChuyen().then((r) => setLoai(r.data)).catch(() => {});
+    listToChuyen().then((r) => setDsTo(r.data || { co_cot: false, items: [] })).catch(() => {});
+  }, []);
   const load = useCallback(async () => {
     setLoading(true);
     try { setRows((await listChuyen({ search })).data); }
@@ -44,14 +51,21 @@ export default function ChuyenPage() {
   const openCreate = () => { setEditing(null); setForm(empty); setOpen(true); };
   const openEdit = (r) => {
     setEditing(r);
-    setForm({ maChuyen: r.ma_chuyen, tenChuyen: r.ten_chuyen, loaiChuyenId: r.loai_chuyen_id || '', dinhMucGio: r.dinh_muc_gio ?? '', soPass: r.so_pass ?? '' });
+    setForm({
+      maChuyen: r.ma_chuyen, tenChuyen: r.ten_chuyen, loaiChuyenId: r.loai_chuyen_id || '', dinhMucGio: r.dinh_muc_gio ?? '',
+      soPass: r.so_pass ?? '', toInId: r.to_in_id || '',
+    });
     setOpen(true);
   };
 
   const save = async () => {
     setSaving(true);
     try {
-      const body = { ...form, dinhMucGio: form.dinhMucGio === '' ? null : Number(form.dinhMucGio), soPass: form.soPass === '' ? null : Number(form.soPass) };
+      const body = {
+        ...form, dinhMucGio: form.dinhMucGio === '' ? null : Number(form.dinhMucGio), soPass: form.soPass === '' ? null : Number(form.soPass),
+        // Chưa chạy mig 117 ⇒ không gửi khóa tổ (BE vốn cũng bỏ qua).
+        toInId: dsTo.co_cot ? (form.toInId || null) : undefined,
+      };
       if (editing) { await updateChuyen(editing.id, body); show('Đã cập nhật chuyền'); }
       else { await createChuyen(body); show('Đã thêm chuyền'); }
       setOpen(false); load();
@@ -76,6 +90,7 @@ export default function ChuyenPage() {
     { key: 'ma_chuyen', header: 'Mã chuyền', render: (r) => <Badge tone="info">{r.ma_chuyen}</Badge> },
     { key: 'ten_chuyen', header: 'Tên chuyền', className: 'font-medium text-ink' },
     { key: 'loai_ten', header: 'Loại', render: (r) => r.loai_ten ? <Badge tone="default">{r.loai_ten}</Badge> : '—' },
+    ...(dsTo.co_cot ? [{ key: 'ten_to', header: 'Tổ', render: (r) => tenTo(r) || '—' }] : []),
     { key: 'dinh_muc_gio', header: 'Định mức (cái/giờ)', className: 'text-right tabular-nums', render: (r) => r.dinh_muc_gio ?? '—' },
     { key: 'so_pass', header: 'Số pass', className: 'text-right tabular-nums', render: (r) => r.so_pass ?? '—' },
     { key: 'dang_hoat_dong', header: 'Trạng thái', render: (r) => r.dang_hoat_dong ? <Badge tone="success">Bật</Badge> : <Badge tone="danger">Tắt</Badge> },
@@ -117,6 +132,14 @@ export default function ChuyenPage() {
         <Field label="Tên chuyền" required>
           <Input value={form.tenChuyen} onChange={(e) => setForm({ ...form, tenChuyen: e.target.value })} />
         </Field>
+        {dsTo.co_cot && (
+          <Field label="Tổ" hint="Dùng thống kê theo tổ ở Theo dõi chuyền in">
+            <Select value={form.toInId} onChange={(e) => setForm({ ...form, toInId: e.target.value })}>
+              <option value="">— Không thuộc tổ nào —</option>
+              {dsTo.items.map((t) => <option key={t.id} value={t.id}>{tenTo(t)}</option>)}
+            </Select>
+          </Field>
+        )}
         <div className="grid grid-cols-2 gap-x-4">
           <Field label="Định mức (cái/giờ)" hint="Dùng tính tốc độ/OEE ở màn Theo dõi chuyền">
             <Input type="number" min="0" value={form.dinhMucGio} onChange={(e) => setForm({ ...form, dinhMucGio: e.target.value })} />

@@ -34,13 +34,18 @@ import { LOAI_TABS, hopChipChuyen, nhanChip, demChip, locSiSoTheoChip } from '..
 import RunPanel from '../components/RunPanel';
 import RunNhieuPanel from '../components/RunNhieuPanel';
 import ChoChayModal, { LocLenhPanel } from '../components/ChoChayModal';
-import { locLenhChay, coLoc, LOC_TRONG, timLenhTheoMa, gomTheoCodePhan, lenhCuaDong } from '../utils/locLenhChay';
+import {
+  locLenhChay, coLoc, LOC_TRONG, timLenhTheoMa, gomTheoCodePhan, lenhCuaDong, gomDangChayTheoCodePhan,
+} from '../utils/locLenhChay';
 import useOTimKiem from '../../../hooks/useOTimKiem';
 import TheoDoiChuyenPage from './TheoDoiChuyenPage';
+import TheoDoiTo from '../components/TheoDoiTo';
 import XePhoiPage from './XePhoiPage';
 
 // Trần số lệnh mở chung 1 sidebar (mỗi lệnh 1 lượt `getRun`).
 const TOI_DA_MO_CHUNG = 30;
+// 3 chế độ của modal "Theo dõi chuyền in" (21/10/2026).
+const CHE_DO_THEO_DOI = [['chuyen', 'Chuyền đang chạy'], ['tong', 'Tổng nhà máy'], ['to', 'Theo tổ']];
 
 // ⚠⚠ GỌN LẠI 01/10/2026 (người dùng yêu cầu): trang chỉ còn bảng *Đang chạy*; danh sách *Chờ chạy* chuyển
 //   vào modal mở từ nút "Chờ chạy (N)" (`components/ChoChayModal`, bộ lọc RIÊNG đầy đủ). Ô tìm + panel lọc
@@ -71,6 +76,7 @@ export default function XacNhanChayPage() {
     const m = params.get('mo');
     return m === 'theo-doi-chuyen' || m === 'xe-phoi' ? m : null;
   });
+  const [cheDoTheoDoi, setCheDoTheoDoi] = useState('chuyen');
   const dongTrang = () => {
     setMoTrang(null);
     if (params.get('mo')) setParams((p) => { const n = new URLSearchParams(p); n.delete('mo'); return n; }, { replace: true });
@@ -150,24 +156,42 @@ export default function XacNhanChayPage() {
   const runFiltered = useMemo(() => locLenhChay(running, {
     search, loc: filters, chuyen, loai, ngay: [{ cot: 'ngay_ke_hoach', ...ngayRun }, { cot: 'tg_bd', ...ngayXnRun }],
   }), [running, search, filters, chuyen, ngayRun, ngayXnRun, loai]);
-  // Số trên chip = tập đã qua mọi bộ lọc TRỪ chính chip.
-  const countChip = useMemo(() => demChip(locLenhChay(running, {
+  // Số trên chip = tập đã qua mọi bộ lọc TRỪ chính chip. Đếm theo DÒNG (đã gom code phần + chuyền — 21/10/2026).
+  const countChip = useMemo(() => demChip(gomDangChayTheoCodePhan(locLenhChay(running, {
     search, loc: filters, chuyen, boChip: true, ngay: [{ cot: 'ngay_ke_hoach', ...ngayRun }, { cot: 'tg_bd', ...ngayXnRun }],
-  })), [running, search, filters, chuyen, ngayRun, ngayXnRun]);
+  }))), [running, search, filters, chuyen, ngayRun, ngayXnRun]);
+  const soDongRun = useMemo(() => gomDangChayTheoCodePhan(runFiltered).length, [runFiltered]);
+  const soDongRunTatCa = useMemo(() => gomDangChayTheoCodePhan(running).length, [running]);
 
   // ── QUÉT / TÍCH lệnh đang chạy (08/10/2026) ──
   const chonRunSet = useMemo(() => new Set(chonRun), [chonRun]);
   const runTheoPhieu = useMemo(() => new Map((running || []).map((r) => [r.phieu_id, r])), [running]);
   // Lệnh đã tích còn đang chạy (lệnh vừa chạy hoàn tất / bị hủy tự rơi ra).
   const daChonRun = useMemo(() => chonRun.map((id) => runTheoPhieu.get(id)).filter(Boolean), [chonRun, runTheoPhieu]);
-  // Bảng = [đã tích — mới nhất trên cùng, LUÔN hiện dù bộ lọc loại nó] + [phần còn lại theo bộ lọc].
+  // Bảng = [đã tích — mới nhất trên cùng, LUÔN hiện dù bộ lọc loại nó] + [phần còn lại theo bộ lọc], rồi GOM các
+  //   lệnh cùng code phần + cùng chuyền thành 1 dòng (21/10/2026 — `gomDangChayTheoCodePhan`; dòng gom đứng ở vị trí
+  //   lệnh đầu của nó nên nhóm có lệnh đã tích vẫn lên đầu).
   const bangRun = useMemo(
-    () => [...daChonRun, ...runFiltered.filter((r) => !chonRunSet.has(r.phieu_id))],
+    () => gomDangChayTheoCodePhan([...daChonRun, ...runFiltered.filter((r) => !chonRunSet.has(r.phieu_id))]),
     [daChonRun, runFiltered, chonRunSet]
   );
+  // Ô tích của DÒNG: dòng gom tích/bỏ MỌI lệnh của nó; "đã tích" = mọi lệnh đã tích.
+  const daTichDong = (r) => lenhCuaDong(r).every((l) => chonRunSet.has(l.phieu_id));
   const doiTichRun = (r) => {
-    setChonRun((c) => (c.includes(r.phieu_id) ? c.filter((x) => x !== r.phieu_id) : [r.phieu_id, ...c]));
+    const ids = lenhCuaDong(r).map((l) => l.phieu_id);
+    const boHet = ids.every((id) => chonRunSet.has(id));
+    if (!boHet && chonRunSet.size + ids.filter((id) => !chonRunSet.has(id)).length > TOI_DA_MO_CHUNG) {
+      show(`Tối đa ${TOI_DA_MO_CHUNG} lệnh mỗi lần mở chung`, 'error');
+      return;
+    }
+    setChonRun((c) => (boHet ? c.filter((x) => !ids.includes(x)) : [...ids, ...c.filter((x) => !ids.includes(x))]));
     oTim.datConTro();
+  };
+  // Bấm 1 dòng / nút "Mở": dòng lẻ ⇒ RunPanel; dòng gom ⇒ sidebar chung mọi lệnh của dòng.
+  const moDong = (r) => {
+    const ds = lenhCuaDong(r);
+    if (ds.length > 1) setSelNhieu(ds.map((l) => l.lenh_id));
+    else setSel(r.lenh_id);
   };
   // ENTER ở ô tìm = 1 lần quét: khớp CHÍNH XÁC (mã lệnh · code phần · TDTHĐH → mã HSKT) ⇒ tích mọi lệnh khớp;
   // chỉ khớp GẦN ĐÚNG mà ra > 1 lệnh ⇒ không tích, giữ chữ trong ô để bảng lọc ra cho người dùng tích tay.
@@ -373,13 +397,18 @@ export default function XacNhanChayPage() {
     // Ô tích (selection — DataTable vẽ ở dòng đầu bản ghi, chặn click mở panel): gom lệnh để "Mở (N)" chung.
     { key: 'chon', header: '', selection: true, render: (r) => (
       <input type="checkbox" className="h-4 w-4 cursor-pointer accent-primary" aria-label="Chọn để mở chung"
-        checked={chonRunSet.has(r.phieu_id)} onChange={() => doiTichRun(r)} />
+        checked={daTichDong(r)} onChange={() => doiTichRun(r)} />
     ) },
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => (
       <div>
         <div className="text-ink">{r.ma_hang || '—'}</div>
+        {!r.__sub && lenhCuaDong(r).length > 1 && (
+          <span title={lenhCuaDong(r).map((l) => l.ma_lenh_san_xuat).join(' · ')}>
+            <Badge tone="info">Gom {lenhCuaDong(r).length} lệnh cùng code phần</Badge>
+          </span>
+        )}
         {!r.__sub && <GomBadge soDotVai={r.so_dot_vai} soPhanIn={r.so_phan_in} />}
       </div>
     ) },
@@ -392,12 +421,19 @@ export default function XacNhanChayPage() {
     { key: 'ngay_ke_hoach', header: 'Ngày SX KH', merge: true, render: (r) => fmtDate(r.ngay_ke_hoach) },
     { key: 'tg_bd', header: 'Xác nhận chạy', merge: true,
       render: (r) => (r.tg_bd ? new Date(r.tg_bd).toLocaleString('vi-VN') : '—') },
-    { key: 'printed', header: 'Đã in', className: 'text-right tabular-nums', merge: true, render: (r) => `${fmtNum(r.printed)} / ${fmtNum(r.target)}` },
+    { key: 'printed', header: 'Đã in', className: 'text-right tabular-nums', merge: true, render: (r) => (
+      lenhCuaDong(r).length > 1 ? (
+        <div title={lenhCuaDong(r).map((l) => `${l.ma_lenh_san_xuat}: ${fmtNum(l.printed)} / ${fmtNum(l.target)}`).join(' · ')}>
+          <div className="font-semibold text-ink">{fmtNum(r.printed)} / {fmtNum(r.target)}</div>
+          <div className="text-[11px] text-ink-soft">{lenhCuaDong(r).map((l) => fmtNum(l.target)).join(' + ')}</div>
+        </div>
+      ) : `${fmtNum(r.printed)} / ${fmtNum(r.target)}`
+    ) },
     { key: 'so_tem', header: 'Tem', className: 'text-right', merge: true },
     { key: 'tt', header: 'Trạng thái', merge: true, render: (r) =>
       r.dang_ngung ? <Badge tone="danger">Đang ngừng</Badge> : <Badge tone="success">Đang chạy</Badge> },
     { key: 'actions', header: '', className: 'text-right whitespace-nowrap', merge: true, render: (r) =>
-      <Button chiXemOk variant="secondary" className="px-2.5 py-1 text-xs" onClick={() => setSel(r.lenh_id)}>Mở</Button> },
+      <Button chiXemOk variant="secondary" className="px-2.5 py-1 text-xs" onClick={() => moDong(r)}>Mở</Button> },
   ];
 
   return (
@@ -429,7 +465,7 @@ export default function XacNhanChayPage() {
 
       <div className="mb-2 mt-1 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <h3 className="text-sm font-semibold text-ink">Đang chạy ({runFiltered.length}{runFiltered.length !== running.length ? `/${running.length}` : ''})</h3>
+          <h3 className="text-sm font-semibold text-ink">Đang chạy ({soDongRun}{soDongRun !== soDongRunTatCa ? `/${soDongRunTatCa}` : ''})</h3>
           <DateRangePicker value={ngayXnRun} onChange={setNgayXnRun} placeholder="Ngày xác nhận chạy" />
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -450,8 +486,9 @@ export default function XacNhanChayPage() {
       )}
       <DataTable columns={runCols} rows={bangRun} loading={loading} rowKey="phieu_id" sttStart={0}
         subRows={subRows}
-        rowClassName={(r) => slaRowClass(statusLenh(r.lenh_id)) || (chonRunSet.has(r.phieu_id) ? 'bg-primary/5' : '')}
-        onRowClick={(r) => setSel(r.lenh_id)} emptyText="Không có lệnh đang chạy" />
+        rowClassName={(r) => lenhCuaDong(r).map((l) => slaRowClass(statusLenh(l.lenh_id))).find(Boolean)
+          || (daTichDong(r) ? 'bg-primary/5' : '')}
+        onRowClick={moDong} emptyText="Không có lệnh đang chạy" />
 
       <ChoChayModal open={choChayOpen} onClose={() => setChoChayOpen(false)} rows={candidates} loading={loading}
         chuyen={chuyen} canRun={canRun} statusLenh={statusLenh}
@@ -567,12 +604,30 @@ export default function XacNhanChayPage() {
       </Modal>
 
       {selNhieu && <RunNhieuPanel lenhIds={selNhieu} onClose={() => { setSelNhieu(null); oTim.datConTro(); }}
-        onChanged={() => load(true)} onMoLenh={(id) => { setSelNhieu(null); setSel(id); }} />}
+        onChanged={() => load(true)} onMoLenh={(id) => { setSelNhieu(null); setSel(id); }}
+        truocXacNhan={(ids) => hoiLyDoNghen(rowsNghen.filter((r) => ids.includes(r.lenh_id)))} />}
       {sel && <RunPanel lenhId={sel} onClose={() => { setSel(null); oTim.datConTro(); }} onChanged={load}
         truocXacNhan={() => hoiLyDoNghen(rowsNghen.filter((r) => r.lenh_id === sel))} />}
       {/* Modal TOÀN MÀN HÌNH của 2 trang cũ — chỉ dựng component khi mở (2 trang có vòng tự làm mới 10–15s). */}
-      <Modal open={moTrang === 'theo-doi-chuyen'} onClose={dongTrang} size="full" canhTren={8} title="Theo dõi chuyền in">
-        {moTrang === 'theo-doi-chuyen' && <TheoDoiChuyenPage />}
+      {/* 21/10/2026: thêm "Tổng nhà máy" + "Theo tổ" NGANG HÀNG tiêu đề (người dùng chốt) — màn cũ giữ nguyên ở
+          "Chuyền đang chạy". */}
+      <Modal open={moTrang === 'theo-doi-chuyen'} onClose={dongTrang} size="full" canhTren={8}
+        title={(
+          <span className="flex flex-wrap items-center gap-3">
+            <span>Theo dõi chuyền in</span>
+            <span className="inline-flex rounded-full border border-line bg-surface-muted p-0.5 text-sm font-medium">
+              {CHE_DO_THEO_DOI.map(([v, ten]) => (
+                <button key={v} type="button" onClick={() => setCheDoTheoDoi(v)}
+                  className={`rounded-full px-3 py-1 ${cheDoTheoDoi === v ? 'bg-primary text-white' : 'text-ink-soft hover:text-ink'}`}>
+                  {ten}
+                </button>
+              ))}
+            </span>
+          </span>
+        )}>
+        {moTrang === 'theo-doi-chuyen' && (cheDoTheoDoi === 'chuyen'
+          ? <TheoDoiChuyenPage />
+          : <TheoDoiTo cheDo={cheDoTheoDoi} onCheDo={setCheDoTheoDoi} />)}
       </Modal>
       <Modal open={moTrang === 'xe-phoi'} onClose={dongTrang} size="full" canhTren={8} title="Tình trạng xe phơi">
         {moTrang === 'xe-phoi' && <XePhoiPage />}

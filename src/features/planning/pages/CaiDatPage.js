@@ -51,6 +51,22 @@ const LOAI_CHUYEN = [
 ];
 const toneCa = (ca) => (ca === 'DAI' ? 'warning' : ca === 'HANH_CHINH' ? 'success' : 'info');
 
+// THỪA HƯỞNG TUẦN TRƯỚC (21/10/2026) — GƯƠNG backend `utils/ca.js loaiCaChiTiet` (sửa 1 bên phải sửa bên kia):
+//   tuần chưa cài cho nhóm ⇒ tuần GẦN NHẤT TRƯỚC ĐÓ có cài; chưa từng cài ⇒ mặc định (Ngắn · Khác = Hành chính).
+//   "Có cài cho nhóm": Máy/Bàn/Robot = riêng ⇒ chung · Khác = riêng Khác · '' (chung) = chung.
+// Trả { ca, nguon: 'TUAN' | 'THUA_HUONG' | 'MAC_DINH', nam, tuan }.
+function caHieuLuc(tuanRows, nam, tuan, nhom = '') {
+  const ord = nam * 100 + tuan;
+  const giaTri = (r) => (nhom === NHOM_KHAC ? r.rieng[NHOM_KHAC] : (nhom && r.rieng[nhom]) || r.chung);
+  const ds = tuanRows.filter((r) => giaTri(r) && r.nam * 100 + r.tuan <= ord)
+    .sort((a, b) => (b.nam * 100 + b.tuan) - (a.nam * 100 + a.tuan));
+  if (!ds.length) return { ca: nhom === NHOM_KHAC ? CA_KHAC_MAC_DINH : 'NGAN', nguon: 'MAC_DINH' };
+  const r = ds[0];
+  return { ca: giaTri(r), nguon: r.nam === nam && r.tuan === tuan ? 'TUAN' : 'THUA_HUONG', nam: r.nam, tuan: r.tuan };
+}
+const nhanNguon = (h) => (h.nguon === 'TUAN' ? 'cài tuần này'
+  : h.nguon === 'THUA_HUONG' ? `thừa hưởng tuần ${h.tuan}/${h.nam}` : 'mặc định (chưa từng cài)');
+
 // Gom dòng `cai_dat_ca_tuan` (1 dòng / tuần × loại chuyền) thành 1 dòng / tuần: { chung, rieng: {MAY…} }.
 function gomTheoTuan(rows) {
   const m = new Map();
@@ -111,25 +127,19 @@ export default function CaiDatPage() {
     return simple;
   };
 
-  // Ô của 1 loại chuyền = ca riêng nếu có, không thì ca CHUNG (chữ mờ "theo chung"), không có gì ⇒ Ngắn mặc định.
-  // Nhóm "Chuyền khác" không theo chung: chưa cài riêng ⇒ Hành chính mặc định.
-  const oLoai = (r, lc) => {
-    const khac = lc === NHOM_KHAC;
-    const ca = r.rieng[lc] || (khac ? CA_KHAC_MAC_DINH : r.chung || 'NGAN');
-    const rieng = !!r.rieng[lc];
-    return (
-      <div className="flex flex-col items-start gap-0.5">
-        <Badge tone={rieng ? toneCa(ca) : 'default'}>{CA_LABEL[ca] || ca}</Badge>
-        {!rieng && <span className="text-[11px] text-ink-soft">{!khac && r.chung ? 'theo chung' : 'mặc định'}</span>}
-      </div>
-    );
-  };
+  // Ô của 1 loại chuyền = ca ĐANG ÁP DỤNG của tuần (riêng ⇒ chung ⇒ thừa hưởng tuần trước ⇒ mặc định); dòng chữ mờ
+  // nói nguồn. Nhóm "Chuyền khác" không theo chung.
+  const oHieuLuc = (h, rieng) => (
+    <div className="flex flex-col items-start gap-0.5">
+      <Badge tone={rieng ? toneCa(h.ca) : 'default'}>{CA_LABEL[h.ca] || h.ca}</Badge>
+      {!rieng && <span className="text-[11px] text-ink-soft">{h.nguon === 'TUAN' ? 'theo chung' : nhanNguon(h)}</span>}
+    </div>
+  );
+  const oLoai = (r, lc) => oHieuLuc(caHieuLuc(tuanRows, r.nam, r.tuan, lc), !!r.rieng[lc]);
   const columns = [
     { key: 'tuan', header: 'Tuần', render: (r) => <span className="font-medium text-ink">Tuần {r.tuan}/{r.nam}</span> },
     { key: 'khoang', header: 'Khoảng ngày', render: (r) => weekRange(dateOfWeek(r.nam, r.tuan)) },
-    { key: 'chung', header: 'Chung (mọi chuyền)', render: (r) => (r.chung
-      ? <Badge tone={toneCa(r.chung)}>{CA_LABEL[r.chung] || r.chung}</Badge>
-      : <span className="text-xs text-ink-soft">Ngắn (mặc định)</span>) },
+    { key: 'chung', header: 'Chung (mọi chuyền)', render: (r) => oHieuLuc(caHieuLuc(tuanRows, r.nam, r.tuan, ''), !!r.chung) },
     ...LOAI_CHUYEN.map((l) => ({ key: `lc_${l.v}`, header: l.cot || l.label, render: (r) => oLoai(r, l.v) })),
     { key: 'ghi_chu', header: 'Ghi chú', render: (r) => r.ghi_chu || '—' },
   ];
@@ -155,7 +165,8 @@ export default function CaiDatPage() {
       <div className="mb-4 rounded-control border border-line bg-surface p-3 text-xs">
         <span className="font-semibold text-ink">Ghi chú: </span>
         <span className="text-ink-soft">
-          Tuần chưa cài mặc định đi ca <b>Ngắn</b>. Chuyền Máy / Bàn / Robot cài riêng thì theo cài riêng, không thì theo
+          Tuần chưa cài <b>thừa hưởng tuần gần nhất trước đó đã cài</b> — chỉ vào sửa khi đổi ca; chưa từng cài thì đi ca
+          <b> Ngắn</b>. Chuyền Máy / Bàn / Robot cài riêng thì theo cài riêng, không thì theo
           ca <b>chung</b> của tuần. <b>Chuyền khác</b> (Gia công, Máy tròn, Logo, Ép) mặc định <b>Hành chính</b>, không theo
           ca chung — đổi thì chọn "Khác". Lưu cho <b>tất cả chuyền</b> sẽ đưa các cài riêng Máy / Bàn / Robot của tuần
           đó về cùng loại ca (không đụng "Khác").
@@ -207,6 +218,23 @@ export default function CaiDatPage() {
           </div>
         </div>
       )}
+
+      {/* Ca ĐANG ÁP DỤNG cho tuần đang chọn ở ô ngày (mặc định tuần này) — kể cả khi tuần đó chưa cài (thừa hưởng). */}
+      <div className="mb-5 card p-4">
+        <h3 className="mb-3 text-sm font-semibold text-ink">Đang áp dụng · tuần {wk.tuan}/{wk.nam} · {weekRange(new Date(ngay))}</h3>
+        <div className="grid gap-3 sm:grid-cols-4">
+          {LOAI_CHUYEN.map((l) => {
+            const h = caHieuLuc(tuanRows, wk.nam, wk.tuan, l.v);
+            return (
+              <div key={l.v} className="rounded-control border border-line p-3">
+                <div className="mb-1 text-xs font-semibold text-ink-soft">{l.cot || l.label}</div>
+                <Badge tone={toneCa(h.ca)}>{CA_LABEL[h.ca] || h.ca}</Badge>
+                <div className={`mt-1 text-[11px] ${h.nguon === 'MAC_DINH' ? 'text-warning' : 'text-ink-soft'}`}>{nhanNguon(h)}</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-soft">Các tuần đã cài</div>
       <DataTable columns={columns} rows={tuanRows} loading={loading} rowKey="id"

@@ -7,6 +7,8 @@ const VARIANTS = {
   secondary: 'bg-primary-wash text-primary hover:bg-blue-100',
   ghost: 'bg-transparent text-ink-soft hover:bg-surface-muted',
   danger: 'bg-danger text-white hover:opacity-90',
+  // Xanh lá — hành động "hoàn tất" (Chạy hoàn tất, 21/10/2026 người dùng yêu cầu).
+  success: 'bg-success text-white hover:opacity-90',
 };
 
 export default function Button({

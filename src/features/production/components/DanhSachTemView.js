@@ -7,7 +7,8 @@ import SidePanel from '../../../components/common/SidePanel';
 import Pagination from '../../../components/common/Pagination';
 import Spinner from '../../../components/common/Spinner';
 import Toast from '../../../components/common/Toast';
-import { Input } from '../../../components/common/controls';
+import { Input, Select } from '../../../components/common/controls';
+import { listChuyen, getVaiTem, suaVaiTem } from '../../../services/productionService';
 import FieldFilters, { FilterToggle } from '../../../components/common/FieldFilters';
 import DateRangePicker from '../../../components/common/DateRangePicker';
 import useToast from '../../../hooks/useToast';
@@ -15,6 +16,7 @@ import useHuyLichSu from '../../../hooks/useHuyLichSu';
 import { fmtNum, fmtDateTime, temCode } from '../../../utils/format';
 import exportCheckpointExcel, { cotTemChung, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
 import taiHetTrang, { LIMIT_TAI_LON } from '../../../utils/taiHetTrang';
+import HuyLyDoModal from '../../../components/common/HuyLyDoModal';
 import TemInPreview from './TemInPreview';
 import { toTemSanXuat, toTemGiaCongVe } from '../utils/printTemLabel';
 
@@ -50,6 +52,10 @@ const FIELD_MA_NGAY_CA = { key: 'maNgayCa', label: 'Mã ngày ca' };
 // "Tem đã in" của RunPanel). `da_kiem` + `mo_lai_duoc` do backend `listTemDaIn` tính.
 const TEM_CHUA_KIEM = ['IN', 'DANG_PHOI', 'DA_KHO'];
 const temHuyDuoc = (r) => TEM_CHUA_KIEM.includes(r.trang_thai) && !r.da_kiem;
+// HỦY NHIỀU TEM (21/10/2026, người dùng yêu cầu): tối đa mỗi lượt — mỗi tem 1 lần gọi route hủy (transaction riêng +
+//   báo ERP riêng), chạy tuần tự.
+const TOI_DA_HUY = 100;
+const MA_HIEN_TOI_DA = 12; // số mã tem liệt kê trong hộp xác nhận, dư thì "… và N tem khác"
 
 // Trạng thái tem: IN → DANG_PHOI → DA_KHO → CHO_SUA/CHO_OQC/LOAI → OQC_DAT → DA_GIAO; HUY.
 const TT = {
@@ -153,6 +159,12 @@ export default function DanhSachTemView({
   const [loading, setLoading] = useState(true);
   const [tem, setTem] = useState(null);         // hàng đang mở SidePanel
   const [dangXuat, setDangXuat] = useState(false);
+  // Ô CHỌN CHUYỀN (21/10/2026) — lọc đúng chuyền chạy phiếu (`chuyenId`, khớp chính xác). Chỉ trang Sản xuất.
+  const [dsChuyen, setDsChuyen] = useState([]);
+  useEffect(() => {
+    if (laGiaCong) return;
+    listChuyen().then((r) => setDsChuyen((r.data || []).filter((c) => c.ma_loai_chuyen !== 'GIA_CONG'))).catch(() => setDsChuyen([]));
+  }, [laGiaCong]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -195,6 +207,54 @@ export default function DanhSachTemView({
   });
   const coNutHuy = !laGiaCong && !!huyTem && coQuyenHuy;
 
+  // ─── HỦY NHIỀU TEM (21/10/2026) ─────────────────────────────────────────────
+  // Ô tích chỉ ở tem còn hủy được (`temHuyDuoc`). Danh sách tích GIỮ khi sang trang khác (Map id → dòng), bỏ khi bấm
+  //   "Bỏ chọn" hoặc hủy xong. Hủy = gọi `huyTem` (cùng route nút Hủy từng dòng) TUẦN TỰ từng tem với CÙNG 1 lý do ⇒
+  //   mọi guard + báo ERP theo IDMES giữ nguyên từng tem; tem lỗi (vd vừa bị kiểm ở máy khác ⇒ 409) không chặn tem
+  //   sau, vẫn được tích lại để xem.
+  const [chon, setChon] = useState(() => new Map());
+  const [hopHuyNhieu, setHopHuyNhieu] = useState(null); // { ds: [dòng] } khi hộp lý do đang mở
+  const [dangHuyNhieu, setDangHuyNhieu] = useState(null); // { xong, tong } trong lúc chạy
+  const chonDuocTrang = coNutHuy ? rows.filter(temHuyDuoc) : [];
+  const tatCaTrang = chonDuocTrang.length > 0 && chonDuocTrang.every((r) => chon.has(r.id));
+  const doiChon = (r) => setChon((m) => {
+    const n = new Map(m);
+    if (n.has(r.id)) n.delete(r.id);
+    else if (n.size < TOI_DA_HUY) n.set(r.id, r);
+    return n;
+  });
+  const chonCaTrang = () => setChon((m) => {
+    const n = new Map(m);
+    if (tatCaTrang) chonDuocTrang.forEach((r) => n.delete(r.id));
+    else chonDuocTrang.forEach((r) => { if (n.size < TOI_DA_HUY) n.set(r.id, r); });
+    return n;
+  });
+  const dsChon = [...chon.values()];
+
+  const huyNhieu = async ({ ds }, lyDo) => {
+    const loi = [];
+    setDangHuyNhieu({ xong: 0, tong: ds.length });
+    for (let i = 0; i < ds.length; i += 1) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        await huyTem(ds[i].id, lyDo);
+      } catch (e) {
+        loi.push({ r: ds[i], loi: e.message || 'lỗi' });
+      }
+      setDangHuyNhieu({ xong: i + 1, tong: ds.length });
+    }
+    setDangHuyNhieu(null);
+    setHopHuyNhieu(null);
+    const ok = ds.length - loi.length;
+    setChon(new Map(loi.map((x) => [x.r.id, x.r])));
+    if (!loi.length) show(`Đã hủy ${ok} tem`);
+    else {
+      show(`Đã hủy ${ok}/${ds.length} tem — ${loi.length} tem chưa hủy được (vẫn đang tích): `
+        + `${loi.slice(0, 3).map((x) => `${x.r.ma_tem}: ${x.loi}`).join(' · ')}${loi.length > 3 ? ' …' : ''}`, 'error');
+    }
+    load();
+  };
+
   // Đổi ô lọc / ô tìm → về trang 1 (đang ở trang 5 mà lọc còn 2 trang thì bảng ra rỗng).
   const setField = (k, v) => { setFilters((s) => ({ ...s, [k]: v })); setPage(1); };
   const setNgay = ({ from, to }) => {
@@ -205,8 +265,8 @@ export default function DanhSachTemView({
     setFilters((s) => ({ ...s, ngayCaTu: from || '', ngayCaDen: to || '' })); setPage(1);
   };
   const clearFilters = () => { setFilters({}); setPage(1); };
-  // Bỏ `ngayDen` / `ngayCaDen` khi đếm: khoảng ngày là MỘT bộ lọc, không phải hai.
-  const filterCount = Object.entries(filters).filter(([k, v]) => v && k !== 'ngayDen' && k !== 'ngayCaDen').length;
+  // Bỏ `ngayDen` / `ngayCaDen` khi đếm: khoảng ngày là MỘT bộ lọc, không phải hai. Ô chọn chuyền nằm ngoài panel.
+  const filterCount = Object.entries(filters).filter(([k, v]) => v && !['ngayDen', 'ngayCaDen', 'chuyenId'].includes(k)).length;
 
   const fields = laGiaCong ? FIELDS_CHUNG : [...FIELDS_CHUNG, FIELD_CHUYEN, FIELD_MA_NGAY_CA];
   const textFilters = Object.fromEntries(fields.map((f) => [f.key, filters[f.key] || '']));
@@ -235,6 +295,10 @@ export default function DanhSachTemView({
               value: (r) => [r.gio_sx_bd, r.gio_sx_kt].filter(Boolean).join(' → ') },
           ]),
           { header: 'SL in', width: 12, num: true, value: (r) => (r.so_luong == null ? null : Number(r.so_luong)) },
+          ...(laGiaCong ? [] : [
+            { header: 'Vải hủy', width: 10, num: true, value: (r) => Number(r.sl_vai_huy_tem) || null },
+            { header: 'Vải thiếu', width: 10, num: true, value: (r) => Number(r.sl_vai_thieu_tem) || null },
+          ]),
         ],
         rows: items,
         title,
@@ -254,9 +318,28 @@ export default function DanhSachTemView({
   };
 
   const cols = [
+    // Ô chọn để hủy nhiều tem (21/10/2026) — chỉ tem còn hủy được mới tích được; ô đầu bảng = cả trang.
+    ...(coNutHuy ? [{ key: '_chon', className: 'w-10', selection: true,
+      header: <input type="checkbox" checked={tatCaTrang} disabled={!chonDuocTrang.length}
+        onChange={chonCaTrang} aria-label="Chọn mọi tem hủy được của trang" />,
+      render: (r) => {
+        if (!temHuyDuoc(r)) return null;
+        const tick = chon.has(r.id);
+        const khoa = !tick && chon.size >= TOI_DA_HUY;
+        return (
+          <input type="checkbox" checked={tick} disabled={khoa}
+            title={khoa ? `Mỗi lần hủy tối đa ${TOI_DA_HUY} tem` : undefined}
+            onClick={(e) => e.stopPropagation()} onChange={() => doiChon(r)} aria-label="Chọn tem để hủy" />
+        );
+      } }] : []),
     { key: 'ma_tem', header: 'Mã tem', render: (r) => <span className="font-medium text-ink">{chu(maHienThi(r, laGiaCong))}</span> },
     { key: 'trang_thai', header: 'Trạng thái', render: (r) => ttBadge(r.trang_thai) },
     { key: 'so_luong', header: 'SL in', className: 'text-right tabular-nums', headerClassName: 'text-right', render: (r) => fmtNum(r.so_luong) },
+    // Vải hủy / thiếu CỦA TEM (21/10/2026 — hủy/thiếu theo tem). Không có ⇒ để trống.
+    ...(laGiaCong ? [] : [{ key: 'sl_vai_huy_tem', header: 'Hủy / Thiếu', className: 'text-right tabular-nums whitespace-nowrap', headerClassName: 'text-right',
+      render: (r) => (Number(r.sl_vai_huy_tem) || Number(r.sl_vai_thieu_tem)
+        ? <span><span className="text-danger">{fmtNum(r.sl_vai_huy_tem)}</span> / <span className="text-warning">{fmtNum(r.sl_vai_thieu_tem)}</span></span>
+        : <span className="text-ink-soft">—</span>) }]),
     { key: 'created_date', header: laGiaCong ? 'Giờ nhận về' : 'Giờ in tem', render: (r) => <span className="whitespace-nowrap text-ink-soft">{fmtDateTime(r.created_date)}</span> },
     ...(laGiaCong
       // Tem 13 do `confirmGiaCongToOqc` tạo lúc Kế hoạch nhận hàng về ⇒ KHÔNG có ngày ca / giờ SX
@@ -305,6 +388,14 @@ export default function DanhSachTemView({
           <DateRangePicker value={{ from: filters.ngayCaTu || '', to: filters.ngayCaDen || '' }}
             onChange={setNgayCa} placeholder="Ngày ca" />
         )}
+        {!laGiaCong && (
+          <div className="w-44">
+            <Select value={filters.chuyenId || ''} onChange={(e) => setField('chuyenId', e.target.value)} aria-label="Lọc theo chuyền">
+              <option value="">Tất cả chuyền</option>
+              {dsChuyen.map((c) => <option key={c.id} value={c.id}>{c.ma_chuyen}{c.ten_chuyen && c.ten_chuyen !== c.ma_chuyen ? ` · ${c.ten_chuyen}` : ''}</option>)}
+            </Select>
+          </div>
+        )}
         <FilterToggle open={showFilter} count={filterCount} onClick={() => setShowFilter((v) => !v)} />
         <Button chiXemOk variant="secondary" icon="download" onClick={doExcel}
           loading={dangXuat} disabled={!meta.total}>Excel ({fmtNum(meta.total)})</Button>
@@ -313,6 +404,18 @@ export default function DanhSachTemView({
 
       <FieldFilters fields={fields} values={textFilters} onField={setField}
         onClear={clearFilters} open={showFilter} />
+
+      {coNutHuy && chon.size > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-control border border-rose-200 bg-rose-50 px-3 py-2 text-sm">
+          <span className="font-medium text-rose-800">
+            Đã chọn {fmtNum(chon.size)} tem · {fmtNum(dsChon.reduce((s, r) => s + (Number(r.so_luong) || 0), 0))} pcs
+          </span>
+          <Button variant="ghost" className="px-2.5 py-1 text-xs" onClick={() => setChon(new Map())}>Bỏ chọn</Button>
+          <Button variant="danger" className="ml-auto px-3 py-1.5" onClick={() => setHopHuyNhieu({ ds: dsChon })}>
+            Hủy {fmtNum(chon.size)} tem
+          </Button>
+        </div>
+      )}
 
       <DataTable
         columns={cols}
@@ -325,9 +428,30 @@ export default function DanhSachTemView({
       />
       <Pagination page={meta.page} totalPages={meta.totalPages} total={meta.total} onPage={setPage} />
 
-      <TemPanel tem={tem} onClose={() => setTem(null)} laGiaCong={laGiaCong} layNhan={layNhan} />
+      <TemPanel tem={tem} onClose={() => setTem(null)} laGiaCong={laGiaCong} layNhan={layNhan}
+        coSuaVai={coNutHuy} show={show}
+        onDaLuuVai={(kq) => {
+          setTem((t) => (t ? { ...t, sl_vai_huy_tem: kq.huy, sl_vai_thieu_tem: kq.thieu } : t));
+          load();
+        }} />
       {huy.modal}
       {moLai.modal}
+      <HuyLyDoModal muc={hopHuyNhieu} onClose={() => { if (!dangHuyNhieu) setHopHuyNhieu(null); }} onXacNhan={huyNhieu}
+        tieuDe={`Hủy ${hopHuyNhieu ? hopHuyNhieu.ds.length : 0} tem đã in`} nhanNut="Hủy các tem đã chọn"
+        moTa={({ ds }) => (
+          <>
+            <div className="font-medium">{ds.length} tem · {fmtNum(ds.reduce((s, r) => s + (Number(r.so_luong) || 0), 0))} pcs</div>
+            <div className="mt-1 break-all font-mono text-xs text-ink-soft">
+              {ds.slice(0, MA_HIEN_TOI_DA).map((r) => r.ma_tem).join(', ')}
+              {ds.length > MA_HIEN_TOI_DA ? ` … và ${ds.length - MA_HIEN_TOI_DA} tem khác` : ''}
+            </div>
+          </>
+        )}
+        hauQua={dangHuyNhieu
+          ? `Đang hủy ${dangHuyNhieu.xong}/${dangHuyNhieu.tong} tem — đừng đóng trang.`
+          : 'Cùng 1 lý do cho mọi tem. Mỗi tem bị hủy và gỡ khỏi xe phơi; số lượng trả lại cho lệnh để in lại.'}
+        ghiChuErp="Hủy xong hệ thống tự báo ERP hủy phiếu in tem của từng tem." />
+
       <Toast toast={toast} />
     </div>
   );
@@ -340,7 +464,7 @@ export default function DanhSachTemView({
 // ⚠⚠ Route đó gác `PROD_RUN`/`PROD_MONITOR` ⇒ trang GIA CÔNG (quyền RELEASE1/RELEASE2) gọi vào sẽ
 //    403 ⇒ chỉ trang Sản xuất truyền `layNhan`. Ngoài ra tem 13 vốn được in từ dữ liệu LỆNH
 //    (`printGiaCongVeTem`), không phải từ bản ghi tem, nên khối này cũng không đúng nguồn cho nó.
-function TemPanel({ tem, onClose, laGiaCong, layNhan }) {
+function TemPanel({ tem, onClose, laGiaCong, layNhan, coSuaVai = false, show, onDaLuuVai }) {
   const [nhan, setNhan] = useState(null);
   const [dangTai, setDangTai] = useState(false);
   const temId = tem?.id;
@@ -429,6 +553,13 @@ function TemPanel({ tem, onClose, laGiaCong, layNhan }) {
               <O nhan="Mã lô">{chu(t.ma_lo)}</O>
               <O nhan="Giờ sản xuất">{t.gio_sx_bd || t.gio_sx_kt ? `${chu(t.gio_sx_bd)} → ${chu(t.gio_sx_kt)}` : '—'}</O>
               <O nhan="GC màu vải">{chu(t.gc_mau_vai)}</O>
+              {/* Vải hủy / thiếu ĐI KÈM TEM (21/10/2026) — số đã gửi ERP cùng tem. Trang Sản xuất có khối nhập riêng bên dưới. */}
+              {!layNhan && (
+                <>
+                  <O nhan="Vải hủy (kèm tem)"><span className={Number(t.sl_vai_huy_tem) ? 'text-danger' : ''}>{fmtNum(t.sl_vai_huy_tem)}</span></O>
+                  <O nhan="Vải thiếu (kèm tem)"><span className={Number(t.sl_vai_thieu_tem) ? 'text-warning' : ''}>{fmtNum(t.sl_vai_thieu_tem)}</span></O>
+                </>
+              )}
               <div>
                 <div className="text-xs text-ink-soft">BTP</div>
                 <div className="mt-1 flex flex-wrap gap-1">
@@ -439,6 +570,10 @@ function TemPanel({ tem, onClose, laGiaCong, layNhan }) {
               </div>
             </div>
           </div>
+        )}
+
+        {!laGiaCong && layNhan && (
+          <KhoiVaiTem key={t.id} tem={t} choSua={coSuaVai && t.trang_thai !== 'HUY'} show={show} onDaLuu={onDaLuuVai} />
         )}
 
         <div>
@@ -475,5 +610,125 @@ function TemPanel({ tem, onClose, laGiaCong, layNhan }) {
         )}
       </div>
     </SidePanel>
+  );
+}
+
+// ─── KHỐI VẢI HỦY / THIẾU CỦA TEM (21/10/2026) ──────────────────────────────────────────────────
+// Hủy / thiếu vẫn là số của ĐỢT VẢI của phần in; tem chỉ là TEM ĐẠI DIỆN mang số đó sang ERP (thường là tem
+//   cuối — in xong mới biết thiếu / hủy bao nhiêu). Nhập ở đây = ĐẶT số của tem này (backend ghi phần chênh vào sổ
+//   đợt, gắn tem) rồi tự gửi lại phiếu in tem sang ERP cùng IDMES. Tem in trước mig 118 (`nguon: 'ERP'`): số đang
+//   hiện là số đã gửi ERP lúc in — lưu thì backend chuyển số đó sang sổ của tem (tổng của đợt vẫn đúng).
+function KhoiVaiTem({ tem, choSua, show, onDaLuu }) {
+  const [du, setDu] = useState(null);       // dữ liệu từ `GET /production/tem/:id/vai`
+  const [loi, setLoi] = useState('');
+  const [huy, setHuy] = useState('');
+  const [thieu, setThieu] = useState('');
+  const [dot, setDot] = useState('');
+  const [lyDo, setLyDo] = useState('');
+  const [dangLuu, setDangLuu] = useState(false);
+  const temId = tem.id;
+
+  const nap = useCallback(async () => {
+    try {
+      const res = await getVaiTem(temId);
+      const d = res.data;
+      setDu(d); setLoi('');
+      setHuy(String(d.huy ?? 0)); setThieu(String(d.thieu ?? 0));
+      setDot(d.dot_vai_ve_id || ''); setLyDo('');
+    } catch (e) { setDu(null); setLoi(e.message || 'Không tải được số vải hủy / thiếu'); }
+  }, [temId]);
+
+  useEffect(() => { nap(); }, [nap]);
+
+  const soHopLe = (v) => v !== '' && /^\d+$/.test(String(v).trim());
+  const doi = !!du && (Number(huy) !== Number(du.huy) || Number(thieu) !== Number(du.thieu));
+  const daCoSo = !!du && (Number(du.huy) > 0 || Number(du.thieu) > 0);
+  const nhieuDot = !!du && (du.dot_vai || []).length > 1;
+  const thieuLyDo = daCoSo && doi && !lyDo.trim();
+  const sai = !soHopLe(huy) || !soHopLe(thieu);
+
+  const luu = async () => {
+    if (sai) { show('Vải hủy / vải thiếu phải là số nguyên ≥ 0', 'error'); return; }
+    if (thieuLyDo) { show('Tem đã có số vải hủy / thiếu — nhập lý do sửa', 'error'); return; }
+    setDangLuu(true);
+    try {
+      const res = await suaVaiTem(temId, {
+        huy: Number(huy), thieu: Number(thieu), dotVaiId: dot || null, lyDo: lyDo.trim() || null,
+      });
+      const kq = res.data;
+      show(kq.gui_erp
+        ? `Đã lưu hủy ${fmtNum(kq.huy)} · thiếu ${fmtNum(kq.thieu)} cho tem ${tem.ma_tem} — đang gửi lại ERP`
+        : `Đã lưu hủy ${fmtNum(kq.huy)} · thiếu ${fmtNum(kq.thieu)} cho tem ${tem.ma_tem}`);
+      if (onDaLuu) onDaLuu(kq);
+      await nap();
+    } catch (e) { show(e.message || 'Lưu vải hủy / thiếu thất bại', 'error'); }
+    finally { setDangLuu(false); }
+  };
+
+  return (
+    <div>
+      <h4 className="mb-2 text-sm font-semibold text-ink">Vải hủy / thiếu (theo đợt vải · tem đại diện)</h4>
+      <div className="rounded-control border border-line p-3">
+        {loi ? (
+          <div className="text-sm text-danger">{loi}</div>
+        ) : !du ? (
+          <div className="flex items-center gap-2 py-2 text-sm text-ink-soft"><Spinner size={18} /><span>Đang tải...</span></div>
+        ) : !du.co_cot ? (
+          <div className="grid grid-cols-2 gap-3">
+            <O nhan="Vải hủy (kèm tem)">{fmtNum(tem.sl_vai_huy_tem)}</O>
+            <O nhan="Vải thiếu (kèm tem)">{fmtNum(tem.sl_vai_thieu_tem)}</O>
+            <div className="col-span-2 text-xs text-ink-soft">Chưa chạy migration 118 — chưa nhập được số theo tem.</div>
+          </div>
+        ) : !choSua ? (
+          <div className="grid grid-cols-2 gap-3">
+            <O nhan="Vải hủy"><span className={Number(du.huy) ? 'text-danger' : ''}>{fmtNum(du.huy)}</span></O>
+            <O nhan="Vải thiếu"><span className={Number(du.thieu) ? 'text-warning' : ''}>{fmtNum(du.thieu)}</span></O>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block">
+                <span className="text-xs text-ink-soft">Vải hủy (pcs)</span>
+                <Input type="number" min="0" inputMode="numeric" value={huy} onChange={(e) => setHuy(e.target.value)} />
+              </label>
+              <label className="block">
+                <span className="text-xs text-ink-soft">Vải thiếu (pcs)</span>
+                <Input type="number" min="0" inputMode="numeric" value={thieu} onChange={(e) => setThieu(e.target.value)} />
+              </label>
+            </div>
+            {nhieuDot && (
+              <label className="block">
+                <span className="text-xs text-ink-soft">Đợt vải của phần in</span>
+                <Select value={dot} onChange={(e) => setDot(e.target.value)}>
+                  <option value="">— Chọn đợt vải —</option>
+                  {du.dot_vai.map((d) => (
+                    <option key={d.dot_vai_ve_id} value={d.dot_vai_ve_id}>
+                      {[d.ma_phan, d.ma_dot_vai, d.mau_vai].filter(Boolean).join(' · ')}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+            )}
+            {daCoSo && doi && (
+              <label className="block">
+                <span className="text-xs text-ink-soft">Lý do sửa <span className="text-danger">*</span></span>
+                <Input value={lyDo} maxLength={200} placeholder="Vì sao sửa số (vd: nhập nhầm, kiểm lại vải)..."
+                  onChange={(e) => setLyDo(e.target.value)} />
+              </label>
+            )}
+            <div className="text-xs text-ink-soft">
+              {du.nguon === 'ERP'
+                ? 'Số đang hiện là số đã gửi ERP lúc in tem. Lưu sẽ chuyển số này sang tem (tổng của đợt vải vẫn đúng).'
+                : 'Số thuộc đợt vải của phần in; tem này là tem đại diện mang số sang ERP. Lưu xong tự gửi lại phiếu in tem sang ERP.'}
+            </div>
+            <div className="flex justify-end">
+              <Button onClick={luu} loading={dangLuu} disabled={!doi || sai || thieuLyDo || (nhieuDot && !dot)}>
+                Lưu hủy / thiếu
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

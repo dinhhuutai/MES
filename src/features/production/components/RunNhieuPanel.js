@@ -10,7 +10,7 @@ import { Textarea } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import {
-  getRun, printTemBatch, getTemLabel, savePhanCong, listToIn, listLyDoNgung, stopLine, resumeLine, addVaiHuy,
+  getRun, printTemBatch, getTemLabel, savePhanCong, listToIn, listLyDoNgung, stopLine, resumeLine, addVaiHuy, finishRun,
 } from '../../../services/productionService';
 import { listUserOptions } from '../../../services/userService';
 import printTemLabel, { printTemLabelNhieu, moSanCuaSoIn, dongCuaSoIn } from '../utils/printTemLabel';
@@ -26,7 +26,9 @@ import { TemMetaFields, PhanCongInline, META_MAC_DINH, metaGuiDi, gioHienTai, th
 //     (`printTemLabelNhieu` = bố cục SX). Lệnh gom set cũ (nhiều phần in / 1 lệnh) tách 1 dòng / đợt vải.
 //     Phiếu lỗi không chặn phiếu khác: tem đã tạo vẫn in, dòng lỗi giữ số để sửa.
 //     19/10/2026: thêm cột SL HỦY / SL THIẾU mỗi dòng (= 2 ô Vải hủy / Vải thiếu của RunPanel) — đi kèm
-//     `printTemBatch` (BE ghi sổ vải + báo ERP cùng đúng tem của dòng); lệnh chỉ nhập hủy/thiếu ⇒ `addVaiHuy`.
+//     `printTemBatch` (BE ghi sổ vải + báo ERP cùng đúng tem của dòng); lệnh chỉ nhập hủy/thiếu ⇒ `addVaiHuy`
+//     (21/10/2026: = LƯU SỐ CHỜ gắn vào tem in kế tiếp của lệnh). Số nhập ở bảng được ƯU TIÊN hơn số chờ của lệnh.
+//   · CHẠY HOÀN TẤT (21/10/2026): nút xanh lá ở chân sidebar ⇒ hộp chọn lệnh đã in ≥ 90% ⇒ `finishRun` từng phiếu.
 //   · PHÂN CÔNG: lưu 1 lần ⇒ `savePhanCong` mọi phiếu.
 //   · NGỪNG CHUYỀN: ghi 1 lần ⇒ `stopLine` mọi phiếu chưa ngừng; "Hoạt động lại" ⇒ `resumeLine` mọi phiếu đang ngừng.
 //   · Việc riêng từng lệnh (vải hủy/thiếu, bổ sung, tem đã in, đổi chuyền, trả về KT, chạy hoàn tất) ⇒ nút "Mở".
@@ -44,6 +46,9 @@ const conDuocIn = (run) => {
   return target > 0 ? Math.max(0, Math.floor(target * 1.1) - (Number(run.printed) || 0)) : null;
 };
 const tenLenh = (run) => run?.lenh?.phan_list || run?.lenh?.ma_lenh_san_xuat || '';
+// "Chạy hoàn tất" mở khi đã in ≥ 90% SL release (gương `RunPanel minFinish`); lệnh không có SL release ⇒ luôn mở.
+const toiThieuHoanTat = (run) => { const t = Number(run?.lenh?.so_luong_release) || 0; return t ? Math.ceil(t * 0.9) : 0; };
+const duHoanTat = (run) => (Number(run?.printed) || 0) >= toiThieuHoanTat(run);
 const khoaPc = (pc) => [pc?.ca_truong_id || '', pc?.chuyen_truong || '', pc?.tho_in || '', pc?.to_in_id || ''].join('|');
 
 // Dòng in tem: lệnh thường ⇒ 1 dòng (không gửi đợt vải, như ô "Số lượng in" của RunPanel); lệnh gom set cũ ⇒
@@ -66,6 +71,13 @@ function dongInTem(runs) {
 // 19/10/2026: thêm cột SL HỦY + SL THIẾU (= 2 ô "Vải hủy / Vải thiếu" của RunPanel) ngay sau Số lượng — ghi sổ vải
 //   theo đợt của dòng (lệnh thường ⇒ đợt đầu của lệnh); dòng có in tem thì số này đi ERP cùng ĐÚNG tem đó.
 const soNguyen = (v) => Math.max(0, Math.trunc(Number(v) || 0));
+// Dòng nhỏ "Chờ: 5" dưới ô SL hủy / thiếu — số đang chờ gắn tem của lệnh (mức module, luật §9).
+const ChoVai = ({ v, k }) => (v && v[k] > 0 ? (
+  <div className="mt-0.5 text-[11px] text-amber-700"
+    title="Số đã lưu ở ô Vải hủy / thiếu của lệnh — nhập số ở bảng này sẽ thay số chờ">
+    Chờ: {fmtNum(v[k])}
+  </div>
+) : null);
 function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn }) {
   const [sl, setSl] = useState({}); // key dòng → { sl, huy, thieu } (chuỗi)
   useEffect(() => { if (open) setSl({}); }, [open]);
@@ -80,6 +92,9 @@ function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn 
     const con = conDuocIn(d.run);
     return (con != null && tongLenh(d.run.lenh.id) > con) || (d.capDot > 0 && so(d.key) > d.capDot);
   };
+  // Số vải hủy / thiếu CHỜ gắn tem của lệnh (lưu ở sidebar 1 lệnh — 21/10/2026): hiện ở DÒNG ĐẦU của lệnh. Lệnh nào
+  //   nhập hủy/thiếu ở bảng này ⇒ BE ưu tiên số ở bảng, bỏ số chờ; không nhập ⇒ số chờ gắn vào tem đầu của lệnh.
+  const choCuaDong = (d) => (dong.find((x) => x.run === d.run) === d ? d.run.vai_cho_tem : null);
   const coSo = dong.filter((d) => so(d.key) > 0);
   const coNhap = dong.filter((d) => so(d.key) > 0 || coVai(d.key));
   const coVuot = coSo.some(vuot);
@@ -134,10 +149,12 @@ function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn 
                   <td className={`${TD} text-right`}>
                     <input type="number" min="0" value={(sl[d.key] || {}).huy || ''} placeholder="0" aria-label="SL hủy"
                       onChange={(e) => datO(d.key, 'huy', e.target.value)} className={numCls} />
+                    {choCuaDong(d) && <ChoVai v={choCuaDong(d)} k="huy" />}
                   </td>
                   <td className={`${TD} text-right`}>
                     <input type="number" min="0" value={(sl[d.key] || {}).thieu || ''} placeholder="0" aria-label="SL thiếu"
                       onChange={(e) => datO(d.key, 'thieu', e.target.value)} className={numCls} />
+                    {choCuaDong(d) && <ChoVai v={choCuaDong(d)} k="thieu" />}
                   </td>
                 </tr>
               );
@@ -149,7 +166,64 @@ function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn 
   );
 }
 
-export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh }) {
+// HỘP "CHẠY HOÀN TẤT" NHIỀU LỆNH (21/10/2026, người dùng yêu cầu) — tích sẵn lệnh đã in ≥ 90%; lệnh chưa đủ thì khóa
+//   (nêu còn thiếu bao nhiêu). Mức module (luật §9).
+function HoanTatNhieuModal({ open, onClose, runs, busy, onXacNhan }) {
+  const [chon, setChon] = useState(() => new Set());
+  // ⚠ `runs` là mảng tạo mới mỗi lần panel vẽ lại ⇒ deps theo KHÓA CHUỖI, không theo mảng (vòng lặp vô hạn — §9).
+  const khoaDu = runs.filter(duHoanTat).map((r) => r.lenh.id).join(',');
+  useEffect(() => { if (open) setChon(new Set(khoaDu ? khoaDu.split(',') : [])); }, [open, khoaDu]);
+  const ds = runs.filter((r) => chon.has(r.lenh.id));
+  return (
+    <Modal open={open} onClose={onClose} size="lg" title="Chạy hoàn tất nhiều lệnh"
+      footer={<>
+        <Button chiXemOk variant="ghost" onClick={onClose}>Đóng</Button>
+        <Button variant="success" icon="check" loading={busy} disabled={busy || !ds.length} onClick={() => onXacNhan(ds)}>
+          Chạy hoàn tất ({fmtNum(ds.length)} lệnh)
+        </Button>
+      </>}>
+      <div className="overflow-auto rounded-card border border-line">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="border-b border-line bg-surface-muted">
+              <th className={TH} />
+              <th className={TH}>Code phần · Lệnh</th>
+              <th className={`${TH} text-right`}>Đã in / SL release</th>
+              <th className={TH}>Tình trạng</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line">
+            {runs.map((r) => {
+              const du = duHoanTat(r);
+              const thieu = toiThieuHoanTat(r) - (Number(r.printed) || 0);
+              return (
+                <tr key={r.lenh.id} className={du ? '' : 'opacity-60'}>
+                  <td className={TD}>
+                    <input type="checkbox" className="h-4 w-4 accent-primary" disabled={!du} checked={chon.has(r.lenh.id)}
+                      aria-label="Chọn lệnh để chạy hoàn tất"
+                      onChange={() => setChon((s) => { const n = new Set(s); if (n.has(r.lenh.id)) n.delete(r.lenh.id); else n.add(r.lenh.id); return n; })} />
+                  </td>
+                  <td className={TD}>
+                    <div className="font-medium">{tenLenh(r) || '—'}</div>
+                    <div className="text-xs text-ink-soft">{[r.lenh.ma_lenh_san_xuat, r.lenh.ma_chuyen].filter(Boolean).join(' · ')}</div>
+                  </td>
+                  <td className={`${TD} text-right tabular-nums`}>{fmtNum(r.printed)} / {fmtNum(r.lenh.so_luong_release)}</td>
+                  <td className={TD}>
+                    {du ? <Badge tone="success">Đủ 90%</Badge>
+                      : <span className="text-xs text-danger">Chưa đủ 90% — còn thiếu {fmtNum(thieu)}</span>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Modal>
+  );
+}
+
+// `truocXacNhan(lenhIds)` — Promise<bool>: trang hỏi LÝ DO NGHẼN trước khi chạy hoàn tất (như `RunPanel`).
+export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh, truocXacNhan }) {
   const { can } = usePermissions();
   const { toast, show } = useToast();
   const canRun = can('PROD_RUN');
@@ -163,6 +237,7 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh })
   const [lyDoNgungDs, setLyDoNgungDs] = useState([]);
   const [stop, setStop] = useState({ lyDoId: '', ghiChu: '', gioBd: '', gioKt: '' });
   const [gioHoatDongLai, setGioHoatDongLai] = useState('');
+  const [hoanTatOpen, setHoanTatOpen] = useState(false);
   const khoaLenh = (lenhIds || []).join(',');
 
   const load = useCallback(async () => {
@@ -231,6 +306,14 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh })
       stop.gioKt ? `Đã ghi ngừng chuyền ${stop.gioBd || 'bây giờ'} → ${stop.gioKt}` : 'Đã ngừng chuyền');
     if (!n) setStop({ lyDoId: '', ghiChu: '', gioBd: '', gioKt: '' });
   };
+  // CHẠY HOÀN TẤT nhiều lệnh (21/10/2026) — tuần tự từng phiếu (`finishRun`), lỗi lệnh nào báo lệnh đó.
+  const doHoanTat = async (ds) => {
+    if (truocXacNhan && !(await truocXacNhan(ds.map((r) => r.lenh.id)))) return; // quá SLA ⇒ lý do nghẽn
+    const n = await lamTungPhieu(ds, (r) => finishRun(r.phieu.id), 'Đã chạy hoàn tất');
+    if (!n) setHoanTatOpen(false);
+  };
+  const soDuHoanTat = chay.filter(duHoanTat).length;
+
   const doResume = async () => {
     const n = await lamTungPhieu(dangNgung, (r) => resumeLine(r.phieu.id, gioHoatDongLai || null), 'Chuyền hoạt động lại');
     if (!n) setGioHoatDongLai('');
@@ -309,7 +392,7 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh })
       if (inTem.length && !chiLuu) await inNhan(tems, w);
       const phan = [
         tems.length ? `${chiLuu ? 'Đã lưu' : 'Đã in'} ${fmtNum(tems.length)} tem${chiLuu ? ' (BTP trước — không in nhãn)' : ''} — tự vào xe phơi` : null,
-        soVai ? `đã ghi vải hủy/thiếu ${fmtNum(soVai)} dòng` : null,
+        soVai ? `đã ghi vải hủy/thiếu ${fmtNum(soVai)} dòng (lệnh không in tem: lưu chờ gắn tem in kế tiếp)` : null,
       ].filter(Boolean).join(' · ');
       if (phan) show(`${phan}${loi.length ? ` · LỖI: ${loi.join(' · ')}` : ''}`, loi.length ? 'error' : 'success');
       else show(`Chưa ghi được gì — ${loi.join(' · ')}`, 'error');
@@ -330,7 +413,13 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh })
   return (
     <SidePanel open={!!(lenhIds && lenhIds.length)} onClose={onClose}
       title={`Sản xuất — ${fmtNum(runs.length || (lenhIds || []).length)} lệnh`}
-      subtitle={`Chuyền ${dsChuyen} · đã in ${fmtNum(tongIn)} / ${fmtNum(tongTarget)}`}>
+      subtitle={`Chuyền ${dsChuyen} · đã in ${fmtNum(tongIn)} / ${fmtNum(tongTarget)}`}
+      footer={canRun && chay.length > 0 && (
+        <Button variant="success" icon="check" onClick={() => setHoanTatOpen(true)} disabled={busy || !soDuHoanTat}
+          title={soDuHoanTat ? undefined : 'Chưa lệnh nào in đủ 90% SL release'}>
+          Chạy hoàn tất ({fmtNum(soDuHoanTat)}/{fmtNum(chay.length)} lệnh)
+        </Button>
+      )}>
       {loading && !runs.length ? (
         <div className="py-10 text-center text-ink-soft">Đang tải...</div>
       ) : (
@@ -443,6 +532,7 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh })
       )}
       <InTemNhieuModal open={inOpen} onClose={() => setInOpen(false)} runs={chay} meta={temMeta} setMeta={setTemMeta}
         goiY={chay[0]?.goi_y_tem} busy={busy} onIn={doInNhieu} />
+      <HoanTatNhieuModal open={hoanTatOpen} onClose={() => setHoanTatOpen(false)} runs={chay} busy={busy} onXacNhan={doHoanTat} />
       <Toast toast={toast} />
     </SidePanel>
   );

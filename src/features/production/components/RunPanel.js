@@ -781,9 +781,12 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
         tems = res.data?.tems_in || [];
       }
       const tong = Number(soLuong) * n;
+      // Số vải hủy / thiếu đang chờ (21/10/2026) đã được BE gắn vào tem đầu của lượt này.
+      const vc = data?.vai_cho_tem;
+      const kemVai = vc ? ` · kèm ${[vc.huy > 0 && `hủy ${fmtNum(vc.huy)}`, vc.thieu > 0 && `thiếu ${fmtNum(vc.thieu)}`].filter(Boolean).join(', ')}` : '';
       show(chiLuu
-        ? `Đã lưu ${n > 1 ? `${n} tem × ` : ''}${fmtNum(soLuong)}${n > 1 ? ` = ${fmtNum(tong)}` : ''} (BTP trước — không in tem) — tự đưa vào xe phơi, đang đếm ngược`
-        : `Đã in ${n > 1 ? `${n} tem × ${fmtNum(soLuong)} = ${fmtNum(tong)}` : `tem ${fmtNum(soLuong)}`} — tự đưa vào xe phơi, đang đếm ngược`);
+        ? `Đã lưu ${n > 1 ? `${n} tem × ` : ''}${fmtNum(soLuong)}${n > 1 ? ` = ${fmtNum(tong)}` : ''} (BTP trước — không in tem)${kemVai} — tự đưa vào xe phơi, đang đếm ngược`
+        : `Đã in ${n > 1 ? `${n} tem × ${fmtNum(soLuong)} = ${fmtNum(tong)}` : `tem ${fmtNum(soLuong)}`}${kemVai} — tự đưa vào xe phơi, đang đếm ngược`);
       setSoLuong('');
       setSoTem('1');
       if (!chiLuu) await printLabelsFor(tems, w);
@@ -1016,7 +1019,7 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
         lyDo: form.lyDo.trim() || null,
         loai,
       });
-      show(`Đã ghi ${nhan}`);
+      show(`Đã lưu ${nhan} ${fmtNum(qty)} — sẽ gắn vào tem in kế tiếp`);
       // Chỉ xóa Ô CỦA CHÍNH LOẠI VỪA GHI — khối kia đang gõ dở thì giữ nguyên.
       (thieu ? setVhThieu : setVhHuy)({ soLuong: '', lyDo: '' });
       await load();
@@ -1024,6 +1027,19 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
     } catch (e) {
       show(e.message || `Ghi ${nhan} thất bại`, 'error');
     } finally { setBusy(false); }
+  };
+
+  // Xóa số chờ gắn tem (21/10/2026) — lưu 0 cho cả 2 loại.
+  const xoaVaiCho = async () => {
+    setBusy(true);
+    try {
+      for (const loai of ['HUY', 'THIEU']) {
+        // eslint-disable-next-line no-await-in-loop
+        await addVaiHuy(phieu.id, { dotVaiId: null, soLuong: 0, lyDo: null, loai });
+      }
+      show('Đã xóa số vải hủy / thiếu đang chờ');
+      await load();
+    } catch (e) { show(e.message || 'Xóa thất bại', 'error'); } finally { setBusy(false); }
   };
 
   // Vượt sản xuất: cộng SL vượt vào release + trừ đợt vải chưa release cùng phần in.
@@ -1103,7 +1119,7 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
               onClick={() => { setTraVeReason(''); setTraVeOpen(true); }}>
               Trả về Kỹ thuật
             </Button>
-            <Button variant="danger" onClick={doFinish} loading={busy} disabled={printed < minFinish}>
+            <Button variant="success" icon="check" onClick={doFinish} loading={busy} disabled={printed < minFinish}>
               Chạy hoàn tất
             </Button>
           </>
@@ -1226,10 +1242,27 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
               ⚠ 1 phần in có thể có NHIỀU đợt vải trong cùng đợt SX (gộp đợt) ⇒ ô chọn phải hiện mã đợt
               vải, nếu chỉ hiện code phần thì 2 dòng trùng tên, không biết đang ghi cho đợt nào.
               GOM SET → ẨN ô nhập lẻ (nhập trong modal In tem theo bảng); vẫn hiện sổ "Đã ghi". */}
+          {/* ⚠⚠ 21/10/2026 (người dùng chốt) — HỦY / THIẾU THEO TEM: "Lưu" giữ 1 GIÁ TRỊ CHỜ (lưu lại = thay, 0 = xóa);
+              lượt in tem kế tiếp gắn số đó vào tem (sổ + ERP cùng tem) rồi tự xóa. In nhiều phần in mà bảng in có nhập
+              hủy/thiếu ⇒ số ở bảng được ưu tiên, số chờ bị bỏ (BE `production.service addVaiHuy` / `nhanVaiChoTx`). */}
           <section className="border-t border-line pt-4">
             <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-soft">
-              Vải hủy / vải thiếu (theo đợt vải)
+              Vải hủy / vải thiếu (gắn vào tem in kế tiếp)
             </h3>
+            {phieu && data.vai_cho_tem && (
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-control border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                <span>
+                  Chờ gắn vào tem in kế tiếp:{' '}
+                  {data.vai_cho_tem.huy > 0 && <b>Hủy {fmtNum(data.vai_cho_tem.huy)}</b>}
+                  {data.vai_cho_tem.huy > 0 && data.vai_cho_tem.thieu > 0 && ' · '}
+                  {data.vai_cho_tem.thieu > 0 && <b>Thiếu {fmtNum(data.vai_cho_tem.thieu)}</b>}
+                  {data.vai_cho_tem.nguoi && <span className="text-xs"> · {data.vai_cho_tem.nguoi}</span>}
+                </span>
+                {canRun && (
+                  <Button variant="ghost" className="px-2 py-1 text-xs" onClick={xoaVaiCho} loading={busy}>Xóa</Button>
+                )}
+              </div>
+            )}
             {canRun && phieu && !coGomSet && (
               <div className="space-y-2">
                 {dotVaiList.length > 1 && (
@@ -1270,7 +1303,7 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
                       </div>
                       <Button variant={k.nut} onClick={() => doVaiHuy(k.loai)} loading={busy}
                         disabled={!k.form.soLuong || Number(k.form.soLuong) <= 0}>
-                        Ghi
+                        Lưu
                       </Button>
                     </div>
                     <Textarea rows={2} value={k.form.lyDo}
@@ -1305,6 +1338,7 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
                       </span>
                     </div>
                     <div className="mt-0.5 text-xs text-ink-soft">
+                      {v.ma_tem ? <b className="font-mono text-ink">Tem {v.ma_tem} · </b> : ''}
                       {v.nguoi ? `${v.nguoi} · ` : ''}{fmtDt(v.created_date)}{v.ly_do ? ` · ${v.ly_do}` : ''}
                     </div>
                   </div>
