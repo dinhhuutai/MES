@@ -4,7 +4,7 @@ import DataTable from '../../../components/common/DataTable';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import Toast from '../../../components/common/Toast';
-import { Field, Input, Textarea } from '../../../components/common/controls';
+import { Field, Input } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import { listCaTuan, saveCaTuan } from '../../../services/planningService';
@@ -49,6 +49,10 @@ const LOAI_CHUYEN = [
   { v: 'ROBOT', label: 'Robot' },
   { v: NHOM_KHAC, label: 'Khác', cot: 'Chuyền khác', title: 'Gia công · Máy tròn · Logo · Ép' },
 ];
+// Nút chọn (áp cho loại chuyền / loại ca): co giãn đều nhưng không nhỏ hơn chữ — hẹp thì xuống dòng, không tràn.
+const nutChon = (bat) => `min-w-[5.5rem] flex-1 whitespace-nowrap rounded-control border px-3 py-2.5 text-sm font-semibold transition ${
+  bat ? 'border-primary bg-primary-wash text-primary' : 'border-line text-ink-soft hover:border-primary/40'
+}`;
 const toneCa = (ca) => (ca === 'DAI' ? 'warning' : ca === 'HANH_CHINH' ? 'success' : 'info');
 
 // THỪA HƯỞNG TUẦN TRƯỚC (21/10/2026) — GƯƠNG backend `utils/ca.js loaiCaChiTiet` (sửa 1 bên phải sửa bên kia):
@@ -121,10 +125,16 @@ export default function CaiDatPage() {
 
   // Ước lượng 1 ngày trong tuần (nam/tuan) để hiện khoảng ngày ở bảng.
   const dateOfWeek = (nam, tuan) => {
-    const simple = new Date(Date.UTC(nam, 0, 1 + (tuan - 1) * 7));
+    // Mốc 04/01 luôn thuộc tuần ISO 1 (mốc 01/01 lệch 1 tuần ở năm bắt đầu bằng Thứ 6–CN, vd 2027).
+    const simple = new Date(Date.UTC(nam, 0, 4 + (tuan - 1) * 7));
     const day = simple.getUTCDay() || 7;
     simple.setUTCDate(simple.getUTCDate() - day + 1 + 3); // Thứ 5 trong tuần ISO
     return simple;
+  };
+  // Bấm 1 dòng tuần ⇒ form chuyển sang ĐÚNG tuần đó (bản cũ về hôm nay ⇒ sửa nhầm sang tuần hiện tại).
+  const ngayTrongTuan = (nam, tuan) => {
+    const d = dateOfWeek(nam, tuan);
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
   };
 
   // Ô của 1 loại chuyền = ca ĐANG ÁP DỤNG của tuần (riêng ⇒ chung ⇒ thừa hưởng tuần trước ⇒ mặc định); dòng chữ mờ
@@ -176,44 +186,43 @@ export default function CaiDatPage() {
       {canEdit && (
         <div className="mb-5 card p-4">
           <h3 className="mb-3 text-sm font-semibold text-ink">Cài ca cho tuần</h3>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {/* ⚠ 21/10/2026: bản cũ dồn 5 ô vào `lg:grid-cols-5` ⇒ 5 nút loại chuyền + 3 nút loại ca tràn đè ô bên cạnh.
+              Nay 2 hàng: (ngày · tuần · ghi chú) rồi (áp cho · loại ca), nút xuống dòng khi hẹp. */}
+          <div className="grid gap-x-4 sm:grid-cols-2 lg:grid-cols-3">
             <Field label="Chọn 1 ngày trong tuần">
               <Input type="date" value={ngay} onChange={(e) => setNgay(e.target.value)} />
             </Field>
             <Field label="Tuần">
-              <div className="flex h-11 items-center rounded-input border border-line bg-surface-muted px-3 text-sm text-ink">
+              <div className="flex min-h-11 items-center rounded-input border border-line bg-surface-muted px-3 py-2 text-sm text-ink">
                 Tuần {wk.tuan}/{wk.nam} · {weekRange(new Date(ngay))}
               </div>
             </Field>
+            <div className="sm:col-span-2 lg:col-span-1">
+              <Field label="Ghi chú (tùy chọn)">
+                <Input value={ghiChu} onChange={(e) => setGhiChu(e.target.value)} placeholder="Ghi chú..." />
+              </Field>
+            </div>
+          </div>
+          <div className="grid gap-x-4 lg:grid-cols-2">
             <Field label="Áp cho loại chuyền">
-              <div className="flex gap-2">
-                <button type="button" onClick={() => setApCho([])}
-                  className={`flex-1 rounded-control border px-2 py-2.5 text-sm font-semibold transition ${
-                    !apCho.length ? 'border-primary bg-primary-wash text-primary' : 'border-line text-ink-soft'
-                  }`}>Tất cả</button>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => setApCho([])} className={nutChon(!apCho.length)}>Tất cả</button>
                 {LOAI_CHUYEN.map((o) => (
                   <button key={o.v} type="button" onClick={() => batLoai(o.v)} title={o.title}
-                    className={`flex-1 rounded-control border px-2 py-2.5 text-sm font-semibold transition ${
-                      apCho.includes(o.v) ? 'border-primary bg-primary-wash text-primary' : 'border-line text-ink-soft'
-                    }`}>{o.label}</button>
+                    className={nutChon(apCho.includes(o.v))}>{o.label}</button>
                 ))}
               </div>
             </Field>
             <Field label="Loại ca">
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 {CA_OPTIONS.map((o) => (
                   <button key={o.v} type="button" onClick={() => setLoaiCa(o.v)}
-                    className={`flex-1 rounded-control border px-2 py-2.5 text-sm font-semibold transition ${
-                      loaiCa === o.v ? 'border-primary bg-primary-wash text-primary' : 'border-line text-ink-soft'
-                    }`}>{o.label}</button>
+                    className={nutChon(loaiCa === o.v)}>{o.label}</button>
                 ))}
               </div>
             </Field>
-            <Field label="Ghi chú (tùy chọn)">
-              <Textarea rows={1} value={ghiChu} onChange={(e) => setGhiChu(e.target.value)} placeholder="Ghi chú..." />
-            </Field>
           </div>
-          <div className="mt-3 flex justify-end">
+          <div className="flex justify-end">
             <Button onClick={submit} loading={saving}>Lưu ca {tenApCho} · tuần {wk.tuan}/{wk.nam}</Button>
           </div>
         </div>
@@ -222,7 +231,7 @@ export default function CaiDatPage() {
       {/* Ca ĐANG ÁP DỤNG cho tuần đang chọn ở ô ngày (mặc định tuần này) — kể cả khi tuần đó chưa cài (thừa hưởng). */}
       <div className="mb-5 card p-4">
         <h3 className="mb-3 text-sm font-semibold text-ink">Đang áp dụng · tuần {wk.tuan}/{wk.nam} · {weekRange(new Date(ngay))}</h3>
-        <div className="grid gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {LOAI_CHUYEN.map((l) => {
             const h = caHieuLuc(tuanRows, wk.nam, wk.tuan, l.v);
             return (
@@ -238,7 +247,7 @@ export default function CaiDatPage() {
 
       <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-soft">Các tuần đã cài</div>
       <DataTable columns={columns} rows={tuanRows} loading={loading} rowKey="id"
-        onRowClick={(r) => { setLoaiCa(r.chung || 'NGAN'); setApCho([]); setGhiChu(r.ghi_chu || ''); setNgay(todayStr()); }}
+        onRowClick={(r) => { setLoaiCa(r.chung || 'NGAN'); setApCho([]); setGhiChu(r.ghi_chu || ''); setNgay(ngayTrongTuan(r.nam, r.tuan)); }}
         emptyText="Chưa cài ca cho tuần nào (mặc định Ngắn)" />
 
       <Toast toast={toast} />

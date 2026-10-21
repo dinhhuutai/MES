@@ -46,7 +46,9 @@ import PhuongAnInBadge from './PhuongAnInBadge';
 
 const SU_KIEN = ['ready:confirmed', 'workflow:updated', 'production:updated',
   'quality:updated', 'delivery:updated', 'drying:updated'];
-const DELAY_SOCKET = 800;
+// 21/10/2026: 800 → 1500 ms — xưởng xác nhận dồn dập (quét liên tục) thì gộp được nhiều lượt thành 1 lần tải; số vẫn
+// luôn mới vì backend xóa cache ngay khi có thao tác ghi (`backend/src/utils/cacheDoc.js`).
+const DELAY_SOCKET = 1500;
 
 // Bộ lọc của TRANG gửi lên với tiền tố `t_` để KHÔNG đụng bộ lọc riêng trong modal — backend AND
 // 2 tầng với nhau (`dungLocKep`). Trộn chung 1 tên khóa thì tầng này đè mất tầng kia.

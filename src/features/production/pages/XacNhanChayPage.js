@@ -401,15 +401,12 @@ export default function XacNhanChayPage() {
     ) },
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
+    // Dòng gom (cùng code phần + cùng máy) hiện y như 1 phần in — KHÔNG badge "Gom N lệnh" / "Gộp đợt" (21/10/2026,
+    //   người dùng chốt). Chỉ giữ badge GOM SET (lệnh nhiều phần in khác nhau).
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => (
       <div>
         <div className="text-ink">{r.ma_hang || '—'}</div>
-        {!r.__sub && lenhCuaDong(r).length > 1 && (
-          <span title={lenhCuaDong(r).map((l) => l.ma_lenh_san_xuat).join(' · ')}>
-            <Badge tone="info">Gom {lenhCuaDong(r).length} lệnh cùng code phần</Badge>
-          </span>
-        )}
-        {!r.__sub && <GomBadge soDotVai={r.so_dot_vai} soPhanIn={r.so_phan_in} />}
+        {!r.__sub && Number(r.so_phan_in) > 1 && <GomBadge soDotVai={r.so_dot_vai} soPhanIn={r.so_phan_in} />}
       </div>
     ) },
     { key: 'ma_phan', header: 'Code phần', render: (r) => r.ma_phan || '—' },
@@ -421,14 +418,9 @@ export default function XacNhanChayPage() {
     { key: 'ngay_ke_hoach', header: 'Ngày SX KH', merge: true, render: (r) => fmtDate(r.ngay_ke_hoach) },
     { key: 'tg_bd', header: 'Xác nhận chạy', merge: true,
       render: (r) => (r.tg_bd ? new Date(r.tg_bd).toLocaleString('vi-VN') : '—') },
-    { key: 'printed', header: 'Đã in', className: 'text-right tabular-nums', merge: true, render: (r) => (
-      lenhCuaDong(r).length > 1 ? (
-        <div title={lenhCuaDong(r).map((l) => `${l.ma_lenh_san_xuat}: ${fmtNum(l.printed)} / ${fmtNum(l.target)}`).join(' · ')}>
-          <div className="font-semibold text-ink">{fmtNum(r.printed)} / {fmtNum(r.target)}</div>
-          <div className="text-[11px] text-ink-soft">{lenhCuaDong(r).map((l) => fmtNum(l.target)).join(' + ')}</div>
-        </div>
-      ) : `${fmtNum(r.printed)} / ${fmtNum(r.target)}`
-    ) },
+    // Dòng gom: đã in / SL release = TỔNG các lệnh, 1 con số (không tách "a + b").
+    { key: 'printed', header: 'Đã in', className: 'text-right tabular-nums', merge: true,
+      render: (r) => `${fmtNum(r.printed)} / ${fmtNum(r.target)}` },
     { key: 'so_tem', header: 'Tem', className: 'text-right', merge: true },
     { key: 'tt', header: 'Trạng thái', merge: true, render: (r) =>
       r.dang_ngung ? <Badge tone="danger">Đang ngừng</Badge> : <Badge tone="success">Đang chạy</Badge> },
