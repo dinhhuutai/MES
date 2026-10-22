@@ -78,6 +78,9 @@ export const khoaPinLenh = (r) => dsPin(r).map((p) => p.phan_in_id || p.ma_phan 
 // release = TỔNG các lệnh. Chỉ là cách HIỆN: mỗi lệnh vẫn là 1 lệnh riêng (`_lenh` giữ đủ) — tích / xác nhận chạy
 // / trả về của dòng gom áp cho MỌI lệnh trong `_lenh`.
 //   · Chỉ gom lệnh ĐÚNG 1 phần in; lệnh gom set cũ (nhiều phần in) đứng riêng.
+//   · 22/10/2026 (người dùng: "code phần giống nhau và cùng chuyền kế hoạch thì gom 1 hàng"): khóa = phần in + CHUYỀN
+//     KẾ HOẠCH của lệnh (`chuyen_id`) — cùng code phần nhưng kế hoạch 2 chuyền khác nhau là 2 dòng. Dòng gom hiện như
+//     1 phần (1 số SL release tổng, không badge / dòng tách — như bảng Đang chạy).
 //   · Thứ tự: dòng gom đứng ở vị trí lệnh ĐẦU của nó. Dòng trả về luôn có `_lenh` (dòng lẻ = mảng 1 phần tử).
 //   · Số gộp: SL release · đã in trước đó · số đợt vải = tổng; ngày SX KH · hạn giao = SỚM nhất; mã lệnh · tên
 //     chuyền · nhà gia công = danh sách không trùng. `ma_chuyen` / `ma_loai_chuyen` / `id` giữ của lệnh đầu.
@@ -89,7 +92,8 @@ export function gomTheoCodePhan(rows) {
   const out = [];
   for (const r of rows || []) {
     const motPin = !(r.phan_in_list && r.phan_in_list.length > 1);
-    const k = motPin ? (r.phan_in_id || r.ma_phan || '') : '';
+    const pin = r.phan_in_id || r.ma_phan || '';
+    const k = motPin && pin ? `${pin}|${r.chuyen_id || r.ma_chuyen || ''}` : '';
     const g = k ? nhom.get(k) : null;
     if (g) { g._lenh.push(r); continue; }
     const moi = { ...r, _lenh: [r] };

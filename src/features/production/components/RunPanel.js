@@ -14,6 +14,7 @@ import usePermissions from '../../../hooks/usePermissions';
 import useHuyLichSu from '../../../hooks/useHuyLichSu';
 import { getRun, printTem, printTemBatch, reprintTem, getTemLabel, getTemLogs, finishRun, stopLine, resumeLine, addVaiHuy, savePhanCong, pauseLenhChay, listProductionCandidates, startProduction, vuotSanXuat, doiChuyen, traVeKyThuatSanXuat, listChuyen, listLyDoNgung, listToIn, luuLyDoBoSungDotVai, huyTemTaiLichSu, moLaiTemTaiLichSu } from '../../../services/productionService';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
+import TraVeKeHoachModal from './TraVeKeHoachModal';
 import { listUserOptions } from '../../../services/userService';
 import printTemLabel, { printTemLabelNhieu, moSanCuaSoIn, dongCuaSoIn } from '../utils/printTemLabel';
 import { fmtNum, fmtDate } from '../../../utils/format';
@@ -624,6 +625,7 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
   const [doiGhiChu, setDoiGhiChu] = useState('');
   const [chuyenList, setChuyenList] = useState([]);
   const [traVeOpen, setTraVeOpen] = useState(false);   // modal "Trả về Kỹ thuật" (lý do bắt buộc)
+  const [traVeKhOpen, setTraVeKhOpen] = useState(false); // modal "Trả về Kế hoạch" (22/10/2026)
   const [traVeReason, setTraVeReason] = useState('');
 
   const phieu = data?.phieu;
@@ -1119,6 +1121,11 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
               onClick={() => { setTraVeReason(''); setTraVeOpen(true); }}>
               Trả về Kỹ thuật
             </Button>
+            {/* Trả về Kế hoạch (22/10/2026): đang in dở muốn chuyển phần vải còn lại sang máy khác ⇒ phần còn lại về
+                Release 1, lệnh này chạy hoàn tất ở máy hiện tại (xem `TraVeKeHoachModal`). */}
+            <Button variant="secondary" icon="undo" disabled={busy} onClick={() => setTraVeKhOpen(true)}>
+              Trả về Kế hoạch
+            </Button>
             <Button variant="success" icon="check" onClick={doFinish} loading={busy} disabled={printed < minFinish}>
               Chạy hoàn tất
             </Button>
@@ -1514,6 +1521,9 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
       {/* GOM SET: nhập SL in từng phần in → in nhiều tem liên tiếp */}
       <PrintSetModal open={printSetOpen} onClose={() => setPrintSetOpen(false)} rows={dotVaiList}
         onPrintRow={doPrintRow} busy={busy} meta={temMeta} setMeta={setTemMeta} goiY={goiYTem} />
+
+      <TraVeKeHoachModal open={traVeKhOpen} onClose={() => setTraVeKhOpen(false)} runs={data && running ? [data] : []}
+        onXong={({ thongBao }) => { setTraVeKhOpen(false); show(thongBao); load(); onChanged?.(); }} />
 
       {/* Trả về Kỹ thuật — lý do bắt buộc (hiện lại ở màn READY / QC READY) */}
       <Modal open={traVeOpen} onClose={() => setTraVeOpen(false)} size="sm"

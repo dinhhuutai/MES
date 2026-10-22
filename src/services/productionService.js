@@ -104,6 +104,8 @@ export const doiChuyen = (phieuId, body) => client.post(`/production/phieu/${phi
 // ⚠ Theo LỆNH, không phải phiếu — bảng "Chờ chạy" chưa có phiếu SX nào.
 export const traVeKyThuatSanXuat = (lenhId, lyDo) =>
   client.post(`/production/lenh/${lenhId}/tra-ve-ky-thuat`, { lyDo });
+// Trả về Kế hoạch khi ĐANG CHẠY (22/10/2026): items = [{ lenhId, soLuong }] (số vải trả về) ⇒ data { ok, loi }.
+export const traVeKeHoachSx = (body) => client.post('/production/tra-ve-ke-hoach', body);
 // Vượt sản xuất: cộng SL vượt vào release + trừ đợt vải chưa release cùng phần in
 export const vuotSanXuat = (phieuId, soLuong) => client.post(`/production/phieu/${phieuId}/vuot-san-xuat`, { soLuong });
 

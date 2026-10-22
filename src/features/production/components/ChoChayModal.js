@@ -80,6 +80,8 @@ const subRows = (r) => (r.phan_in_list ? r.phan_in_list.map((p) => ({ ...p, __su
 //
 // ⚠⚠ GOM DÒNG TRÙNG CODE PHẦN (13/10/2026, người dùng chốt): các lệnh chờ chạy CÙNG code phần hiện thành 1 dòng,
 //   "SL release" = tổng (`utils/locLenhChay.js gomTheoCodePhan`, tính SAU bộ lọc — bộ lọc vẫn xét từng lệnh).
+//   22/10/2026: gom khi cùng code phần VÀ cùng CHUYỀN KẾ HOẠCH; dòng gom hiện như 1 phần (không badge / dòng tách).
+//   Quét code phần vẫn tích MỌI lệnh của phần in đó (có thể là nhiều dòng nếu kế hoạch nhiều chuyền).
 //   Trang vẫn giữ danh sách tích theo ID LỆNH; ở đây mọi thao tác của dòng gom áp cho mọi lệnh của nó: ô tích /
 //   quét mã tích cả nhóm một lần (bản 08/10 tích từng lệnh, quét lại mới tích lệnh kế), "Xác nhận chạy" mở hộp chạy
 //   nhiều lệnh, "Trả về Kỹ thuật" trả mọi lệnh, "Trả về GN" theo phần in. Số trên tiêu đề / chip / Excel = số DÒNG.
@@ -217,12 +219,12 @@ export default function ChoChayModal({
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => (
       <div>
         <div className="text-ink">{r.ma_hang || '—'}</div>
-        {!r.__sub && lenhCuaDong(r).length > 1 && <Badge tone="info">Gom {lenhCuaDong(r).length} lệnh cùng code phần</Badge>}
         {!r.__sub && lenhCuaDong(r).filter((l) => loiChay[l.id]).map((l) => (
           <Badge key={l.id} tone="danger">Chưa chạy được{lenhCuaDong(r).length > 1 ? ` (${l.ma_lenh_san_xuat})` : ''}: {loiChay[l.id]}</Badge>
         ))}
         {!r.__sub && r.giai_doan === 'EP_UI' && <Badge tone="info">Ép ủi (in kiếng)</Badge>}
-        {!r.__sub && <GomBadge soDotVai={r.so_dot_vai} soPhanIn={r.so_phan_in} />}
+        {/* Dòng gom (cùng code phần + cùng chuyền kế hoạch) hiện như 1 phần — chỉ giữ badge GOM SET (lệnh nhiều phần in). */}
+        {!r.__sub && Number(r.so_phan_in) > 1 && <GomBadge soDotVai={r.so_dot_vai} soPhanIn={r.so_phan_in} />}
         {!r.__sub && Number(r.da_in_truoc) > 0 && (
           <div className="mt-0.5">
             <Badge tone="warning">
@@ -238,14 +240,9 @@ export default function ChoChayModal({
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
     { key: 'ma_chuyen', header: 'Chuyền', merge: true, render: (r) => r.ten_chuyen || '—' },
     { key: 'nha_gia_cong', header: 'Nhà gia công', merge: true, render: (r) => r.nha_gia_cong || '—' },
-    { key: 'so_luong_release', header: 'SL release', className: 'text-right tabular-nums', merge: true, render: (r) => (
-      lenhCuaDong(r).length > 1 ? (
-        <div title={lenhCuaDong(r).map((l) => `${l.ma_lenh_san_xuat}: ${fmtNum(l.so_luong_release)}`).join(' · ')}>
-          <div className="font-semibold text-ink">{fmtNum(r.so_luong_release)}</div>
-          <div className="text-[11px] text-ink-soft">{lenhCuaDong(r).map((l) => fmtNum(l.so_luong_release)).join(' + ')}</div>
-        </div>
-      ) : fmtNum(r.so_luong_release)
-    ) },
+    // Dòng gom: SL release = TỔNG các lệnh, 1 con số.
+    { key: 'so_luong_release', header: 'SL release', className: 'text-right tabular-nums', merge: true,
+      render: (r) => fmtNum(r.so_luong_release) },
     { key: 'ngay_ke_hoach', header: 'Ngày SX KH', merge: true, render: (r) => fmtDate(r.ngay_ke_hoach) },
     { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => fmtDate(r.han_giao_hang) },
     { key: 'actions', header: '', className: 'text-right whitespace-nowrap', merge: true, render: (r) =>

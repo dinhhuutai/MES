@@ -16,6 +16,10 @@ import { listUserOptions } from '../../../services/userService';
 import printTemLabel, { printTemLabelNhieu, moSanCuaSoIn, dongCuaSoIn } from '../utils/printTemLabel';
 import { fmtNum } from '../../../utils/format';
 import { TemMetaFields, PhanCongInline, META_MAC_DINH, metaGuiDi, gioHienTai, thieuNgayCaCt, CHUA_THO_IN, chuaPhanCongThoIn, useTaiNgamKhiLenhDoi } from './RunPanel';
+import TraVeKeHoachModal from './TraVeKeHoachModal';
+import {
+  gomPhan, thuTuIn, phanBoInTem, conDuocIn, conDuocInNhom, tongNhom, daIn, slRelease, duHoanTatNhom, toiThieuHoanTatNhom,
+} from '../utils/gomPhanSanXuat';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SẢN XUẤT NHIỀU LỆNH CÙNG LÚC (08/10/2026, người dùng chốt) — mở từ nút "Mở (N)" của bảng Đang chạy khi đã
@@ -32,6 +36,8 @@ import { TemMetaFields, PhanCongInline, META_MAC_DINH, metaGuiDi, gioHienTai, th
 //   · PHÂN CÔNG: lưu 1 lần ⇒ `savePhanCong` mọi phiếu.
 //   · NGỪNG CHUYỀN: ghi 1 lần ⇒ `stopLine` mọi phiếu chưa ngừng; "Hoạt động lại" ⇒ `resumeLine` mọi phiếu đang ngừng.
 //   · Việc riêng từng lệnh (vải hủy/thiếu, bổ sung, tem đã in, đổi chuyền, trả về KT, chạy hoàn tất) ⇒ nút "Mở".
+//   · 22/10/2026: lệnh CÙNG code phần + CÙNG chuyền gom thành 1 PHẦN (danh sách · In tem · Chạy hoàn tất —
+//     `utils/gomPhanSanXuat.js`) + nút "Trả về Kế hoạch" (`TraVeKeHoachModal`) cho phần vải còn lại sang máy khác.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const numCls = 'w-24 rounded-control border border-line bg-surface px-2 py-1.5 text-right text-base md:text-sm text-ink outline-none focus:border-primary';
@@ -40,22 +46,22 @@ const TD = 'whitespace-nowrap px-2.5 py-2 text-sm text-ink';
 const fmtDt = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '');
 
 const dangChay = (run) => run?.phieu?.trang_thai === 'DANG_CHAY';
-// Còn in được của LỆNH (trần 110% SL release, trừ đã in). Không có SL release ⇒ null (không chặn).
-const conDuocIn = (run) => {
-  const target = Number(run?.lenh?.so_luong_release) || 0;
-  return target > 0 ? Math.max(0, Math.floor(target * 1.1) - (Number(run.printed) || 0)) : null;
-};
 const tenLenh = (run) => run?.lenh?.phan_list || run?.lenh?.ma_lenh_san_xuat || '';
-// "Chạy hoàn tất" mở khi đã in ≥ 90% SL release (gương `RunPanel minFinish`); lệnh không có SL release ⇒ luôn mở.
-const toiThieuHoanTat = (run) => { const t = Number(run?.lenh?.so_luong_release) || 0; return t ? Math.ceil(t * 0.9) : 0; };
-const duHoanTat = (run) => (Number(run?.printed) || 0) >= toiThieuHoanTat(run);
 const khoaPc = (pc) => [pc?.ca_truong_id || '', pc?.chuyen_truong || '', pc?.tho_in || '', pc?.to_in_id || ''].join('|');
 
 // Dòng in tem: lệnh thường ⇒ 1 dòng (không gửi đợt vải, như ô "Số lượng in" của RunPanel); lệnh gom set cũ ⇒
 // 1 dòng / đợt vải (gửi `dotVaiId`, như modal In tem gom set).
+// 22/10/2026: nhiều lệnh CÙNG code phần + CÙNG chuyền ⇒ 1 DÒNG (`nhom` = các lệnh) — số nhập được `phanBoInTem` rót
+//   vào từng lệnh lúc in (vượt ranh giới 1 lệnh thì thành 2 tem).
 function dongInTem(runs) {
   const out = [];
-  runs.forEach((run) => {
+  gomPhan(runs).forEach((g) => {
+    if (g.runs.length > 1) {
+      const run0 = thuTuIn(g.runs)[0];
+      out.push({ key: `g|${g.key}`, nhom: g.runs, run: run0, dotVaiId: null, info: (run0.dot_vai || [])[0] || {}, capDot: 0 });
+      return;
+    }
+    const run = g.runs[0];
     const dots = run.dot_vai || [];
     if (run.co_gom_set) {
       dots.forEach((d) => out.push({ key: `${run.lenh.id}|${d.dot_vai_ve_id}`, run, dotVaiId: d.dot_vai_ve_id, info: d,
@@ -87,10 +93,26 @@ function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn 
   const datO = (k, f, v) => setSl((s) => ({ ...s, [k]: { ...(s[k] || {}), [f]: v } }));
   const coVai = (k) => o(k, 'huy') > 0 || o(k, 'thieu') > 0;
   // Trần: Σ dòng của 1 lệnh ≤ còn in được của lệnh; dòng đợt vải ≤ 110% SL vào SX của đợt (backend chặn lại y vậy).
-  const tongLenh = (lenhId) => dong.filter((d) => d.run.lenh.id === lenhId).reduce((s, d) => s + so(d.key), 0);
+  //   Dòng nhóm (nhiều lệnh cùng code phần) ≤ tổng còn in được của cả nhóm.
+  const tongLenh = (lenhId) => dong.filter((d) => !d.nhom && d.run.lenh.id === lenhId).reduce((s, d) => s + so(d.key), 0);
+  const conCuaDong = (d) => (d.nhom ? conDuocInNhom(d.nhom) : conDuocIn(d.run));
   const vuot = (d) => {
-    const con = conDuocIn(d.run);
+    const con = conCuaDong(d);
+    if (d.nhom) return con != null && so(d.key) > con;
     return (con != null && tongLenh(d.run.lenh.id) > con) || (d.capDot > 0 && so(d.key) > d.capDot);
+  };
+  // Dòng nhóm in vượt ranh giới 1 lệnh ⇒ nói trước sẽ ra mấy tem, lệnh nào bao nhiêu.
+  const tachTem = (d) => (d.nhom && so(d.key) > 0 ? phanBoInTem(d.nhom, so(d.key)).phan : []);
+  // Bung dòng nhóm thành từng lệnh trước khi gửi (hủy/thiếu gắn phần ĐẦU — lệnh đang in dở).
+  const bung = (d) => {
+    const base = { ...d, soLuongHuy: o(d.key, 'huy'), soLuongThieu: o(d.key, 'thieu') };
+    if (!d.nhom) return [{ ...base, soLuong: so(d.key) }];
+    const phan = tachTem(d);
+    if (!phan.length) return [{ ...base, soLuong: 0 }];
+    return phan.map((p, i) => ({
+      ...base, run: p.run, info: (p.run.dot_vai || [])[0] || d.info, soLuong: p.soLuong,
+      soLuongHuy: i ? 0 : base.soLuongHuy, soLuongThieu: i ? 0 : base.soLuongThieu,
+    }));
   };
   // Số vải hủy / thiếu CHỜ gắn tem của lệnh (lưu ở sidebar 1 lệnh — 21/10/2026): hiện ở DÒNG ĐẦU của lệnh. Lệnh nào
   //   nhập hủy/thiếu ở bảng này ⇒ BE ưu tiên số ở bảng, bỏ số chờ; không nhập ⇒ số chờ gắn vào tem đầu của lệnh.
@@ -109,9 +131,7 @@ function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn 
       footer={<>
         <Button chiXemOk variant="ghost" onClick={onClose}>Đóng</Button>
         <Button icon={coSo.length ? (chiLuu ? 'save' : 'printer') : 'save'} loading={busy} disabled={busy || !coNhap.length || coVuot}
-          onClick={() => onIn(coNhap.map((d) => ({
-            ...d, soLuong: so(d.key), soLuongHuy: o(d.key, 'huy'), soLuongThieu: o(d.key, 'thieu'),
-          })))}>
+          onClick={() => onIn(coNhap.flatMap(bung))}>
           {nhanNut}
         </Button>
       </>}>
@@ -129,7 +149,8 @@ function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn 
           </thead>
           <tbody className="divide-y divide-line">
             {dong.map((d, i) => {
-              const con = conDuocIn(d.run);
+              const con = conCuaDong(d);
+              const tach = tachTem(d);
               return (
                 <tr key={d.key}>
                   <td className={`${TD} text-center text-ink-soft`}>{i + 1}</td>
@@ -145,6 +166,12 @@ function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn 
                       onChange={(e) => datO(d.key, 'sl', e.target.value)}
                       className={`${numCls} ${vuot(d) ? 'border-danger focus:border-danger' : ''}`} />
                     {vuot(d) && <div className="mt-0.5 text-[11px] text-danger">Vượt phần còn in được</div>}
+                    {!vuot(d) && tach.length > 1 && (
+                      <div className="mt-0.5 whitespace-normal text-[11px] text-ink-soft"
+                        title="Mỗi lệnh 1 phiếu riêng — số vượt phần còn lại của lệnh đang in sang lệnh kế tiếp">
+                        In {tach.length} tem: {tach.map((p) => `${p.run.lenh.ma_lenh_san_xuat} ${fmtNum(p.soLuong)}`).join(' · ')}
+                      </div>
+                    )}
                   </td>
                   <td className={`${TD} text-right`}>
                     <input type="number" min="0" value={(sl[d.key] || {}).huy || ''} placeholder="0" aria-label="SL hủy"
@@ -168,12 +195,15 @@ function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn 
 
 // HỘP "CHẠY HOÀN TẤT" NHIỀU LỆNH (21/10/2026, người dùng yêu cầu) — tích sẵn lệnh đã in ≥ 90%; lệnh chưa đủ thì khóa
 //   (nêu còn thiếu bao nhiêu). Mức module (luật §9).
+// 22/10/2026: 1 dòng / NHÓM (lệnh cùng code phần + cùng chuyền gom như 1 phần) — đủ 90% tính trên TỔNG cả nhóm (số in
+//   được rót lần lượt vào từng lệnh nên lệnh cuối nhóm luôn thiếu); chọn dòng = chạy hoàn tất mọi lệnh của nhóm.
 function HoanTatNhieuModal({ open, onClose, runs, busy, onXacNhan }) {
   const [chon, setChon] = useState(() => new Set());
+  const nhom = gomPhan(runs);
   // ⚠ `runs` là mảng tạo mới mỗi lần panel vẽ lại ⇒ deps theo KHÓA CHUỖI, không theo mảng (vòng lặp vô hạn — §9).
-  const khoaDu = runs.filter(duHoanTat).map((r) => r.lenh.id).join(',');
+  const khoaDu = nhom.filter((g) => duHoanTatNhom(g.runs)).map((g) => g.key).join(',');
   useEffect(() => { if (open) setChon(new Set(khoaDu ? khoaDu.split(',') : [])); }, [open, khoaDu]);
-  const ds = runs.filter((r) => chon.has(r.lenh.id));
+  const ds = nhom.filter((g) => chon.has(g.key)).flatMap((g) => g.runs);
   return (
     <Modal open={open} onClose={onClose} size="lg" title="Chạy hoàn tất nhiều lệnh"
       footer={<>
@@ -193,21 +223,24 @@ function HoanTatNhieuModal({ open, onClose, runs, busy, onXacNhan }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
-            {runs.map((r) => {
-              const du = duHoanTat(r);
-              const thieu = toiThieuHoanTat(r) - (Number(r.printed) || 0);
+            {nhom.map((g) => {
+              const r = g.runs[0];
+              const du = duHoanTatNhom(g.runs);
+              const thieu = toiThieuHoanTatNhom(g.runs) - tongNhom(g.runs, daIn);
               return (
-                <tr key={r.lenh.id} className={du ? '' : 'opacity-60'}>
+                <tr key={g.key} className={du ? '' : 'opacity-60'}>
                   <td className={TD}>
-                    <input type="checkbox" className="h-4 w-4 accent-primary" disabled={!du} checked={chon.has(r.lenh.id)}
-                      aria-label="Chọn lệnh để chạy hoàn tất"
-                      onChange={() => setChon((s) => { const n = new Set(s); if (n.has(r.lenh.id)) n.delete(r.lenh.id); else n.add(r.lenh.id); return n; })} />
+                    <input type="checkbox" className="h-4 w-4 accent-primary" disabled={!du} checked={chon.has(g.key)}
+                      aria-label="Chọn để chạy hoàn tất"
+                      onChange={() => setChon((s) => { const x = new Set(s); if (x.has(g.key)) x.delete(g.key); else x.add(g.key); return x; })} />
                   </td>
                   <td className={TD}>
                     <div className="font-medium">{tenLenh(r) || '—'}</div>
-                    <div className="text-xs text-ink-soft">{[r.lenh.ma_lenh_san_xuat, r.lenh.ma_chuyen].filter(Boolean).join(' · ')}</div>
+                    <div className="text-xs text-ink-soft">
+                      {[g.runs.map((x) => x.lenh.ma_lenh_san_xuat).join(', '), r.lenh.ma_chuyen].filter(Boolean).join(' · ')}
+                    </div>
                   </td>
-                  <td className={`${TD} text-right tabular-nums`}>{fmtNum(r.printed)} / {fmtNum(r.lenh.so_luong_release)}</td>
+                  <td className={`${TD} text-right tabular-nums`}>{fmtNum(tongNhom(g.runs, daIn))} / {fmtNum(tongNhom(g.runs, slRelease))}</td>
                   <td className={TD}>
                     {du ? <Badge tone="success">Đủ 90%</Badge>
                       : <span className="text-xs text-danger">Chưa đủ 90% — còn thiếu {fmtNum(thieu)}</span>}
@@ -238,6 +271,8 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh, t
   const [stop, setStop] = useState({ lyDoId: '', ghiChu: '', gioBd: '', gioKt: '' });
   const [gioHoatDongLai, setGioHoatDongLai] = useState('');
   const [hoanTatOpen, setHoanTatOpen] = useState(false);
+  const [traVeOpen, setTraVeOpen] = useState(false);
+  const [moRong, setMoRong] = useState(() => new Set()); // khóa nhóm đang bung danh sách lệnh
   const khoaLenh = (lenhIds || []).join(',');
 
   const load = useCallback(async () => {
@@ -312,7 +347,8 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh, t
     const n = await lamTungPhieu(ds, (r) => finishRun(r.phieu.id), 'Đã chạy hoàn tất');
     if (!n) setHoanTatOpen(false);
   };
-  const soDuHoanTat = chay.filter(duHoanTat).length;
+  const nhomChay = gomPhan(chay);
+  const soDuHoanTat = nhomChay.filter((g) => duHoanTatNhom(g.runs)).length;
 
   const doResume = async () => {
     const n = await lamTungPhieu(dangNgung, (r) => resumeLine(r.phieu.id, gioHoatDongLai || null), 'Chuyền hoạt động lại');
@@ -409,16 +445,27 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh, t
   const dsChuyen = [...new Set(runs.map((r) => r?.lenh?.ma_chuyen).filter(Boolean))].join(', ') || '—';
   const tongTarget = runs.reduce((s, r) => s + (Number(r?.lenh?.so_luong_release) || 0), 0);
   const tongIn = runs.reduce((s, r) => s + (Number(r?.printed) || 0), 0);
+  // 22/10/2026: lệnh cùng code phần + cùng chuyền = 1 phần ⇒ tiêu đề / danh sách theo PHẦN, không theo lệnh.
+  const nhomTatCa = gomPhan(runs);
+  const tieuDe = nhomTatCa.length === 1 && runs.length
+    ? `Sản xuất — ${tenLenh(nhomTatCa[0].runs[0]) || `${fmtNum(runs.length)} lệnh`}`
+    : `Sản xuất — ${fmtNum(nhomTatCa.length || (lenhIds || []).length)} phần in`;
+  const batMoRong = (k) => setMoRong((s) => { const x = new Set(s); if (x.has(k)) x.delete(k); else x.add(k); return x; });
 
   return (
     <SidePanel open={!!(lenhIds && lenhIds.length)} onClose={onClose}
-      title={`Sản xuất — ${fmtNum(runs.length || (lenhIds || []).length)} lệnh`}
+      title={tieuDe}
       subtitle={`Chuyền ${dsChuyen} · đã in ${fmtNum(tongIn)} / ${fmtNum(tongTarget)}`}
       footer={canRun && chay.length > 0 && (
-        <Button variant="success" icon="check" onClick={() => setHoanTatOpen(true)} disabled={busy || !soDuHoanTat}
-          title={soDuHoanTat ? undefined : 'Chưa lệnh nào in đủ 90% SL release'}>
-          Chạy hoàn tất ({fmtNum(soDuHoanTat)}/{fmtNum(chay.length)} lệnh)
-        </Button>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button variant="secondary" icon="undo" onClick={() => setTraVeOpen(true)} disabled={busy}>
+            Trả về Kế hoạch
+          </Button>
+          <Button variant="success" icon="check" onClick={() => setHoanTatOpen(true)} disabled={busy || !soDuHoanTat}
+            title={soDuHoanTat ? undefined : 'Chưa phần nào in đủ 90% SL release'}>
+            Chạy hoàn tất ({fmtNum(soDuHoanTat)}/{fmtNum(nhomChay.length)})
+          </Button>
+        </div>
       )}>
       {loading && !runs.length ? (
         <div className="py-10 text-center text-ink-soft">Đang tải...</div>
@@ -435,23 +482,60 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh, t
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
-                  {runs.map((r) => (
-                    <tr key={r.lenh.id}>
-                      <td className="px-2.5 py-2 text-sm text-ink">
-                        <div className="font-medium">{tenLenh(r) || '—'}</div>
-                        <div className="text-xs text-ink-soft">
-                          {[r.lenh.ma_lenh_san_xuat, r.phieu?.ma_phieu_san_xuat, r.lenh.ma_chuyen].filter(Boolean).join(' · ')}
-                          {r.loi && <span className="text-danger"> · {r.loi}</span>}
-                        </div>
-                        {r.phieu && !dangChay(r) && <Badge tone="success">Đã hoàn tất</Badge>}
-                        {r.ngung_active && <Badge tone="danger">Đang ngừng</Badge>}
-                      </td>
-                      <td className="px-2.5 py-2 text-right text-sm tabular-nums text-ink">{fmtNum(r.printed)} / {fmtNum(r.lenh.so_luong_release)}</td>
-                      <td className="px-2.5 py-2 text-right">
-                        <Button chiXemOk variant="ghost" className="px-2 py-1 text-xs" onClick={() => onMoLenh?.(r.lenh.id)}>Mở</Button>
-                      </td>
-                    </tr>
-                  ))}
+                  {nhomTatCa.map((g) => {
+                    // Dòng NHÓM (nhiều lệnh cùng code phần + cùng chuyền) hiện như 1 phần: 1 code phần, 1 số tổng;
+                    //   bấm mũi tên bung danh sách lệnh để "Mở" từng lệnh (vải hủy, tem đã in, đổi chuyền…).
+                    if (g.runs.length > 1) {
+                      const r0 = g.runs[0];
+                      const mo = moRong.has(g.key);
+                      return [
+                        <tr key={g.key}>
+                          <td className="px-2.5 py-2 text-sm text-ink">
+                            <button type="button" className="flex items-center gap-1 text-left font-medium" onClick={() => batMoRong(g.key)}
+                              aria-expanded={mo} title={mo ? 'Thu gọn' : 'Xem từng lệnh'}>
+                              <span className="text-xs text-ink-soft">{mo ? '▾' : '▸'}</span>{tenLenh(r0) || '—'}
+                            </button>
+                            <div className="text-xs text-ink-soft">{r0.lenh.ma_chuyen || ''}</div>
+                            {g.runs.some((x) => x.ngung_active) && <Badge tone="danger">Đang ngừng</Badge>}
+                          </td>
+                          <td className="px-2.5 py-2 text-right text-sm tabular-nums text-ink">
+                            {fmtNum(tongNhom(g.runs, daIn))} / {fmtNum(tongNhom(g.runs, slRelease))}
+                          </td>
+                          <td />
+                        </tr>,
+                        ...(mo ? g.runs.map((r) => (
+                          <tr key={r.lenh.id} className="bg-surface-muted/50">
+                            <td className="py-1.5 pl-7 pr-2.5 text-xs text-ink-soft">
+                              {[r.lenh.ma_lenh_san_xuat, r.phieu?.ma_phieu_san_xuat].filter(Boolean).join(' · ')}
+                              {r.phieu && !dangChay(r) && <span className="text-emerald-700"> · đã hoàn tất</span>}
+                            </td>
+                            <td className="px-2.5 py-1.5 text-right text-xs tabular-nums text-ink-soft">{fmtNum(r.printed)} / {fmtNum(r.lenh.so_luong_release)}</td>
+                            <td className="px-2.5 py-1.5 text-right">
+                              <Button chiXemOk variant="ghost" className="px-2 py-0.5 text-xs" onClick={() => onMoLenh?.(r.lenh.id)}>Mở</Button>
+                            </td>
+                          </tr>
+                        )) : []),
+                      ];
+                    }
+                    const r = g.runs[0];
+                    return (
+                      <tr key={r.lenh.id}>
+                        <td className="px-2.5 py-2 text-sm text-ink">
+                          <div className="font-medium">{tenLenh(r) || '—'}</div>
+                          <div className="text-xs text-ink-soft">
+                            {[r.lenh.ma_lenh_san_xuat, r.phieu?.ma_phieu_san_xuat, r.lenh.ma_chuyen].filter(Boolean).join(' · ')}
+                            {r.loi && <span className="text-danger"> · {r.loi}</span>}
+                          </div>
+                          {r.phieu && !dangChay(r) && <Badge tone="success">Đã hoàn tất</Badge>}
+                          {r.ngung_active && <Badge tone="danger">Đang ngừng</Badge>}
+                        </td>
+                        <td className="px-2.5 py-2 text-right text-sm tabular-nums text-ink">{fmtNum(r.printed)} / {fmtNum(r.lenh.so_luong_release)}</td>
+                        <td className="px-2.5 py-2 text-right">
+                          <Button chiXemOk variant="ghost" className="px-2 py-1 text-xs" onClick={() => onMoLenh?.(r.lenh.id)}>Mở</Button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -533,6 +617,8 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh, t
       <InTemNhieuModal open={inOpen} onClose={() => setInOpen(false)} runs={chay} meta={temMeta} setMeta={setTemMeta}
         goiY={chay[0]?.goi_y_tem} busy={busy} onIn={doInNhieu} />
       <HoanTatNhieuModal open={hoanTatOpen} onClose={() => setHoanTatOpen(false)} runs={chay} busy={busy} onXacNhan={doHoanTat} />
+      <TraVeKeHoachModal open={traVeOpen} onClose={() => setTraVeOpen(false)} runs={chay}
+        onXong={async ({ thongBao }) => { setTraVeOpen(false); show(thongBao); await load(); onChanged?.(); }} />
       <Toast toast={toast} />
     </SidePanel>
   );
