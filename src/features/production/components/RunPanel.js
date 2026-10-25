@@ -139,7 +139,8 @@ export const apGoiYTem = (m, g) => {
 export const metaGuiDi = (m) => ({ ...(m._suaGioKt ? m : { ...m, gioKt: gioHienTai() }), khoaCa: m._khoaCa || '' });
 
 // `anGcMauVai`: lệnh GOM SET nhập GC màu vải RIÊNG từng dòng trong bảng → ẩn ô chung ở đây cho khỏi lẫn.
-export function TemMetaFields({ meta, setMeta, anGcMauVai = false }) {
+// `anBtp` (25/10/2026): bảng In tem nhiều phần nhập BTP trước/cuối RIÊNG từng dòng ⇒ ẩn 2 ô chung.
+export function TemMetaFields({ meta, setMeta, anGcMauVai = false, anBtp = false }) {
   const set = (k, v) => setMeta((m) => ({ ...m, [k]: v, ...(k === 'gioKt' ? { _suaGioKt: true } : {}) }));
   const chk = 'h-4 w-4 rounded border-line text-primary focus:ring-primary/30';
   const batBuoc = <span className="text-danger"> *</span>;
@@ -180,16 +181,18 @@ export function TemMetaFields({ meta, setMeta, anGcMauVai = false }) {
             placeholder="GC màu vải của tem này" />
         </label>
       )}
-      <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1.5">
-        <label className="flex cursor-pointer items-center gap-2 text-sm text-ink">
-          <input type="checkbox" className={chk} checked={!!meta.btpTruoc}
-            onChange={(e) => set('btpTruoc', e.target.checked)} /> BTP trước
-        </label>
-        <label className="flex cursor-pointer items-center gap-2 text-sm text-ink">
-          <input type="checkbox" className={chk} checked={!!meta.btpCuoi}
-            onChange={(e) => set('btpCuoi', e.target.checked)} /> BTP cuối
-        </label>
-      </div>
+      {!anBtp && (
+        <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1.5">
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-ink">
+            <input type="checkbox" className={chk} checked={!!meta.btpTruoc}
+              onChange={(e) => set('btpTruoc', e.target.checked)} /> BTP trước
+          </label>
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-ink">
+            <input type="checkbox" className={chk} checked={!!meta.btpCuoi}
+              onChange={(e) => set('btpCuoi', e.target.checked)} /> BTP cuối
+          </label>
+        </div>
+      )}
     </div>
   );
 }

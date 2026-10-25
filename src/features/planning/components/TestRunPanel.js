@@ -12,6 +12,8 @@ import NhieuNguoiSelect from '../../../components/common/NhieuNguoiSelect';
 import { listUserOptions } from '../../../services/userService';
 import { getLenhDetail, recordTestRun, confirmQA, cancelQA, returnTestRunToReady, skipTestRun, listOwnerChoIn, testRunTraVeKeHoach } from '../../../services/planningService';
 import { fmtNum } from '../../../utils/format';
+import useNow from '../../../hooks/useNow';
+import { trongGioHanhChinh } from '../../../utils/gioHanhChinh';
 
 const fmt = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '');
 // Lần test "Xác nhận In Không Đạt": test không đạt nhưng owner cho IN (xem planning.repository KET_QUA_IN_KHONG_DAT).
@@ -34,6 +36,15 @@ export default function TestRunPanel({ lenhId, onClose, onChanged, truocXacNhan,
   const { can } = usePermissions();
   const { toast, show } = useToast();
   const canQA = can('TESTRUN_QA');
+  // NGOÀI giờ hành chính (07:30–16:30, 25/10/2026): nút đạt / In không đạt kiêm luôn Release 2 ⇒ lệnh vào chờ
+  //   sản xuất ngay. BE tự kiểm lại giờ (`release2` trong giờ bị bỏ qua).
+  const now = useNow(30000);
+  const ngoaiGio = !trongGioHanhChinh(now);
+  const baoR2 = (res, goc) => {
+    const r2 = res?.data?.release2;
+    if (!r2) return goc;
+    return r2.ok ? `${goc} + Release 2 — lệnh vào chờ sản xuất` : `${goc} — CHƯA Release 2: ${r2.loi}`;
+  };
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -131,13 +142,14 @@ export default function TestRunPanel({ lenhId, onClose, onChanged, truocXacNhan,
     if (truocXacNhan && !(await truocXacNhan())) return; // quá SLA ⇒ lý do nghẽn (mig 106)
     setBusy('pass');
     try {
-      await confirmQA(lenhId, {
+      const res = await confirmQA(lenhId, {
         soLuong: soLuong ? Number(soLuong) : null,
         nguoiTest: nguoiTest.trim() || null,
         loaiTest,
         ghiChu: ghiChuQA.trim() || null,
+        release2: ngoaiGio,
       });
-      show('QA xác nhận đạt — chuyển bước tiếp theo');
+      show(baoR2(res, 'QA xác nhận đạt'), res?.data?.release2 && !res.data.release2.ok ? 'error' : 'success');
       setSoLuong(''); setLyDo(''); setNguoiTest(''); setGhiChuQA(''); setLoaiTest('TEST_RUN');
       await load();
       onChanged?.();
@@ -175,18 +187,19 @@ export default function TestRunPanel({ lenhId, onClose, onChanged, truocXacNhan,
     if (truocXacNhan && !(await truocXacNhan())) return;
     setBusy('ikd');
     try {
-      await confirmQA(lenhId, {
+      const res = await confirmQA(lenhId, {
         soLuong: soLuong ? Number(soLuong) : null,
         nguoiTest: nguoiTest.trim() || null,
         loaiTest,
         ghiChu: ghiChuQA.trim() || null,
+        release2: ngoaiGio,
         inKhongDat: {
           ownerIds: [...ikdOwners], lyDo: ikdLyDo.trim() || null,
           nguoiKhac: ikdKhac ? ikdNguoiKhac.trim() || null : null,
           lyDoKhac: ikdKhac ? ikdLyDoKhac.trim() || null : null,
         },
       });
-      show('Đã xác nhận in không đạt — chuyển bước tiếp theo');
+      show(baoR2(res, 'Đã xác nhận in không đạt'), res?.data?.release2 && !res.data.release2.ok ? 'error' : 'success');
       setIkdOpen(false);
       setSoLuong(''); setLyDo(''); setNguoiTest(''); setGhiChuQA(''); setLoaiTest('TEST_RUN');
       await load();
@@ -280,10 +293,11 @@ export default function TestRunPanel({ lenhId, onClose, onChanged, truocXacNhan,
             <Button variant="secondary" onClick={moInKhongDat} loading={busy === 'ikd'}
               disabled={choKyThuat || busy === 'fail' || busy === 'pass' || !nguoiTest.trim()}
               className="!text-blue-900 dark:!text-blue-300">
-              Xác nhận In Không Đạt
+              {ngoaiGio ? 'Xác nhận In Không Đạt và Release 2' : 'Xác nhận In Không Đạt'}
             </Button>
-            <Button onClick={doPass} loading={busy === 'pass'} disabled={choKyThuat || busy === 'fail' || !nguoiTest.trim()}>
-              QA xác nhận đạt
+            <Button onClick={doPass} loading={busy === 'pass'} disabled={choKyThuat || busy === 'fail' || !nguoiTest.trim()}
+              title={ngoaiGio ? 'Ngoài giờ hành chính (07:30–16:30): xác nhận đạt và Release 2 luôn — lệnh vào chờ sản xuất' : undefined}>
+              {ngoaiGio ? 'Xác nhận đạt và Release 2' : 'QA xác nhận đạt'}
             </Button>
           </>
         )
@@ -464,7 +478,7 @@ export default function TestRunPanel({ lenhId, onClose, onChanged, truocXacNhan,
           <>
             <Button chiXemOk variant="ghost" onClick={() => setIkdOpen(false)} disabled={busy === 'ikd'}>Hủy</Button>
             <Button onClick={doInKhongDat} loading={busy === 'ikd'} disabled={!ikdDuDieuKien}>
-              Xác nhận In Không Đạt
+              {ngoaiGio ? 'Xác nhận In Không Đạt và Release 2' : 'Xác nhận In Không Đạt'}
             </Button>
           </>
         )}>

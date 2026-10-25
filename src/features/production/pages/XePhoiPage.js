@@ -17,6 +17,15 @@ import { fmtNum } from '../../../utils/format';
 
 const NEAR_MS = 5 * 60 * 1000; // ngưỡng "sắp xong" — nhấp nháy cảnh báo
 
+// Tìm mã tem (25/10/2026): khớp 1 phần, không phân biệt hoa thường; gõ/quét đủ 12 số thì so 10 số sau
+// (nhãn 15/16/17 cùng 1 tem). Đang tìm ⇒ chỉ hiện xe có tem khớp, và chỉ tem khớp.
+const chuanMa = (s) => String(s || '').trim().toLowerCase();
+function khopTimTem(maTem, q) {
+  const m = chuanMa(maTem);
+  if (/^\d{12}$/.test(q) && /^\d{12}$/.test(m)) return m.slice(2) === q.slice(2);
+  return m.includes(q);
+}
+
 export default function XePhoiPage() {
   const { can } = usePermissions();
   const { toast, show } = useToast();
@@ -32,6 +41,11 @@ export default function XePhoiPage() {
   const [adjust, setAdjust] = useState(null); // { tem_xe_id, ma_tem } đang chỉnh giờ
   const [adjustMin, setAdjustMin] = useState('60');
   const [kho, setKho] = useState(null); // tem đang hỏi "Xác nhận khô" (khô sớm hơn giờ phơi dự kiến)
+  const [tim, setTim] = useState('');
+  const q = chuanMa(tim);
+  const xeHien = !q ? xe : xe
+    .map((x) => ({ ...x, tems: x.tems.filter((t) => khopTimTem(t.ma_tem, q)) }))
+    .filter((x) => x.tems.length);
 
   // silent=true: làm mới nền (interval / sau thao tác) — KHÔNG bật loading để tránh chớp cả lưới.
   const load = useCallback(async (silent = false) => {
@@ -115,7 +129,7 @@ export default function XePhoiPage() {
 
   return (
     <div>
-      <Toolbar title="Tình trạng xe phơi" subtitle="Đưa tem vào xe, đếm ngược thời gian phơi (tự làm mới 15s)">
+      <Toolbar title="Tình trạng xe phơi" search={tim} onSearch={setTim} searchPlaceholder="Tìm mã tem...">
         {canXe && <Button icon="truck" onClick={() => openAdd('')}>Đưa tem vào xe</Button>}
       </Toolbar>
 
@@ -123,7 +137,10 @@ export default function XePhoiPage() {
         <div className="py-10 text-center text-ink-soft">Đang tải...</div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {xe.map((x) => (
+          {q && xeHien.length === 0 && (
+            <div className="col-span-full py-10 text-center text-sm text-ink-soft">Không có tem nào trên xe phơi khớp "{tim.trim()}"</div>
+          )}
+          {xeHien.map((x) => (
             <div key={x.id} className="card flex flex-col p-4">
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">

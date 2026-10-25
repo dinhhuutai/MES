@@ -19,6 +19,8 @@ import useSocketReload from '../../../hooks/useSocketReload';
 import usePermissions from '../../../hooks/usePermissions';
 import useNghenMap from '../../../hooks/useNghenMap';
 import useLyDoNghen from '../../../hooks/useLyDoNghen';
+import useNow from '../../../hooks/useNow';
+import { trongGioHanhChinh } from '../../../utils/gioHanhChinh';
 import { KHOA_LENH } from '../../../utils/nghen';
 import { slaRowClass } from '../../../utils/sla';
 import { listTestRunCandidates, testRunHistory, confirmQABatch, testQaDone } from '../../../services/planningService';
@@ -230,14 +232,18 @@ export default function TestRunPage() {
   const allChecked = selRows.length > 0 && selRows.every((r) => selected.has(r.id));
   const toggleAll = () => setSelected(() => (allChecked ? new Set() : new Set(selRows.map((r) => r.id))));
 
+  // Ngoài giờ hành chính 07:30–16:30 ⇒ xác nhận đạt kiêm Release 2 (25/10/2026; BE tự kiểm lại giờ).
+  const now = useNow(30000);
+  const ngoaiGio = !trongGioHanhChinh(now);
   const doBatch = async () => {
     if (!nguoiTestBatch.trim()) { show('Bắt buộc nhập người test khi QA xác nhận đạt', 'error'); return; }
     if (!(await hoiLyDoNghen(rows.filter((r) => selected.has(r.id))))) return; // mig 106
     setBatching(true);
     try {
-      const res = await confirmQABatch([...selected], { nguoiTest: nguoiTestBatch.trim() });
-      const { okCount, failedCount } = res.data;
-      show(failedCount ? `QA xác nhận ${okCount} lệnh, ${failedCount} lỗi` : `Đã QA xác nhận đạt ${okCount} lệnh`,
+      const res = await confirmQABatch([...selected], { nguoiTest: nguoiTestBatch.trim(), release2: ngoaiGio });
+      const { okCount, failedCount, release2Count } = res.data;
+      const r2 = release2Count ? ` · Release 2 ${release2Count} lệnh` : '';
+      show(failedCount ? `QA xác nhận ${okCount} lệnh${r2}, ${failedCount} lỗi` : `Đã QA xác nhận đạt ${okCount} lệnh${r2}`,
         failedCount ? 'error' : 'success');
       setNguoiTestBatch('');
       load();
@@ -321,7 +327,7 @@ export default function TestRunPage() {
               placeholder="Người test (bắt buộc)"
               className={`!w-44 ${!nguoiTestBatch.trim() ? 'border-danger' : ''}`} />
             <Button loading={batching} onClick={doBatch} disabled={!nguoiTestBatch.trim()}>
-              QA xác nhận đạt ({selected.size})
+              {ngoaiGio ? `Xác nhận đạt và Release 2 (${selected.size})` : `QA xác nhận đạt (${selected.size})`}
             </Button>
           </div>
         )}

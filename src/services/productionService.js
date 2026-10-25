@@ -15,6 +15,10 @@ export const printTem = (phieuId, soLuong, meta) =>
 export const printTemBatch = (phieuId, items, meta) =>
   client.post(`/production/phieu/${phieuId}/tem-batch`, { items, ...(meta || {}) });
 export const reprintTem = (temId, lyDo) => client.post(`/production/tem/${temId}/in-lai`, { lyDo });
+// Sửa SL in / giờ SX / mã ngày ca của tem (Danh sách tem in, 25/10/2026) — BE gửi lại ERP cùng IDMES.
+export const suaTem = (temId, body) => client.put(`/production/tem/${temId}/sua`, body);
+// Gộp các lệnh cùng code phần + cùng chuyền thành 1 lệnh (25/10/2026) — trả { lenh_id, ma_lenh, gop[] }.
+export const gopLenh = (lenhIds, lyDo = '') => client.post('/production/gop-lenh', { lenhIds, lyDo });
 // dotVaiId (tùy chọn) → nhãn lấy đúng phần in của đợt vải đó (in tem lệnh gom set)
 export const getTemLabel = (temId, dotVaiId) =>
   client.get(`/production/tem/${temId}/label`, { params: dotVaiId ? { dotVaiId } : undefined });

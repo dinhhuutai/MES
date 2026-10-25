@@ -151,6 +151,14 @@ export default function ChoChayModal({
     return them.length;
   }, [chon, chonSet, dat, toast]);
   const daTichHet = (r) => lenhCuaDong(r).every((l) => chonSet.has(l.id));
+  const tichMotPhan = (r) => !daTichHet(r) && lenhCuaDong(r).some((l) => chonSet.has(l.id));
+  // Tích / bỏ 1 LỆNH (= 1 đợt vải đã release) trong dòng gom (25/10/2026, người dùng: "quét 1 lần ra nhiều đợt vải
+  //   thì tích ô đầu mỗi dòng để chọn đợt muốn xác nhận chạy"). Các đợt tích cùng lượt được BE gộp thành 1 lệnh.
+  const doiTichLenh = (l) => {
+    if (chonSet.has(l.id)) dat(chon.filter((x) => x !== l.id));
+    else tichNhieu([l]);
+    datConTroTim();
+  };
   const doiTich = (r) => {
     const ds = lenhCuaDong(r);
     if (daTichHet(r)) { const bo = new Set(ds.map((l) => l.id)); dat(chon.filter((x) => !bo.has(x))); }
@@ -212,6 +220,7 @@ export default function ChoChayModal({
   const cols = [
     ...(canRun ? [{ key: 'chon', header: '', selection: true, render: (r) => (
       <input type="checkbox" className="h-4 w-4 cursor-pointer accent-primary" aria-label="Tích để xác nhận chạy"
+        ref={(el) => { if (el) el.indeterminate = tichMotPhan(r); }}
         checked={daTichHet(r)} onChange={() => doiTich(r)} />
     ) }] : []),
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
@@ -243,6 +252,24 @@ export default function ChoChayModal({
     // Dòng gom: SL release = TỔNG các lệnh, 1 con số.
     { key: 'so_luong_release', header: 'SL release', className: 'text-right tabular-nums', merge: true,
       render: (r) => fmtNum(r.so_luong_release) },
+    // ĐỢT VẢI (25/10/2026): dòng gom nhiều lệnh (mỗi đợt vải release ra 1 lệnh) ⇒ 1 ô tích / đợt để chọn đợt chạy.
+    { key: 'dot_vai', header: 'Đợt vải', merge: true, render: (r) => {
+      const ds = lenhCuaDong(r);
+      if (ds.length < 2 || !canRun) return <span className="text-xs text-ink-soft">{ds.map((l) => l.ma_lenh_san_xuat).join(', ')}</span>;
+      return (
+        <div className="space-y-1" onClick={(e) => e.stopPropagation()} role="presentation">
+          {ds.map((l, i) => (
+            <label key={l.id} className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap text-xs text-ink">
+              <input type="checkbox" className="h-3.5 w-3.5 accent-primary" checked={chonSet.has(l.id)} onChange={() => doiTichLenh(l)}
+                aria-label={`Tích đợt ${i + 1}`} />
+              <span>Đợt {i + 1} · <b className="tabular-nums">{fmtNum(l.so_luong_release)}</b>
+                <span className="text-ink-soft"> · {l.ma_lenh_san_xuat}{l.han_giao_hang ? ` · HG ${fmtDate(l.han_giao_hang)}` : ''}{l.ngay_ke_hoach ? ` · KH ${fmtDate(l.ngay_ke_hoach)}` : ''}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      );
+    } },
     { key: 'ngay_ke_hoach', header: 'Ngày SX KH', merge: true, render: (r) => fmtDate(r.ngay_ke_hoach) },
     { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => fmtDate(r.han_giao_hang) },
     { key: 'actions', header: '', className: 'text-right whitespace-nowrap', merge: true, render: (r) =>

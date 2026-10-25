@@ -26,6 +26,7 @@ import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import PhuongAnInBadge, { PHUONG_AN_IN } from '../../../components/common/PhuongAnInBadge';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import TraVeGnModal from '../../../components/common/TraVeGnModal';
+import TraVeKyThuatModal from '../components/TraVeKyThuatModal';
 import { dsPhanInCuaLenh, ungVienTuLenh } from '../../../utils/phanInTraVeGn';
 import { listRelease2Candidates, approveRelease2, approveRelease2Batch, planHistory, release2Done } from '../../../services/planningService';
 import { fmtNum, fmtDate, trongKhoangNgay } from '../../../utils/format';
@@ -78,6 +79,7 @@ export default function Release2Page() {
   const [scanOpen, setScanOpen] = useState(false);
   const [detail, setDetail] = useState(null); // bấm vào hàng → SidePanel chi tiết lệnh
   const [gnLenh, setGnLenh] = useState(null); // lệnh đang mở modal "Trả về GN"
+  const [ktLenh, setKtLenh] = useState(null); // lệnh đang mở modal "Trả về Kỹ thuật" (25/10/2026)
   const [loai, setLoai] = useState(''); // chip loại chuyền / khu bàn ('' = tất cả)
 
   // Dải "Theo dõi" (sĩ số) bám ô tìm + panel lọc + dải chip loại chuyền/khu của màn này.
@@ -284,6 +286,10 @@ export default function Release2Page() {
                 onClick={() => { const r = detail; setDetail(null); setGnLenh(r); }}>Trả về GN</Button>
             )}
             {canApprove && detail && (
+              <Button variant="secondary" icon="undo" className="text-danger"
+                onClick={() => { const r = detail; setDetail(null); setKtLenh(r); }}>Trả về Kỹ thuật</Button>
+            )}
+            {canApprove && detail && (
               <Button onClick={() => { const r = detail; setDetail(null); setConfirm(r); }}>Duyệt Release 2</Button>
             )}
           </>
@@ -312,6 +318,8 @@ export default function Release2Page() {
           </div>
         )}
       </SidePanel>
+
+      <TraVeKyThuatModal lenh={ktLenh} onClose={() => setKtLenh(null)} onToast={(m, t) => show(m, t)} onDone={() => load(true)} />
 
       <TraVeGnModal open={!!gnLenh} onClose={() => setGnLenh(null)} nguon="RELEASE2" lenhId={gnLenh?.id}
         phanIn={dsPhanInCuaLenh(gnLenh)[0] || null} dsPhanIn={dsPhanInCuaLenh(gnLenh)}

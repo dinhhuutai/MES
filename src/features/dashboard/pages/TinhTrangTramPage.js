@@ -255,6 +255,41 @@ function ReadyNode({ checklists, lan = 0, traVe, reg, nodeRef }) {
   );
 }
 
+// LỆNH ĐÃ HỦY của 1 chu kỳ READY (25/10/2026, người dùng: "hiện luôn những trạm ở giữa có xác nhận lần đầu nếu có trả
+//   về — không thấy giờ Release của lần 1, lần 2"). BE `tinhTrangGraph` gắn `cy.lenh_huy`: Release 1 · từng lần test ·
+//   Release 2 · lúc hủy + lý do. Mức module (luật §9).
+const KQ_TEST = { DAT: 'Đạt', CO_LOI: 'Không đạt', LOI: 'Không đạt', KHONG_DAT_CHO_IN: 'Không đạt · cho IN', HUY: 'Đã gỡ' };
+function DongMoc({ ten, nguoi, tg, tone = 'emerald', phu }) {
+  return (
+    <div className="flex items-start gap-1.5 text-[11px]">
+      <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${tone === 'rose' ? 'bg-rose-500' : tone === 'slate' ? 'bg-line' : 'bg-emerald-500'}`} />
+      <div className="min-w-0 flex-1">
+        <span className="font-semibold text-ink">{ten}</span>
+        {phu && <span className={`ml-1 text-[10px] ${tone === 'rose' ? 'text-rose-600' : 'text-ink-soft'}`}>{phu}</span>}
+        {(nguoi || tg) && <div className="text-[10px] text-ink-soft">{[nguoi, tg ? fmtDateTime(tg) : ''].filter(Boolean).join(' · ')}</div>}
+      </div>
+    </div>
+  );
+}
+function LenhHuyNode({ l }) {
+  const huy = l.huy || {};
+  const lyDo = huy.hanh_dong === 'GOP_VAO_LENH' ? `Gộp vào ${huy.vao_lenh || 'lệnh khác'}` : (huy.ly_do || 'Hủy lệnh');
+  return (
+    <Node title={`Đợt SX · ${l.ma_lenh_san_xuat} · đã hủy`} tone="slate" w={210}>
+      <div className="space-y-1 opacity-90">
+        <DongMoc ten="Release 1" nguoi={l.r1_nguoi} tg={l.created_date} phu={l.so_luong_release ? `SL ${Number(l.so_luong_release).toLocaleString('vi-VN')}` : ''} />
+        {(l.tests || []).map((t) => (
+          <DongMoc key={t.lan} ten={`Test Run lần ${t.lan}`} nguoi={t.nguoi} tg={t.tg}
+            tone={t.ket_qua === 'DAT' || t.ket_qua === 'KHONG_DAT_CHO_IN' ? 'emerald' : 'rose'}
+            phu={`${KQ_TEST[t.ket_qua] || t.ket_qua || ''}${t.ghi_chu ? ` · ${t.ghi_chu}` : ''}`} />
+        ))}
+        {l.r2 && <DongMoc ten="Release 2" nguoi={l.r2.nguoi} tg={l.r2.tg} />}
+        <DongMoc ten="Hủy lệnh" tone="rose" phu={lyDo} nguoi={huy.nguoi} tg={huy.tg || l.tg_huy} />
+      </div>
+    </Node>
+  );
+}
+
 const DA_R2 = ['RELEASE_2', 'SAN_XUAT', 'HOAN_TAT', 'CHO_IN_XONG'];
 // Lệnh ra Release 2 mà không có QA đạt ⇒ bỏ Test Run (§5.3): loại đợt Bổ sung / Mẫu SL · QA bấm "Không test run" ·
 //   còn lại = SL < 100 hoặc phần in đang in tem lúc release.
@@ -702,7 +737,10 @@ export default function TinhTrangTramPage() {
     <Fork key={ci}
       parent={<ReadyNode checklists={cy.checklists} lan={graph.ready_cycles.length > 1 ? ci + 1 : 0}
         traVe={traVeCycle(ci)} reg={reg} nodeRef={reg(`rd-${ci}`)} />}
-      items={[...cy.lenh.map(lenhTree), ...(cy.pending || []).map((d) => choRelease(d, 'Chờ release (READY)'))]} />
+      items={[
+        ...(cy.lenh_huy || []).map((l) => <LenhHuyNode key={`huy-${l.id}`} l={l} />),
+        ...cy.lenh.map(lenhTree), ...(cy.pending || []).map((d) => choRelease(d, 'Chờ release (READY)')),
+      ]} />
   )) : [];
   // Nhánh VÀO THẲNG (đợt ERP không cần KT) — đứng TRƯỚC các chu kỳ READY, nối thẳng từ ô Phần in.
   const thangBranch = vaoThang ? (

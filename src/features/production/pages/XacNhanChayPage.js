@@ -351,11 +351,14 @@ export default function XacNhanChayPage() {
       setChon((c) => c.filter((id) => !daChay.has(id)));
       setLoiChay(Object.fromEntries(loi.map((x) => [x.lenhId, x.message])));
       setXnNhieu(null);
+      // Lệnh cùng code phần + cùng chuyền trong lượt được BE GỘP thành 1 lệnh (25/10/2026) — `gopVao` = lệnh đích.
+      const soGop = ok.filter((x) => x.gopVao).length;
+      const ghiGop = soGop ? ` (gộp ${fmtNum(soGop)} lệnh cùng code phần vào lệnh chạy chung)` : '';
       if (!loi.length) {
-        show(`Đã xác nhận chạy ${fmtNum(ok.length)} lệnh`);
+        show(`Đã xác nhận chạy ${fmtNum(ok.length - soGop)} lệnh${ghiGop}`);
         setChoChayOpen(false); // về bảng Đang chạy để thấy ngay các lệnh vừa chạy
       } else {
-        show(`Đã chạy ${fmtNum(ok.length)} lệnh · ${fmtNum(loi.length)} lệnh chưa chạy được (vẫn tích, có ghi lỗi)`, 'error');
+        show(`Đã chạy ${fmtNum(ok.length - soGop)} lệnh${ghiGop} · ${fmtNum(loi.length)} lệnh chưa chạy được (vẫn tích, có ghi lỗi)`, 'error');
         setDatConTro((n) => n + 1);
       }
       load(true);

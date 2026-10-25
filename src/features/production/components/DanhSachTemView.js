@@ -7,8 +7,10 @@ import SidePanel from '../../../components/common/SidePanel';
 import Pagination from '../../../components/common/Pagination';
 import Spinner from '../../../components/common/Spinner';
 import Toast from '../../../components/common/Toast';
-import { Input, Select } from '../../../components/common/controls';
-import { listChuyen, getVaiTem, suaVaiTem } from '../../../services/productionService';
+import { Input, Select, Field, Textarea } from '../../../components/common/controls';
+import Modal from '../../../components/common/Modal';
+import TimeSelect from '../../../components/common/TimeSelect';
+import { listChuyen, getVaiTem, suaVaiTem, suaTem, reprintTem, getTemLabel } from '../../../services/productionService';
 import FieldFilters, { FilterToggle } from '../../../components/common/FieldFilters';
 import DateRangePicker from '../../../components/common/DateRangePicker';
 import useToast from '../../../hooks/useToast';
@@ -18,7 +20,7 @@ import exportCheckpointExcel, { cotTemChung, moTaBoLoc } from '../../../utils/ex
 import taiHetTrang, { LIMIT_TAI_LON } from '../../../utils/taiHetTrang';
 import HuyLyDoModal from '../../../components/common/HuyLyDoModal';
 import TemInPreview from './TemInPreview';
-import { toTemSanXuat, toTemGiaCongVe } from '../utils/printTemLabel';
+import printTemLabel, { toTemSanXuat, toTemGiaCongVe, moSanCuaSoIn, dongCuaSoIn } from '../utils/printTemLabel';
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 // DANH SÁCH TEM ĐÃ IN — view DÙNG CHUNG cho 2 trang (nhiệm vụ #8, phiên 04-05/09/2026):
@@ -159,6 +161,8 @@ export default function DanhSachTemView({
   const [loading, setLoading] = useState(true);
   const [tem, setTem] = useState(null);         // hàng đang mở SidePanel
   const [dangXuat, setDangXuat] = useState(false);
+  const [suaTemDong, setSuaTemDong] = useState(null); // tem đang mở hộp Sửa (25/10/2026)
+  const [inLaiDong, setInLaiDong] = useState(null);   // tem đang mở hộp In lại
   // Ô CHỌN CHUYỀN (21/10/2026) — lọc đúng chuyền chạy phiếu (`chuyenId`, khớp chính xác). Chỉ trang Sản xuất.
   const [dsChuyen, setDsChuyen] = useState([]);
   useEffect(() => {
@@ -364,10 +368,19 @@ export default function DanhSachTemView({
               onClick={(e) => { e.stopPropagation(); moLai.moHuy(r); }}>Mở lại</Button>
           ) : null;
         }
-        return temHuyDuoc(r) ? (
-          <Button variant="danger" className="px-2.5 py-1 text-xs" title="Hủy tem (nhập lý do) — báo ERP hủy phiếu in tem"
-            onClick={(e) => { e.stopPropagation(); huy.moHuy(r); }}>Hủy</Button>
-        ) : null;
+        // Sửa (SL / giờ / ca — gửi lại ERP) + In lại (25/10/2026) ở mọi tem sản xuất chưa hủy.
+        return (
+          <span className="inline-flex items-center gap-1.5">
+            <Button variant="secondary" className="px-2.5 py-1 text-xs" title="Sửa số lượng / giờ / ca — gửi lại ERP cùng IDMES"
+              onClick={(e) => { e.stopPropagation(); setSuaTemDong(r); }}>Sửa</Button>
+            <Button variant="secondary" className="px-2.5 py-1 text-xs" title="In lại tờ tem (giữ nguyên mã)"
+              onClick={(e) => { e.stopPropagation(); setInLaiDong(r); }}>In lại</Button>
+            {temHuyDuoc(r) && (
+              <Button variant="danger" className="px-2.5 py-1 text-xs" title="Hủy tem (nhập lý do) — báo ERP hủy phiếu in tem"
+                onClick={(e) => { e.stopPropagation(); huy.moHuy(r); }}>Hủy</Button>
+            )}
+          </span>
+        );
       },
     }] : []),
   ];
@@ -436,6 +449,8 @@ export default function DanhSachTemView({
         }} />
       {huy.modal}
       {moLai.modal}
+      <SuaTemModal tem={suaTemDong} onClose={() => setSuaTemDong(null)} onDaLuu={() => { setTem(null); load(); }} show={show} />
+      <InLaiTemModal tem={inLaiDong} onClose={() => setInLaiDong(null)} onDaIn={load} show={show} />
       <HuyLyDoModal muc={hopHuyNhieu} onClose={() => { if (!dangHuyNhieu) setHopHuyNhieu(null); }} onXacNhan={huyNhieu}
         tieuDe={`Hủy ${hopHuyNhieu ? hopHuyNhieu.ds.length : 0} tem đã in`} nhanNut="Hủy các tem đã chọn"
         moTa={({ ds }) => (
@@ -610,6 +625,118 @@ function TemPanel({ tem, onClose, laGiaCong, layNhan, coSuaVai = false, show, on
         )}
       </div>
     </SidePanel>
+  );
+}
+
+// ─── SỬA TEM (25/10/2026, người dùng yêu cầu) ──────────────────────────────────────────────────────────────────
+// Sửa SL in (chỉ khi tem CHƯA kiểm) · giờ SX · mã ngày ca; lý do bắt buộc. Backend `PUT /production/tem/:id/sua`
+// (`production.service suaTem`) kiểm lại trong transaction (chưa kiểm · trần 110%) rồi gửi lại phiếu in tem sang ERP
+// CÙNG IDMES (ERP ghi đè phiếu, không thêm phiếu).
+const NGAY_CA_RE = /^\d{6}(C1|C2|C3|D1|D2|HC)$/;
+function SuaTemModal({ tem, onClose, onDaLuu, show }) {
+  const [sl, setSl] = useState('');
+  const [gioBd, setGioBd] = useState('');
+  const [gioKt, setGioKt] = useState('');
+  const [maCa, setMaCa] = useState('');
+  const [lyDo, setLyDo] = useState('');
+  const [dangLuu, setDangLuu] = useState(false);
+  const [loi, setLoi] = useState('');
+  useEffect(() => {
+    if (!tem) return;
+    setSl(String(tem.so_luong ?? '')); setGioBd(tem.gio_sx_bd || ''); setGioKt(tem.gio_sx_kt || '');
+    setMaCa(tem.ma_ngay_ca || ''); setLyDo(''); setLoi('');
+  }, [tem]);
+  if (!tem) return null;
+  const khoaSl = !!tem.da_kiem;
+  const slSai = !khoaSl && (!/^\d+$/.test(String(sl).trim()) || Number(sl) <= 0);
+  const caSai = !!maCa && !NGAY_CA_RE.test(maCa);
+  const body = {};
+  if (!khoaSl && Number(sl) !== Number(tem.so_luong)) body.soLuong = Number(sl);
+  if ((gioBd || '') !== (tem.gio_sx_bd || '')) body.gioBd = gioBd || null;
+  if ((gioKt || '') !== (tem.gio_sx_kt || '')) body.gioKt = gioKt || null;
+  if (maCa && maCa !== (tem.ma_ngay_ca || '')) body.maNgayCa = maCa;
+  const coDoi = Object.keys(body).length > 0;
+
+  const luu = async () => {
+    setDangLuu(true); setLoi('');
+    try {
+      const res = await suaTem(tem.id, { ...body, lyDo: lyDo.trim() });
+      show(res.data?.gui_erp ? `Đã sửa tem ${tem.ma_tem} — đang gửi lại ERP (cùng IDMES)` : `Đã sửa tem ${tem.ma_tem}`);
+      onDaLuu?.();
+      onClose();
+    } catch (e) { setLoi(e.message || 'Sửa tem thất bại'); }
+    finally { setDangLuu(false); }
+  };
+
+  return (
+    <Modal open={!!tem} onClose={() => (dangLuu ? null : onClose())} size="md" title={`Sửa tem ${tem.ma_tem}`}
+      footer={(
+        <>
+          <Button chiXemOk variant="ghost" onClick={onClose} disabled={dangLuu}>Hủy</Button>
+          <Button onClick={luu} loading={dangLuu} disabled={!coDoi || slSai || caSai || !lyDo.trim()}>Lưu &amp; gửi ERP</Button>
+        </>
+      )}>
+      <div className="space-y-3">
+        <div className="text-sm text-ink-soft">{tem.ma_lenh_san_xuat} · {tem.ma_phan} · {tem.ten_chuyen || tem.ma_chuyen || ''}</div>
+        <Field label="Số lượng in (pcs)">
+          <Input type="number" min="1" inputMode="numeric" value={sl} disabled={khoaSl} onChange={(e) => setSl(e.target.value)} />
+        </Field>
+        {khoaSl && <p className="-mt-2 text-xs text-amber-700 dark:text-amber-400">Tem đã kiểm (KCS) — không sửa số lượng được.</p>}
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Từ giờ"><TimeSelect value={gioBd} onChange={setGioBd} minuteStep={1} /></Field>
+          <Field label="Đến giờ"><TimeSelect value={gioKt} onChange={setGioKt} minuteStep={1} /></Field>
+        </div>
+        <Field label="Mã ngày ca (vd 261025C1)">
+          <Input value={maCa} onChange={(e) => setMaCa(e.target.value.toUpperCase().replace(/\s+/g, ''))}
+            className={caSai ? 'border-danger' : ''} placeholder="YYMMDD + C1/C2/C3/D1/D2/HC" />
+        </Field>
+        {caSai && <p className="-mt-2 text-xs text-danger">Mã ngày ca phải đúng 8 ký tự: YYMMDD + C1·C2·C3·D1·D2·HC</p>}
+        <Field label="Lý do sửa" required>
+          <Textarea rows={2} value={lyDo} onChange={(e) => setLyDo(e.target.value)} placeholder="Vì sao sửa tem (vd: nhập nhầm số lượng / ca)..." />
+        </Field>
+        <p className="text-xs text-ink-soft">Lưu xong hệ thống gửi lại phiếu in tem sang ERP cùng IDMES — ERP cập nhật phiếu cũ, không tạo phiếu mới.</p>
+        {loi && <p className="text-sm text-danger">{loi}</p>}
+      </div>
+    </Modal>
+  );
+}
+
+// ─── IN LẠI TEM (25/10/2026) — giữ nguyên mã tem, ghi `log_tem` (lý do bắt buộc), in đúng đường in thật. ─────────
+function InLaiTemModal({ tem, onClose, onDaIn, show }) {
+  const [lyDo, setLyDo] = useState('');
+  const [dangIn, setDangIn] = useState(false);
+  useEffect(() => { if (tem) setLyDo(''); }, [tem]);
+  if (!tem) return null;
+  const inLai = async () => {
+    // ⚠ Mở SẴN cửa sổ in trong cú bấm (trước mọi await) — mở sau await là trình duyệt chặn popup.
+    let w;
+    try { w = moSanCuaSoIn(); } catch (e) { show(e.message, 'error'); return; }
+    setDangIn(true);
+    try {
+      await reprintTem(tem.id, lyDo.trim());
+      const nhan = (await getTemLabel(tem.id)).data;
+      await printTemLabel(nhan, w);
+      show(`Đã in lại tem ${tem.ma_tem} (giữ nguyên mã)`);
+      onDaIn?.();
+      onClose();
+    } catch (e) {
+      dongCuaSoIn(w);
+      show(e.message || 'In lại thất bại', 'error');
+    } finally { setDangIn(false); }
+  };
+  return (
+    <Modal open={!!tem} onClose={() => (dangIn ? null : onClose())} size="sm" title={`In lại tem ${tem.ma_tem}`}
+      footer={(
+        <>
+          <Button chiXemOk variant="ghost" onClick={onClose} disabled={dangIn}>Hủy</Button>
+          <Button onClick={inLai} loading={dangIn} disabled={!lyDo.trim()}>In lại tem</Button>
+        </>
+      )}>
+      <p className="mb-3 text-sm text-ink-soft">In lại nhãn — <b>giữ nguyên mã tem</b>, không đổi số lượng / sổ cái, không gửi ERP.</p>
+      <Field label="Lý do in lại" required>
+        <Textarea rows={3} value={lyDo} autoFocus onChange={(e) => setLyDo(e.target.value)} placeholder="vd: tem rách, mờ..." />
+      </Field>
+    </Modal>
   );
 }
 

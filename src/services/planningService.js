@@ -41,6 +41,7 @@ export const cancelQA = (id) => client.post(`/planning/test-run/${id}/cancel-qa`
 // Test không đạt → trả về KỸ THUẬT (READY) theo mục rớt: body {checklists:['KHUON'|'FILM'|'MUC'], lyDo}.
 // Lệnh GIỮ NGUYÊN → QC xác nhận READY xong là tự quay lại Test Run (không qua Release 1).
 export const returnTestRunToReady = (id, body) => client.post(`/planning/test-run/${id}/tra-ve-ky-thuat`, body);
+export const release2TraVeKyThuat = (id, body) => client.post(`/planning/release2/${id}/tra-ve-ky-thuat`, body);
 // Test Run trả về KẾ HOẠCH (giữ lệnh) — body { lyDo } (07/10/2026).
 export const testRunTraVeKeHoach = (id, body) => client.post(`/planning/test-run/${id}/tra-ve-ke-hoach`, body);
 // Màn Release 1: lệnh bị Test Run trả về (1 dòng / lệnh × đợt) + xác nhận lại { chuyenId, ngayKeHoach, tgBdKh, tgKtKh, thoIn }.

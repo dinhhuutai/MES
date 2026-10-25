@@ -193,7 +193,8 @@ export default function PhanLoaiLoiPage() {
     { header: 'Hủy', render: (r) => <span className="text-danger">{Number(r.sl_kcs_huy || 0)}</span>, center: true },
     { header: 'Lỗi đã phân loại', render: (r) => <span className="text-xs text-ink-soft">{r.cac_loi || '—'}</span> },
     { header: 'Người nhập', key: 'nguoi' },
-    ...huyLs.taoCot((r) => !!r.da_phan_loai && !!r.tem_id),
+    // Tem đã xác nhận Sửa (còn hiệu lực) ⇒ không hủy phân loại — phải hủy xác nhận Sửa trước (BE 409 DA_XAC_NHAN_SUA).
+    ...huyLs.taoCot((r) => !!r.da_phan_loai && !!r.tem_id && !(Number(r.sl_da_xac_nhan_sua) > 0)),
   ];
 
   return (
