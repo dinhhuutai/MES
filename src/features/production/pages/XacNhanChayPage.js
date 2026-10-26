@@ -27,12 +27,15 @@ import {
 import { fmtNum, fmtDate } from '../../../utils/format';
 import { Select } from '../../../components/common/controls';
 import DateRangePicker from '../../../components/common/DateRangePicker';
-import exportCheckpointExcel, { moTaBoLoc } from '../../../utils/exportCheckpointExcel';
+import exportCheckpointExcel, {
+  moTaBoLoc, cotKhoangGio, khoangGio, gioNgay,
+} from '../../../utils/exportCheckpointExcel';
 import { thoInHienThi } from '../../../utils/thoIn';
 import ChipTabs from '../../../components/common/ChipTabs';
 import { LOAI_TABS, hopChipChuyen, nhanChip, demChip, locSiSoTheoChip } from '../../../utils/khuChuyen';
 import RunPanel from '../components/RunPanel';
 import RunNhieuPanel from '../components/RunNhieuPanel';
+import DsReleaseSxModal from '../components/DsReleaseSxModal';
 import ChoChayModal, { LocLenhPanel } from '../components/ChoChayModal';
 import {
   locLenhChay, coLoc, LOC_TRONG, timLenhTheoMa, gomTheoCodePhan, lenhCuaDong, gomDangChayTheoCodePhan,
@@ -90,7 +93,8 @@ export default function XacNhanChayPage() {
   const [showFilter, setShowFilter] = useState(false);
   const [filters, setFilters] = useState(LOC_TRONG);
   const [sel, setSel] = useState(null);
-  const [selNhieu, setSelNhieu] = useState(null); // lenhIds[] — sidebar nhiều lệnh đang chạy
+  const [selNhieu, setSelNhieu] = useState(null);
+  const [dsReleaseOpen, setDsReleaseOpen] = useState(false); // modal Danh sách release sản xuất (26/10/2026) // lenhIds[] — sidebar nhiều lệnh đang chạy
   const [chonRun, setChonRun] = useState([]);     // phieu_id[] đã quét/tích ở bảng Đang chạy (mới nhất đứng đầu)
   const oTim = useOTimKiem();
   const [confirmRun, setConfirmRun] = useState(null); // lệnh đang xác nhận chạy
@@ -306,6 +310,16 @@ export default function XacNhanChayPage() {
       { header: 'Ca', width: 8, center: true, value: (r) => r.ca || '' },
       { header: 'Ngày ca', width: 12, type: 'date', center: true, value: (r) => r.ngay_ca },
       { header: 'Ngày SX kế hoạch', width: 15, type: 'date', center: true, value: (r) => r.ngay_ke_hoach },
+      // 26/10/2026 (người dùng): SLĐH · SL nhận vải (Σ đợt vải của lệnh) · SL đã in · giờ kế hoạch + giờ thực hiện.
+      //   Thực hiện: TỪ = giờ BĐ SX nhập ở tem đầu (chưa tem ⇒ lúc xác nhận chạy) · ĐẾN = giờ KT SX tem cuối (chưa tem ⇒
+      //   trống) · thời gian = cột "Phút" (Σ khoảng giờ SX của các tem).
+      { header: 'SLĐH', width: 10, num: true, value: (r) => (r.so_luong_don_hang == null ? null : Number(r.so_luong_don_hang)) },
+      { header: 'SL nhận vải', width: 11, num: true, value: (r) => (r.sl_nhan_vai == null ? null : Number(r.sl_nhan_vai)) },
+      { header: 'SL đã in', width: 10, num: true, value: (r) => Number(r.printed) || 0 },
+      ...cotKhoangGio('kế hoạch', (r) => khoangGio([[r.tg_bd_kh, r.tg_kt_kh]])),
+      { header: 'Từ giờ thực hiện', width: 13, center: true, value: (r) => gioNgay(r.th_tu_tem || r.tg_bd ? new Date(r.th_tu_tem || r.tg_bd).getTime() : null) },
+      { header: 'Đến giờ thực hiện', width: 13, center: true, value: (r) => gioNgay(r.th_den_tem ? new Date(r.th_den_tem).getTime() : null) },
+      { header: 'Thời gian thực hiện (phút)', width: 13, num: true, value: phutIn },
       { header: 'Mã đợt SX', width: 16, value: (r) => r.ma_lenh_san_xuat || '' },
       { header: 'Chuyền', width: 16, value: (r) => r.ten_chuyen || r.ma_chuyen || '' },
       { header: 'Code phần', width: 24, value: (r) => r.ma_phan || r.phan_list || '' },
@@ -466,6 +480,8 @@ export default function XacNhanChayPage() {
         <Button chiXemOk icon="list" onClick={() => setChoChayOpen(true)}>
           Chờ chạy ({fmtNum(soDongChoChay)})
         </Button>
+        {/* Danh sách release CỦA SẢN XUẤT (26/10/2026) — mẫu "DANH SÁCH RELEASE BÀN …" theo khu + chuyền thêm. */}
+        <Button chiXemOk variant="ghost" icon="file-spreadsheet" onClick={() => setDsReleaseOpen(true)}>Danh sách release</Button>
         {can('PROD_MONITOR') && (
           <Button chiXemOk variant="ghost" icon="activity" onClick={() => setMoTrang('theo-doi-chuyen')}>Theo dõi chuyền</Button>
         )}
@@ -626,6 +642,7 @@ export default function XacNhanChayPage() {
         )}
       </Modal>
 
+      {dsReleaseOpen && <DsReleaseSxModal open onClose={() => setDsReleaseOpen(false)} />}
       {selNhieu && <RunNhieuPanel lenhIds={selNhieu} onClose={() => { setSelNhieu(null); oTim.datConTro(); }}
         onChanged={() => load(true)} onMoLenh={(id) => { setSelNhieu(null); setSel(id); }}
         truocXacNhan={(ids) => hoiLyDoNghen(rowsNghen.filter((r) => ids.includes(r.lenh_id)))} />}

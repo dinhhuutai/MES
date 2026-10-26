@@ -12,7 +12,9 @@ import { Field, Input } from '../../../components/common/controls';
 import { slaRowClass } from '../../../utils/sla';
 import { fmtNum, fmtDate } from '../../../utils/format';
 import { LOAI_TABS, nhanChip, demChip } from '../../../utils/khuChuyen';
-import exportCheckpointExcel, { COT_LENH, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
+import exportCheckpointExcel, {
+  COT_LENH, moTaBoLoc, chenCot, cotKhoangGio, khoangGio,
+} from '../../../utils/exportCheckpointExcel';
 import { locLenhChay, coLoc, LOC_TRONG, timLenhTheoMa, chonLenhDeTich, khoaPinLenh, gomTheoCodePhan, lenhCuaDong } from '../utils/locLenhChay';
 
 // Trần số lệnh 1 lần xác nhận chạy — gương BE `production.service TOI_DA_CHAY_MOT_LUOT`.
@@ -208,7 +210,13 @@ export default function ChoChayModal({
 
   const selChuyen = (chuyen || []).find((x) => x.id === loc.chuyenId);
   const doExcel = () => exportCheckpointExcel({
-    cols: [...COT_LENH, { header: 'Đã in trước đó', width: 13, num: true, value: (r) => r.da_in_truoc || null }],
+    // 26/10/2026 (người dùng): thêm SL nhận vải (Σ đợt vải của lệnh) · SL đã in · giờ kế hoạch (từ · đến · thời gian).
+    //   Dòng gom nhiều lệnh: SL = tổng, giờ KH = từ lệnh sớm nhất tới lệnh muộn nhất.
+    cols: [
+      ...chenCot(COT_LENH, { header: 'SL nhận vải', width: 12, num: true, value: (r) => (r.sl_nhan_vai == null ? null : Number(r.sl_nhan_vai)) }, 'SL release'),
+      { header: 'SL đã in', width: 11, num: true, value: (r) => Number(r.da_in_truoc) || 0 },
+      ...cotKhoangGio('kế hoạch', (r) => khoangGio(lenhCuaDong(r).map((l) => [l.tg_bd_kh, l.tg_kt_kh]))),
+    ],
     rows: hienGom, title: 'Đang chờ chạy', fileName: 'cho-chay',
     moTaLoc: moTaBoLoc({
       'tìm kiếm': search, khách: loc.khach, đơn: loc.don, 'mã hàng': loc.maHang, 'màu vải': loc.mauVai,

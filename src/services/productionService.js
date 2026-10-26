@@ -132,3 +132,8 @@ export const huyTemTaiLichSu = (temId, lyDo) => client.post(`/production/huy-tem
 export const listReopenableTem = (params) => client.get('/production/mo-lai-tem/candidates', { params });
 export const moLaiTem = (temId, lyDo) => client.post(`/production/mo-lai-tem/${temId}`, { lyDo });
 export const moLaiTemTaiLichSu = (temId, lyDo) => client.post(`/production/mo-lai-tem/${temId}/lich-su`, { lyDo });
+// Danh sách release CỦA SẢN XUẤT (26/10/2026, nút ở Xác nhận chạy).
+export const getDsReleaseSx = (ngay) => client.get('/production/ds-release', { params: { ngay } });
+export const luuDongDsReleaseSx = (body) => client.put('/production/ds-release/dong', body);
+export const getChuyenThemDsRelease = (khu) => client.get('/production/ds-release/chuyen-them', { params: { khu } });
+export const luuChuyenThemDsRelease = (khu, maChuyen) => client.put('/production/ds-release/chuyen-them', { khu, maChuyen });

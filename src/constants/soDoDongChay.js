@@ -61,3 +61,44 @@ export function gomOwner(ds) {
     .sort((a, b) => (a[0] === '' ? -1 : b[0] === '' ? 1 : 0))
     .map(([ghiChu, nguoi]) => ({ ghiChu, nguoi: nguoi.sort((x, y) => Number(y.chinh) - Number(x.chinh)) }));
 }
+
+// ─── TÌM CODE PHẦN ĐANG Ở TRẠM NÀO (26/10/2026) ───────────────────────────────────────────────────────────────
+// Dữ liệu `GET /dashboard/so-do-dong-chay/tim` (1 phần in): `dots` = từng đợt vải sống + giai đoạn (`dotStageCase`
+//   backend — cùng luật Dashboard / chip Danh sách phần in) · `tem` = sổ cái tem sau sản xuất · `dang_o_gn`.
+// ⇒ { MA_TRAM: [{ chu, phu, xong }] } — `xong` = đã qua (đã giao) để vẽ nhạt. Đợt ở giai đoạn sau sản xuất (tem đã
+//   in) không ghi theo đợt mà theo TEM (1 lệnh có tem rải nhiều trạm).
+const TRAM_THEO_STAGE = {
+  READY_KT: 'READY_KT', READY_QA: 'READY_QC', RELEASE_1: 'RELEASE_1', TESTRUN_CNSP: 'TEST_RUN', TESTRUN_QA: 'TEST_RUN',
+  RELEASE_2: 'RELEASE_2', CHO_SAN_XUAT: 'SAN_XUAT', SAN_XUAT: 'SAN_XUAT', GIA_CONG: 'RELEASE_1',
+};
+const NHAN_STAGE = {
+  READY_KT: 'chờ Kỹ thuật xác nhận', READY_QA: 'chờ QC xác nhận', RELEASE_1: 'chờ Release 1', TESTRUN_CNSP: 'chờ test',
+  TESTRUN_QA: 'chờ QA test', RELEASE_2: 'chờ duyệt Release 2', CHO_SAN_XUAT: 'chờ xác nhận chạy', SAN_XUAT: 'đang chạy',
+  GIA_CONG: 'đang ở Gia công (Kế hoạch › Gia công)',
+};
+const so = (n) => Number(n || 0).toLocaleString('vi-VN');
+export function viTriTheoTram(p) {
+  const m = {};
+  const them = (ma, x) => { (m[ma] = m[ma] || []).push(x); };
+  if (!p) return m;
+  if (p.dang_o_gn) {
+    them('DOT_VAI', { chu: 'Đang trả về Giao nhận sửa thông tin', phu: 'Tạm rời các màn READY → Chờ chạy tới khi GN xác nhận lại trên ERP' });
+  }
+  (p.dots || []).forEach((d) => {
+    const ma = TRAM_THEO_STAGE[d.stage];
+    if (!ma) return;
+    them(ma, {
+      chu: `Đợt ${d.thu_tu}/${d.so_dot} · ${so(d.sl)} pcs — ${NHAN_STAGE[d.stage] || d.stage}`,
+      phu: [d.ma_lenh, d.ma_chuyen && `chuyền ${d.ma_chuyen}`].filter(Boolean).join(' · '),
+    });
+  });
+  const t = p.tem || {};
+  const tem = (ma, n, sl, viec) => { if (n > 0) them(ma, { chu: `${so(n)} tem · ${so(sl)} pcs — ${viec}` }); };
+  tem('CHO_KHO', t.cho_kho_tem, t.cho_kho_sl, 'đang phơi');
+  tem('KIEM', t.kcs_tem, t.kcs_sl, 'chờ kiểm');
+  tem('SUA', t.sua_tem, t.sua_sl, 'chờ sửa');
+  tem('OQC', t.oqc_tem, t.oqc_sl, 'chờ OQC');
+  tem('GIAO', t.cho_giao_tem, t.cho_giao_sl, 'chờ GN tích tem / in phiếu giao');
+  if (t.da_giao_sl > 0) them('GIAO', { chu: `Đã giao ${so(t.da_giao_sl)} pcs`, xong: true });
+  return m;
+}

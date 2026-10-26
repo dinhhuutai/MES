@@ -64,6 +64,37 @@ export const COT_LENH = [
   { header: 'Ngày SX kế hoạch', width: 15, type: 'date', center: true, value: (r) => r.ngay_ke_hoach },
 ];
 
+// ─── CỘT GIỜ "TỪ · ĐẾN · THỜI GIAN" (26/10/2026 — Excel màn Xác nhận chạy: giờ kế hoạch + giờ thực hiện) ───────────
+// `khoangGio(ds)` nhận các cặp [từ, đến] (mốc ISO / Date) ⇒ { tu: sớm nhất, den: muộn nhất, phut }. Cặp có ĐẾN < TỪ =
+//   qua nửa đêm (+1 ngày, gương BE `planning.repository KT_QUA_DEM`). Phút = độ dài từ ĐẦU tới CUỐI (dòng gom nhiều lệnh
+//   ⇒ trọn khung từ lệnh sớm nhất tới lệnh muộn nhất). Thiếu ⇒ null.
+const NGAY_MS = 24 * 3600 * 1000;
+export function khoangGio(cap) {
+  let tu = null; let den = null;
+  (cap || []).forEach(([a, b]) => {
+    const x = a ? new Date(a).getTime() : null;
+    let y = b ? new Date(b).getTime() : null;
+    if (x != null && y != null && y < x) y += NGAY_MS;
+    if (x != null && !Number.isNaN(x)) tu = tu == null ? x : Math.min(tu, x);
+    if (y != null && !Number.isNaN(y)) den = den == null ? y : Math.max(den, y);
+  });
+  const phut = tu != null && den != null && den > tu ? Math.round((den - tu) / 60000) : null;
+  return { tu, den, phut };
+}
+const p2 = (n) => String(n).padStart(2, '0');
+// 'dd/mm HH:mm' theo giờ máy (trình duyệt ở VN).
+export const gioNgay = (ms) => {
+  if (ms == null) return '';
+  const d = new Date(ms);
+  return `${p2(d.getDate())}/${p2(d.getMonth() + 1)} ${p2(d.getHours())}:${p2(d.getMinutes())}`;
+};
+// 3 cột cho 1 khoảng giờ: `nhan` = 'kế hoạch' / 'thực hiện', `layKhoang(r)` ⇒ kết quả `khoangGio`.
+export const cotKhoangGio = (nhan, layKhoang) => [
+  { header: `Từ giờ ${nhan}`, width: 13, center: true, value: (r) => gioNgay(layKhoang(r).tu) },
+  { header: `Đến giờ ${nhan}`, width: 13, center: true, value: (r) => gioNgay(layKhoang(r).den) },
+  { header: `Thời gian ${nhan} (phút)`, width: 13, num: true, value: (r) => layKhoang(r).phut },
+];
+
 // Bộ cột dùng chung cho danh sách theo TEM (KCS · Sửa · Giao hàng · Danh sách tem in · Phân loại lỗi).
 // ⚠ Đây là phần CHUNG — mỗi màn tự nối thêm cột riêng của nó (SL còn kiểm / SL cần sửa / SL còn giao…),
 //   đừng nhét cột đặc thù vào đây: 5 màn dùng chung thì cột thừa sẽ rỗng ở 4 màn kia.

@@ -2,6 +2,8 @@ import client from './axiosClient';
 
 export const getSummary = () => client.get('/dashboard/summary');
 export const getSoDoDongChay = () => client.get('/dashboard/so-do-dong-chay');
+// Code phần đang ở trạm nào (26/10/2026 — ô tìm trong modal Sơ đồ dòng chảy).
+export const timViTriSoDo = (q) => client.get('/dashboard/so-do-dong-chay/tim', { params: { q } });
 export const getActivity = () => client.get('/dashboard/activity');
 export const getStageCounts = () => client.get('/dashboard/stage-counts');
 export const getChartDetail = () => client.get('/dashboard/chart-detail');
