@@ -38,7 +38,20 @@ export const locChuyen = (rows, chon) => (chon && chon.length
   ? (rows || []).filter((r) => chon.includes(r.ma_chuyen || '—')) : (rows || []));
 
 // ═══ BÁO CÁO SẢN XUẤT — mỗi dòng mang `m` = { TONG|HC|CA1|CA2|CA3: { kh, tt, gk, gt } } ═══
-const CA = ['TONG', 'HC', 'CA1', 'CA2', 'CA3'];
+// 26/10/2026: thêm D1 / D2 (ca dài có cột riêng — trước dồn vào CA1/CA2).
+const CA = ['TONG', 'HC', 'CA1', 'CA2', 'CA3', 'D1', 'D2'];
+const CA_THEO_LOAI = { NGAN: ['CA1', 'CA2', 'CA3'], DAI: ['D1', 'D2'], HANH_CHINH: [] };
+// Cột ca cần hiện cho tập dòng chi tiết (gương BE `utils/baoCaoSanXuat.js caHien`): HC luôn có + ca của loại ca từng
+//   chuyền (`loai_ca` của dòng) + ca nào có số. BE cũ (dòng không có `loai_ca`) ⇒ null (bảng dùng bộ HC · CA1–3).
+export function caHien(rows) {
+  if (!(rows || []).some((r) => r.loai_ca)) return null;
+  const co = new Set(['HC']);
+  (rows || []).forEach((r) => {
+    (CA_THEO_LOAI[r.loai_ca] || []).forEach((c) => co.add(c));
+    CA.slice(1).forEach((c) => { const o = (r.m || {})[c]; if (o && (Number(o.kh) || Number(o.tt) || Number(o.gk) || Number(o.gt))) co.add(c); });
+  });
+  return CA.slice(1).filter((c) => co.has(c));
+}
 const mRong = () => Object.fromEntries(CA.map((c) => [c, { kh: 0, tt: 0, gk: 0, gt: 0 }]));
 const congM = (dich, m) => {
   CA.forEach((c) => { const o = (m || {})[c] || {}; ['kh', 'tt', 'gk', 'gt'].forEach((k) => { dich[c][k] += Number(o[k]) || 0; }); });
@@ -63,15 +76,17 @@ const tachThoDs = (v) => String(v || '').split(',').map((s) => s.trim()).filter(
 // (`tho_ds`) ⇒ số của dòng CHIA ĐỀU cho số người — KH + giờ chia thẳng; SL in TT chia số nguyên, phần lẻ của ca sau
 // tiếp từ người kế người nhận lẻ cuối của ca trước (tổng mỗi người chênh ≤ 1 pcs); cột Tổng = Σ các ca đã chia.
 // Gương BE `utils/baoCaoSanXuat.js chiaBo` (chia trên CÙNG dòng chi tiết).
+// ⚠ 26/10/2026 người dùng chốt: chuyền MÁY + BÀN tính cho CHUYỀN TRƯỞNG (thiếu ⇒ thợ in) — backend đã dựng sẵn danh
+// sách người được tính ở `tho_tinh` (`utils/thoIn.js dsThoBaoCaoSanXuat`); BE cũ không có ⇒ lùi `tho_ds`.
 export function gomSanXuatTheoTho(rows) {
   const out = new Map();
   (rows || []).forEach((r) => {
-    const ds = tachThoDs(r.tho_ds);
+    const ds = tachThoDs(r.tho_tinh != null ? r.tho_tinh : r.tho_ds);
     const tho = ds.length ? ds : [r.tho || 'Chưa phân công'];
     const n = tho.length;
     const phan = tho.map(() => mRong());
     let ke = 0;
-    ['HC', 'CA1', 'CA2', 'CA3'].forEach((c) => {
+    CA.slice(1).forEach((c) => {
       const o = (r.m || {})[c] || {};
       const tt = Number(o.tt) || 0;
       const nguyen = Number.isInteger(tt) && tt >= 0;

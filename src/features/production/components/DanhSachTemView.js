@@ -13,6 +13,7 @@ import TimeSelect from '../../../components/common/TimeSelect';
 import { listChuyen, getVaiTem, suaVaiTem, suaTem, reprintTem, getTemLabel } from '../../../services/productionService';
 import FieldFilters, { FilterToggle } from '../../../components/common/FieldFilters';
 import DateRangePicker from '../../../components/common/DateRangePicker';
+import { CA_LOC } from '../../../utils/caLoc';
 import useToast from '../../../hooks/useToast';
 import useHuyLichSu from '../../../hooks/useHuyLichSu';
 import { fmtNum, fmtDateTime, temCode } from '../../../utils/format';
@@ -270,7 +271,7 @@ export default function DanhSachTemView({
   };
   const clearFilters = () => { setFilters({}); setPage(1); };
   // Bỏ `ngayDen` / `ngayCaDen` khi đếm: khoảng ngày là MỘT bộ lọc, không phải hai. Ô chọn chuyền nằm ngoài panel.
-  const filterCount = Object.entries(filters).filter(([k, v]) => v && !['ngayDen', 'ngayCaDen', 'chuyenId'].includes(k)).length;
+  const filterCount = Object.entries(filters).filter(([k, v]) => v && !['ngayDen', 'ngayCaDen', 'chuyenId', 'ca'].includes(k)).length;
 
   const fields = laGiaCong ? FIELDS_CHUNG : [...FIELDS_CHUNG, FIELD_CHUYEN, FIELD_MA_NGAY_CA];
   const textFilters = Object.fromEntries(fields.map((f) => [f.key, filters[f.key] || '']));
@@ -311,6 +312,7 @@ export default function DanhSachTemView({
           'tìm kiếm': search,
           [laGiaCong ? 'ngày nhận về' : 'ngày in tem']: [filters.ngayTu, filters.ngayDen].filter(Boolean).join(' → '),
           'ngày ca': [filters.ngayCaTu, filters.ngayCaDen].filter(Boolean).join(' → '),
+          ca: filters.ca || '',
           ...Object.fromEntries(fields.map((f) => [f.label.toLowerCase(), filters[f.key] || ''])),
         }),
       });
@@ -400,6 +402,15 @@ export default function DanhSachTemView({
         {!laGiaCong && (
           <DateRangePicker value={{ from: filters.ngayCaTu || '', to: filters.ngayCaDen || '' }}
             onChange={setNgayCa} placeholder="Ngày ca" />
+        )}
+        {/* Ô CA (26/10/2026) — 2 ký tự cuối mã ngày ca của tem; dùng kèm Ngày ca. */}
+        {!laGiaCong && (
+          <div className="w-28">
+            <Select value={filters.ca || ''} onChange={(e) => setField('ca', e.target.value)} aria-label="Lọc theo ca">
+              <option value="">Mọi ca</option>
+              {CA_LOC.map((c) => <option key={c} value={c}>{c}</option>)}
+            </Select>
+          </div>
         )}
         {!laGiaCong && (
           <div className="w-44">

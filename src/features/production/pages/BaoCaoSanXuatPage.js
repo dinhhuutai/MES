@@ -5,11 +5,12 @@ import useSocketReload from '../../../hooks/useSocketReload';
 import { getBaoCaoSanXuat } from '../../../services/productionService';
 import { ngayLocalISO } from '../../../utils/format';
 import {
-  NHOM_CA, OSo, TieuDe, BangTong, ChonBang, ChonNgay, NhanLoaiCa, hienNgay,
+  nhomCa, OSo, TieuDe, BangTong, ChonBang, ChonNgay, NhanLoaiCa, hienNgay,
 } from '../components/BangBaoCaoSanXuat';
 import ChonChuyenNhieu from '../components/ChonChuyenNhieu';
+import DanhSachOBaoCaoModal from '../components/DanhSachOBaoCaoModal';
 import {
-  CHIEU, dsChuyen, locChuyen, gomSanXuat, gomSanXuatTheoNhom, gomSanXuatTheoTho, tongSanXuat,
+  CHIEU, dsChuyen, locChuyen, gomSanXuat, gomSanXuatTheoNhom, gomSanXuatTheoTho, tongSanXuat, caHien,
 } from '../utils/gomBaoCao';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -21,6 +22,9 @@ import {
 //                             `components/BangBaoCaoSanXuat.js` (khối trên Dashboard đã gỡ 09/10/2026).
 //   · "Theo chuyền"         : 1 dòng / chuyền · "Theo thợ in": 1 dòng / THỢ — 19/10/2026 lấy CẢ danh sách thợ in
 //                             phân công (mọi loại chuyền), số của mỗi dòng chi tiết chia đều cho số người.
+//                             ⚠ 26/10/2026: chuyền Máy + Bàn tính cho CHUYỀN TRƯỞNG (thiếu ⇒ thợ in).
+//   · Bấm ô SL kế hoạch / SL in thực tế (bảng khu chuyền · chuyền · khách) ⇒ modal danh sách kế hoạch / tem in
+//     của đúng ô đó (`DanhSachOBaoCaoModal`, 26/10/2026).
 //   · "Chi tiết phần in"    : 1 dòng / (chuyền × phần in × nhóm thợ in).
 // BỘ CHỌN CHUYỀN (11/10/2026): chọn 1/nhiều chuyền ⇒ MỌI bảng tính lại trên các chuyền đó. Vì vậy trang tự gom mọi
 // bảng từ `chi_tiet` (`utils/gomBaoCao.js`, cùng phép cộng với backend) thay vì đọc `theo_nhom`/`theo_khach` có sẵn.
@@ -48,12 +52,21 @@ const COT_CT = [
   { k: 'mau_vai', l: 'Màu vải', w: 'min-w-[90px] max-w-[130px]' },
   { k: 'kich_vai', l: 'Kích vải', w: 'min-w-[80px]' },
   { k: 'kich_phim', l: 'Kích phim', w: 'min-w-[80px]' },
-  // Cả danh sách thợ in phân công của lượt chạy (19/10/2026 — chuyền Máy cũng vậy).
+  // Chuyền trưởng (26/10/2026 — bảng "Theo thợ in" tính chuyền Máy + Bàn cho người này) + cả danh sách thợ in phân công.
+  { k: 'chuyen_truong', l: 'Chuyền trưởng', w: 'min-w-[110px] max-w-[180px]' },
   { k: 'tho_ds', l: 'Thợ in', w: 'min-w-[120px] max-w-[220px]' },
 ];
 
+// Bấm ô SL KH / SL in TT (26/10/2026): dòng của bảng nào thì lọc danh sách theo khóa của bảng đó.
+const LOC_DONG = {
+  TO: (d, k) => (d.nhom || 'KHAC') === k,
+  CH: (d, k) => (d.ma_chuyen || '—') === k,
+  KH: (d, k) => (d.khach || '(Chưa rõ khách)') === k,
+};
+
 // Bảng 2 — chi tiết (chuyền × phần in). Ô Chuyền gộp dọc theo các dòng liên tiếp cùng chuyền.
-function BangChiTiet({ rows, tong }) {
+function BangChiTiet({ rows, tong, cas }) {
+  const ds = nhomCa(cas);
   const span = useMemo(() => {
     const s = new Array(rows.length).fill(0);
     for (let i = 0; i < rows.length;) {
@@ -69,7 +82,7 @@ function BangChiTiet({ rows, tong }) {
   }));
   return (
     <table className="w-full min-w-max border-separate border-spacing-0 text-xs">
-      <TieuDe cotTrai={cotTrai} />
+      <TieuDe cotTrai={cotTrai} cas={cas} />
       <tbody>
         {rows.map((r, i) => (
           <tr key={`${r.ma_chuyen}|${r.ma_phan}|${i}`}>
@@ -85,13 +98,13 @@ function BangChiTiet({ rows, tong }) {
                 {r[c.k] || '—'}
               </td>
             ))}
-            {NHOM_CA.map((c) => <OSo key={c.k} m={r.m[c.k]} nhom={c.k} />)}
+            {ds.map((c) => <OSo key={c.k} m={r.m[c.k]} nhom={c.k} />)}
           </tr>
         ))}
         {rows.length > 1 && (
           <tr>
             <td colSpan={COT_CT.length} className="sticky left-0 z-10 border-t-2 border-line bg-surface-muted px-2 py-2 font-bold text-ink">Tổng cộng</td>
-            {NHOM_CA.map((n) => <OSo key={n.k} m={tong[n.k]} nhom={n.k} dam />)}
+            {ds.map((n) => <OSo key={n.k} m={tong[n.k]} nhom={n.k} dam />)}
           </tr>
         )}
       </tbody>
@@ -147,12 +160,28 @@ export default function BaoCaoSanXuatPage() {
   const chonHopLe = useMemo(() => chuyenChon.filter((ma) => chuyens.some((c) => c.ma === ma)), [chuyenChon, chuyens]);
   const rows = useMemo(() => locChuyen(dangXem ? dangXem.chi_tiet : [], chonHopLe), [dangXem, chonHopLe]);
   const tong = useMemo(() => tongSanXuat(rows), [rows]);
+  // Cột ca theo loại ca đã cài của các chuyền đang xem (26/10/2026): ca dài ⇒ D1/D2, ca ngắn ⇒ CA1–3, HC luôn có.
+  const cas = useMemo(() => caHien(rows) || (dangXem && dangXem.ca) || null, [rows, dangXem]);
   const bangGom = useMemo(() => ({
     TO: gomSanXuatTheoNhom(rows),
     CH: gomSanXuat(rows, CHIEU.CH.khoa),
     KH: gomSanXuat(rows, CHIEU.KH.khoa),
     TH: gomSanXuatTheoTho(rows),
   }), [rows]);
+
+  // Modal danh sách của 1 ô: kế hoạch (`ds_kh`) hoặc tem (`ds_tem`), lọc theo bộ chọn chuyền + dòng + ca của ô.
+  const [oChon, setOChon] = useState(null);
+  const moO = (bangCua) => (dong, ca, loai) => {
+    if (!dangXem) return;
+    const nguon = locChuyen(loai === 'KH' ? dangXem.ds_kh : dangXem.ds_tem, chonHopLe);
+    const loc = dong ? LOC_DONG[bangCua] : null;
+    setOChon({
+      loai, ca, nhan: dong ? dong.label : 'Tổng cộng',
+      rows: nguon.filter((d) => (ca === 'TONG' || d.ca === ca) && (!loc || loc(d, dong.key))),
+    });
+  };
+  // BE cũ chưa trả danh sách ⇒ không cho bấm.
+  const coDs = !!(dangXem && dangXem.ds_kh && dangXem.ds_tem);
 
   return (
     <div>
@@ -196,14 +225,15 @@ export default function BaoCaoSanXuatPage() {
         ) : dangXem ? (
           <div key={bang}
             className={`max-h-[calc(100vh-13.5rem)] overflow-auto rounded-card border border-line bg-surface transition-opacity duration-200 motion-reduce:animate-none ${huong === 'phai' ? 'animate-vao-tu-phai' : 'animate-vao-tu-trai'} ${cuNgay ? 'opacity-50' : ''}`}>
-            {bang === 'TO' && <BangTong dong={bangGom.TO} tong={tong} nhan="Khu chuyền" />}
-            {bang === 'CH' && <BangTong dong={bangGom.CH} tong={tong} nhan="Chuyền" rongNhan="w-[110px] min-w-[110px] max-w-[110px]" />}
-            {bang === 'KH' && <BangTong dong={bangGom.KH} tong={tong} nhan="Khách hàng" rongNhan="w-[150px] min-w-[150px] max-w-[150px]" />}
-            {bang === 'TH' && <BangTong dong={bangGom.TH} tong={tong} nhan="Thợ in" rongNhan="w-[190px] min-w-[190px] max-w-[190px]" />}
-            {bang === 'CT' && <BangChiTiet rows={rows} tong={tong} />}
+            {bang === 'TO' && <BangTong dong={bangGom.TO} tong={tong} nhan="Khu chuyền" onChon={coDs ? moO('TO') : undefined} cas={cas} />}
+            {bang === 'CH' && <BangTong dong={bangGom.CH} tong={tong} nhan="Chuyền" rongNhan="w-[110px] min-w-[110px] max-w-[110px]" onChon={coDs ? moO('CH') : undefined} cas={cas} />}
+            {bang === 'KH' && <BangTong dong={bangGom.KH} tong={tong} nhan="Khách hàng" rongNhan="w-[150px] min-w-[150px] max-w-[150px]" onChon={coDs ? moO('KH') : undefined} cas={cas} />}
+            {bang === 'TH' && <BangTong dong={bangGom.TH} tong={tong} nhan="Thợ in" rongNhan="w-[190px] min-w-[190px] max-w-[190px]" cas={cas} />}
+            {bang === 'CT' && <BangChiTiet rows={rows} tong={tong} cas={cas} />}
           </div>
         ) : null}
       </div>
+      <DanhSachOBaoCaoModal o={oChon} ngay={dangXem ? dangXem.ngay : ngay} onClose={() => setOChon(null)} />
     </div>
   );
 }

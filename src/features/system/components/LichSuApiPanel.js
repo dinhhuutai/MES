@@ -28,6 +28,76 @@ const MA_LA_LENH = new Set(['ERP_GUI_RELEASE_1', 'ERP_GUI_HUY_RELEASE_1']);
 
 const fmtDt = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '—');
 
+// ⚠ 26/10/2026 — 1 DÒNG = 1 LƯỢT (backend gộp mọi lần gửi cùng ID kết nối: lần đầu + "Gửi lại" / "Sửa & gửi").
+//   Mỗi lần gửi có thể tự thử lại vài lần (timeout / lỗi ERP) — các lần thử hỏng nằm ở `cac_lan_loi`.
+//   Trả { lanGui, lanThu, soLoi }: thành công ở LẦN GỬI thứ mấy (trong `so_lan_gui`) · lần THỬ thứ mấy của lần đó ·
+//   tổng số lần hỏng trước đó (lần gửi cũ không ghi `cac_lan_loi` — trước 26/10 — tính theo `so_lan_thu`, thiếu thì 1).
+function tomTatLuot(r) {
+  const ds = Array.isArray(r.cac_lan_gui) && r.cac_lan_gui.length
+    ? r.cac_lan_gui : [{ thanh_cong: r.thanh_cong, so_lan_thu: r.so_lan_thu, cac_lan_loi: r.chi_tiet?.cac_lan_loi }];
+  const iOk = ds.findIndex((x) => x.thanh_cong);
+  const hong = (x) => (Array.isArray(x.cac_lan_loi) ? x.cac_lan_loi.length : (x.thanh_cong ? 0 : (x.so_lan_thu || 1)));
+  const truoc = iOk < 0 ? ds : ds.slice(0, iOk + 1);
+  return {
+    ds, lanGui: iOk + 1, lanThu: iOk >= 0 ? (ds[iOk].so_lan_thu || 1) : null,
+    soLoi: truoc.reduce((a, x) => a + hong(x), 0),
+  };
+}
+
+// Ô "Kết quả": kết quả của lần gửi MỚI NHẤT + dòng nhỏ "lần thứ mấy thành công / bao nhiêu lần lỗi".
+function KetQuaLuot({ r }) {
+  const t = tomTatLuot(r);
+  const nhieuGui = t.ds.length > 1;
+  let ghi = '';
+  if (r.thanh_cong) {
+    if (t.soLoi > 0) ghi = `${nhieuGui ? `lần gửi ${t.lanGui}/${t.ds.length}, ` : ''}lần thử ${t.lanThu} · ${t.soLoi} lần lỗi trước`;
+    else if (nhieuGui) ghi = `gửi ${t.ds.length} lần`;
+  } else {
+    ghi = r.co_thanh_cong ? 'lần gửi lại mới nhất lỗi — trước đó đã thành công' : `${t.soLoi} lần lỗi${nhieuGui ? ` · ${t.ds.length} lần gửi` : ''}`;
+  }
+  return (
+    <div className="leading-tight">
+      {r.thanh_cong
+        ? <Badge tone="success">Thành công</Badge>
+        : r.co_thanh_cong ? <Badge tone="warning">Lỗi</Badge> : <Badge tone="danger">Lỗi</Badge>}
+      {ghi && <div className={`mt-0.5 whitespace-nowrap text-[11px] ${r.thanh_cong ? 'text-ink-soft' : 'text-danger'}`}>{ghi}</div>}
+    </div>
+  );
+}
+
+// Chi tiết: từng lần gửi (cũ → mới), trong mỗi lần là các lần thử hỏng rồi lần thử thành công.
+function CacLanGui({ r }) {
+  const { ds } = tomTatLuot(r);
+  if (ds.length <= 1 && !(ds[0]?.cac_lan_loi || []).length) return null;
+  return (
+    <div>
+      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-soft">Các lần gửi · các lần lỗi</p>
+      <ol className="space-y-2 rounded-control border border-line bg-surface-muted p-3 text-xs">
+        {ds.map((g, i) => (
+          <li key={g.id || i}>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold text-ink">Lần gửi {i + 1}</span>
+              <span className="text-ink-soft">{fmtDt(g.thoi_gian)}{g.nguoi ? ` · ${g.nguoi}` : ''}{g.sua_tay ? ' · sửa tay' : ''}</span>
+              {g.thanh_cong
+                ? <Badge tone="success">Thành công{g.so_lan_thu ? ` ở lần thử ${g.so_lan_thu}` : ''}</Badge>
+                : <Badge tone="danger">Lỗi{g.so_lan_thu ? ` sau ${g.so_lan_thu} lần thử` : ''}</Badge>}
+            </div>
+            {(g.cac_lan_loi || []).length > 0 ? (
+              <ul className="mt-1 space-y-0.5 pl-4">
+                {g.cac_lan_loi.map((x) => (
+                  <li key={x.lan} className="break-all text-danger">
+                    Lần thử {x.lan} ✗ {fmtDt(x.tg)}{x.ms != null ? ` · ${(x.ms / 1000).toFixed(1)}s` : ''}{x.timeout ? ' · TIMEOUT' : ''} — {x.loi}
+                  </li>
+                ))}
+              </ul>
+            ) : (!g.thanh_cong && g.loi && <div className="mt-1 break-all pl-4 text-danger">{g.loi}</div>)}
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
 // Ô mã cần copy nhanh (IDMES / mã tem): 1 chạm là có thể dán sang màn tra cứu của ERP.
 function MaCopy({ v, manh }) {
   const [xong, setXong] = useState(false);
@@ -108,9 +178,7 @@ export default function LichSuApiPanel({ open, onClose, ma, ten, laGhiInTem }) {
     {
       key: 'thanh_cong',
       header: 'Kết quả',
-      render: (r) => (r.thanh_cong
-        ? <Badge tone="success">Thành công</Badge>
-        : <Badge tone="danger">Lỗi</Badge>),
+      render: (r) => <KetQuaLuot r={r} />,
     },
     // ID KẾT NỐI đứng ngay sau kết quả — thứ người dùng cần nhất khi đối soát 2 bên (27/09/2026: mọi API
     //   đều có — IDMES · ID phiếu giao · mã ERP cấp · ID lượt kéo).
@@ -124,9 +192,14 @@ export default function LichSuApiPanel({ open, onClose, ma, ten, laGhiInTem }) {
     },
     {
       key: 'so_lan_thu',
-      header: 'Lần thử',
+      header: 'Lần gửi · thử',
       className: 'text-right tabular-nums',
-      render: (r) => (r.so_lan_thu == null ? '—' : r.so_lan_thu),
+      // Lần gửi mới nhất / tổng số lần gửi của lượt · lần thử của lần gửi mới nhất.
+      render: (r) => {
+        const n = Number(r.so_lan_gui) || 1;
+        const thu = r.so_lan_thu == null ? '—' : r.so_lan_thu;
+        return n > 1 ? `${n} lần · thử ${thu}` : thu;
+      },
     },
     { key: 'nguoi', header: 'Người', render: (r) => r.nguoi || '—' },
     // ⚠ ERP NÓI GÌ — có ở CẢ dòng thành công lẫn dòng lỗi (19/08/2026). Trước đây chỉ dòng lỗi mới
@@ -209,7 +282,7 @@ export default function LichSuApiPanel({ open, onClose, ma, ten, laGhiInTem }) {
           </div>
           <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             placeholder={`Tìm theo ID kết nối hoặc ${nhanMa.toLowerCase()}…`} className={`${inputClass} max-w-xs`} />
-          <Badge tone="info">{meta.total} lượt gọi</Badge>
+          <Badge tone="info">{meta.total} lượt</Badge>
           <Button chiXemOk variant="secondary" icon="loader" loading={loading} onClick={load} className="ml-auto px-3 py-1.5">
             Tải lại
           </Button>
@@ -228,7 +301,7 @@ export default function LichSuApiPanel({ open, onClose, ma, ten, laGhiInTem }) {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 <h4 className="text-sm font-semibold text-ink">Chi tiết lượt gọi</h4>
-                {chon.thanh_cong ? <Badge tone="success">Thành công</Badge> : <Badge tone="danger">Lỗi</Badge>}
+                <KetQuaLuot r={chon} />
                 <span className="text-xs text-ink-soft">{fmtDt(chon.thoi_gian)}</span>
               </div>
               <button type="button" onClick={() => setChon(null)} className="text-ink-soft hover:text-danger">
@@ -241,6 +314,8 @@ export default function LichSuApiPanel({ open, onClose, ma, ten, laGhiInTem }) {
               <div><span className="text-ink-soft">{nhanMa}: </span><MaCopy v={chon.ma_tem} /></div>
             </div>
             {chon.url && <p className="break-all font-mono text-xs text-ink-soft">{chon.url}</p>}
+
+            <CacLanGui r={chon} />
 
             {/* Lượt "Sửa & gửi lại" (21/10/2026): ai sửa (cột Người) · lý do · trường nào cũ → mới. */}
             {chon.chi_tiet?.sua_tay && (

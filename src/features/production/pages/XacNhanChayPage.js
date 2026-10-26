@@ -22,7 +22,7 @@ import useNghenMap from '../../../hooks/useNghenMap';
 import useLyDoNghen from '../../../hooks/useLyDoNghen';
 import { slaRowClass } from '../../../utils/sla';
 import {
-  listProductionCandidates, startProduction, startProductionBatch, getMonitor, listChuyen, traVeKyThuatSanXuat,
+  listProductionCandidates, startProduction, startProductionBatch, getMonitor, listChuyen, traVeKyThuatSanXuat, gopLenh,
 } from '../../../services/productionService';
 import { fmtNum, fmtDate } from '../../../utils/format';
 import { Select } from '../../../components/common/controls';
@@ -187,10 +187,34 @@ export default function XacNhanChayPage() {
     setChonRun((c) => (boHet ? c.filter((x) => !ids.includes(x)) : [...ids, ...c.filter((x) => !ids.includes(x))]));
     oTim.datConTro();
   };
-  // Bấm 1 dòng / nút "Mở": dòng lẻ ⇒ RunPanel; dòng gom ⇒ sidebar chung mọi lệnh của dòng.
+  // ⚠ 26/10/2026 (người dùng: "gom số lượng đợt vải nếu giống code phần thì hiện modal sản xuất như 1 phần"): các
+  //   lệnh ĐANG CHẠY cùng code phần + cùng chuyền ⇒ GỘP THẬT thành 1 lệnh (`POST /production/gop-lenh`, luật 25/10)
+  //   rồi mở `RunPanel` của lệnh đích — như 1 phần in. Gộp lỗi (vd lệnh vừa đổi trạng thái) ⇒ lùi về sidebar nhiều lệnh.
+  const cungMotPhan = (ds) => ds.length > 1
+    && ds.every((l) => (Number(l.so_phan_in) || 1) === 1 && !(l.phan_in_list && l.phan_in_list.length > 1))
+    && new Set(ds.map((l) => `${l.phan_in_id || l.ma_phan || ''}|${l.chuyen_id || ''}`)).size === 1
+    && !!(ds[0].phan_in_id || ds[0].ma_phan);
+  const moNhieu = async (ds) => {
+    if (!cungMotPhan(ds)) { setSelNhieu(ds.map((l) => l.lenh_id)); return; }
+    setBusy(true);
+    try {
+      const res = await gopLenh(ds.map((l) => l.lenh_id), 'Mở sản xuất chung — cùng code phần, cùng chuyền');
+      const g = res.data || {};
+      show(`Đã gộp ${fmtNum(ds.length)} lệnh cùng code phần thành 1 lệnh ${g.ma_lenh || ''}`);
+      setChonRun((c) => c.filter((id) => !ds.some((l) => l.phieu_id === id)));
+      setSel(g.lenh_id);
+      load(true);
+    } catch (e) {
+      show(`Chưa gộp được lệnh — mở chung từng lệnh (${e.message || 'lỗi'})`, 'error');
+      setSelNhieu(ds.map((l) => l.lenh_id));
+    } finally {
+      setBusy(false);
+    }
+  };
+  // Bấm 1 dòng / nút "Mở": dòng lẻ ⇒ RunPanel; dòng gom ⇒ gộp thành 1 lệnh rồi RunPanel (khác phần ⇒ sidebar chung).
   const moDong = (r) => {
     const ds = lenhCuaDong(r);
-    if (ds.length > 1) setSelNhieu(ds.map((l) => l.lenh_id));
+    if (ds.length > 1) moNhieu(ds);
     else setSel(r.lenh_id);
   };
   // ENTER ở ô tìm = 1 lần quét: khớp CHÍNH XÁC (mã lệnh · code phần · TDTHĐH → mã HSKT) ⇒ tích mọi lệnh khớp;
@@ -228,10 +252,10 @@ export default function XacNhanChayPage() {
     setSearch('');
     oTim.datConTro();
   };
-  // "Mở (N)": 1 lệnh ⇒ RunPanel như cũ; nhiều ⇒ sidebar chung.
+  // "Mở (N)": 1 lệnh ⇒ RunPanel như cũ; nhiều lệnh cùng code phần + chuyền ⇒ gộp rồi RunPanel; còn lại sidebar chung.
   const moDaChon = () => {
     if (daChonRun.length === 1) setSel(daChonRun[0].lenh_id);
-    else if (daChonRun.length > 1) setSelNhieu(daChonRun.map((r) => r.lenh_id));
+    else if (daChonRun.length > 1) moNhieu(daChonRun);
   };
 
   // Nguồn "Danh sách nghẽn": GỘP cả Đang chạy + Chờ chạy, tập ĐẦY ĐỦ (chưa lọc), khử trùng `lenh_id`.
@@ -354,9 +378,13 @@ export default function XacNhanChayPage() {
       // Lệnh cùng code phần + cùng chuyền trong lượt được BE GỘP thành 1 lệnh (25/10/2026) — `gopVao` = lệnh đích.
       const soGop = ok.filter((x) => x.gopVao).length;
       const ghiGop = soGop ? ` (gộp ${fmtNum(soGop)} lệnh cùng code phần vào lệnh chạy chung)` : '';
+      // Cả lượt dồn về ĐÚNG 1 lệnh chạy (các đợt cùng code phần đã gộp — 26/10/2026) ⇒ mở luôn sidebar sản xuất của
+      //   lệnh đó như chạy 1 lệnh.
+      const dichs = [...new Set(ok.map((x) => x.gopVao || x.lenhId))];
       if (!loi.length) {
         show(`Đã xác nhận chạy ${fmtNum(ok.length - soGop)} lệnh${ghiGop}`);
         setChoChayOpen(false); // về bảng Đang chạy để thấy ngay các lệnh vừa chạy
+        if (dichs.length === 1) setSel(dichs[0]);
       } else {
         show(`Đã chạy ${fmtNum(ok.length - soGop)} lệnh${ghiGop} · ${fmtNum(loi.length)} lệnh chưa chạy được (vẫn tích, có ghi lỗi)`, 'error');
         setDatConTro((n) => n + 1);

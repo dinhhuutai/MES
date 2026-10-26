@@ -19,6 +19,7 @@ import FieldFilters, { filterRows, FilterToggle } from '../../../components/comm
 import { khopNhieu } from '../../../utils/timKiem';
 import { LOAI_TABS, hopChipChuyen, nhanChip, demChip } from '../../../utils/khuChuyen';
 import { gopTheoLenh, demLenh, demGiaiDoan } from '../utils/gopDongRelease';
+import { CA_LOC } from '../../../utils/caLoc';
 
 // Bộ lọc từng trường (client-side — modal tải trọn 1 ngày nên lọc tại chỗ là đủ).
 // `_chuyen_tim` = mã hiện ở cột "Chuyền in" + mã chuyền + tên chuyền (gắn lúc tải) ⇒ gõ "1A1B", "M1A-1B" hay
@@ -169,6 +170,10 @@ export default function ReleaseListModal({ open, onClose }) {
   const [locDangO, setLocDangO] = useState([]); // lọc cột "Đang ở" — mảng mã giai đoạn, rỗng = không lọc
   // Lọc theo GIỜ KẾ HOẠCH của lệnh: '' tất cả | 'CO' đủ giờ BĐ + KT | 'KHONG' thiếu giờ (`cotChecklistRelease.hopLocGio`).
   const [locGio, setLocGio] = useState('');
+  // Ô CA (26/10/2026, người dùng: "chọn ngày rồi chọn ca") — ca chứa GIỜ BẮT ĐẦU KH của lệnh (`ca_kh`, backend dựng theo
+  //   cùng luật `Ngayca` gửi ERP: loại ca tuần × loại chuyền). '' = mọi ca; lệnh chưa có giờ BĐ KH không thuộc ca nào.
+  const [locCa, setLocCa] = useState('');
+  const hopCa = useCallback((r) => !locCa || r.ca_kh === locCa, [locCa]);
   // CHE DO NGAY: 'KE_HOACH' (ngay hang len chuyen - de in phieu release) | 'RELEASE' (ngay bam
   // Release 1). Dung 'RELEASE' thi chip "Tat ca" khop dung voi sidebar "Da hoan thanh" cua Release 1.
   const [mode, setMode] = useState('KE_HOACH');
@@ -202,24 +207,31 @@ export default function ReleaseListModal({ open, onClose }) {
     (r) => !locDangO.length || locDangO.includes(r.giai_doan_hien_tai || '_KHAC'), [locDangO]);
   // Tập TRƯỚC khi áp lọc cột "Đang ở" — nguồn số đếm của hộp chọn checkpoint.
   const truocDangO = useMemo(
-    () => filterRows(chipItems, filters, FILTER_FIELDS).filter((r) => khopNhieu(oTimCols(r), q) && hopLocGio(r, locGio)),
-    [chipItems, filters, q, locGio]
+    () => filterRows(chipItems, filters, FILTER_FIELDS).filter((r) => khopNhieu(oTimCols(r), q) && hopLocGio(r, locGio) && hopCa(r)),
+    [chipItems, filters, q, locGio, hopCa]
   );
   const viewItems = useMemo(() => gopTheoLenh(truocDangO.filter(hopDangO)), [truocDangO, hopDangO]);
   // So dem tren chip tinh tren tap DA qua o tim + bo loc (chip chi la 1 chieu loc khac) => bam chip
   // nao cung thay dung so dong se hien ra.
   const counts = useMemo(
     () => demChip(filterRows(items, filters, FILTER_FIELDS)
-      .filter((r) => khopNhieu(oTimCols(r), q) && hopLocGio(r, locGio)).filter(hopDangO)),
-    [items, filters, q, locGio, hopDangO]
+      .filter((r) => khopNhieu(oTimCols(r), q) && hopLocGio(r, locGio) && hopCa(r)).filter(hopDangO)),
+    [items, filters, q, locGio, hopDangO, hopCa]
   );
   // Số dòng theo từng lựa chọn "có giờ" — tính trên tập đã qua chip + ô tìm + bộ lọc (chưa áp chính lọc giờ).
   const demGio = useMemo(() => {
-    const ds = filterRows(chipItems, filters, FILTER_FIELDS).filter((r) => khopNhieu(oTimCols(r), q)).filter(hopDangO);
+    const ds = filterRows(chipItems, filters, FILTER_FIELDS).filter((r) => khopNhieu(oTimCols(r), q) && hopCa(r)).filter(hopDangO);
     return { '': ds.length, CO: ds.filter((r) => hopLocGio(r, 'CO')).length, KHONG: ds.filter((r) => hopLocGio(r, 'KHONG')).length };
-  }, [chipItems, filters, q, hopDangO]);
+  }, [chipItems, filters, q, hopDangO, hopCa]);
+  // Số dòng mỗi ca — trên tập đã qua chip + ô tìm + bộ lọc + lọc giờ (chưa áp chính ô ca).
+  const demCa = useMemo(() => {
+    const ds = filterRows(chipItems, filters, FILTER_FIELDS).filter((r) => khopNhieu(oTimCols(r), q) && hopLocGio(r, locGio)).filter(hopDangO);
+    const m = { '': ds.length };
+    ds.forEach((r) => { if (r.ca_kh) m[r.ca_kh] = (m[r.ca_kh] || 0) + 1; });
+    return m;
+  }, [chipItems, filters, q, locGio, hopDangO]);
   const soLoc = Object.values(filters).filter((v) => (v || '').trim()).length + (q.trim() ? 1 : 0);
-  const dangLoc = !!chip || soLoc > 0 || locDangO.length > 0 || !!locGio;
+  const dangLoc = !!chip || soLoc > 0 || locDangO.length > 0 || !!locGio || !!locCa;
   // Cac so tong phai tinh LAI theo tap DANG XEM, khong dung `meta` cua server: neu khong thi bam chip
   // loc con 3 dong ma van hien "Tong phan 49" - hai con so da nhau ngay tren cung mot man.
   const metaXem = useMemo(() => {
@@ -313,6 +325,14 @@ export default function ReleaseListModal({ open, onClose }) {
           <span className="text-ink-soft">{mode === 'RELEASE' ? 'Ngày release' : 'Ngày kế hoạch'}</span>
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
             className="h-9 rounded-input border border-line px-3 text-sm focus:border-primary focus:outline-none" />
+        </label>
+        <label className="flex items-center gap-2 text-sm" title="Ca chứa giờ bắt đầu kế hoạch của lệnh (theo cài đặt ca của tuần)">
+          <span className="text-ink-soft">Ca</span>
+          <select value={locCa} onChange={(e) => setLocCa(e.target.value)} aria-label="Lọc theo ca kế hoạch"
+            className="h-9 rounded-input border border-line bg-surface px-2 text-sm focus:border-primary focus:outline-none">
+            <option value="">Mọi ca ({fmtNum(demCa[''] || 0)})</option>
+            {CA_LOC.map((c) => <option key={c} value={c}>{c} ({fmtNum(demCa[c] || 0)})</option>)}
+          </select>
         </label>
         {/* 2 CHẾ ĐỘ NGÀY — 2 câu hỏi khác nhau, đừng lẫn:
             · Ngày kế hoạch = hàng LÊN CHUYỀN ngày đó (dùng in phiếu release cho xưởng)
@@ -426,7 +446,7 @@ export default function ReleaseListModal({ open, onClose }) {
               <tr><td colSpan={soCot} className="px-3 py-8 text-center text-ink-soft">Đang tải...</td></tr>
             ) : viewItems.length === 0 ? (
               <tr><td colSpan={soCot} className="px-3 py-8 text-center text-ink-soft">
-                {soLoc || locGio || locDangO.length ? 'Không có dòng nào khớp ô tìm / bộ lọc'
+                {soLoc || locGio || locCa || locDangO.length ? 'Không có dòng nào khớp ô tìm / bộ lọc'
                   : chip ? `Không có đợt sản xuất nào thuộc ${nhanChip(chip)} trong ngày này`
                     : 'Không có đợt sản xuất release cho ngày này'}
               </td></tr>
