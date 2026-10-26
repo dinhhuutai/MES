@@ -15,13 +15,12 @@ import FieldFilters, { FilterToggle, filterRows } from '../../../components/comm
 import { Input } from '../../../components/common/controls';
 import { fmtNum, ngayLocalISO } from '../../../utils/format';
 import { khopTungTu } from '../../../utils/timKiem';
-import { LOAI_TABS, demChip, hopChipChuyen, nhanChip } from '../../../utils/khuChuyen';
 import {
   getDsReleaseSx, getNhatKyIn, luuDongDsReleaseSx, getChuyenThemDsRelease, luuChuyenThemDsRelease, listChuyen,
 } from '../../../services/productionService';
 import {
   COT_DS_RELEASE_SX, COT_NHAT_KY_IN, LOC_DS_RELEASE, tieuDeNhom, locDsRelease, tongDsRelease, tongNhatKy, tongDong, clDong,
-  ganTruongLoc, chuoiTim,
+  ganTruongLoc, chuoiTim, TABS_DS_RELEASE, hopChipDs, demChipDs, nhanChipDs,
 } from '../utils/dsReleaseSx';
 import exportDsReleaseSx from '../utils/exportDsReleaseSx';
 
@@ -134,14 +133,14 @@ export default function DsReleaseSxModal({ open, onClose }) {
   const rows = useMemo(() => locDsRelease(daLoc, chip, them), [daLoc, chip, them]);
   const tong = useMemo(() => tongDsRelease(rows), [rows]);
   const tongNk = useMemo(() => tongNhatKy(rows), [rows]);
-  const counts = useMemo(() => demChip(daLoc), [daLoc]);
+  const counts = useMemo(() => demChipDs(daLoc), [daLoc]);
   const soLoc = Object.values(loc).filter(Boolean).length;
   const cols = nhatKy ? COT_NHAT_KY_IN : COT_DS_RELEASE_SX;
   // Chuyền chọn thêm được = chuyền KHÔNG thuộc chip đang xem và chưa thêm.
   const chuyenChon = useMemo(() => dsChuyen
-    .filter((c) => !them.includes(c.ma_chuyen) && !hopChipChuyen({ ma_chuyen: c.ma_chuyen, ma_loai_chuyen: c.ma_loai_chuyen }, chip))
+    .filter((c) => !them.includes(c.ma_chuyen) && !hopChipDs({ ma_chuyen: c.ma_chuyen, ma_loai_chuyen: c.ma_loai_chuyen }, chip))
     .map((c) => ({ id: c.ma_chuyen, label: `${c.ma_chuyen}${c.ten_chuyen && c.ten_chuyen !== c.ma_chuyen ? ` · ${c.ten_chuyen}` : ''}` })), [dsChuyen, them, chip]);
-  const khu = `${(nhanChip(chip) || 'TẤT CẢ').toUpperCase()}${them.length ? ` + ${them.join(', ')}` : ''}`;
+  const khu = `${(nhanChipDs(chip) || 'TẤT CẢ').toUpperCase()}${them.length ? ` + ${them.join(', ')}` : ''}`;
   const ngayTieuDe = denNgay !== ngay ? `${ngayHien(ngay)} – ${ngayHien(denNgay)}` : ngayHien(ngay);
   const tieuDe = nhatKy ? `DANH SÁCH NHẬT KÝ IN ${khu}` : `DANH SÁCH RELEASE ${khu} ${ngayTieuDe}`;
 
@@ -206,7 +205,7 @@ export default function DsReleaseSxModal({ open, onClose }) {
         </div>
         <FieldFilters fields={LOC_DS_RELEASE} values={loc} open={moLoc}
           onField={(k, v) => setLoc((s) => ({ ...s, [k]: v }))} onClear={() => setLoc({})} />
-        <ChipTabs tabs={LOAI_TABS} value={chip} counts={counts} onChange={doiChip} />
+        <ChipTabs tabs={TABS_DS_RELEASE} value={chip} counts={counts} onChange={doiChip} />
         {/* Chuyền THÊM vào khu đang xem — lưu riêng từng người theo chip. */}
         <div className="-mt-2 flex flex-wrap items-center gap-2 text-sm">
           <span className="text-ink-soft">Thêm chuyền vào danh sách:</span>

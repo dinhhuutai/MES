@@ -8,7 +8,8 @@ import { chuanMaChuyen } from './maChuyen';
 // có thể đổi. Chuyền Bàn không nằm trong khu nào (vd dữ liệu cũ M1A/M1B/C03 đã ngừng hoạt động)
 // vẫn thuộc chip "Bàn" tổng nhưng không lọt khu nào — cố ý, để không bịa nhóm.
 // ⚠⚠ KHU CÓ CẢ CHUYỀN ROBOT (chốt 2026-09-04, theo bố trí thật của xưởng): **Robot 1 (`MRB1`) nằm
-// trong khu A**, **Robot 2 + 3 (`MRB2`/`MRB3`) nằm trong khu B**. ⇒ `KHU_BAN` KHÔNG còn là "chia nhỏ
+// trong khu A**, **Robot 2 + 3 (`MRB2`/`MRB3`) nằm trong khu B** — ⚠ ĐÃ ĐỔI 26/10/2026: cả Robot 1–3 thuộc KHU A
+// (người dùng chốt). ⇒ `KHU_BAN` KHÔNG còn là "chia nhỏ
 // loại BAN" nữa mà là **CHIA THEO VỊ TRÍ MẶT BẰNG**, có thể chứa chuyền thuộc loại khác.
 // ⚠ 3 chuyền robot vẫn giữ `loai_chuyen='ROBOT'` trong DB — chỉ có CHIP "Robot" bị bỏ khỏi dải lọc
 //   (xem `LOAI_TABS`), còn dữ liệu/loại chuyền KHÔNG đụng tới.
@@ -19,8 +20,9 @@ import { chuanMaChuyen } from './maChuyen';
 //   qua `chuanMaChuyen` (`utils/maChuyen.js`) ⇒ khớp cả mã cũ trên DB (`M4A-4B`, `M10A`, `MRB1`) lẫn mã mới sau khi
 //   chạy script `database/scripts/doi_ma_chuyen_theo_erp.sql`.
 export const KHU_BAN = [
-  { key: 'BAN_A', label: 'Bàn khu A', ma: ['4A4B', '5A5B', '6A6B', '7A7B', '8A8B', '9A9B', 'RB1'] },
-  { key: 'BAN_B', label: 'Bàn khu B', ma: ['10A', '11A', '12A', '13A', '14A', '10B', '11B', '12B', '13B', '14B', 'RB2', 'RB3'] },
+  // ⚠ 26/10/2026 (người dùng: "robot 1 → 3 là của khu A"): CẢ 3 chuyền robot thuộc khu A; khu B chỉ còn bàn 10–14.
+  { key: 'BAN_A', label: 'Bàn khu A', ma: ['4A4B', '5A5B', '6A6B', '7A7B', '8A8B', '9A9B', 'RB1', 'RB2', 'RB3'] },
+  { key: 'BAN_B', label: 'Bàn khu B', ma: ['10A', '11A', '12A', '13A', '14A', '10B', '11B', '12B', '13B', '14B'] },
   { key: 'MAU', label: 'Mẫu', ma: ['3A3B'] },
   { key: 'CANH_HANG', label: 'Canh hàng', ma: ['1A1B'] },
   { key: 'BO_SUNG_MTD', label: 'Bổ sung MTĐ', ma: ['2A2B'] },
@@ -41,7 +43,7 @@ export const thuocKhu = (maChuyen, khuKey) => !!khuKey && khuCuaChuyen(maChuyen)
 // mọi màn cùng đổi. Giữ chip "Bàn" TỔNG để vẫn xem được toàn bộ Bàn; 5 chip khu nằm ngay sau nó.
 //
 // ⚠⚠ ĐÃ BỎ CHIP "ROBOT" (chốt 2026-09-10, người dùng yêu cầu): từ 04/09 cả 3 chuyền robot đã được
-//   xếp vào khu (`MRB1` → khu A · `MRB2`/`MRB3` → khu B) nên chip Robot chỉ còn là **bản trùng lặp
+//   xếp vào khu (từ 26/10/2026 cả 3 → khu A) nên chip Robot chỉ còn là **bản trùng lặp
 //   của phần robot trong 2 chip khu** — bấm vào ra đúng những dòng vốn đã đếm ở khu A + khu B.
 //   Bỏ đi cũng làm Σ các chip bớt vênh so với chip "Tất cả" (xem ghi chú ở `demChip`).
 // ⚠ KHÔNG đụng `loai_chuyen='ROBOT'` trong DB và KHÔNG đụng `hopChipChuyen`/`locSiSoTheoChip` — chúng
