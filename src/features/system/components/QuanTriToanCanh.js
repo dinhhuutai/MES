@@ -1,12 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import Modal from '../../../components/common/Modal';
 import SearchableSelect from '../../../components/common/SearchableSelect';
 import NhieuNguoiSelect from '../../../components/common/NhieuNguoiSelect';
-import { Field, Textarea } from '../../../components/common/controls';
-import { fmtNum, fmtDateTime } from '../../../utils/format';
-import { luiVeTram, huyLeQt, luuPhanCongQt } from '../../../services/quanTriPhanInService';
+import ChuyenPicker from '../../../components/common/ChuyenPicker';
+import TimeSelect from '../../../components/common/TimeSelect';
+import Spinner from '../../../components/common/Spinner';
+import { Field, Input, Textarea } from '../../../components/common/controls';
+import { fmtNum, fmtDateTime, fmtDate } from '../../../utils/format';
+import { laChuyenGiaCong } from '../../planning/utils/chuyenGiaCong';
+import {
+  luiVeTram, huyLeQt, luuPhanCongQt, getKeHoachLenhQt, suaKeHoachLenhQt, suaKeHoachTamQt,
+} from '../../../services/quanTriPhanInService';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // QUẢN TRỊ PHẦN IN — khối "Lệnh · phiếu · tem · xác nhận" + 3 modal (19/10/2026, người dùng chốt: trang điều chỉnh
@@ -25,6 +31,12 @@ const TEN_TT_TEM = {
   OQC_DAT: 'Qua OQC (chờ giao)', DA_GIAO: 'Đã giao', HUY: 'Đã hủy',
 };
 const TONE_TEM = { HUY: 'danger', DA_GIAO: 'success', OQC_DAT: 'success', CHO_SUA: 'warning', CHO_OQC: 'info' };
+// Ngày / giờ trong ngày theo giờ máy (VN) — đổ sẵn ô sửa kế hoạch; ghép lại `${ngày}T${giờ}:00` như màn Lập lại kế hoạch.
+const pad2 = (n) => String(n).padStart(2, '0');
+const ngayStr = (v) => { const d = v ? new Date(v) : null; return d && !Number.isNaN(d.getTime()) ? `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}` : ''; };
+const gioStr = (v) => { const d = v ? new Date(v) : null; return d && !Number.isNaN(d.getTime()) ? `${pad2(d.getHours())}:${pad2(d.getMinutes())}` : ''; };
+const mkTs = (ngay, gio) => (ngay && gio ? `${ngay}T${gio}:00` : null);
+const khoangGio = (bd, kt) => (bd || kt ? `${gioStr(bd) || '—'} → ${gioStr(kt) || '—'}` : '');
 const th = 'whitespace-nowrap px-2 py-1.5 text-left text-[11px] font-bold uppercase tracking-wide text-ink-soft';
 const td = 'px-2 py-1.5 text-sm text-ink align-top';
 
@@ -54,7 +66,7 @@ function dongXacNhan(tc, temIds) {
   return out.sort((a, b) => new Date(a.tg || 0) - new Date(b.tg || 0));
 }
 
-function KhoiLenh({ tc, lenh, onLuiVe, onHuyLe, onPhanCong }) {
+function KhoiLenh({ tc, lenh, onLuiVe, onHuyLe, onPhanCong, onSuaKeHoach }) {
   const phieu = tc.phieu.filter((p) => p.lenh_san_xuat_id === lenh.id);
   const tems = tc.tem.filter((t) => t.lenh_san_xuat_id === lenh.id);
   const temSong = new Set(tems.filter((t) => t.trang_thai !== 'HUY').map((t) => t.id));
@@ -71,7 +83,17 @@ function KhoiLenh({ tc, lenh, onLuiVe, onHuyLe, onPhanCong }) {
           {lenh.test_dat && <Badge tone="success">Đã test đạt</Badge>}
           {lenh.so_phan_in > 1 && <Badge tone="warning">Lệnh gom {lenh.so_phan_in} phần in</Badge>}
         </div>
-        <Button variant="danger" onClick={() => onLuiVe(lenh)}>Lùi về trạm…</Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" onClick={() => onSuaKeHoach({ kieu: 'LENH', lenh })}>Sửa kế hoạch</Button>
+          <Button variant="danger" onClick={() => onLuiVe(lenh)}>Lùi về trạm…</Button>
+        </div>
+      </div>
+      {/* Kế hoạch hiện tại của lệnh (26/10/2026 — sửa được bằng nút "Sửa kế hoạch"). */}
+      <div className="mb-3 flex flex-wrap gap-x-5 gap-y-1 rounded-control bg-surface-muted px-3 py-2 text-xs text-ink-soft">
+        <span>Chuyền KH <b className="text-ink">{lenh.ma_chuyen || '—'}</b></span>
+        <span>Ngày SX KH <b className="text-ink">{lenh.ngay_ke_hoach ? fmtDate(lenh.ngay_ke_hoach) : '—'}</b></span>
+        <span>Giờ KH <b className="text-ink">{khoangGio(lenh.tg_bd_kh, lenh.tg_kt_kh) || '—'}</b></span>
+        <span>Thợ in KH <b className="text-ink">{lenh.tho_in_kh || '—'}</b></span>
       </div>
 
       {tests.length > 0 && (
@@ -175,13 +197,177 @@ function KhoiLenh({ tc, lenh, onLuiVe, onHuyLe, onPhanCong }) {
   );
 }
 
-export function ToanCanhLenh({ tc, onLuiVe, onHuyLe, onPhanCong }) {
-  if (!tc || !tc.lenh || !tc.lenh.length) return null;
+// Kế hoạch tạm của các đợt chưa Ready (`ke_hoach_tam`) — sửa được (26/10/2026).
+function KhoiKeHoachTam({ ds, onSuaKeHoach }) {
+  return (
+    <div className="overflow-x-auto rounded-card border border-line bg-surface p-4">
+      <div className="mb-1 text-xs font-semibold text-ink-soft">Kế hoạch tạm (đợt chưa Ready — chưa có lệnh)</div>
+      <table className="w-full min-w-[720px]">
+        <thead><tr className="border-b border-line">{['Đợt vải', 'Chuyền', 'Ngày SX KH', 'Giờ', 'SL', 'Thợ in', ''].map((h) => <th key={h} className={th}>{h}</th>)}</tr></thead>
+        <tbody>
+          {ds.map((k) => (
+            <tr key={k.id} className="border-b border-line/50">
+              <td className={`${td} text-xs`}>{k.ma_dot_vai}<div className="text-ink-soft">vải {fmtNum(k.so_luong_vai_ve)}</div></td>
+              <td className={td}>{k.ma_chuyen || '—'}</td>
+              <td className={td}>{k.ngay_ke_hoach ? fmtDate(k.ngay_ke_hoach) : '—'}</td>
+              <td className={`${td} text-xs`}>{khoangGio(k.tg_bd_kh, k.tg_kt_kh) || '—'}</td>
+              <td className={`${td} tabular-nums`}>{fmtNum(k.so_luong)}</td>
+              <td className={`${td} text-xs`}>{k.tho_in_kh || '—'}</td>
+              <td className={`${td} text-right`}><NutHuy tone="secondary" onClick={() => onSuaKeHoach({ kieu: 'TAM', kt: k })}>Sửa</NutHuy></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export function ToanCanhLenh({ tc, onLuiVe, onHuyLe, onPhanCong, onSuaKeHoach }) {
+  const coLenh = !!(tc && tc.lenh && tc.lenh.length);
+  const kht = (tc && tc.ke_hoach_tam) || [];
+  if (!coLenh && !kht.length) return null;
   return (
     <div className="space-y-3">
-      <h3 className="text-sm font-semibold text-ink">Lệnh · phiếu · tem · xác nhận ({tc.lenh.length} lệnh)</h3>
-      {tc.lenh.map((l) => <KhoiLenh key={l.id} tc={tc} lenh={l} onLuiVe={onLuiVe} onHuyLe={onHuyLe} onPhanCong={onPhanCong} />)}
+      {kht.length > 0 && <KhoiKeHoachTam ds={kht} onSuaKeHoach={onSuaKeHoach} />}
+      {coLenh && <h3 className="text-sm font-semibold text-ink">Lệnh · phiếu · tem · xác nhận ({tc.lenh.length} lệnh)</h3>}
+      {coLenh && tc.lenh.map((l) => (
+        <KhoiLenh key={l.id} tc={tc} lenh={l} onLuiVe={onLuiVe} onHuyLe={onHuyLe} onPhanCong={onPhanCong} onSuaKeHoach={onSuaKeHoach} />
+      ))}
     </div>
+  );
+}
+
+// ─── Modal SỬA KẾ HOẠCH (26/10/2026) ────────────────────────────────────────────────────────────────────
+// `muc` = { kieu: 'LENH', lenh } | { kieu: 'TAM', kt }. Lệnh ⇒ BE gọi CHÍNH "Lập lại kế hoạch" (`planning.replan`, nhận
+//   cả lệnh đã chạy: chỉ sửa thông tin, không đổi chặng, không qua gia công; SL release trần theo vải + không dưới đã in;
+//   báo ERP kế hoạch). Kế hoạch tạm ⇒ `planning.updateKeHoachTam`. Lý do bắt buộc.
+export function KeHoachModal({ phanInId, muc, chuyen, users, onClose, onDone, show }) {
+  const laLenh = muc?.kieu === 'LENH';
+  const goc = laLenh ? muc?.lenh : muc?.kt;
+  const daChay = laLenh && !!goc?.co_phieu && goc?.trang_thai !== 'GIA_CONG';
+  const [f, setF] = useState(null);
+  const [dsDot, setDsDot] = useState([]);
+  const [dangTai, setDangTai] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!muc || !goc) { setF(null); setDsDot([]); return undefined; }
+    const ngay = ngayStr(goc.ngay_ke_hoach);
+    setF({
+      chuyenId: goc.chuyen_id || '', ngayKeHoach: ngay, gioBd: gioStr(goc.tg_bd_kh), gioKt: gioStr(goc.tg_kt_kh),
+      thoIn: goc.tho_in_kh || '', soLuong: laLenh ? '' : String(goc.so_luong ?? ''), slRelease: {}, lyDo: '',
+    });
+    setDsDot([]);
+    if (!laLenh) return undefined;
+    let song = true;
+    setDangTai(true);
+    getKeHoachLenhQt(phanInId, goc.id)
+      .then((r) => {
+        if (!song) return;
+        const ds = (r.data && r.data.dot_vai) || [];
+        setDsDot(ds);
+        setF((x) => (x ? { ...x, slRelease: Object.fromEntries(ds.map((d) => [d.dot_vai_id, String(d.so_luong)])) } : x));
+      })
+      .catch((e) => { if (song) show(e.message || 'Không tải được kế hoạch lệnh', 'error'); })
+      .finally(() => { if (song) setDangTai(false); });
+    return () => { song = false; };
+  }, [muc, goc, laLenh, phanInId, show]);
+
+  // Lệnh đã chạy trong xưởng ⇒ bỏ chuyền gia công khỏi danh sách (BE cũng chặn 409 `DA_CHAY`).
+  const dsChuyen = useMemo(() => (daChay ? (chuyen || []).filter((c) => !laChuyenGiaCong(chuyen, c.id)) : (chuyen || [])), [chuyen, daChay]);
+  if (!muc || !f) return null;
+  const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
+  const slSai = laLenh && dsDot.some((d) => {
+    const v = f.slRelease[d.dot_vai_id];
+    const n = Number(v);
+    return v === '' || v == null || !Number.isInteger(n) || n <= 0 || n > d.toi_da;
+  });
+  const tongSl = dsDot.reduce((a, d) => a + (Number(f.slRelease[d.dot_vai_id]) || 0), 0);
+
+  const luu = async () => {
+    if (!String(f.lyDo).trim()) { show('Nhập lý do', 'error'); return; }
+    if (!f.ngayKeHoach) { show('Chọn ngày sản xuất kế hoạch', 'error'); return; }
+    setBusy(true);
+    try {
+      const chung = {
+        chuyenId: f.chuyenId || null, ngayKeHoach: f.ngayKeHoach, tgBdKh: mkTs(f.ngayKeHoach, f.gioBd), tgKtKh: mkTs(f.ngayKeHoach, f.gioKt),
+        thoIn: f.thoIn, lyDo: f.lyDo.trim(),
+      };
+      const r = laLenh
+        ? await suaKeHoachLenhQt(phanInId, goc.id, {
+          ...chung,
+          slRelease: Object.fromEntries(dsDot.filter((d) => Number(f.slRelease[d.dot_vai_id]) !== d.so_luong)
+            .map((d) => [d.dot_vai_id, Number(f.slRelease[d.dot_vai_id])])),
+        })
+        : await suaKeHoachTamQt(phanInId, goc.id, { ...chung, soLuong: f.soLuong === '' ? null : Number(f.soLuong) });
+      show(r.message || 'Đã sửa kế hoạch');
+      onDone();
+    } catch (e) { show(e.message || 'Sửa kế hoạch thất bại', 'error'); } finally { setBusy(false); }
+  };
+
+  return (
+    <Modal open={!!muc} onClose={onClose} size="md"
+      title={laLenh ? `Sửa kế hoạch — lệnh ${goc.ma_lenh_san_xuat}` : `Sửa kế hoạch tạm — đợt ${goc.ma_dot_vai}`}
+      footer={(
+        <>
+          <Button chiXemOk variant="secondary" onClick={onClose}>Đóng</Button>
+          <Button loading={busy} disabled={busy || dangTai || slSai || !String(f.lyDo).trim() || (!laLenh && !f.chuyenId)} onClick={luu}>Lưu kế hoạch</Button>
+        </>
+      )}>
+      <div className="space-y-3">
+        {daChay && (
+          <p className="rounded-control bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">
+            Lệnh đã xác nhận chạy — chỉ sửa THÔNG TIN kế hoạch (chuyền KH, ngày, giờ, SL release, thợ in KH). Máy đang chạy thật của
+            phiếu không đổi (muốn chuyển máy dùng "Đổi chuyền" ở Xác nhận chạy). SL release không được thấp hơn SL đã in.
+          </p>
+        )}
+        <Field label="Chuyền kế hoạch" required={!laLenh}>
+          <ChuyenPicker chuyen={dsChuyen} value={f.chuyenId} onChange={(id) => set('chuyenId', id)} />
+        </Field>
+        <Field label="Ngày sản xuất kế hoạch" required>
+          <Input type="date" value={f.ngayKeHoach} onChange={(e) => set('ngayKeHoach', e.target.value)} />
+        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Giờ bắt đầu"><TimeSelect value={f.gioBd} onChange={(v) => set('gioBd', v)} minuteStep={5} /></Field>
+          <Field label="Giờ kết thúc"><TimeSelect value={f.gioKt} onChange={(v) => set('gioKt', v)} minuteStep={5} /></Field>
+        </div>
+        {laLenh ? (
+          dangTai ? <div className="flex items-center gap-2 text-sm text-ink-soft"><Spinner size={16} />Đang tải đợt vải…</div> : dsDot.length > 0 && (
+            <div className="space-y-2 rounded-control border border-line bg-surface-muted/40 p-3">
+              <div className="flex items-center justify-between text-xs font-semibold text-ink-soft">
+                <span>Số lượng release{dsDot.length > 1 ? ` (${dsDot.length} đợt vải)` : ''}</span>
+                <span className="tabular-nums">Tổng: {fmtNum(tongSl)}</span>
+              </div>
+              {dsDot.map((d) => (
+                <div key={d.dot_vai_id} className="flex items-center gap-2">
+                  <div className="min-w-0 flex-1 text-xs">
+                    <div className="truncate text-ink">{d.ma_dot_vai}</div>
+                    <div className="truncate text-ink-soft">
+                      {dsDot.length > 1 ? `${d.ma_phan} · ` : ''}vải về {fmtNum(d.so_luong_vai_ve)}
+                      {d.da_release_khac > 0 ? ` · lệnh khác giữ ${fmtNum(d.da_release_khac)}` : ''} · tối đa {fmtNum(d.toi_da)}
+                    </div>
+                  </div>
+                  <div className="w-28 shrink-0">
+                    <Input type="number" min={1} max={d.toi_da} value={f.slRelease[d.dot_vai_id] ?? ''}
+                      onChange={(e) => setF((x) => ({ ...x, slRelease: { ...x.slRelease, [d.dot_vai_id]: e.target.value } }))} />
+                  </div>
+                </div>
+              ))}
+              {slSai && <div className="text-xs font-medium text-danger">Có đợt để trống hoặc vượt mức tối đa.</div>}
+            </div>
+          )
+        ) : (
+          <Field label="Số lượng release dự kiến">
+            <Input type="number" min={1} value={f.soLuong} onChange={(e) => set('soLuong', e.target.value)} />
+          </Field>
+        )}
+        <Field label="Thợ in kế hoạch">
+          <NhieuNguoiSelect value={f.thoIn} onChange={(v) => set('thoIn', v)} options={users} placeholder="Gõ tên hoặc MSNV để tìm rồi chọn / Enter..." />
+        </Field>
+        <Field label="Lý do" required hint={laLenh ? 'Lưu xong hệ thống báo lại kế hoạch lệnh sang ERP' : undefined}>
+          <Textarea rows={2} value={f.lyDo} onChange={(e) => set('lyDo', e.target.value)} />
+        </Field>
+      </div>
+    </Modal>
   );
 }
 

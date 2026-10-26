@@ -12,6 +12,20 @@ import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import { lichSuApi, guiLaiApi } from '../../../services/caiDatApiService';
 import SuaGuiLaiModal from './SuaGuiLaiModal';
+import FieldFilters, { FilterToggle } from '../../../components/common/FieldFilters';
+
+// LỌC THEO TRƯỜNG (26/10/2026, người dùng yêu cầu) — lọc Ở SERVER (`caidatapi.repository dkTruongSql`): mỗi lượt quy về
+//   tem / lượt KCS·Sửa·OQC / phiếu giao / lệnh rồi tới phần in; khóa = tên query backend nhận.
+// ⚠ Lượt không gắn bản ghi (xin mã tem, hủy vải theo lô) chỉ lọc được Code phần / Ngày ca / Chuyền theo thân đã gửi.
+const LOC_LICH_SU = [
+  { key: 'codePhan', label: 'Code phần' },
+  { key: 'ngayCa', label: 'Ngày ca (vd 261026D1)' },
+  { key: 'chuyen', label: 'Chuyền' },
+  { key: 'don', label: 'Đơn hàng / PO' },
+  { key: 'maHang', label: 'Mã hàng' },
+  { key: 'kich', label: 'Kích vải / phim' },
+  { key: 'mau', label: 'Màu vải' },
+];
 
 // 5 API ĐẨY dữ liệu có nút "Gửi lại ERP" từng dòng (gương backend `caidatapi/guiLai.js` MA_GUI_LAI).
 // API XIN SỐ (mã tem, ID phiếu giao) KHÔNG có — gọi lại là tiêu thêm 1 số của ERP.
@@ -143,23 +157,28 @@ export default function LichSuApiPanel({ open, onClose, ma, ten, laGhiInTem }) {
   const [chon, setChon] = useState(null); // dòng đang mở chi tiết
   const [dangGui, setDangGui] = useState(null); // id dòng đang gửi lại
   const [dongSua, setDongSua] = useState(null); // dòng đang mở hộp "Sửa & gửi lại" (21/10/2026)
+  const [loc, setLoc] = useState({});           // lọc theo trường (26/10/2026) — `LOC_LICH_SU`
+  const [moLoc, setMoLoc] = useState(false);
   const { toast, show } = useToast();
   const { can } = usePermissions();
   const guiLaiDuoc = CO_GUI_LAI.has(ma) && can('WORKFLOW_MANAGE');
   const nhanMa = MA_LA_LENH.has(ma) ? 'Mã lệnh' : 'Mã tem';
+  const soLoc = Object.values(loc).filter((v) => String(v || '').trim()).length;
 
   const load = useCallback(async () => {
     if (!open || !ma) return;
     setLoading(true);
     try {
-      const res = await lichSuApi(ma, { date: date || undefined, search: search || undefined, page, limit: 20 });
+      const locGui = Object.fromEntries(Object.entries(loc).filter(([, v]) => String(v || '').trim()));
+      const res = await lichSuApi(ma, { date: date || undefined, search: search || undefined, ...locGui, page, limit: 20 });
       setRows(res.data.items || []);
       setMeta(res.data.meta || { page: 1, totalPages: 1, total: 0 });
     } catch {
       setRows([]);
     } finally { setLoading(false); }
-  }, [open, ma, date, search, page]);
-  useEffect(() => { load(); }, [load]);
+  }, [open, ma, date, search, loc, page]);
+  // Gõ ô tìm / ô lọc ⇒ chờ 350 ms mới tải (lọc theo trường phải dò ngược về phần in — đừng bắn mỗi phím).
+  useEffect(() => { const t = setTimeout(load, 350); return () => clearTimeout(t); }, [load]);
 
   // Mở panel cho API khác / đóng rồi mở lại ⇒ về trang 1, bỏ chi tiết đang xem.
   useEffect(() => { if (open) { setPage(1); setChon(null); } }, [open, ma]);
@@ -282,16 +301,20 @@ export default function LichSuApiPanel({ open, onClose, ma, ten, laGhiInTem }) {
           </div>
           <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             placeholder={`Tìm theo ID kết nối hoặc ${nhanMa.toLowerCase()}…`} className={`${inputClass} max-w-xs`} />
+          <FilterToggle open={moLoc} count={soLoc} onClick={() => setMoLoc((v) => !v)} />
           <Badge tone="info">{meta.total} lượt</Badge>
           <Button chiXemOk variant="secondary" icon="loader" loading={loading} onClick={load} className="ml-auto px-3 py-1.5">
             Tải lại
           </Button>
         </div>
+        <FieldFilters fields={LOC_LICH_SU} values={loc} open={moLoc}
+          onField={(k, v) => { setLoc((s) => ({ ...s, [k]: v })); setPage(1); }}
+          onClear={() => { setLoc({}); setPage(1); }} />
 
         <DataTable columns={columns} rows={rows} loading={loading} rowKey="id"
           pageSize={0} onRowClick={setChon}
           sttStart={(meta.page - 1) * 20}
-          emptyText={date || search
+          emptyText={date || search || soLoc
             ? 'Không có lượt gọi nào khớp bộ lọc'
             : 'Chưa có lượt gọi nào được ghi lại'} />
         <Pagination page={meta.page} totalPages={meta.totalPages} total={meta.total} onPage={setPage} />

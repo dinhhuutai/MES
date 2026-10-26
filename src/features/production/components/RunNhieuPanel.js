@@ -338,7 +338,13 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh, t
       const dsG = ds.filter(dangChay).map((r) => r.goi_y_tem).filter(Boolean);
       const g = dsG[0];
       const chung = (k) => (dsG.length && dsG.every((x) => (x[k] || '') === (g[k] || '')) ? (g[k] || '') : '');
-      if (g) setTemMeta((m) => ({ ...m, ngayCa: m.ngayCa || chung('ngay_ca'), ngayCt: m.ngayCt || chung('ngay_ct'), gioBd: m.gioBd || g.gio_bd || '', gioKt: m.gioKt || g.gio_kt || '' }));
+      // Ngày chứng từ (26/10/2026): ô còn giá trị TỰ ĐIỀN (hôm nay) ⇒ thay bằng giá trị chung đã nhớ nếu có.
+      if (g) {
+        setTemMeta((m) => {
+          const ct = (!m.ngayCt || m._ctTuDong) && chung('ngay_ct');
+          return { ...m, ngayCa: m.ngayCa || chung('ngay_ca'), ...(ct ? { ngayCt: ct, _ctTuDong: false } : {}), gioBd: m.gioBd || g.gio_bd || '', gioKt: m.gioKt || g.gio_kt || '' };
+        });
+      }
     } finally {
       setLoading(false);
     }

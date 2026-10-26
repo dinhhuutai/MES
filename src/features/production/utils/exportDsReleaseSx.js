@@ -1,16 +1,22 @@
-// Xuất Excel "DANH SÁCH RELEASE <KHU> <ngày>" — đúng các dòng ĐANG HIỆN trong modal (chip khu + chuyền thêm), cùng bộ cột
-// `dsReleaseSx.js` (tiêu đề 2 tầng: PHẦN IN · HẠN HOÀN THÀNH · SL IN). Lazy import exceljs.
-import { COT_DS_RELEASE_SX, tieuDeNhom, tongDsRelease } from './dsReleaseSx';
+// Xuất Excel modal Danh sách release của Sản xuất — đúng các dòng ĐANG HIỆN (chip khu + chuyền thêm + bộ lọc). Lazy exceljs.
+//   · `cheDo: 'RELEASE'` (mặc định) — "DANH SÁCH RELEASE <KHU> <ngày>", bộ cột `COT_DS_RELEASE_SX` (tiêu đề 2 tầng: PHẦN
+//     IN · HẠN HOÀN THÀNH · SL IN) + dòng số tổng như tờ mẫu.
+//   · `cheDo: 'NHAT_KY'` (26/10/2026) — "DANH SÁCH NHẬT KÝ IN" + dòng "Từ ngày … đến ngày …" như mẫu ERP, bộ cột
+//     `COT_NHAT_KY_IN` (tiêu đề 2 tầng: Hàng hóa · Số lượng · Thông tin hàng in).
+import { COT_DS_RELEASE_SX, COT_NHAT_KY_IN, tieuDeNhom, tongDsRelease } from './dsReleaseSx';
 
 const XANH = 'FFE2EFDA';
 const VANG = 'FFFFE699';
 const TIM = 'FFD9E1F2';
+const GIUA = ['chuyen', 'gio_bd', 'gio_kt', 'trang_thai', 'tho_in', 'to', 'ca', 'ngay', 'gio', 'gio_sx', 'btp', 'btp2', 'ngay_giao', 'ngay_xn_kiem', 'day_chuyen'];
+const ngayHien = (iso) => String(iso || '').split('-').reverse().join('/');
 
-export default async function exportDsReleaseSx(rows, { tieuDe, ngay }) {
+export default async function exportDsReleaseSx(rows, { tieuDe, ngay, denNgay, cheDo = 'RELEASE' }) {
   const ExcelJS = (await import('exceljs')).default || (await import('exceljs'));
+  const nhatKy = cheDo === 'NHAT_KY';
   const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet('Danh sách release');
-  const cols = COT_DS_RELEASE_SX;
+  const ws = wb.addWorksheet(nhatKy ? 'Nhật ký in' : 'Danh sách release');
+  const cols = nhatKy ? COT_NHAT_KY_IN : COT_DS_RELEASE_SX;
   const N = cols.length;
   ws.columns = cols.map((c) => ({ width: c.width }));
   const thin = { style: 'thin', color: { argb: 'FF000000' } };
@@ -26,23 +32,32 @@ export default async function exportDsReleaseSx(rows, { tieuDe, ngay }) {
   t.alignment = { horizontal: 'center', vertical: 'middle' };
   ws.getRow(1).height = 26;
 
-  // Dòng 2–3 — số tổng như tờ mẫu: Tổng đơn · Tổng mã · Tổng phần release · SL RELEASE · SL IN.
-  const tong = tongDsRelease(rows);
-  const o = [
-    ['TỔNG ĐƠN RELEASE', tong.tong_don, iCot('po'), null],
-    ['TỔNG MÃ RELEASE', tong.tong_ma, iCot('ma'), null],
-    ['TỔNG PHẦN RELEASE', tong.tong_phan, iCot('kich_vai'), null],
-    ['SL RELEASE', tong.sl_release, iCot('sl_release'), 'FFD9D9D9'],
-    ['SL IN', tong.sl_in, iCot('sl_in'), VANG],
-  ];
-  o.forEach(([nhan, v, c, nen]) => {
-    const a = ws.getCell(2, c); const b = ws.getCell(3, c);
-    a.value = nhan; b.value = v;
-    a.font = font({ bold: true, size: 9 }); b.font = font({ bold: true });
-    [a, b].forEach((x) => { x.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }; if (nen) x.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: nen } }; });
-    b.numFmt = '#,##0';
-  });
-  ws.getRow(2).height = 28;
+  if (nhatKy) {
+    // Dòng 2 — "Từ ngày … đến ngày …" như mẫu ERP.
+    ws.mergeCells(2, 1, 2, N);
+    const d = ws.getCell(2, 1);
+    d.value = `Từ ngày ${ngayHien(ngay)} đến ngày ${ngayHien(denNgay || ngay)}`;
+    d.font = font({ size: 11 });
+    d.alignment = { horizontal: 'center', vertical: 'middle' };
+  } else {
+    // Dòng 2–3 — số tổng như tờ mẫu: Tổng đơn · Tổng mã · Tổng phần release · SL RELEASE · SL IN.
+    const tong = tongDsRelease(rows);
+    const o = [
+      ['TỔNG ĐƠN RELEASE', tong.tong_don, iCot('po'), null],
+      ['TỔNG MÃ RELEASE', tong.tong_ma, iCot('ma'), null],
+      ['TỔNG PHẦN RELEASE', tong.tong_phan, iCot('kich_vai'), null],
+      ['SL RELEASE', tong.sl_release, iCot('sl_release'), 'FFD9D9D9'],
+      ['SL IN', tong.sl_in, iCot('sl_in'), VANG],
+    ];
+    o.forEach(([nhan, v, c, nen]) => {
+      const a = ws.getCell(2, c); const b = ws.getCell(3, c);
+      a.value = nhan; b.value = v;
+      a.font = font({ bold: true, size: 9 }); b.font = font({ bold: true });
+      [a, b].forEach((x) => { x.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }; if (nen) x.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: nen } }; });
+      b.numFmt = '#,##0';
+    });
+    ws.getRow(2).height = 28;
+  }
 
   // Dòng 4–5 — tiêu đề nhóm + cột.
   const R1 = 4; const R2 = 5;
@@ -68,14 +83,14 @@ export default async function exportDsReleaseSx(rows, { tieuDe, ngay }) {
   ws.autoFilter = { from: { row: R2, column: 1 }, to: { row: R2, column: N } };
   ws.views = [{ state: 'frozen', ySplit: R2 }];
 
-  const iTong = iCot('tong');
+  const iTong = nhatKy ? 0 : iCot('tong');
   rows.forEach((r) => {
     const row = ws.addRow(cols.map((c) => c.value(r)));
     row.eachCell({ includeEmpty: true }, (cell, ci) => {
       const c = cols[ci - 1];
       cell.border = border;
       cell.font = font();
-      cell.alignment = { vertical: 'middle', horizontal: c.num || ['chuyen', 'gio_bd', 'gio_kt', 'trang_thai', 'tho_in'].includes(c.key) ? 'center' : 'left', wrapText: true };
+      cell.alignment = { vertical: 'middle', horizontal: c.num || GIUA.includes(c.key) ? 'center' : 'left', wrapText: true };
       if (c.num && typeof cell.value === 'number') cell.numFmt = '#,##0';
       if (ci === iTong) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TIM } };
     });
@@ -85,7 +100,8 @@ export default async function exportDsReleaseSx(rows, { tieuDe, ngay }) {
   const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = `danh-sach-release-sx-${String(ngay || '').replace(/-/g, '')}.xlsx`;
+  const hau = `${String(ngay || '').replace(/-/g, '')}${denNgay && denNgay !== ngay ? `-${String(denNgay).replace(/-/g, '')}` : ''}`;
+  a.href = url; a.download = `${nhatKy ? 'nhat-ky-in' : 'danh-sach-release-sx'}-${hau}.xlsx`;
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
 }

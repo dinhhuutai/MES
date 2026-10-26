@@ -14,6 +14,7 @@ import { listChuyen, getVaiTem, suaVaiTem, suaTem, reprintTem, getTemLabel } fro
 import FieldFilters, { FilterToggle } from '../../../components/common/FieldFilters';
 import DateRangePicker from '../../../components/common/DateRangePicker';
 import { CA_LOC } from '../../../utils/caLoc';
+import { LOAI_TABS, locSiSoTheoChip } from '../../../utils/khuChuyen';
 import useToast from '../../../hooks/useToast';
 import useHuyLichSu from '../../../hooks/useHuyLichSu';
 import { fmtNum, fmtDateTime, temCode } from '../../../utils/format';
@@ -54,6 +55,13 @@ const FIELD_MA_NGAY_CA = { key: 'maNgayCa', label: 'Mã ngày ca' };
 // Tem còn HỦY được: chưa qua kiểm (gương guard backend `production.service.cancelPrintTem` — cùng luật nút Hủy ở
 // "Tem đã in" của RunPanel). `da_kiem` + `mo_lai_duoc` do backend `listTemDaIn` tính.
 const TEM_CHUA_KIEM = ['IN', 'DANG_PHOI', 'DA_KHO'];
+// KHU CHUYỀN (26/10/2026) — cùng dải chip `LOAI_TABS` (Bàn · khu A/B · Mẫu · … · Máy · Ép · Logo), bỏ Gia công (trang
+//   tem sản xuất). Gửi lên server như dải Theo dõi (`locSiSoTheoChip`: chip loại ⇒ `loaiChuyen`, chip khu ⇒ `maChuyen`).
+const KHU_LOC = LOAI_TABS.filter((t) => t.v && t.v !== 'GIA_CONG');
+const thamSoLoc = (filters) => {
+  const { khu, ...con } = filters;
+  return { ...con, ...locSiSoTheoChip(khu || '') };
+};
 const temHuyDuoc = (r) => TEM_CHUA_KIEM.includes(r.trang_thai) && !r.da_kiem;
 // HỦY NHIỀU TEM (21/10/2026, người dùng yêu cầu): tối đa mỗi lượt — mỗi tem 1 lần gọi route hủy (transaction riêng +
 //   báo ERP riêng), chạy tuần tự.
@@ -174,7 +182,7 @@ export default function DanhSachTemView({
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetcher({ search, page, limit: LIMIT, ...filters });
+      const res = await fetcher({ search, page, limit: LIMIT, ...thamSoLoc(filters) });
       setRows(res.data.items);
       setMeta(res.data.meta || { page: 1, totalPages: 1, total: res.data.items.length });
     } catch (e) { show(e.message || 'Lỗi tải danh sách tem', 'error'); }
@@ -271,7 +279,7 @@ export default function DanhSachTemView({
   };
   const clearFilters = () => { setFilters({}); setPage(1); };
   // Bỏ `ngayDen` / `ngayCaDen` khi đếm: khoảng ngày là MỘT bộ lọc, không phải hai. Ô chọn chuyền nằm ngoài panel.
-  const filterCount = Object.entries(filters).filter(([k, v]) => v && !['ngayDen', 'ngayCaDen', 'chuyenId', 'ca'].includes(k)).length;
+  const filterCount = Object.entries(filters).filter(([k, v]) => v && !['ngayDen', 'ngayCaDen', 'chuyenId', 'ca', 'khu'].includes(k)).length;
 
   const fields = laGiaCong ? FIELDS_CHUNG : [...FIELDS_CHUNG, FIELD_CHUYEN, FIELD_MA_NGAY_CA];
   const textFilters = Object.fromEntries(fields.map((f) => [f.key, filters[f.key] || '']));
@@ -284,7 +292,7 @@ export default function DanhSachTemView({
     setDangXuat(true);
     try {
       const { items, thieu, total } = await taiHetTrang(
-        (p) => fetcher({ search, ...filters, ...p }), { limit: LIMIT_TAI_LON }
+        (p) => fetcher({ search, ...thamSoLoc(filters), ...p }), { limit: LIMIT_TAI_LON }
       );
       if (thieu) show(`Chỉ tải được ${items.length}/${total} tem — hãy thu hẹp bằng bộ lọc`, 'error');
       await exportCheckpointExcel({
@@ -313,6 +321,7 @@ export default function DanhSachTemView({
           [laGiaCong ? 'ngày nhận về' : 'ngày in tem']: [filters.ngayTu, filters.ngayDen].filter(Boolean).join(' → '),
           'ngày ca': [filters.ngayCaTu, filters.ngayCaDen].filter(Boolean).join(' → '),
           ca: filters.ca || '',
+          'khu chuyền': (KHU_LOC.find((t) => t.v === filters.khu) || {}).label || '',
           ...Object.fromEntries(fields.map((f) => [f.label.toLowerCase(), filters[f.key] || ''])),
         }),
       });
@@ -409,6 +418,14 @@ export default function DanhSachTemView({
             <Select value={filters.ca || ''} onChange={(e) => setField('ca', e.target.value)} aria-label="Lọc theo ca">
               <option value="">Mọi ca</option>
               {CA_LOC.map((c) => <option key={c} value={c}>{c}</option>)}
+            </Select>
+          </div>
+        )}
+        {!laGiaCong && (
+          <div className="w-40">
+            <Select value={filters.khu || ''} onChange={(e) => setField('khu', e.target.value)} aria-label="Lọc theo khu chuyền">
+              <option value="">Mọi khu chuyền</option>
+              {KHU_LOC.map((t) => <option key={t.v} value={t.v}>{t.label}</option>)}
             </Select>
           </div>
         )}

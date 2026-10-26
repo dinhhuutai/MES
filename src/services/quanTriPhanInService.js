@@ -18,3 +18,7 @@ export const huyLeQt = (phanInId, body) => client.post(`${P}/${phanInId}/huy-le`
 export const luuPhanCongQt = (phanInId, phieuId, body) => client.post(`${P}/${phanInId}/phieu/${phieuId}/phan-cong`, body);
 export const huyPhanInQt = (phanInId, lyDo) => client.post(`${P}/${phanInId}/huy`, { lyDo });
 export const moPhanInQt = (phanInId) => client.post(`${P}/${phanInId}/mo`);
+// 26/10/2026: sửa kế hoạch lệnh (cả lệnh đã chạy — BE `planning.replan` choDaChay) · kế hoạch tạm.
+export const getKeHoachLenhQt = (phanInId, lenhId) => client.get(`${P}/${phanInId}/lenh/${lenhId}/ke-hoach`);
+export const suaKeHoachLenhQt = (phanInId, lenhId, body) => client.put(`${P}/${phanInId}/lenh/${lenhId}/ke-hoach`, body);
+export const suaKeHoachTamQt = (phanInId, ktId, body) => client.put(`${P}/${phanInId}/ke-hoach-tam/${ktId}`, body);

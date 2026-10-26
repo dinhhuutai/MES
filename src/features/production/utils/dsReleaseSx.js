@@ -9,8 +9,10 @@ const tuChecklist = (key) => (COT_CHECKLIST.find((c) => c.key === key) || { valu
 const so = (v) => (v == null || v === '' ? 0 : Number(v) || 0);
 
 // TỔNG = SL IN + vải hư + vải thiếu + DM+TEST · CL = Tổng − SL release (đúng công thức tờ mẫu: 481 + 10 + 10 + 3 = 504).
+// ⚠ 26/10/2026 danh sách theo NGÀY IN TEM ⇒ SL IN chỉ là tem in TRONG kỳ; lệnh đã in một phần TRƯỚC kỳ thì CL cộng thêm
+//   phần đó (`sl_in_truoc_lenh`, backend) ⇒ CL vẫn là "còn thiếu / dư của lệnh". Lệnh in trọn trong kỳ = công thức tờ mẫu.
 export const tongDong = (r) => so(r.sl_in) + so(r.vai_hu) + so(r.vai_thieu) + so(r.dm_test);
-export const clDong = (r) => tongDong(r) - slReleaseDong(r);
+export const clDong = (r) => tongDong(r) + so(r.sl_in_truoc_lenh) - slReleaseDong(r);
 
 // `nhom` = tiêu đề nhóm (dòng trên). `nhap` = ô nhập tay (DM+TEST / Ghi chú).
 export const COT_DS_RELEASE_SX = [
@@ -23,9 +25,13 @@ export const COT_DS_RELEASE_SX = [
   { key: 'kich_vai', header: 'Kích vải', nhom: 'PHẦN IN', width: 11, value: (r) => r.kich_vai || '' },
   { key: 'kich_phim', header: 'Kích phim', nhom: 'PHẦN IN', width: 11, value: (r) => r.kich_phim || '' },
   { key: 'sldh', header: 'SLĐH', width: 8, num: true, value: (r) => (r.so_luong_don_hang == null ? '' : so(r.so_luong_don_hang)) },
-  { key: 'slnv', header: 'SLNV', width: 8, num: true, value: (r) => so(r.slnv) },
-  { key: 'sl_da_in', header: 'SL ĐÃ IN', width: 8, num: true, value: (r) => so(r.sl_da_in_truoc) },
-  { key: 'sl_da_giao', header: 'SL ĐÃ GIAO', width: 8, num: true, value: (r) => so(r.sl_da_giao_pin) },
+  // SLNV = vải nhận của CẢ phần in (mọi đợt sống) — cùng phạm vi Đã in / Đã giao (26/10/2026, ca 8A8B). `tip` = chú thích
+  //   ô (title trên bảng); `ht` = phần số do script hệ thống "chạy đến giao" tạo (tem `HT-`) ⇒ bảng đánh dấu `*`.
+  { key: 'slnv', header: 'SLNV', width: 8, num: true, value: (r) => so(r.slnv_pin ?? r.slnv),
+    tip: (r) => `Vải nhận cả phần in: ${so(r.slnv_pin ?? r.slnv)} · đợt trong lệnh này: ${so(r.slnv)}` },
+  // "Đã in" = tem của phần in in TRƯỚC kỳ đang xem (mọi lệnh) — backend `dsReleaseSx`.
+  { key: 'sl_da_in', header: 'SL ĐÃ IN', width: 8, num: true, value: (r) => so(r.sl_da_in_truoc), ht: (r) => so(r.sl_da_in_ht) },
+  { key: 'sl_da_giao', header: 'SL ĐÃ GIAO', width: 8, num: true, value: (r) => so(r.sl_da_giao_pin), ht: (r) => so(r.sl_da_giao_ht) },
   { key: 'sl_release', header: 'SL RELEASE', width: 9, num: true, value: slReleaseDong },
   { key: 'gio_bd', header: 'GIỜ BD', nhom: 'HẠN HOÀN THÀNH', width: 8, value: tuChecklist('gio_bd') },
   { key: 'gio_kt', header: 'GIỜ KT', nhom: 'HẠN HOÀN THÀNH', width: 8, value: tuChecklist('gio_kt') },
@@ -52,10 +58,102 @@ export function tieuDeNhom(cols = COT_DS_RELEASE_SX) {
 }
 
 // Dòng hiện = chip khu (`hopChipChuyen`) HOẶC chuyền được thêm (`themMa` = mã chuyền gốc) · xếp theo chuyền như BE.
-export function locDsRelease(items, chip, themMa = []) {
+// `locThem(r)` (26/10/2026) = ô tìm + bộ lọc trường của modal — áp SAU chip, STT đánh lại trên tập còn lại.
+export function locDsRelease(items, chip, themMa = [], locThem = null) {
   const them = new Set(themMa);
-  return (items || []).filter((r) => hopChipChuyen(r, chip) || them.has(r.ma_chuyen))
+  return (items || []).filter((r) => (hopChipChuyen(r, chip) || them.has(r.ma_chuyen)) && (!locThem || locThem(r)))
     .map((r, i) => ({ ...r, _stt: i + 1 }));
+}
+
+// ─── BỘ LỌC (26/10/2026, người dùng: "cho thêm bộ lọc, lọc theo code phần") ─────────────────────────────────────
+// Dùng chung 2 chế độ (Danh sách release · Nhật ký in) — `col` = tên thuộc tính hàng của CẢ HAI nguồn (`filterRows`).
+export const LOC_DS_RELEASE = [
+  { key: 'ma_phan', label: 'Code phần', col: 'ma_phan' },
+  { key: 'khach', label: 'Khách hàng', col: 'ten_khach_hang' },
+  { key: 'don', label: 'Đơn hàng / PO', col: '_don_po' },
+  { key: 'ma_hang', label: 'Mã hàng', col: 'ma_hang' },
+  { key: 'mau_vai', label: 'Màu vải', col: 'mau_vai' },
+  { key: 'chuyen', label: 'Chuyền', col: '_chuyen' },
+  { key: 'tho_in', label: 'Thợ in', col: '_tho' },
+  { key: 'lenh', label: 'Mã lệnh SX', col: 'ma_lenh_san_xuat' },
+];
+// Trường gộp cho bộ lọc + ô tìm (gắn 1 lần lúc tải).
+export const ganTruongLoc = (r) => ({
+  ...r,
+  _don_po: [r.ma_don_hang, r.so_po].filter(Boolean).join(' '),
+  _chuyen: [maChuyenIn(r), r.ma_chuyen, r.ten_chuyen].filter(Boolean).join(' '),
+  _tho: [r.tho_in, r.tho_in_kh].filter(Boolean).join(' '),
+});
+// Chuỗi cho ô tìm chung (code phần · mã tem · mã lệnh · khách · đơn · mã hàng · màu · kích).
+export const chuoiTim = (r) => [r.ma_phan, r.ma_tem, r.ma_lenh_san_xuat, r.ten_khach_hang, r._don_po, r.ma_hang,
+  r.mau_vai, r.kich_vai, r.kich_phim, r._chuyen, r.barcode_phan_in].filter(Boolean).join(' ');
+
+// ─── NHẬT KÝ IN (26/10/2026, mẫu ERP "DANH SÁCH NHẬT KÝ IN") — 1 dòng / tem gốc in trong kỳ (`GET …/nhat-ky-in`). ──
+const ngayVn = (v) => {
+  if (!v) return '';
+  const s = String(v);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s.split('-').reverse().join('/');
+  const d = new Date(s);
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' });
+};
+const gioVn = (v) => {
+  if (!v) return '';
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false });
+};
+const ngayGioVn = (v) => (v ? `${ngayVn(v)} ${gioVn(v)}` : '');
+export const COT_NHAT_KY_IN = [
+  { key: 'stt', header: 'STT', width: 5, num: true, value: (r) => r._stt },
+  { key: 'so_ct', header: 'Số CT', width: 12, value: (r) => r.id_mes || '' },
+  { key: 'kh', header: 'Khách hàng', width: 14, value: (r) => r.ten_khach_hang || '' },
+  { key: 'don', header: 'Đơn hàng', width: 16, value: (r) => r.so_po || r.ma_don_hang || '' },
+  { key: 'ma_hang', header: 'Mã hàng', nhom: 'Hàng hóa', width: 22, value: (r) => r.ma_hang || '' },
+  { key: 'mau_vai', header: 'Màu vải', nhom: 'Hàng hóa', width: 16, value: (r) => r.mau_vai || '' },
+  { key: 'kich_vai', header: 'Kích vải', nhom: 'Hàng hóa', width: 10, value: (r) => r.kich_vai || '' },
+  { key: 'kich_phim', header: 'Kích phim', nhom: 'Hàng hóa', width: 10, value: (r) => r.kich_phim || '' },
+  { key: 'mau_in', header: 'Màu in', nhom: 'Hàng hóa', width: 14, value: (r) => r.mau_in || '' },
+  { key: 'tinh_chat_in', header: 'Tính chất in', nhom: 'Hàng hóa', width: 8, value: (r) => r.tinh_chat_in || '' },
+  { key: 'do_in', header: 'Độ in', nhom: 'Hàng hóa', width: 6, value: (r) => r.do_in || '' },
+  { key: 'barcode', header: 'Barcode', width: 15, value: (r) => r.ma_tem || '' },
+  { key: 'ngc', header: 'NGC', width: 8, value: (r) => r.nha_gia_cong || '' },
+  { key: 'sl_in', header: 'In', nhom: 'Số lượng', width: 8, num: true, value: (r) => so(r.so_luong) },
+  { key: 'vai_hu', header: 'Vải hư', nhom: 'Số lượng', width: 7, num: true, value: (r) => (so(r.vai_hu) || '') },
+  { key: 'vai_thieu', header: 'Vải thiếu', nhom: 'Số lượng', width: 7, num: true, value: (r) => (so(r.vai_thieu) || '') },
+  { key: 'so_phut', header: 'Số phút', width: 7, num: true, value: (r) => (r.so_phut == null ? '' : so(r.so_phut)) },
+  { key: 'to', header: 'Tổ', nhom: 'Thông tin hàng in', width: 6, value: (r) => r.ma_to || '' },
+  { key: 'chuyen', header: 'Máy/Bàn', nhom: 'Thông tin hàng in', width: 8, value: maChuyenIn },
+  { key: 'tho', header: 'Thợ', nhom: 'Thông tin hàng in', width: 18, value: (r) => r.tho_in || '' },
+  { key: 'ca', header: 'Ca', nhom: 'Thông tin hàng in', width: 10, value: (r) => r.ma_ngay_ca || '' },
+  { key: 'ngay', header: 'Ngày', nhom: 'Thông tin hàng in', width: 11, value: (r) => ngayVn(r.ngay_ct) },
+  { key: 'gio', header: 'Giờ', nhom: 'Thông tin hàng in', width: 7, value: (r) => gioVn(r.created_date) },
+  { key: 'gio_sx', header: 'Giờ SX', nhom: 'Thông tin hàng in', width: 12, value: (r) => [r.gio_sx_bd, r.gio_sx_kt].filter(Boolean).join(' – ') },
+  { key: 'tg_kiem', header: 'Thời gian kiểm', nhom: 'Thông tin hàng in', width: 16, value: (r) => ngayGioVn(r.tg_kiem_dau) },
+  { key: 'ngay_giao', header: 'Ngày giao', nhom: 'Thông tin hàng in', width: 11, value: (r) => ngayVn(r.han_giao_hang) },
+  { key: 'ngay_xn_kiem', header: 'Ngày XN Kiểm', nhom: 'Thông tin hàng in', width: 11, value: (r) => ngayVn(r.tg_kiem_cuoi) },
+  { key: 'so_ct_kiem', header: 'Số CT Xn Kiểm', nhom: 'Thông tin hàng in', width: 12, value: (r) => r.id_mes_kiem || '' },
+  { key: 'btp', header: 'BTP', nhom: 'Thông tin hàng in', width: 5, value: (r) => (r.btp_truoc ? 'x' : '') },
+  { key: 'btp2', header: 'BTP 2', nhom: 'Thông tin hàng in', width: 5, value: (r) => (r.btp_cuoi ? 'x' : '') },
+  { key: 'ddhid', header: 'ddhid', nhom: 'Thông tin hàng in', width: 16, value: (r) => r.ddh_id || '' },
+  { key: 'ddhsubid', header: 'ddhsubid', nhom: 'Thông tin hàng in', width: 7, value: (r) => r.ddh_sub_id || '' },
+  { key: 'lenh', header: 'Lệnh SX', nhom: 'Thông tin hàng in', width: 10, value: (r) => r.ma_lenh_san_xuat || '' },
+  { key: 'ma_phan', header: 'Mã phần', nhom: 'Thông tin hàng in', width: 26, value: (r) => r.ma_phan || '' },
+  { key: 'slbs_cty', header: 'SLBS cty', nhom: 'Thông tin hàng in', width: 7, num: true, value: (r) => (so(r.sl_bo_sung_cty) || '') },
+  { key: 'slbs_khach', header: 'SLBS khách', nhom: 'Thông tin hàng in', width: 7, num: true, value: (r) => (so(r.sl_bo_sung_khach) || '') },
+  { key: 'gom', header: 'gom', nhom: 'Thông tin hàng in', width: 9, value: (r) => r.ma_set || (r.so_phan_in_lenh > 1 ? `${r.so_phan_in_lenh} phần` : '') },
+  { key: 'ma_lo', header: 'Mã lô', nhom: 'Thông tin hàng in', width: 20, value: (r) => r.ma_lo || '' },
+  { key: 'day_chuyen', header: 'Dây chuyền', width: 9, value: (r) => r.day_chuyen || '' },
+];
+
+// Số tổng của Nhật ký in: số tem · Σ in · Σ vải hư / thiếu · số code phần.
+export function tongNhatKy(rows) {
+  const ds = rows || [];
+  return {
+    so_tem: ds.length,
+    sl_in: ds.reduce((a, r) => a + so(r.so_luong), 0),
+    vai_hu: ds.reduce((a, r) => a + so(r.vai_hu), 0),
+    vai_thieu: ds.reduce((a, r) => a + so(r.vai_thieu), 0),
+    so_phan: new Set(ds.map((r) => r.ma_phan).filter(Boolean)).size,
+  };
 }
 
 // Số tổng đầu trang (đếm như Danh sách release: đơn / mã / phần in khác nhau · Σ SL release · Σ SL IN).

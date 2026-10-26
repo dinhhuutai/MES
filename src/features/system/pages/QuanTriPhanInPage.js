@@ -17,7 +17,8 @@ import {
 } from '../../../services/quanTriPhanInService';
 import { listUserOptions } from '../../../services/userService';
 import { listToIn } from '../../../services/productionService';
-import { ToanCanhLenh, LuiVeModal, HuyLeModal, PhanCongModal } from '../components/QuanTriToanCanh';
+import { ToanCanhLenh, LuiVeModal, HuyLeModal, PhanCongModal, KeHoachModal } from '../components/QuanTriToanCanh';
+import { listChuyen } from '../../../services/planningService';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // QUẢN TRỊ PHẦN IN — một chỗ gỡ rối mọi thứ của 1 phần in (mig 078, quyền `PHAN_IN_ADMIN`).
@@ -98,9 +99,12 @@ export default function QuanTriPhanInPage() {
   const [xacNhanMoPin, setXacNhanMoPin] = useState(false);
   const [users, setUsers] = useState([]);
   const [toIns, setToIns] = useState([]);
+  const [keHoachMuc, setKeHoachMuc] = useState(null);       // { kieu: 'LENH', lenh } | { kieu: 'TAM', kt } (26/10/2026)
+  const [chuyen, setChuyen] = useState([]);
   useEffect(() => {
     listUserOptions({ limit: 500 }).then((r) => setUsers(r.data || [])).catch(() => {});
     listToIn().then((r) => setToIns(r.data || [])).catch(() => setToIns([]));
+    listChuyen().then((r) => setChuyen(r.data || [])).catch(() => setChuyen([]));
   }, []);
 
   const tim = useCallback(async () => {
@@ -150,7 +154,7 @@ export default function QuanTriPhanInPage() {
     try { await moPhanInQt(chon); show('Đã mở lại phần in'); setXacNhanMoPin(false); await tai(chon, true); }
     catch (e) { show(e.message || 'Mở lại thất bại', 'error'); } finally { setDangLuu(false); }
   };
-  const xongViec = () => { setHuyLe(null); setPhanCongPhieu(null); tai(chon, true); };
+  const xongViec = () => { setHuyLe(null); setPhanCongPhieu(null); setKeHoachMuc(null); tai(chon, true); };
   // Đợt đã có lệnh ⇒ lùi theo lệnh (mọi trạm); chưa có lệnh ⇒ modal cũ (READY KT / QA).
   const moDatGiaiDoan = (d) => {
     const l = d.lenh_id && (data?.toan_canh?.lenh || []).find((x) => x.id === d.lenh_id);
@@ -406,7 +410,8 @@ export default function QuanTriPhanInPage() {
                 ))}
               </div>
 
-              <ToanCanhLenh tc={data.toan_canh} onLuiVe={setLuiLenh} onHuyLe={setHuyLe} onPhanCong={setPhanCongPhieu} />
+              <ToanCanhLenh tc={data.toan_canh} onLuiVe={setLuiLenh} onHuyLe={setHuyLe} onPhanCong={setPhanCongPhieu}
+                onSuaKeHoach={setKeHoachMuc} />
             </>
           )}
         </div>
@@ -417,6 +422,8 @@ export default function QuanTriPhanInPage() {
       <HuyLeModal phanInId={chon} viec={huyLe} show={show} onClose={() => setHuyLe(null)} onDone={xongViec} />
       <PhanCongModal phanInId={chon} phieu={phanCongPhieu} users={users} toIns={toIns} show={show}
         onClose={() => setPhanCongPhieu(null)} onDone={xongViec} />
+      <KeHoachModal phanInId={chon} muc={keHoachMuc} chuyen={chuyen} users={users} show={show}
+        onClose={() => setKeHoachMuc(null)} onDone={xongViec} />
       <Modal open={!!huyPinModal} onClose={() => setHuyPinModal(null)} size="sm" title={`Hủy phần in — ${pin?.ma_phan || ''}`}
         footer={(
           <>
