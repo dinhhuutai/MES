@@ -12,7 +12,8 @@ import { Field, Input, Textarea, Select } from '../../../components/common/contr
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import useHuyLichSu from '../../../hooks/useHuyLichSu';
-import { getRun, printTem, printTemBatch, reprintTem, getTemLabel, getTemLogs, finishRun, stopLine, resumeLine, addVaiHuy, savePhanCong, pauseLenhChay, listProductionCandidates, startProduction, vuotSanXuat, doiChuyen, traVeKyThuatSanXuat, listChuyen, listLyDoNgung, listToIn, luuLyDoBoSungDotVai, huyTemTaiLichSu, moLaiTemTaiLichSu } from '../../../services/productionService';
+import { getRun, printTem, printTemBatch, reprintTem, getTemLabel, getTemLogs, finishRun, stopLine, resumeLine, addVaiHuy, savePhanCong, pauseLenhChay, listProductionCandidates, startProduction, vuotSanXuat, doiChuyen, traVeKyThuatSanXuat, listChuyen, listLyDoNgung, listToIn, luuLyDoBoSungDotVai, huyTemTaiLichSu, moLaiTemTaiLichSu, tachLenhNgc } from '../../../services/productionService';
+import { khoaNgc } from '../../../utils/nhaGiaCong';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import TraVeKeHoachModal from './TraVeKeHoachModal';
 import { listUserOptions } from '../../../services/userService';
@@ -98,6 +99,7 @@ export const thieuNgayCaCt = (m) => {
   return maNgayCaSai(m?.ngayCa);
 };
 export const CHUA_THO_IN = 'Chưa phân công thợ in / tổ in — chọn thợ in và tổ in ở khối Phân công rồi bấm Lưu trước khi in tem';
+const KHOA_IN_NGC = 'Lệnh gom đợt vải của nhiều nhà gia công — bấm "Tách theo nhà gia công" trước khi in tem';
 // Phân công chưa đủ để in tem: chưa có thợ in, hoặc ca này chuyền chưa phân công (gương BE `kiemThoInPhanCong`).
 // TẢI NGẦM khi lệnh đang mở đổi ở MÁY KHÁC (21/10/2026): sidebar trước đây chỉ tải lúc mở ⇒ chuyền vừa được phân
 //   công ở máy khác mà máy này vẫn hiện "chưa phân công + Lưu phân công" (khóa In tem). Nghe `production:updated`,
@@ -660,6 +662,21 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
   // Chưa LƯU phân công có thợ in ⇒ khóa In tem 15|16 (18/10/2026, gương BE `kiemThoInPhanCong` — thợ in kế hoạch
   // chỉ điền sẵn ô, không tính). 19/10/2026: sang ca mới mà chuyền chưa phân công (`can_phan_cong_lai`) cũng khóa.
   const chuaThoIn = !!data && chuaPhanCongThoIn(data.phan_cong, toInDs.length > 0);
+  // NHÀ GIA CÔNG theo đợt (27/10/2026, người dùng chốt): lệnh gom đợt của ≥ 2 NGC ⇒ không cộng chung — chưa in tem thì
+  //   phải TÁCH (mỗi NGC 1 lệnh, `POST /production/lenh/:id/tach-ngc`) rồi mới in; đã in thì chỉ báo (không tách được).
+  const dsNgc = (() => {
+    const m = new Map();
+    dotVaiList.filter((d) => Number(d.sl_vao_sx) > 0).forEach((d) => {
+      const k = khoaNgc(d.nha_gia_cong);
+      const g = m.get(k) || { ten: d.nha_gia_cong || '(trống)', sl: 0 };
+      g.sl += Number(d.sl_vao_sx) || 0;
+      m.set(k, g);
+    });
+    return [...m.values()];
+  })();
+  const lanNgc = !coGomSet && dsNgc.length > 1;
+  const khoaInNgc = running && lanNgc && !(Number(data?.printed) > 0);
+  const [tachNgcOpen, setTachNgcOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -771,7 +788,7 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
 
   // Thiếu Ngày ca / Ngày chứng từ ⇒ báo và KHÔNG in (kiểm trước khi mở cửa sổ in).
   const thieuDauCa = () => {
-    const loi = chuaThoIn ? CHUA_THO_IN : thieuNgayCaCt(temMeta);
+    const loi = khoaInNgc ? KHOA_IN_NGC : chuaThoIn ? CHUA_THO_IN : thieuNgayCaCt(temMeta);
     if (loi) show(loi, 'error');
     return !!loi;
   };
@@ -881,6 +898,23 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
       onChanged?.();
     } catch (e) {
       show(e.message || 'Đổi chuyền thất bại', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doTachNgc = async () => {
+    setBusy(true);
+    try {
+      const res = await tachLenhNgc(lenhId);
+      const d = res.data || {};
+      show(`Đã tách: ${d.ma_lenh} giữ ${d.nha_gia_cong} ${fmtNum(d.so_luong_release)} pcs · `
+        + (d.tach || []).map((t) => `${t.ma_lenh} ${t.nha_gia_cong} ${fmtNum(t.so_luong_release)} pcs`).join(' · '));
+      setTachNgcOpen(false);
+      await load();
+      onChanged?.();
+    } catch (e) {
+      show(e.message || 'Tách lệnh thất bại', 'error');
     } finally {
       setBusy(false);
     }
@@ -1180,6 +1214,20 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
               </h3>
               {/* Ngày ca · giờ SX · BTP: nhập 1 lần, áp cho mọi tem in ở lượt này (mig 066).
                   Với gom set thì bảng in tem cũng hiện lại khối này để nhập ngay trước khi in. */}
+              {lanNgc && (
+                <div className="mb-2 rounded-input border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
+                  <p>
+                    Lệnh gom đợt vải của {fmtNum(dsNgc.length)} nhà gia công khác nhau:{' '}
+                    <b>{dsNgc.map((g) => `${g.ten} ${fmtNum(g.sl)}`).join(' · ')}</b> — không cộng chung số lượng.
+                    {khoaInNgc ? ' Tách mỗi nhà gia công 1 lệnh rồi mới in tem.' : ' Lệnh đã in tem nên không tách được.'}
+                  </p>
+                  {khoaInNgc && (
+                    <Button className="mt-2" variant="secondary" icon="shuffle" disabled={busy} onClick={() => setTachNgcOpen(true)}>
+                      Tách theo nhà gia công
+                    </Button>
+                  )}
+                </div>
+              )}
               {chuaThoIn && (
                 <p className="mb-2 rounded-input border border-danger/30 bg-danger/5 px-3 py-2 text-xs text-danger">
                   {CHUA_THO_IN} (khối Phân công bên dưới).
@@ -1187,7 +1235,7 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
               )}
               {!coGomSet && <div className="mb-2"><TemMetaFields meta={temMeta} setMeta={setTemMeta} goiY={goiYTem} /></div>}
               {coGomSet ? (
-                <Button className="w-full" icon={chiLuu ? 'save' : 'printer'} onClick={() => setPrintSetOpen(true)} disabled={busy || remain === 0 || chuaThoIn}>
+                <Button className="w-full" icon={chiLuu ? 'save' : 'printer'} onClick={() => setPrintSetOpen(true)} disabled={busy || remain === 0 || chuaThoIn || khoaInNgc}>
                   Nhập số lượng &amp; {chiLuu ? 'lưu' : 'in tem'}…
                 </Button>
               ) : (
@@ -1207,7 +1255,7 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
                     </div>
                     {/* BTP trước → chỉ LƯU (không mở cửa sổ in nhãn), nút đổi hẳn nhãn cho khỏi hiểu nhầm. */}
                     <Button onClick={doPrint} loading={busy} icon={chiLuu ? 'save' : undefined}
-                      disabled={!soLuong || Number(soLuong) <= 0 || overMax || remain === 0 || chuaThoIn}>
+                      disabled={!soLuong || Number(soLuong) <= 0 || overMax || remain === 0 || chuaThoIn || khoaInNgc}>
                       {chiLuu ? 'Lưu' : (nTem > 1 ? `In ${nTem} tem` : 'In tem')}
                     </Button>
                   </div>
@@ -1566,6 +1614,26 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
           <Textarea rows={3} value={traVeReason} onChange={(e) => setTraVeReason(e.target.value)}
             placeholder="Vì sao trả về kỹ thuật (vd: sai film, khuôn chưa đạt...)" />
         </Field>
+      </Modal>
+
+      {/* Tách lệnh theo nhà gia công (27/10/2026) — mỗi NGC 1 lệnh, cùng chuyền / kế hoạch / đang chạy */}
+      <Modal open={tachNgcOpen} onClose={() => setTachNgcOpen(false)} title="Tách theo nhà gia công" size="sm"
+        footer={
+          <>
+            <Button chiXemOk variant="ghost" onClick={() => setTachNgcOpen(false)}>Hủy</Button>
+            <Button onClick={doTachNgc} loading={busy}>Tách {fmtNum(dsNgc.length)} lệnh</Button>
+          </>
+        }
+      >
+        <p className="text-sm text-ink">
+          Lệnh <b>{data?.lenh?.ma_lenh_san_xuat}</b> tách thành {fmtNum(dsNgc.length)} lệnh, mỗi nhà gia công 1 lệnh:
+        </p>
+        <ul className="mt-2 space-y-1 text-sm text-ink">
+          {dsNgc.map((g) => <li key={g.ten}>· <b>{g.ten}</b> — {fmtNum(g.sl)} pcs</li>)}
+        </ul>
+        <p className="mt-3 text-xs text-ink-soft">
+          Cùng chuyền, kế hoạch và kết quả test; lệnh mới cũng đang chạy (phiếu riêng, giữ phân công). Kế hoạch gửi lại ERP.
+        </p>
       </Modal>
 
       {/* Đổi chuyền lượt chạy — chọn chuyền khác, tem đã in giữ nguyên */}

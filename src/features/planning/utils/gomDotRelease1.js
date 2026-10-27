@@ -8,11 +8,13 @@
 // · Cột số = TỔNG (SL vải về · đã release · còn release); ngày nhận vải / hạn giao = SỚM NHẤT; loại đợt · nhà gia công
 //   · mã đợt = danh sách không trùng. `_dots` giữ đủ đợt — release / chọn / trả về đều thao tác trên MỌI đợt của dòng;
 //   BE gộp các đợt cùng phần in vào 1 lệnh.
+// · ⚠ 27/10/2026 (người dùng chốt): đợt KHÁC NHÀ GIA CÔNG (ERP NGC) không gom — khóa thêm `nha_gia_cong` (gương BE).
 // · Giữ vị trí của đợt xuất hiện ĐẦU (không sắp lại bảng).
 // Hàm thuần, không phụ thuộc React.
 // ─────────────────────────────────────────────────────────────────────────────
+import { khoaNgc } from '../../../utils/nhaGiaCong';
 
-const khoaNhom = (r) => `${r.phan_in_id}|${r.qc_done ? 'R' : 'C'}`;
+const khoaNhom = (r) => `${r.phan_in_id}|${r.qc_done ? 'R' : 'C'}|${khoaNgc(r.nha_gia_cong)}`;
 const dsKhongTrung = (ds) => [...new Set(ds.filter((x) => x != null && String(x).trim() !== '').map(String))].join(', ');
 const nho = (a, b) => (!a ? b : !b ? a : (String(a) <= String(b) ? a : b));
 const cong = (ds, k) => ds.reduce((s, r) => s + (Number(r[k]) || 0), 0);

@@ -31,6 +31,7 @@ import exportCheckpointExcel, {
   moTaBoLoc, cotKhoangGio, khoangGio, gioNgay,
 } from '../../../utils/exportCheckpointExcel';
 import { thoInHienThi } from '../../../utils/thoIn';
+import { khoaNgcLenh } from '../../../utils/nhaGiaCong';
 import ChipTabs from '../../../components/common/ChipTabs';
 import { LOAI_TABS, hopChipChuyen, nhanChip, demChip, locSiSoTheoChip } from '../../../utils/khuChuyen';
 import RunPanel from '../components/RunPanel';
@@ -218,9 +219,11 @@ export default function XacNhanChayPage() {
   // ⚠ 26/10/2026 (người dùng: "gom số lượng đợt vải nếu giống code phần thì hiện modal sản xuất như 1 phần"): các
   //   lệnh ĐANG CHẠY cùng code phần + cùng chuyền ⇒ GỘP THẬT thành 1 lệnh (`POST /production/gop-lenh`, luật 25/10)
   //   rồi mở `RunPanel` của lệnh đích — như 1 phần in. Gộp lỗi (vd lệnh vừa đổi trạng thái) ⇒ lùi về sidebar nhiều lệnh.
+  // 27/10/2026: khác nhà gia công (NGC của đợt) thì KHÔNG gộp — mở sidebar nhiều lệnh.
   const cungMotPhan = (ds) => ds.length > 1
     && ds.every((l) => (Number(l.so_phan_in) || 1) === 1 && !(l.phan_in_list && l.phan_in_list.length > 1))
-    && new Set(ds.map((l) => `${l.phan_in_id || l.ma_phan || ''}|${l.chuyen_id || ''}`)).size === 1
+    && ds.every((l) => !khoaNgcLenh(l).includes('|'))
+    && new Set(ds.map((l) => `${l.phan_in_id || l.ma_phan || ''}|${l.chuyen_id || ''}|${khoaNgcLenh(l)}`)).size === 1
     && !!(ds[0].phan_in_id || ds[0].ma_phan);
   const moNhieu = async (ds) => {
     if (!cungMotPhan(ds)) { setSelNhieu(ds.map((l) => l.lenh_id)); return; }

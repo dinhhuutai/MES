@@ -3,9 +3,10 @@
 // như 1 phần, gộp tổng số lượng"). 1 phần in có nhiều đợt vải ⇒ release ra nhiều lệnh; chạy chung 1 máy thì sidebar
 // coi cả nhóm là 1 phần: 1 dòng, 1 số đã in / SL tổng, 1 ô số lượng in tem. Mỗi lệnh VẪN là 1 lệnh + 1 phiếu riêng ở
 // backend ⇒ số in của 1 lượt được PHÂN BỔ về từng lệnh (`phanBoInTem`) — vượt ranh giới lệnh thì tách 2 tem.
-//   · Khóa nhóm = phần in + chuyền của lệnh. Lệnh gom set cũ (nhiều phần in / 1 lệnh) đứng riêng.
+//   · Khóa nhóm = phần in + chuyền của lệnh + nhà gia công (27/10/2026). Lệnh gom set cũ (nhiều phần in / 1 lệnh) đứng riêng.
 //   · Hàm thuần — không gọi API, thử được độc lập.
 // ─────────────────────────────────────────────────────────────────────────────
+import { khoaNgc } from '../../../utils/nhaGiaCong';
 
 const n = (v) => Number(v) || 0;
 export const slRelease = (run) => n(run?.lenh?.so_luong_release);
@@ -19,12 +20,16 @@ export const conDuocIn = (run) => {
 export const conLai = (run) => Math.max(0, slRelease(run) - daIn(run));
 const soLenh = (run) => n(String(run?.lenh?.ma_lenh_san_xuat || '').replace(/\D/g, ''));
 
+// Khóa NGC của lệnh = các nhà gia công khác nhau của đợt (27/10/2026: đợt khác NGC không gom). BE cũ không trả ⇒ ''.
+const ngcRun = (run) => [...new Set((run?.dot_vai || []).filter((d) => n(d.sl_vao_sx) > 0 || d.sl_vao_sx == null)
+  .map((d) => khoaNgc(d.nha_gia_cong)))].sort().join('|');
+
 export function gomPhan(runs) {
   const m = new Map();
   const out = [];
   (runs || []).forEach((run) => {
     const pin = !run?.co_gom_set && !run?.loi ? (run?.dot_vai || [])[0]?.phan_in_id : null;
-    const k = pin ? `${pin}|${run.lenh?.chuyen_id || ''}` : `lenh|${run?.lenh?.id}`;
+    const k = pin ? `${pin}|${run.lenh?.chuyen_id || ''}|${ngcRun(run)}` : `lenh|${run?.lenh?.id}`;
     let g = m.get(k);
     if (!g) { g = { key: k, runs: [] }; m.set(k, g); out.push(g); }
     g.runs.push(run);

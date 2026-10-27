@@ -1,6 +1,7 @@
 import { khop, khopNhieu } from '../../../utils/timKiem';
 import { trongKhoangNgay } from '../../../utils/format';
 import { hopChipChuyen } from '../../../utils/khuChuyen';
+import { khoaNgcLenh } from '../../../utils/nhaGiaCong';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LỌC LỆNH màn Xác nhận chạy — DÙNG CHUNG bảng *Đang chạy* (trang) và modal *Chờ chạy* (01/10/2026),
@@ -87,13 +88,14 @@ export const khoaPinLenh = (r) => dsPin(r).map((p) => p.phan_in_id || p.ma_phan 
 const tongCot = (ds, k) => ds.reduce((a, r) => a + (Number(r[k]) || 0), 0);
 const khacNhau = (ds, k) => [...new Set(ds.map((r) => r[k]).filter(Boolean))];
 const somNhat = (ds, k) => ds.map((r) => r[k]).filter(Boolean).sort((a, b) => new Date(a) - new Date(b))[0] || null;
+//   · 27/10/2026 (người dùng chốt): khóa thêm NHÀ GIA CÔNG của lệnh (`khoaNgcLenh`) — đợt khác NGC không cộng chung.
 export function gomTheoCodePhan(rows) {
   const nhom = new Map();
   const out = [];
   for (const r of rows || []) {
     const motPin = !(r.phan_in_list && r.phan_in_list.length > 1);
     const pin = r.phan_in_id || r.ma_phan || '';
-    const k = motPin && pin ? `${pin}|${r.chuyen_id || r.ma_chuyen || ''}` : '';
+    const k = motPin && pin ? `${pin}|${r.chuyen_id || r.ma_chuyen || ''}|${khoaNgcLenh(r)}` : '';
     const g = k ? nhom.get(k) : null;
     if (g) { g._lenh.push(r); continue; }
     const moi = { ...r, _lenh: [r] };
@@ -124,7 +126,8 @@ export const lenhCuaDong = (r) => (r && r._lenh && r._lenh.length ? r._lenh : (r
 // GOM DÒNG ĐANG CHẠY THEO CODE PHẦN + CHUYỀN (21/10/2026, người dùng: "cùng code phần, cùng máy thì gom số lượng
 // lại thành 1 dòng" — ca thật SL-2609-001-A17-F02-C04: 3 đợt vải release 3 lần ⇒ 3 lệnh, bấm chạy chung 1 lượt từ
 // dòng gom Chờ chạy ⇒ bảng Đang chạy hiện 3 dòng). Chỉ là cách HIỆN — mỗi lệnh vẫn là 1 lệnh + 1 phiếu riêng.
-//   · Khóa = phần in + CHUYỀN THỰC TẾ của phiếu (`chuyen_id`) — cùng code phần chạy 2 máy khác nhau vẫn 2 dòng.
+//   · Khóa = phần in + CHUYỀN THỰC TẾ của phiếu (`chuyen_id`) + NHÀ GIA CÔNG (27/10/2026) — cùng code phần chạy 2 máy
+//     khác nhau, hoặc 2 đợt khác nhà gia công, vẫn 2 dòng.
 //   · Chỉ gom lệnh ĐÚNG 1 phần in; lệnh gom set cũ đứng riêng. Dòng trả về luôn có `_lenh`.
 //   · Số gộp: đã in · SL release · số tem · vải hủy · đợt vải = tổng; ngừng = BẤT KỲ phiếu đang ngừng; xác nhận chạy ·
 //     ngày SX KH · hạn giao = sớm nhất; mã lệnh = danh sách. `phieu_id` / `lenh_id` giữ của lệnh đầu (khóa dòng).
@@ -134,7 +137,7 @@ export function gomDangChayTheoCodePhan(rows) {
   for (const r of rows || []) {
     const motPin = !(r.phan_in_list && r.phan_in_list.length > 1);
     const pin = r.phan_in_id || r.ma_phan || '';
-    const k = motPin && pin ? `${pin}|${r.chuyen_id || r.ma_chuyen || ''}` : '';
+    const k = motPin && pin ? `${pin}|${r.chuyen_id || r.ma_chuyen || ''}|${khoaNgcLenh(r)}` : '';
     const g = k ? nhom.get(k) : null;
     if (g) { g._lenh.push(r); continue; }
     const moi = { ...r, _lenh: [r] };
