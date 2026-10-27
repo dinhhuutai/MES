@@ -60,6 +60,13 @@ function TramNode({ t }) {
             ))}
           </ul>
         )}
+        {(t.bo_test_run || []).map((b, i) => (
+          <div key={`bt-${i}`} className="mt-1 text-xs text-ink-soft">
+            <Badge tone="warning">Không test run</Badge> {fmtDt(b.tg)}{b.nguoi ? ` · ${b.nguoi}` : ''}
+            {b.tu_lenh ? ` · lệnh ${b.tu_lenh} cộng vào lệnh đang chạy` : ''}
+            <div className="text-ink">Lý do: {b.ly_do || '(không ghi — trước 27/10/2026)'}</div>
+          </div>
+        ))}
       </div>
     </li>
   );

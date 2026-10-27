@@ -47,8 +47,15 @@ const FIELDS_CHUNG = [
   { key: 'don', label: 'Đơn hàng' },
   { key: 'maHang', label: 'Mã hàng' },
   { key: 'codePhan', label: 'Code phần' },
+  // 27/10/2026 (người dùng: "thêm bộ lọc ở danh sách tem in")
+  { key: 'mauVai', label: 'Màu vải' },
+  { key: 'kichVai', label: 'Kích vải' },
+  { key: 'kichPhim', label: 'Kích phim' },
+  { key: 'maLenh', label: 'Mã đợt SX' },
+  { key: 'nhaGiaCong', label: 'Nhà gia công' },
 ];
 const FIELD_CHUYEN = { key: 'chuyen', label: 'Chuyền' };
+const FIELD_MA_LO = { key: 'maLo', label: 'Mã lô' }; // mig 114 — chỉ tem sản xuất
 // Mã ngày ca (14/10/2026) — gõ 1 phần cũng được: `261013` (cả ngày) · `261013D2` (đúng ca) · `D2` (mọi ngày ca D2).
 const FIELD_MA_NGAY_CA = { key: 'maNgayCa', label: 'Mã ngày ca' };
 
@@ -279,9 +286,9 @@ export default function DanhSachTemView({
   };
   const clearFilters = () => { setFilters({}); setPage(1); };
   // Bỏ `ngayDen` / `ngayCaDen` khi đếm: khoảng ngày là MỘT bộ lọc, không phải hai. Ô chọn chuyền nằm ngoài panel.
-  const filterCount = Object.entries(filters).filter(([k, v]) => v && !['ngayDen', 'ngayCaDen', 'chuyenId', 'ca', 'khu'].includes(k)).length;
+  const filterCount = Object.entries(filters).filter(([k, v]) => v && !['ngayDen', 'ngayCaDen', 'chuyenId', 'ca', 'khu', 'trangThai'].includes(k)).length;
 
-  const fields = laGiaCong ? FIELDS_CHUNG : [...FIELDS_CHUNG, FIELD_CHUYEN, FIELD_MA_NGAY_CA];
+  const fields = laGiaCong ? FIELDS_CHUNG : [...FIELDS_CHUNG, FIELD_CHUYEN, FIELD_MA_NGAY_CA, FIELD_MA_LO];
   const textFilters = Object.fromEntries(fields.map((f) => [f.key, filters[f.key] || '']));
 
   // ⚠⚠ Phân trang Ở SERVER (20 dòng/trang) ⇒ tải hết mọi trang rồi mới xuất; lấy `rows` là chỉ ra
@@ -322,6 +329,7 @@ export default function DanhSachTemView({
           'ngày ca': [filters.ngayCaTu, filters.ngayCaDen].filter(Boolean).join(' → '),
           ca: filters.ca || '',
           'khu chuyền': (KHU_LOC.find((t) => t.v === filters.khu) || {}).label || '',
+          'trạng thái': (TT[filters.trangThai] || [])[0] || '',
           ...Object.fromEntries(fields.map((f) => [f.label.toLowerCase(), filters[f.key] || ''])),
         }),
       });
@@ -437,6 +445,13 @@ export default function DanhSachTemView({
             </Select>
           </div>
         )}
+        {/* TRẠNG THÁI TEM (27/10/2026) — lọc ở server (`trangThai`, mã trong bảng TT). */}
+        <div className="w-36">
+          <Select value={filters.trangThai || ''} onChange={(e) => setField('trangThai', e.target.value)} aria-label="Lọc theo trạng thái tem">
+            <option value="">Mọi trạng thái</option>
+            {Object.entries(TT).map(([v, [ten]]) => <option key={v} value={v}>{ten}</option>)}
+          </Select>
+        </div>
         <FilterToggle open={showFilter} count={filterCount} onClick={() => setShowFilter((v) => !v)} />
         <Button chiXemOk variant="secondary" icon="download" onClick={doExcel}
           loading={dangXuat} disabled={!meta.total}>Excel ({fmtNum(meta.total)})</Button>

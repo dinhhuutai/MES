@@ -34,7 +34,6 @@ import LoaiDotVaiBadge from '../../planning/components/LoaiDotVaiBadge';
 import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import PhuongAnInCell from '../../../components/common/PhuongAnInCell';
-import NutSaoChep from '../../../components/common/NutSaoChep';
 import { PHUONG_AN_IN } from '../../../components/common/PhuongAnInBadge';
 import { fmtDateTime, fmtDate } from '../../../utils/format';
 import { khuonRequired } from '../constants';
@@ -66,15 +65,6 @@ const ITEMS = [
   { ma: 'KHUON', label: 'Khuôn', perm: 'READY_KHUON', hasOptions: true },
   { ma: 'MUC', label: 'Mực', perm: 'READY_MUC', hasOptions: true },
 ];
-
-// Thông tin 1 dòng READY để chép: Khách · Đơn · Mã hàng · Code phần · Màu vải · Kích vải · Kích phim · Loại đợt (+ SL đợt)
-//   · Phương án in · Hạn giao — ngăn TAB (dán Excel tự tách cột).
-const chuoiDongReady = (r) => [
-  r.ten_khach_hang, r.ma_don_hang, r.ma_hang, r.ma_phan, r.mau_vai, r.kich_vai, r.kich_phim,
-  [r.loai_dot_vai, r.so_luong_dot ? `${Number(r.so_luong_dot).toLocaleString('vi-VN')} pcs` : ''].filter(Boolean).join(' · '),
-  r.phuong_an_in != null ? (PHUONG_AN_IN[r.phuong_an_in] || '') : '',
-  r.han_giao_hang ? fmtDate(r.han_giao_hang) : '',
-].map((x) => String(x ?? '').replace(/[\t\r\n]+/g, ' ').trim()).join('\t');
 
 const DoneCell = (done) =>
   done ? <Badge tone="success">✓</Badge> : <span className="text-ink-soft">–</span>;
@@ -358,12 +348,6 @@ export default function ReadyPage() {
     { key: 'han_giao_hang', header: 'Hạn giao', copyText: (r) => (r.han_giao_hang ? fmtDate(r.han_giao_hang) : ''), render: (r) => <HanGiaoCell value={r.han_giao_hang} /> },
     { key: 'tg_qua_ready', header: 'Thời gian ERP lên MES', className: 'whitespace-nowrap', copyText: (r) => (r.tg_qua_ready ? fmtDateTime(r.tg_qua_ready) : ''), render: (r) => (
       <span className="text-ink-soft">{fmtDateTime(r.tg_qua_ready)}</span>
-    ) },
-    // Chép CẢ DÒNG (27/10/2026 — bấm dòng là mở panel nên không bôi đen chép được): các ô ngăn TAB ⇒ dán vào Excel tự
-    // tách cột, dán vào Zalo vẫn đọc được. Bôi đen chữ trong dòng cũng không mở panel nữa (DataTable).
-    { key: 'chep', header: '', className: 'w-10 text-center', render: (r) => (
-      <NutSaoChep layChu={() => chuoiDongReady(r)} title="Chép thông tin dòng (dán vào Excel/Zalo)"
-        onDone={(ok) => show(ok ? `Đã chép dòng ${r.ma_phan || ''}` : 'Trình duyệt không cho chép — bôi đen chữ rồi Ctrl+C', ok ? 'success' : 'error')} />
     ) },
   ];
 

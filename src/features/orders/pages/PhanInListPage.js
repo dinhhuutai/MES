@@ -841,6 +841,19 @@ export default function PhanInListPage() {
                           Hàng đi thẳng sang Kế hoạch — hệ thống tự xác nhận, không qua tổ kỹ thuật.
                         </p>
                       )}
+                      {/* KHÔNG TEST RUN (27/10/2026) — QA bấm bỏ test: người · giờ · lý do; lệnh đã cộng vào lệnh đang chạy thì ghi lệnh gốc. */}
+                      {t.bo_test_run?.length > 0 && (
+                        <div className="mt-2 space-y-1 pl-8 text-xs">
+                          {t.bo_test_run.map((b, k) => (
+                            <div key={k}>
+                              <Badge tone="warning">Không test run</Badge>
+                              <span className="ml-1.5 text-ink-soft">{fmtDateTime(b.tg)} · {b.nguoi || '—'}</span>
+                              {b.tu_lenh && <span className="text-ink-soft"> · lệnh {b.tu_lenh} cộng vào lệnh đang chạy</span>}
+                              <div className="text-ink">Lý do: {b.ly_do || <span className="text-ink-soft">(không ghi — trước 27/10/2026)</span>}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                       {t.ma_tram === 'RELEASE_1' && journey?.dot_vai?.length > 0 && (
                         <div className="mt-2 pl-8">
                           {(() => { const ci = composeInfo(journey.dot_vai); return ci ? <Badge tone={ci.tone}>{ci.label}</Badge> : null; })()}

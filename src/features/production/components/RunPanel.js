@@ -1156,7 +1156,9 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
       open={!!lenhId}
       onClose={onClose}
       title={data?.lenh ? `Sản xuất — ${data.lenh.ma_lenh_san_xuat}` : 'Sản xuất'}
-      subtitle={data?.lenh ? `Chuyền ${data.lenh.ma_chuyen || '—'} · Phần ${data.lenh.phan_list || '—'}` : ''}
+      subtitle={data?.lenh ? `Chuyền ${data.lenh.ma_chuyen || '—'}`
+        + (data.lenh.chuyen_kh_id && data.lenh.chuyen_kh_id !== data.lenh.chuyen_id ? ` (kế hoạch ${data.lenh.ma_chuyen_kh || '—'})` : '')
+        + ` · Phần ${data.lenh.phan_list || '—'}` : ''}
       footer={
         running && canRun && (
           <>
@@ -1650,8 +1652,8 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
       >
         <div className="mb-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
           Chuyển lệnh <b>{data?.lenh?.ma_lenh_san_xuat}</b> sang chuyền khác (máy hỏng, dồn tải…).
-          Đổi cả <b>phiếu đang chạy</b> lẫn <b>lệnh</b>; <b>tem đã in giữ nguyên</b> — không in lại,
-          không đụng xe phơi.
+          Chỉ đổi chuyền <b>thực tế</b> của phiếu đang chạy — <b>chuyền kế hoạch giữ nguyên</b> bên Kế hoạch;
+          <b>tem đã in giữ nguyên</b> — không in lại, không đụng xe phơi.
         </div>
         <div className="mb-3 text-sm text-ink">
           Chuyền hiện tại: <b>{data?.lenh?.ten_chuyen || data?.lenh?.ma_chuyen || '—'}</b>

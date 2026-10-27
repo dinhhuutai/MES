@@ -1,14 +1,29 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import SidePanel from '../../../components/common/SidePanel';
 import DataTable from '../../../components/common/DataTable';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
+import Icon from '../../../components/common/Icon';
 import Toast from '../../../components/common/Toast';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import useHuyLichSu from '../../../hooks/useHuyLichSu';
 import { giaCongHistory, huyGiaCongTemLichSu } from '../../../services/planningService';
 import { fmtNum, ngayLocalISO } from '../../../utils/format';
+import { khopTungTu } from '../../../utils/timKiem';
+
+// Bộ lọc (27/10/2026, người dùng yêu cầu) — lọc client trên 1 ngày đã tải, kết hợp AND.
+const TRUONG_LOC = [
+  { key: 'ma_phan', label: 'Code phần' },
+  { key: 'ten_khach_hang', label: 'Khách hàng' },
+  { key: 'ma_hang', label: 'Mã hàng' },
+  { key: 'mau_vai', label: 'Màu vải' },
+  { key: 'kich_vai', label: 'Kích vải' },
+  { key: 'kich_phim', label: 'Kích phim' },
+  { key: 'ma_lenh_san_xuat', label: 'Mã đợt SX' },
+  { key: 'nguoi', label: 'Người thực hiện' },
+];
+const chuoiTim = (r) => [...TRUONG_LOC.map((f) => r[f.key]), r.ma_tem, r.ly_do].filter(Boolean).join(' ');
 
 const todayStr = () => ngayLocalISO(new Date());
 const fmtTime = (t) => (t ? new Date(t).toLocaleTimeString('vi-VN') : '');
@@ -30,6 +45,16 @@ export default function GiaCongHistoryPanel({ open, onClose, onPrint, onChanged 
   const [date, setDate] = useState(todayStr);
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [q, setQ] = useState('');
+  const [loai, setLoai] = useState('');
+  const [filters, setFilters] = useState({});
+  const [showFilters, setShowFilters] = useState(false);
+  const viewRows = useMemo(() => rows.filter((r) => {
+    if (loai && r.loai !== loai) return false;
+    if (TRUONG_LOC.some((f) => (filters[f.key] || '').trim() && !khopTungTu(r[f.key], filters[f.key]))) return false;
+    return !q.trim() || khopTungTu(chuoiTim(r), q);
+  }), [rows, q, loai, filters]);
+  const soLoc = TRUONG_LOC.filter((f) => (filters[f.key] || '').trim()).length + (q.trim() ? 1 : 0) + (loai ? 1 : 0);
 
   const onPrintRef = useRef(onPrint);
   onPrintRef.current = onPrint;
@@ -99,15 +124,46 @@ export default function GiaCongHistoryPanel({ open, onClose, onPrint, onChanged 
 
   return (
     <SidePanel open={open} onClose={onClose} title="Lịch sử gia công"
-      subtitle={`${rows.length} lượt trong ngày · nhận hàng · OQC trả về · trả lại nhà gia công`}
+      subtitle={`${soLoc ? `${viewRows.length}/${rows.length}` : rows.length} lượt trong ngày · nhận hàng · OQC trả về · trả lại nhà gia công`}
       width="max-w-5xl" side="left">
-      <div className="mb-4 flex items-center gap-2">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         <label className="text-sm font-medium text-ink">Ngày</label>
         <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
           className="h-10 rounded-input border border-line px-3 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10" />
+        <div className="relative min-w-[12rem] flex-1">
+          <Icon name="search" size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm code phần, mã tem, khách, mã hàng..."
+            className="h-10 w-full rounded-input border border-line bg-surface pl-9 pr-3 text-base md:text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10" />
+        </div>
+        <select value={loai} onChange={(e) => setLoai(e.target.value)} aria-label="Lọc theo sự kiện"
+          className="h-10 rounded-input border border-line bg-surface px-2 text-base md:text-sm outline-none focus:border-primary">
+          <option value="">Mọi sự kiện</option>
+          {Object.entries(LOAI).map(([v, c]) => <option key={v} value={v}>{c.label}</option>)}
+        </select>
+        <Button variant={showFilters || soLoc ? 'secondary' : 'ghost'} icon="filter" chiXemOk
+          onClick={() => setShowFilters((v) => !v)}>Bộ lọc{soLoc ? ` (${soLoc})` : ''}</Button>
       </div>
-      <DataTable columns={columns} rows={rows} loading={loading} rowKey="_k" sttStart={0}
-        emptyText="Không có hoạt động gia công nào trong ngày" />
+      {showFilters && (
+        <div className="mb-3 rounded-card border border-line p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-ink">Lọc nhiều trường (kết hợp AND)</h3>
+            <Button variant="ghost" chiXemOk className="px-2.5 py-1 text-xs" disabled={!soLoc}
+              onClick={() => { setFilters({}); setQ(''); setLoai(''); }}>Xóa lọc</Button>
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {TRUONG_LOC.map((f) => (
+              <div key={f.key}>
+                <label className="mb-1 block text-xs font-medium text-ink-soft">{f.label}</label>
+                <input value={filters[f.key] || ''} onChange={(e) => setFilters((s) => ({ ...s, [f.key]: e.target.value }))}
+                  placeholder={`Lọc ${f.label.toLowerCase()}...`}
+                  className="h-9 w-full rounded-input border border-line bg-surface px-2.5 text-base md:text-sm outline-none focus:border-primary" />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <DataTable columns={columns} rows={viewRows} loading={loading} rowKey="_k" sttStart={0}
+        emptyText={soLoc ? 'Không có lượt nào khớp bộ lọc' : 'Không có hoạt động gia công nào trong ngày'} />
       {huyLs.modal}
       <Toast toast={toast} />
     </SidePanel>

@@ -348,8 +348,10 @@ function dongNhatKyLenh(l) {
       const m = NK_LENH[n.hanh_dong] || { ten: n.hanh_dong };
       return {
         tg: n.tg, nguoi: n.nguoi, tone: boTest ? 'slate' : (m.tone || 'emerald'),
-        ten: boTest ? 'Không test run' : n.dich ? `${m.ten} ${TEN_DICH_LUI[n.dich] || n.dich}` : m.ten,
-        phu: [n.ly_do, n.cong_vao_lenh ? `cộng vào ${n.cong_vao_lenh}` : ''].filter(Boolean).join(' · '),
+        ten: boTest ? `Không test run${n.tu_lenh ? ` — ${n.tu_lenh} cộng vào lệnh này` : ''}`
+          : n.dich ? `${m.ten} ${TEN_DICH_LUI[n.dich] || n.dich}` : m.ten,
+        phu: [n.ly_do ? (boTest ? `Lý do: ${n.ly_do}` : n.ly_do) : '', !n.tu_lenh && n.cong_vao_lenh ? `cộng vào ${n.cong_vao_lenh}` : '']
+          .filter(Boolean).join(' · '),
       };
     }),
   ];
@@ -389,7 +391,11 @@ const DA_R2 = ['RELEASE_2', 'SAN_XUAT', 'HOAN_TAT', 'CHO_IN_XONG'];
 //   còn lại = SL < 100 hoặc phần in đang in tem lúc release.
 function boTestRun(l) {
   if (l.test_qa || l.test?.qa || !DA_R2.includes(l.trang_thai)) return null;
-  if (l.qa_bo_test) return 'QA bấm "Không test run"';
+  if (l.qa_bo_test) { // { tg, nguoi, ly_do } — 27/10/2026: ghi rõ người · giờ · lý do ngay ở bước Test Run
+    const b = l.qa_bo_test;
+    return ['QA bấm "Không test run"', [b.nguoi, b.tg ? fmtDateTime(b.tg) : ''].filter(Boolean).join(' · '),
+      b.ly_do ? `Lý do: ${b.ly_do}` : ''].filter(Boolean).join(' — ');
+  }
   const f = (l.feeds || []).find((x) => x.ma_loai_dot === 'BO_SUNG' || x.ma_loai_dot === 'MAU_SO_LUONG');
   if (f) return `Đợt ${f.loai_dot || (f.ma_loai_dot === 'BO_SUNG' ? 'bổ sung' : 'mẫu số lượng')}`;
   return 'SL < 100 / phần in đang in tem';
