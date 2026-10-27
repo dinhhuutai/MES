@@ -73,6 +73,9 @@ export default function TestRunPanel({ lenhId, onClose, onChanged, truocXacNhan,
   //   khối "Test Run trả về" màn Release 1 tới khi Kế hoạch xác nhận lại.
   const [khOpen, setKhOpen] = useState(false);
   const [khLyDo, setKhLyDo] = useState('');
+  // "Không test run" (27/10/2026): bắt buộc lý do — BE 422 `NO_LY_DO`, hiện ở sidebar Lịch sử Test Run.
+  const [skipOpen, setSkipOpen] = useState(false);
+  const [skipLyDo, setSkipLyDo] = useState('');
 
   // Phần in (khử trùng) của lệnh — lệnh gom set cũ có nhiều phần in ⇒ modal Trả về GN cho chọn.
   const dsPhanIn = [...new Map((data?.dot_vai || []).map((d) => [d.phan_in_id, { id: d.phan_in_id, ma_phan: d.ma_phan, mau_vai: d.mau_vai }])).values()];
@@ -214,13 +217,16 @@ export default function TestRunPanel({ lenhId, onClose, onChanged, truocXacNhan,
   // Không test run → bỏ Test Run, duyệt thẳng Release 2 (đợt SX vào chờ sản xuất). Phần in đang có lệnh CHẠY ⇒ BE cộng
   // thẳng số lượng vào lệnh đó (27/10/2026, `cong_vao_lenh_chay`).
   const doSkip = async () => {
+    if (!skipLyDo.trim()) { show('Nhập lý do không test run', 'error'); return; }
     if (truocXacNhan && !(await truocXacNhan())) return;
     setBusy('skip');
     try {
-      const res = await skipTestRun(lenhId);
+      const res = await skipTestRun(lenhId, skipLyDo.trim());
       const cv = res?.data?.cong_vao_lenh_chay;
-      show(cv ? `Đã bỏ Test Run — cộng thẳng số lượng vào lệnh đang chạy ${cv.ma_lenh}`
+      // Panel đóng ngay ⇒ báo bằng toast của TRANG (toast của panel mất theo panel).
+      (onToast || show)(cv ? `Đã bỏ Test Run — cộng thẳng số lượng vào lệnh đang chạy ${cv.ma_lenh}`
         : 'Đã bỏ Test Run — đợt sản xuất vào danh sách chờ sản xuất');
+      setSkipOpen(false); setSkipLyDo('');
       onChanged?.();
       onClose?.();
     } catch (e) {
@@ -287,7 +293,7 @@ export default function TestRunPanel({ lenhId, onClose, onChanged, truocXacNhan,
           <>
             {/* Trả về GN / Kỹ thuật / Kế hoạch nằm CHUNG 1 hàng trong thân panel (07/10/2026) — không để ở footer. */}
             {/* Đang chờ kỹ thuật làm lại → khóa hết (backend cũng chặn: 409 CHO_KY_THUAT). */}
-            <Button variant="secondary" onClick={doSkip} loading={busy === 'skip'} disabled={choKyThuat || busy === 'pass' || busy === 'fail'}>
+            <Button variant="secondary" onClick={() => { setSkipLyDo(''); setSkipOpen(true); }} loading={busy === 'skip'} disabled={choKyThuat || busy === 'pass' || busy === 'fail'}>
               Không test run
             </Button>
             <Button variant="danger" onClick={doFail} loading={busy === 'fail'} disabled={choKyThuat || busy === 'pass'}>
@@ -544,6 +550,22 @@ export default function TestRunPanel({ lenhId, onClose, onChanged, truocXacNhan,
         <Field label="Lý do trả về Kế hoạch" required>
           <Textarea rows={3} value={khLyDo} autoFocus onChange={(e) => setKhLyDo(e.target.value)}
             placeholder="Vd: sai chuyền, chưa đến giờ chạy, cần đổi thợ in..." />
+        </Field>
+      </Modal>
+      <Modal open={skipOpen} onClose={() => (busy === 'skip' ? null : setSkipOpen(false))} size="sm"
+        title={`Không test run — ${data?.lenh?.ma_lenh_san_xuat || ''}`}
+        footer={(
+          <>
+            <Button chiXemOk variant="ghost" onClick={() => setSkipOpen(false)} disabled={busy === 'skip'}>Hủy</Button>
+            <Button onClick={doSkip} loading={busy === 'skip'} disabled={!skipLyDo.trim()}>Không test run</Button>
+          </>
+        )}>
+        <p className="mb-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
+          Lệnh vào <b>Chờ sản xuất</b>. Phần in đang có lệnh <b>đang chạy</b> thì số lượng được <b>cộng thẳng</b> vào lệnh đó.
+        </p>
+        <Field label="Lý do không test run" required>
+          <Textarea rows={3} value={skipLyDo} autoFocus maxLength={500} onChange={(e) => setSkipLyDo(e.target.value)}
+            placeholder="Vd: hàng in lặp lại, khách duyệt mẫu rồi, đợt bổ sung..." />
         </Field>
       </Modal>
       <TraVeGnModal open={gnOpen} onClose={() => setGnOpen(false)} nguon="TEST_RUN" lenhId={lenhId}

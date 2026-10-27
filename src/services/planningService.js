@@ -48,7 +48,7 @@ export const testRunTraVeKeHoach = (id, body) => client.post(`/planning/test-run
 export const listRelease1TestRunTraVe = () => client.get('/planning/release1/test-run-tra-ve');
 export const xacNhanLaiRelease1 = (lenhId, body) => client.post(`/planning/release1/test-run-tra-ve/${lenhId}/xac-nhan`, body);
 export const listOwnerChoIn = () => client.get('/planning/test-run/owner-cho-in');
-export const skipTestRun = (id) => client.post(`/planning/test-run/${id}/skip`);
+export const skipTestRun = (id, lyDo) => client.post(`/planning/test-run/${id}/skip`, { lyDo });
 export const confirmCNSPBatch = (lenhIds) => client.post('/planning/test-run/cnsp-confirm-batch', { lenhIds });
 export const confirmQABatch = (lenhIds, payload = {}) => client.post('/planning/test-run/qa-confirm-batch', { lenhIds, ...payload });
 export const testRunHistory = (date) => client.get('/planning/test-run/history', { params: { date } });

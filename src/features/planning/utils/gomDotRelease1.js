@@ -3,8 +3,8 @@
 // Release 1 thì tự động cho gom số lượng lại").
 //
 // · 1 dòng = các đợt CÙNG phần in + CÙNG tình trạng Ready (Đã Ready / Chờ Ready — release vs lưu Kế hoạch tạm khác
-//   đường) + CÙNG nhóm "bỏ Test Run theo loại" (bổ sung 5I / mẫu SL 6I KHÔNG gộp với đợt thường — gương BE
-//   `planning.service createRelease1` nhóm `nhomLenh`; gộp vào là kéo đợt bổ sung qua Test Run).
+//   đường). 27/10/2026: mọi lệnh qua Test Run ⇒ đợt bổ sung 5I / mẫu SL 6I gom CHUNG với đợt thường (gương BE
+//   `planning.service createRelease1` nhóm `nhomLenh`).
 // · Cột số = TỔNG (SL vải về · đã release · còn release); ngày nhận vải / hạn giao = SỚM NHẤT; loại đợt · nhà gia công
 //   · mã đợt = danh sách không trùng. `_dots` giữ đủ đợt — release / chọn / trả về đều thao tác trên MỌI đợt của dòng;
 //   BE gộp các đợt cùng phần in vào 1 lệnh.
@@ -12,9 +12,7 @@
 // Hàm thuần, không phụ thuộc React.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const LOAI_BO_TEST_RUN = new Set(['BO_SUNG', 'MAU_SO_LUONG']);
-
-const khoaNhom = (r) => `${r.phan_in_id}|${r.qc_done ? 'R' : 'C'}|${LOAI_BO_TEST_RUN.has(r.ma_loai_dot_vai) ? 'BT' : 'T'}`;
+const khoaNhom = (r) => `${r.phan_in_id}|${r.qc_done ? 'R' : 'C'}`;
 const dsKhongTrung = (ds) => [...new Set(ds.filter((x) => x != null && String(x).trim() !== '').map(String))].join(', ');
 const nho = (a, b) => (!a ? b : !b ? a : (String(a) <= String(b) ? a : b));
 const cong = (ds, k) => ds.reduce((s, r) => s + (Number(r[k]) || 0), 0);

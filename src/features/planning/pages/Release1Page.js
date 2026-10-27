@@ -407,13 +407,13 @@ export default function Release1Page() {
         tgBdKh: mkTs(form.gioBd), tgKtKh: mkTs(form.gioKt),
         thoIn: form.thoIn || null,
       });
-      const skipped = res?.data?.skipped_test_count || 0;
       const tam = res?.data?.ke_hoach_tam_count || 0;
       const tamMsg = tam > 0 ? ` · ${tam} phần chưa Ready → lưu Kế hoạch tạm` : '';
       if (res?.data?.chi_tam) show(`${tam} phần chưa Ready → đã lưu Kế hoạch tạm (xác nhận lại khi Ready xong)${canhBaoThoIn(res)}`, 'success');
       else {
-        const chinh = skipped > 0 ? `Đã tạo lệnh — ${skipped} lệnh bỏ Test Run, vào thẳng Chờ sản xuất`
-          : 'Đã Release 1 — tạo lệnh sản xuất';
+        // 27/10/2026: mọi lệnh qua Test Run (BE không còn tự bỏ test) — chỉ chuyền gia công đi thẳng Gia công.
+        const chinh = res?.data?.gia_cong ? 'Đã Release 1 — lệnh vào Kế hoạch › Gia công'
+          : 'Đã Release 1 — lệnh vào Test Run';
         show(chinh + tamMsg + canhBaoThoIn(res));
       }
       setSelected((s) => { const n = { ...s }; dotVaiIds.forEach((id) => delete n[id]); return n; });
@@ -669,11 +669,6 @@ export default function Release1Page() {
           {looseList.some((r) => r.ma_set) && (
             <div className="mt-1 text-xs">
               Trong đó có đợt thuộc gom set — mỗi phần in vẫn ra lệnh riêng, không gom chung với phần in khác.
-            </div>
-          )}
-          {looseList.some((r) => ['BO_SUNG', 'MAU_SO_LUONG'].includes(r.ma_loai_dot_vai)) && (
-            <div className="mt-1 text-xs">
-              Đợt bổ sung / mẫu số lượng ra lệnh riêng (bỏ Test Run), không gom với đợt thường.
             </div>
           )}
           {looseList.some((r) => !r.qc_done) && (

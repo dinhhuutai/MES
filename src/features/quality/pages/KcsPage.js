@@ -43,7 +43,7 @@ import { trangThaiSla } from '../../../utils/nghen';
 // ⚠ ĐÃ BỎ 2 Ô `soLuongSua` (Quyết định sửa) + `soLuongHuy` (Số lượng hủy) — chốt 04/09/2026:
 //   KCS chỉ chốt ĐẠT/HƯ, việc chia HƯ thành sửa–hủy làm ở trang *Sản xuất › Phân loại lỗi* (mig 075,
 //   "con số ở đó là CHÍNH THỨC"). Backend vẫn nhận 2 khóa này để tương thích ngược — xem `recordKcs`.
-const empty = { soLuongDat: '', soLuongHu: '', soLuongThieu: '', soLuongDu: '', soLuongMau: '', kiemMotPhan: false };
+const empty = { soLuongDat: '', soLuongHu: '', soLuongThieu: '', soLuongDu: '', soLuongMau: '' };
 // Tối đa số tem tích để xác nhận 1 lượt (27/10/2026) — mỗi tem 1 lần gọi recordKcs tuần tự.
 const TOI_DA_TICH = 100;
 
@@ -247,7 +247,8 @@ export default function KcsPage() {
   // ⚠ Quy ước dấu GIỮ NGUYÊN như sổ cái đang chạy (`sl_chenh_lech` = dư − thiếu): **dư làm TĂNG** tổng
   //   cần kiểm, **thiếu làm GIẢM**. Đổi dấu ở đây là lệch với `addKcsLedger` ⇒ sai tổng cần kiểm về sau.
   // ⚠ `mẫu` CỐ Ý không vào công thức — nó là hàng lấy ra làm mẫu, không thuộc số kiểm (luật cũ, giữ).
-  // "Kiểm một phần" (27/10/2026): kiểm trước một phần, phần còn lại tem ở lại màn KCS — luật GƯƠNG BE (`danhGiaKcs`).
+  // KIỂM MỘT PHẦN (27/10/2026): không nhập thiếu/dư mà đạt + hư < cần kiểm ⇒ TỰ là lượt một phần (không cần tích ô),
+  //   phần còn lại tem ở lại màn KCS — luật GƯƠNG BE (`danhGiaKcs`).
   const canDoi = useMemo(() => {
     const n = (v) => Math.max(0, Math.trunc(Number(v) || 0));
     const canKiem = Number(editing?.con_kcs ?? editing?.so_luong ?? 0) || 0;
@@ -255,7 +256,8 @@ export default function KcsPage() {
     const thieu = n(form.soLuongThieu); const du = n(form.soLuongDu);
     const tong = canKiem + du - thieu;
     const daNhap = dat + hu;
-    const motPhan = form.kiemMotPhan ? danhGiaKcs(canKiem, form) : null;
+    const dg = danhGiaKcs(canKiem, form);
+    const motPhan = dg.motPhan ? dg : null;
     return { canKiem, dat, hu, thieu, du, tong, daNhap, lech: daNhap - tong, motPhan,
       can: motPhan ? motPhan.ok : (daNhap === tong && daNhap > 0) };
   }, [editing, form]);
@@ -498,17 +500,11 @@ export default function KcsPage() {
           {editing?.ma_lenh_san_xuat} · {editing?.phan_list} · SL in {fmtNum(editing?.so_luong)}
           <span className="ml-1 font-semibold text-primary">· còn cần kiểm {fmtNum(editing?.con_kcs)}</span>
         </div>
-        <label className="mb-3 flex cursor-pointer items-center gap-2 rounded-control border border-line px-3 py-2 text-sm">
-          <input type="checkbox" checked={!!form.kiemMotPhan}
-            onChange={(e) => setForm((f) => ({ ...f, kiemMotPhan: e.target.checked,
-              ...(e.target.checked ? { soLuongThieu: '', soLuongDu: '' } : {}) }))} />
-          <span><b>Kiểm một phần</b> <span className="text-ink-soft">— kiểm trước một phần, số còn lại tem ở lại màn KCS kiểm sau</span></span>
-        </label>
         <div className="grid grid-cols-2 gap-x-4">
           {N({ f: 'soLuongDat', label: 'Số lượng đạt' })}
           {N({ f: 'soLuongHu', label: 'Số lượng hư' })}
-          {!form.kiemMotPhan && N({ f: 'soLuongThieu', label: 'Số lượng thiếu' })}
-          {!form.kiemMotPhan && N({ f: 'soLuongDu', label: 'Số lượng dư' })}
+          {N({ f: 'soLuongThieu', label: 'Số lượng thiếu' })}
+          {N({ f: 'soLuongDu', label: 'Số lượng dư' })}
           {N({ f: 'soLuongMau', label: 'Số lượng mẫu (không tính)' })}
         </div>
 
@@ -538,7 +534,8 @@ export default function KcsPage() {
         </div>
 
         <p className="mt-2 text-xs text-ink-soft">
-          <b>Số lượng kiểm + thiếu + dư = đạt + hư</b> — phải khớp tuyệt đối mới lưu được.
+          Nhập đạt + hư <b>nhỏ hơn</b> số cần kiểm (không nhập thiếu/dư) = <b>kiểm trước một phần</b>, phần còn lại tem ở lại
+          màn này. Có nhập thiếu/dư thì <b>cần kiểm + dư − thiếu = đạt + hư</b> phải khớp tuyệt đối.
           Toàn bộ <b>SL hư</b> vào <b>chờ sửa</b>; chia sửa/hủy theo từng loại lỗi làm ở trang{' '}
           <b>Sản xuất › Phân loại lỗi</b> (số ở đó là chính thức). <b>Mẫu</b> không tính vào SL kiểm.
           Đạt → chờ <b>OQC</b>. Phần chưa kiểm giữ lại kiểm lần sau.

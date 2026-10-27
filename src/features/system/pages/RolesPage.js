@@ -14,6 +14,7 @@ import {
   listRoles, getRole, getRoleUsers, createRole, updateRole, setRoleActive,
 } from '../../../services/roleService';
 import { listPermissions } from '../../../services/permissionService';
+import { khopTungTu } from '../../../utils/timKiem';
 
 export default function RolesPage() {
   const { can } = usePermissions();
@@ -24,6 +25,8 @@ export default function RolesPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [allPerms, setAllPerms] = useState([]);
+  // Ô tìm quyền trong hộp Sửa vai trò (27/10/2026 — ~70 quyền, người dùng không tìm thấy "Quản trị phần in").
+  const [timQuyen, setTimQuyen] = useState('');
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -72,16 +75,19 @@ export default function RolesPage() {
 
   const permsByModule = useMemo(() => {
     const g = {};
+    const tu = timQuyen.trim();
     for (const p of allPerms) {
+      if (tu && !khopTungTu(`${p.ten_permission || ''} ${p.ma_permission || ''} ${p.module || ''}`, tu)) continue;
       const m = p.module || 'KHÁC';
       (g[m] = g[m] || []).push(p);
     }
     return g;
-  }, [allPerms]);
+  }, [allPerms, timQuyen]);
 
   const openCreate = () => {
     setEditing(null);
     setForm({ maRole: '', tenRole: '', moTa: '', permissionIds: [] });
+    setTimQuyen('');
     setModalOpen(true);
   };
   const openEdit = async (r) => {
@@ -92,6 +98,7 @@ export default function RolesPage() {
         maRole: res.data.ma_role, tenRole: res.data.ten_role, moTa: res.data.mo_ta || '',
         permissionIds: res.data.permission_ids || [],
       });
+      setTimQuyen('');
       setModalOpen(true);
     } catch (e) {
       show(e.message || 'Lỗi', 'error');
@@ -195,7 +202,15 @@ export default function RolesPage() {
         </Field>
 
         <div className="mt-2">
-          <div className="mb-2 text-sm font-medium text-ink">Phân quyền ({form.permissionIds.length})</div>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-sm font-medium text-ink">Phân quyền ({form.permissionIds.length})</span>
+            <div className="w-full sm:w-72">
+              <Input value={timQuyen} onChange={(e) => setTimQuyen(e.target.value)} placeholder="Tìm quyền (vd: quản trị phần in)..." />
+            </div>
+          </div>
+          {timQuyen.trim() && !Object.keys(permsByModule).length && (
+            <p className="mb-2 text-sm text-ink-soft">Không có quyền nào khớp «{timQuyen.trim()}».</p>
+          )}
           <div className="space-y-4">
             {Object.entries(permsByModule).map(([mod, perms]) => (
               <div key={mod} className="rounded-control border border-line p-3">

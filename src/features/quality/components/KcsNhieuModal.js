@@ -7,31 +7,29 @@ import { fmtNum } from '../../../utils/format';
 
 // ─── XÁC NHẬN KCS NHIỀU TEM 1 LƯỢT (27/10/2026, người dùng: "quét tem, enter tự tích … bấm xác nhận thì hiện modal gần
 //   toàn màn hình chứa danh sách các tem đã tích và các ô nhập xác nhận KCS giống in nhiều tem 15,16 bên sản xuất") ───
-// Mỗi dòng = 1 tem: Đạt · Hư · Thiếu · Dư · Mẫu + ô "Một phần". Mỗi dòng đi ĐÚNG `recordKcs` (POST /quality/kcs/:temId —
-//   đủ guard cân đối + khóa tem + ERP kiểm phẩm), TUẦN TỰ, dòng lỗi không chặn dòng sau. Luật cân đối GƯƠNG BE:
-//   · thường: đạt + hư = cần kiểm + dư − thiếu (lệch là chặn);
-//   · "Một phần" (kiểm trước): không thiếu/dư, 0 < đạt + hư < cần kiểm — phần còn lại tem ở lại màn KCS.
+// Mỗi dòng = 1 tem: Đạt · Hư · Thiếu · Dư · Mẫu. Mỗi dòng đi ĐÚNG `recordKcs` (POST /quality/kcs/:temId — đủ guard cân
+//   đối + khóa tem + ERP kiểm phẩm), TUẦN TỰ, dòng lỗi không chặn dòng sau. Luật GƯƠNG BE `recordKcs`:
+//   · KHÔNG nhập thiếu/dư mà đạt + hư < cần kiểm ⇒ TỰ là lượt MỘT PHẦN (không cần tích ô — người dùng chốt 27/10/2026),
+//     phần còn lại tem ở lại màn KCS;
+//   · còn lại (có thiếu/dư, hoặc nhập ≥ cần kiểm): đạt + hư = cần kiểm + dư − thiếu (lệch là chặn).
 // Ô Đạt điền sẵn = còn cần kiểm (như panel 1 tem).
 const n = (v) => Math.max(0, Math.trunc(Number(v) || 0));
 export function danhGiaKcs(canKiem, f) {
   const dat = n(f.soLuongDat); const hu = n(f.soLuongHu);
   const thieu = n(f.soLuongThieu); const du = n(f.soLuongDu);
   const daNhap = dat + hu;
-  if (f.kiemMotPhan) {
-    if (thieu || du) return { ok: false, chu: 'Một phần: không nhập thiếu/dư' };
-    if (daNhap <= 0) return { ok: false, chu: 'Nhập đạt/hư' };
-    if (daNhap >= canKiem) return { ok: false, chu: `Phải < ${fmtNum(canKiem)} (kiểm hết thì bỏ tích "Một phần")` };
-    return { ok: true, motPhan: true, chu: `Kiểm ${fmtNum(daNhap)} · còn ${fmtNum(canKiem - daNhap)} ở lại KCS` };
+  if (daNhap <= 0) return { ok: false, chu: 'Nhập đạt/hư' };
+  if (!thieu && !du && daNhap < canKiem) {
+    return { ok: true, motPhan: true, chu: `Kiểm một phần ${fmtNum(daNhap)} · còn ${fmtNum(canKiem - daNhap)} ở lại KCS` };
   }
   const tong = canKiem + du - thieu;
   const lech = daNhap - tong;
-  if (daNhap <= 0) return { ok: false, chu: 'Nhập đạt/hư' };
   if (lech !== 0) return { ok: false, chu: `Lệch ${lech > 0 ? '+' : ''}${fmtNum(lech)} (cần ${fmtNum(tong)})` };
   return { ok: true, chu: 'Cân đối' };
 }
 
 const formMoi = (r) => ({
-  soLuongDat: String(r.con_kcs ?? r.so_luong ?? ''), soLuongHu: '', soLuongThieu: '', soLuongDu: '', soLuongMau: '', kiemMotPhan: false,
+  soLuongDat: String(r.con_kcs ?? r.so_luong ?? ''), soLuongHu: '', soLuongThieu: '', soLuongDu: '', soLuongMau: '',
 });
 
 const O_SO = [
@@ -61,7 +59,7 @@ export default function KcsNhieuModal({ open, rows, onClose, onXong, truocXacNha
   const tongHu = (rows || []).reduce((s, r) => s + n(forms[r.tem_id]?.soLuongHu), 0);
 
   const datHet = () => setForms((f) => Object.fromEntries((rows || []).map((r) => [r.tem_id, { ...(f[r.tem_id] || formMoi(r)),
-    soLuongDat: String(r.con_kcs ?? ''), soLuongHu: '', soLuongThieu: '', soLuongDu: '', kiemMotPhan: false }])));
+    soLuongDat: String(r.con_kcs ?? ''), soLuongHu: '', soLuongThieu: '', soLuongDu: '' }])));
 
   const luu = async () => {
     if (soSai) { show(`Còn ${soSai} dòng chưa cân đối — sửa trước khi lưu`, 'error'); return; }
@@ -105,7 +103,7 @@ export default function KcsNhieuModal({ open, rows, onClose, onXong, truocXacNha
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <Button variant="secondary" icon="check" onClick={datHet} disabled={dangLuu}>Đạt hết (điền Đạt = còn kiểm)</Button>
           <span className="text-ink-soft">Tổng đạt <b className="text-ink">{fmtNum(tongDat)}</b> · hư <b className="text-ink">{fmtNum(tongHu)}</b></span>
-          <span className="text-xs text-ink-soft">Tích <b>Một phần</b> khi kiểm trước một phần — phần còn lại tem ở lại màn KCS. Toàn bộ hư vào chờ sửa.</span>
+          <span className="text-xs text-ink-soft">Nhập đạt + hư <b>nhỏ hơn</b> còn kiểm (không nhập thiếu/dư) = kiểm trước một phần — phần còn lại tem ở lại màn KCS. Có thiếu/dư thì phải cân đối. Toàn bộ hư vào chờ sửa.</span>
         </div>
         <div className="min-h-0 flex-1 overflow-auto rounded-card border border-line">
           <table className="w-full text-sm">
@@ -117,7 +115,6 @@ export default function KcsNhieuModal({ open, rows, onClose, onXong, truocXacNha
                 <th className="px-2 py-2">Màu · Kích vải · Kích phim</th>
                 <th className="px-2 py-2 text-right">Còn kiểm</th>
                 {O_SO.map(([, l]) => <th key={l} className="w-24 px-2 py-2">{l}</th>)}
-                <th className="px-2 py-2 text-center">Một phần</th>
                 <th className="px-2 py-2">Cân đối</th>
               </tr>
             </thead>
@@ -140,7 +137,7 @@ export default function KcsNhieuModal({ open, rows, onClose, onXong, truocXacNha
                     </td>
                     <td className="px-2 py-1.5 text-right font-semibold tabular-nums text-primary">{fmtNum(r.con_kcs)}</td>
                     {O_SO.map(([k]) => {
-                      const khoa = dangLuu || (f.kiemMotPhan && (k === 'soLuongThieu' || k === 'soLuongDu'));
+                      const khoa = dangLuu;
                       return (
                         <td key={k} className="px-1 py-1">
                           <input type="number" min="0" inputMode="numeric" value={f[k]} disabled={khoa}
@@ -149,11 +146,6 @@ export default function KcsNhieuModal({ open, rows, onClose, onXong, truocXacNha
                         </td>
                       );
                     })}
-                    <td className="px-2 py-1.5 text-center">
-                      <input type="checkbox" checked={!!f.kiemMotPhan} disabled={dangLuu}
-                        onChange={(e) => setForms((all) => ({ ...all, [r.tem_id]: { ...f, kiemMotPhan: e.target.checked,
-                          ...(e.target.checked ? { soLuongThieu: '', soLuongDu: '' } : {}) } }))} aria-label="Kiểm một phần" />
-                    </td>
                     <td className="px-2 py-1.5 text-xs">
                       {kq ? <span className={kq.ok ? 'text-success' : 'text-danger'}>{kq.ok ? '✓ ' : '✗ '}{kq.chu}</span>
                         : <span className={dg.ok ? (dg.motPhan ? 'text-amber-700 dark:text-amber-400' : 'text-success') : 'text-danger'}>{dg.chu}</span>}
