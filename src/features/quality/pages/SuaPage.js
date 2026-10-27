@@ -35,8 +35,12 @@ import { listUserOptions } from '../../../services/userService';
 import { printSuaOqcTem, moSanCuaSoIn, dongCuaSoIn } from '../../production/utils/printTemLabel';
 import exportCheckpointExcel, { cotTemChung, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
 import { fmtNum, timTheoMaTem, temCode } from '../../../utils/format';
+import VuaQuet from '../../../components/common/VuaQuet';
+import SuaNhieuModal, { danhGiaSua } from '../components/SuaNhieuModal';
 
 const empty = { soLuongHuyThang: '', soLuongSua: '', soLuongSuaDat: '', soLuongSuaHuy: '' };
+// Tối đa số tem tích để xác nhận sửa 1 lượt (27/10/2026, như KCS) — mỗi tem 1 lần gọi recordSua tuần tự.
+const TOI_DA_TICH = 100;
 
 const FILTER_FIELDS = [
   { key: 'khach', label: 'Khách hàng' },
@@ -80,6 +84,11 @@ export default function SuaPage() {
   const [histOpen, setHistOpen] = useState(false);
   const [doneOpen, setDoneOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
+  // TEM ĐÃ TÍCH (27/10/2026, như KCS): giữ bản dòng lúc tích ⇒ dòng tích ghim đầu bảng kể cả khi ô tìm / bộ lọc loại nó.
+  const [chon, setChon] = useState([]);
+  const daChon = useMemo(() => new Set(chon.map((r) => r.tem_id)), [chon]);
+  const [nhieuOpen, setNhieuOpen] = useState(false);
+  const [vuaQuet, setVuaQuet] = useState(null);
 
   const filtersKey = useMemo(() => JSON.stringify(filters), [filters]);
   const rangeKey = useMemo(() => `${range.from || ''}|${range.to || ''}`, [range]);
@@ -102,6 +111,63 @@ export default function SuaPage() {
   const clearFilters = () => setFilters({});
 
   const openRow = (row) => { setEditing(row); setForm({ ...empty, soLuongSuaDat: String(row.con_sua || '') }); };
+  // Hộp Sửa vừa mở ⇒ con trỏ ở ô "Sửa đạt" + bôi đen (SidePanel Headless UI tự đặt focus lúc mở ⇒ đợi vài nhịp) — như KCS.
+  const temDangMo = editing ? editing.tem_id : null;
+  useEffect(() => {
+    if (!temDangMo) return undefined;
+    const hen = [80, 250].map((ms) => setTimeout(() => {
+      const el = document.getElementById('sua-o-dat');
+      if (el && document.activeElement !== el) { el.focus(); el.select(); }
+    }, ms));
+    return () => hen.forEach(clearTimeout);
+  }, [temDangMo]);
+
+  // Dòng đã tích lấy bản MỚI từ danh sách (còn cần sửa đổi theo socket), không còn thì giữ bản lúc tích.
+  const rowById = useMemo(() => new Map(rows.map((r) => [r.tem_id, r])), [rows]);
+  const chonRows = useMemo(() => chon.map((c) => rowById.get(c.tem_id) || c), [chon, rowById]);
+  const viewRows = [...chonRows, ...rows.filter((r) => !daChon.has(r.tem_id))];
+  const doiChon = (r) => {
+    if (daChon.has(r.tem_id)) { setChon((c) => c.filter((x) => x.tem_id !== r.tem_id)); return; }
+    if (chon.length >= TOI_DA_TICH) { show(`Tối đa ${TOI_DA_TICH} tem một lượt`, 'error'); return; }
+    setChon((c) => [...c, r]);
+  };
+  // Ô tích tiêu đề: đang có dòng tích ⇒ BỎ TÍCH HẾT; chưa tích ⇒ tích các dòng đang hiện (tối đa TOI_DA_TICH).
+  const tichHet = viewRows.length > 0 && viewRows.every((r) => daChon.has(r.tem_id));
+  const doiChonHet = () => setChon(() => (chon.length ? [] : viewRows.slice(0, TOI_DA_TICH)));
+
+  // QUÉT LIÊN TỤC (27/10/2026, như KCS): con trỏ ở ô tìm → quét mã tem + Enter ⇒ ô tìm xóa + MỞ NGAY hộp Sửa của tem
+  //   (con trỏ ở ô "Sửa đạt", điền sẵn = cần sửa) → Enter ⇒ lưu, hộp đóng, con trỏ về ô tìm quét tem kế.
+  const quetSua = async (giaTri) => {
+    const code = String(giaTri || '').trim();
+    setSearch('');
+    if (!code) { oTim.datConTro(); return; }
+    try {
+      const res = await listSuaCandidates({ search: code });
+      const row = timTheoMaTem(res.data || [], code);
+      if (!row) {
+        setVuaQuet({ ma: code, tone: 'loi', chu: 'Không có tem chờ sửa khớp mã này' });
+        show(`Tem ${code} không có phần chờ sửa`, 'error');
+        oTim.datConTro();
+        return;
+      }
+      setVuaQuet({ ma: code, tone: 'ok', chu: `Mở Sửa ${row.ma_tem} · ${row.ma_phan || row.ma_hang || ''} · cần sửa ${fmtNum(row.con_sua)}` });
+      openRow(row);
+    } catch (e) {
+      setVuaQuet({ ma: code, tone: 'loi', chu: e.message || 'Không tra được tem' });
+      oTim.datConTro();
+    }
+  };
+  const sauSuaNhieu = (okIds, loi) => {
+    setChon((c) => c.filter((x) => !okIds.includes(x.tem_id)));
+    load(true);
+    if (!loi.length) {
+      show(`Đã xác nhận sửa ${okIds.length} tem — in tem 17 ở "Đã hoàn thành"`);
+      setNhieuOpen(false);
+      oTim.datConTro();
+    } else {
+      show(`Đã lưu ${okIds.length}/${okIds.length + loi.length} tem — lỗi: ${loi.join(', ')}`, 'error');
+    }
+  };
 
   // ── IN TEM 17 (Sửa đã hoàn thành → OQC) ────────────────────────────────────
   // ⚠⚠ ĐÃ BỎ nút "In tem" ở TỪNG DÒNG (đổi 12/08/2026). Nay: tích dòng ở sidebar "Đã hoàn thành"
@@ -265,6 +331,8 @@ export default function SuaPage() {
   });
 
   const save = async () => {
+    const dg = danhGiaSua(Number(editing?.con_sua) || 0, form);
+    if (!dg.ok) { show(dg.chu, 'error'); return; } // backend vẫn chặn (422 EMPTY / OVER)
     if (!(await hoiLyDoNghen([editing]))) return; // tem quá SLA ⇒ nhập lý do nghẽn (mig 106)
     setSaving(true);
     try {
@@ -284,6 +352,13 @@ export default function SuaPage() {
   };
 
   const columns = [
+    ...(canSua ? [{ key: 'sel', selection: true,
+      header: <input type="checkbox" aria-label="Chọn tất cả / bỏ tích tất cả" checked={tichHet}
+        ref={(el) => { if (el) el.indeterminate = chon.length > 0 && !tichHet; }} onChange={doiChonHet} />,
+      render: (r) => (
+        <input type="checkbox" aria-label="Chọn tem" checked={daChon.has(r.tem_id)}
+          onClick={(e) => e.stopPropagation()} onChange={() => doiChon(r)} />
+      ) }] : []),
     { key: 'ma_tem', header: 'Tem', render: (r) => (
       <div>
         <Badge tone="info">{r.ma_tem}</Badge>
@@ -313,9 +388,12 @@ export default function SuaPage() {
       canSua && <Button className="px-3 py-1.5" onClick={() => openRow(r)}>Sửa</Button> },
   ];
 
+  // Enter ở ô số = Xác nhận sửa (như KCS).
   const N = (f, label) => (
     <Field label={label}>
-      <Input type="number" min="0" value={form[f]} onChange={(e) => setForm({ ...form, [f]: e.target.value })} />
+      <Input type="number" min="0" value={form[f]} id={f === 'soLuongSuaDat' ? 'sua-o-dat' : undefined}
+        onKeyDown={(e) => { if (e.key === 'Enter' && !saving) { e.preventDefault(); save(); } }}
+        onChange={(e) => setForm({ ...form, [f]: e.target.value })} />
     </Field>
   );
 
@@ -343,8 +421,13 @@ export default function SuaPage() {
   return (
     <div>
       <Toolbar title="Sửa hàng lỗi" subtitle="Xử lý tem lỗi từ KCS / OQC"
-        search={search} onSearch={setSearch} searchPlaceholder="Quét/nhập mã tem..." searchRef={oTim.ref}>
+        search={search} onSearch={setSearch} searchPlaceholder="Quét mã tem rồi Enter để mở Sửa — gõ để tìm..." searchRef={oTim.ref}
+        onSearchEnter={canSua ? quetSua : undefined}>
         {canSua && <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét QR</Button>}
+        {canSua && chon.length > 0 && (
+          <Button icon="check-circle" onClick={() => setNhieuOpen(true)}>Xác nhận sửa ({chon.length})</Button>
+        )}
+        {chon.length > 0 && <Button chiXemOk variant="ghost" icon="x" onClick={() => setChon([])}>Bỏ tích</Button>}
         <div className="flex items-center gap-1.5 text-xs text-ink-soft">
           <span>Ngày in tem</span>
           <div className="w-60"><DateRangePicker value={range} onChange={setRange} placeholder="Chọn khoảng ngày in tem" /></div>
@@ -361,6 +444,7 @@ export default function SuaPage() {
         <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="warning">{rows.length} tem chờ sửa</Badge>
       </Toolbar>
+      <VuaQuet ket={vuaQuet} className="mb-3" />
 
       {showFilters && (
         <div className="mb-3 card p-4">
@@ -398,13 +482,16 @@ export default function SuaPage() {
 
       <OwnerHint tram="SUA" className="mb-3" />
 
-      <DataTable columns={columns} rows={rows} loading={loading} rowKey="tem_id"
+      <DataTable columns={columns} rows={viewRows} loading={loading} rowKey="tem_id"
         rowClassName={(r) => slaRowClass(evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status)}
         emptyText="Không có tem nào chờ sửa" />
 
+      <SuaNhieuModal open={nhieuOpen} rows={chonRows} onClose={() => { setNhieuOpen(false); oTim.datConTro(); }}
+        onXong={sauSuaNhieu} truocXacNhan={(rs) => hoiLyDoNghen(rs)} show={show} />
+
       <SidePanel
         open={!!editing}
-        onClose={() => setEditing(null)}
+        onClose={() => { setEditing(null); oTim.datConTro(); }}
         title={`Sửa — ${editing?.ma_tem || ''}`}
         footer={
           <>

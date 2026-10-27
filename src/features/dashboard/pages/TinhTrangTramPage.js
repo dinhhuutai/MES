@@ -197,15 +197,32 @@ function tenTraVe(r) {
   switch (r.loai) {
     case 'READY': return 'QC READY trả về Kỹ thuật';
     case 'RELEASE1': return r.o_lenh ? 'Sản xuất trả về Kỹ thuật' : 'Release 1 trả về Kỹ thuật';
-    case 'TEST_RUN_KT': return 'Test Run không đạt → Kỹ thuật';
+    case 'TEST_RUN_KT': return /^Release 2:/i.test(r.ly_do || '') ? 'Release 2 trả về Kỹ thuật' : 'Test Run không đạt → Kỹ thuật';
+    case 'SX_KH': return 'Sản xuất trả về Kế hoạch';
     case 'TEST_RUN_KH': return 'Test Run trả về Kế hoạch';
     case 'OQC_GIA_CONG': return 'OQC trả về Kế hoạch (gia công)';
     case 'TRA_VE_GN': return `${r.gn_nguon || 'READY'} trả về Giao nhận`;
+    case 'QUAN_TRI': return `Quản trị phần in lùi về${r.ma_lenh ? ` · ${r.ma_lenh}` : r.ma_dot_vai ? ` · ${r.ma_dot_vai}` : ''}`;
     default: return 'Trả về';
   }
 }
+// Đích "Lùi về trạm" của Quản trị phần in — gương `phaninadmin.service DICH_LUI` (+ `DICH` của đặt giai đoạn đợt).
+const TEN_DICH_LUI = {
+  CHO_GIAO: 'Chờ giao', OQC: 'OQC', SUA: 'Sửa', KCS: 'KCS', SAN_XUAT: 'Đang sản xuất',
+  CHO_SAN_XUAT: 'Chờ chạy / Release 2', TEST_RUN: 'Test Run', RELEASE_1: 'Release 1',
+  READY_QA: 'READY (QA)', READY_KT: 'READY (Kỹ thuật)',
+};
 function diemVe(r) {
+  if (r.loai === 'QUAN_TRI') {
+    const ten = TEN_DICH_LUI[r.dich] || r.dich || '';
+    return `→ ${ten}${r.kieu === 'KT' && r.t_cycle != null ? ` · làm lại READY lần ${r.t_cycle + 1}` : ''}`;
+  }
   if (r.kieu === 'KT') return r.t_cycle != null ? `→ làm lại READY lần ${r.t_cycle + 1}` : '→ về READY (Kỹ thuật)';
+  if (r.loai === 'SX_KH') {
+    return r.cach === 'HOAN_TAT'
+      ? `→ trả ${fmtNum(r.sl_tra_ve)} pcs về Release 1, lệnh đóng`
+      : '→ hủy lệnh, đợt vải về Release 1';
+  }
   if (r.kieu === 'KH') return '→ về Release 1, giữ lệnh';
   if (r.kieu === 'GN') {
     if (r.gn_xu_ly === 'GN_HUY_DOT_VAI') return '→ GN: hủy vải không in';
@@ -221,6 +238,15 @@ function TraVeKhoi({ r, refFn }) {
       {r.checklist_list && <div className="whitespace-normal">Mục: {r.checklist_list}</div>}
       {r.ly_do && <div className="whitespace-normal">Lý do: {r.ly_do}</div>}
       <div className="font-semibold">{diemVe(r)}{r.kieu !== 'GN' && !r.da_xu_ly ? ' · đang chờ' : ''}</div>
+      {r.loai === 'QUAN_TRI' && r.loi && (
+        <div className="whitespace-normal">Dừng ở bước lỗi ({(r.da_xong || []).length}/{r.so_buoc || '?'} bước xong): {r.loi}</div>
+      )}
+      {r.loai === 'QUAN_TRI' && (r.da_xong || []).length > 0 && (
+        <details className="mt-0.5">
+          <summary className="cursor-pointer select-none font-semibold">Các bước đã hủy ({r.da_xong.length})</summary>
+          <ul className="ml-3 list-disc whitespace-normal">{r.da_xong.map((b, i) => <li key={i}>{b}</li>)}</ul>
+        </details>
+      )}
       {(r.nguoi || r.tg) && (
         <div className="text-[9px] text-danger/70">{[r.nguoi, r.tg ? fmtDateTime(r.tg) : ''].filter(Boolean).join(' · ')}</div>
       )}
@@ -273,7 +299,10 @@ function DongMoc({ ten, nguoi, tg, tone = 'emerald', phu }) {
 }
 function LenhHuyNode({ l }) {
   const huy = l.huy || {};
-  const lyDo = huy.hanh_dong === 'GOP_VAO_LENH' ? `Gộp vào ${huy.vao_lenh || 'lệnh khác'}` : (huy.ly_do || 'Hủy lệnh');
+  const lyDo = huy.hanh_dong === 'GOP_VAO_LENH' ? `Gộp vào ${huy.vao_lenh || 'lệnh khác'}`
+    : huy.hanh_dong === 'QUAN_TRI_LUI_VE'
+      ? `Quản trị phần in lùi về ${TEN_DICH_LUI[huy.dich] || huy.dich || ''}${huy.ly_do ? ` · ${huy.ly_do}` : ''}`
+      : (huy.ly_do || 'Hủy lệnh');
   return (
     <Node title={`Đợt SX · ${l.ma_lenh_san_xuat} · đã hủy`} tone="slate" w={210}>
       <div className="space-y-1 opacity-90">
@@ -288,6 +317,70 @@ function LenhHuyNode({ l }) {
       </div>
     </Node>
   );
+}
+
+// NHẬT KÝ LỆNH / TEM (27/10/2026, người dùng: "thể hiện rõ tất cả các trạm trả về và các xác nhận của lần trước trả về"):
+//   BE `tinhTrangGraph` trả `lenh.tests` (mọi lần test) + `lenh.nhat_ky` (Release 2 · Không test run · các lần trả về KT /
+//   KH · xác nhận lại Release 1 · lập lại kế hoạch · gộp · đổi chuyền) và `tem.luot` (MỌI lượt KCS / Sửa / OQC, kể cả lượt
+//   đã HỦY xác nhận). Cây chính vẫn vẽ theo trạng thái hiện tại — đây là phần "lần trước", gập/mở bằng <details>.
+const NK_LENH = {
+  RELEASE_2: { ten: 'Release 2' },
+  TRA_VE_KY_THUAT_TEST_RUN: { ten: 'Test Run trả về Kỹ thuật', tone: 'rose' },
+  TRA_VE_KY_THUAT_RELEASE_2: { ten: 'Release 2 trả về Kỹ thuật', tone: 'rose' },
+  TRA_VE_KE_HOACH_TEST_RUN: { ten: 'Test Run trả về Kế hoạch', tone: 'rose' },
+  XAC_NHAN_LAI_RELEASE_1: { ten: 'Release 1 xác nhận lại' },
+  REPLAN: { ten: 'Lập lại kế hoạch' },
+  TRA_VE_KE_HOACH_SX: { ten: 'Sản xuất trả về Kế hoạch', tone: 'rose' },
+  GOP_LENH_SX: { ten: 'Gộp lệnh cùng code phần' },
+  DOI_CHUYEN: { ten: 'Đổi chuyền' },
+  QUAN_TRI_LUI_VE: { ten: 'Quản trị phần in lùi về', tone: 'rose' },
+};
+function dongNhatKyLenh(l) {
+  const ds = [
+    ...(l.tests || []).map((t) => ({
+      tg: t.tg, ten: `Test Run lần ${t.lan}`, nguoi: t.nguoi,
+      tone: t.ket_qua === 'DAT' || t.ket_qua === 'KHONG_DAT_CHO_IN' ? 'emerald' : t.ket_qua === 'HUY' ? 'slate' : 'rose',
+      phu: `${KQ_TEST[t.ket_qua] || t.ket_qua || ''}${t.ghi_chu ? ` · ${t.ghi_chu}` : ''}`,
+    })),
+    ...(l.nhat_ky || []).map((n) => {
+      const boTest = n.hanh_dong === 'RELEASE_2' && n.bo_test_run === 'true';
+      const m = NK_LENH[n.hanh_dong] || { ten: n.hanh_dong };
+      return {
+        tg: n.tg, nguoi: n.nguoi, tone: boTest ? 'slate' : (m.tone || 'emerald'),
+        ten: boTest ? 'Không test run' : n.dich ? `${m.ten} ${TEN_DICH_LUI[n.dich] || n.dich}` : m.ten,
+        phu: [n.ly_do, n.cong_vao_lenh ? `cộng vào ${n.cong_vao_lenh}` : ''].filter(Boolean).join(' · '),
+      };
+    }),
+  ];
+  return ds.sort((a, b) => new Date(a.tg || 0) - new Date(b.tg || 0));
+}
+function NhatKy({ tieuDe, dong }) {
+  if (!dong.length) return null;
+  return (
+    <details className="mt-1.5 border-t border-line/60 pt-1">
+      <summary className="cursor-pointer select-none text-[10px] font-semibold text-primary">{tieuDe} ({dong.length})</summary>
+      <div className="mt-1 space-y-1">
+        {dong.map((d, i) => <DongMoc key={i} ten={d.ten} nguoi={d.nguoi} tg={d.tg} tone={d.tone} phu={d.phu} />)}
+      </div>
+    </details>
+  );
+}
+const TEN_HUY = { OQC_TRA_VE_KCS: 'OQC trả về KCS' };
+function dongNhatKyTem(tem) {
+  return (tem.luot || []).map((x) => {
+    const huy = x.tg_huy ? ` · ĐÃ HỦY${x.huy_nguon ? ` (${TEN_HUY[x.huy_nguon] || x.huy_nguon})` : x.huy_ly_do ? ` (${x.huy_ly_do})` : ''}` : '';
+    if (x.buoc === 'KCS') {
+      return { tg: x.tg, nguoi: x.nguoi, ten: 'KCS', tone: x.tg_huy ? 'slate' : 'emerald',
+        phu: `kiểm ${fmtNum(x.sl)} · đạt ${fmtNum(x.dat)}${x.loi ? ` · hư ${fmtNum(x.loi)}` : ''}${huy}` };
+    }
+    if (x.buoc === 'SUA') {
+      return { tg: x.tg, nguoi: x.nguoi, ten: 'Sửa', tone: x.tg_huy ? 'slate' : 'emerald',
+        phu: `sửa ${fmtNum(x.sl)} · đạt ${fmtNum(x.dat)}${x.loi ? ` · hủy ${fmtNum(x.loi)}` : ''}${huy}` };
+    }
+    const dat = x.ket_qua === 'DAT';
+    return { tg: x.tg, nguoi: x.nguoi, ten: `OQC (${x.nguon === 'SUA' ? 'Sửa' : 'KCS'})`, tone: x.tg_huy ? 'slate' : dat ? 'emerald' : 'rose',
+      phu: `mẫu ${fmtNum(x.sl)} · đạt ${fmtNum(x.dat)} · ${dat ? 'Đạt' : 'Không đạt'}${huy}` };
+  });
 }
 
 const DA_R2 = ['RELEASE_2', 'SAN_XUAT', 'HOAN_TAT', 'CHO_IN_XONG'];
@@ -351,6 +444,7 @@ function LenhNode({ lenh, traVe, reg }) {
           </div>
         ))}
       </div>
+      <NhatKy tieuDe="Các lần xác nhận / trả về" dong={dongNhatKyLenh(lenh)} />
       {dsTraVe(traVe, reg)}
     </Node>
   );
@@ -410,6 +504,7 @@ function KcsNode({ tem, label = 'KCS', traVe }) {
         </>
       ) : <span className="text-[11px] text-ink-soft">Chờ KCS</span>}
       <ReturnBack items={traVe} />
+      <NhatKy tieuDe="Các lượt KCS · Sửa · OQC" dong={dongNhatKyTem(tem)} />
     </Node>
   );
 }

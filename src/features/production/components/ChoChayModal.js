@@ -169,11 +169,12 @@ export default function ChoChayModal({
   };
   // Ô tích Ở TIÊU ĐỀ (27/10/2026): tích / bỏ MỌI dòng đang hiện. Tích thêm theo thứ tự bảng, trọn dòng, tới trần 1 lượt chạy.
   const tichHetBang = bang.length > 0 && bang.every(daTichHet);
-  const tichMotPhanBang = !tichHetBang && bang.some((r) => lenhCuaDong(r).some((l) => chonSet.has(l.id)));
+  const tichMotPhanBang = !tichHetBang && chon.length > 0;
+  // ⚠ 27/10/2026 sửa lỗi: ĐANG có lệnh tích ⇒ bấm là BỎ TÍCH HẾT (bản đầu chỉ bỏ khi "đã tích hết" — bảng > 100 lệnh không
+  //   bao giờ "hết" vì trần ⇒ bấm lại không bỏ được).
   const doiTichTatCa = () => {
-    if (tichHetBang) {
-      const bo = new Set(bang.flatMap((r) => lenhCuaDong(r).map((l) => l.id)));
-      dat(chon.filter((x) => !bo.has(x)));
+    if (chon.length) {
+      dat([]);
     } else {
       const moi = [...chon];
       const co = new Set(moi);

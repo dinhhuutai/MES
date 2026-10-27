@@ -24,7 +24,14 @@ const O_SO = 'h-9 w-20 rounded-control border border-line bg-surface px-2 text-r
 const O_CHU = 'h-9 w-full rounded-control border border-line bg-surface px-2 text-base md:text-sm outline-none focus:border-primary';
 
 const so = (v) => Math.max(0, Math.trunc(Number(v) || 0));
-const dongMoi = () => ({ loaiLoiId: '', bienPhapId: '', soLuongSua: 0, soLuongHuy: 0, ghiChu: '' });
+const dongMoi = (sua = 0) => ({ loaiLoiId: '', bienPhapId: '', soLuongSua: sua, soLuongHuy: 0, ghiChu: '' });
+
+// THAO TÁC NHANH (27/10/2026, như KCS): mở panel ⇒ con trỏ ở ô MÃ LỖI dòng 1 (phiếu mới điền sẵn SL sửa = SL hư) ⇒ chọn
+//   mã lỗi (gõ + Enter) ⇒ con trỏ nhảy sang ô SL sửa (bôi đen) ⇒ Enter ở ô số / ghi chú = Lưu phân loại.
+const datConTro = (sel, chon) => [80, 250].map((ms) => setTimeout(() => {
+  const el = document.querySelector(sel);
+  if (el && document.activeElement !== el) { el.focus(); if (chon && el.select) el.select(); }
+}, ms));
 
 function O({ nhan, children }) {
   return (
@@ -51,10 +58,17 @@ export default function PhanLoaiLoiPanel({ open, onClose, data, loaiLoi, bienPha
         soLuongSua: d.so_luong_sua, soLuongHuy: d.so_luong_huy, ghiChu: d.ghi_chu || '',
       })));
     } else {
-      setDong([dongMoi()]);
+      setDong([dongMoi(so(tem.sl_hu))]);
     }
     setGhiChu(phieu?.ghi_chu || '');
   }, [tem, phieu]);
+
+  const temId = tem ? tem.tem_id : null;
+  useEffect(() => {
+    if (!open || !temId) return undefined;
+    const hen = datConTro('#pll-loi-0 input', false);
+    return () => hen.forEach(clearTimeout);
+  }, [open, temId]);
 
   const slHu = Number(tem?.sl_hu || 0);
   const tongSua = useMemo(() => dong.reduce((s, d) => s + so(d.soLuongSua), 0), [dong]);
@@ -64,6 +78,11 @@ export default function PhanLoaiLoiPanel({ open, onClose, data, loaiLoi, bienPha
   const hopLe = slHu > 0 && lech === 0 && !thieuLoai && (tongSua + tongHuy) > 0;
 
   const sua = (i, v) => setDong((ds) => ds.map((d, j) => (j === i ? { ...d, ...v } : d)));
+  const enterLuu = (e) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    if (hopLe && !dangLuu) onLuu({ dong, ghiChu });
+  };
   const boDong = (i) => setDong((ds) => (ds.length === 1 ? [dongMoi()] : ds.filter((_, j) => j !== i)));
 
   // ⚠ `SearchableSelect` mặc định `getValue = (o) => o.id` ⇒ khóa phải tên là `id`.
@@ -167,10 +186,10 @@ export default function PhanLoaiLoiPanel({ open, onClose, data, loaiLoi, bienPha
                     // eslint-disable-next-line react/no-array-index-key
                     <tr key={i} className="border-t border-line align-top">
                       <td className="px-2 py-2 text-ink-soft">{i + 1}</td>
-                      <td className="px-2 py-2">
+                      <td className="px-2 py-2" id={`pll-loi-${i}`}>
                         <SearchableSelect
                           options={optLoi} value={d.loaiLoiId}
-                          onChange={(v) => sua(i, { loaiLoiId: v })}
+                          onChange={(v) => { sua(i, { loaiLoiId: v }); if (v) datConTro(`#pll-sua-${i}`, true); }}
                           placeholder="Gõ mã hoặc tên lỗi…"
                           getSearch={(o) => o.search}
                         />
@@ -184,16 +203,16 @@ export default function PhanLoaiLoiPanel({ open, onClose, data, loaiLoi, bienPha
                         />
                       </td>
                       <td className="px-2 py-2 text-right">
-                        <input type="number" min="0" className={O_SO} value={d.soLuongSua}
-                          onChange={(e) => sua(i, { soLuongSua: so(e.target.value) })} />
+                        <input type="number" min="0" className={O_SO} value={d.soLuongSua} id={`pll-sua-${i}`}
+                          onKeyDown={enterLuu} onChange={(e) => sua(i, { soLuongSua: so(e.target.value) })} />
                       </td>
                       <td className="px-2 py-2 text-right">
                         <input type="number" min="0" className={O_SO} value={d.soLuongHuy}
-                          onChange={(e) => sua(i, { soLuongHuy: so(e.target.value) })} />
+                          onKeyDown={enterLuu} onChange={(e) => sua(i, { soLuongHuy: so(e.target.value) })} />
                       </td>
                       <td className="px-2 py-2">
                         <input className={O_CHU} value={d.ghiChu} placeholder="…"
-                          onChange={(e) => sua(i, { ghiChu: e.target.value })} />
+                          onKeyDown={enterLuu} onChange={(e) => sua(i, { ghiChu: e.target.value })} />
                       </td>
                       <td className="px-2 py-2">
                         <button type="button" title="Bỏ dòng" className="text-ink-soft hover:text-danger"
@@ -224,7 +243,7 @@ export default function PhanLoaiLoiPanel({ open, onClose, data, loaiLoi, bienPha
 
           <div>
             <div className="mb-1 text-xs font-medium text-ink">Ghi chú chung</div>
-            <input className={O_CHU} value={ghiChu} onChange={(e) => setGhiChu(e.target.value)}
+            <input className={O_CHU} value={ghiChu} onKeyDown={enterLuu} onChange={(e) => setGhiChu(e.target.value)}
               placeholder="Ghi chú cho phiếu phân loại này…" />
           </div>
         </div>

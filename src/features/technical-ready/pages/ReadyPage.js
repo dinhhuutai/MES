@@ -301,7 +301,7 @@ export default function ReadyPage() {
           onClick={(e) => e.stopPropagation()} onChange={() => toggleOne(r._key)} aria-label="Chọn" />
       ),
     }] : []),
-    { key: 'ma_phan', header: 'Code phần', className: 'font-medium text-ink', render: (r) => (
+    { key: 'ma_phan', header: 'Code phần', className: 'font-medium text-ink', copyText: (r) => r.ma_phan, render: (r) => (
       <div>
         <div className="flex items-center gap-0.5">
           <span>{r.ma_phan || '—'}</span>
@@ -317,12 +317,12 @@ export default function ReadyPage() {
         {r.tra_ve_test && <div className="mt-1"><TraVeBadge data={r.tra_ve_test} label="Test Run trả về" nguon="Test Run (QA)" /></div>}
       </div>
     ) },
-    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
-    { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
-    { key: 'ma_hang', header: 'Mã hàng' },
-    { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
-    { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
-    { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
+    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', copyText: (r) => r.ten_khach_hang, render: (r) => r.ten_khach_hang || '—' },
+    { key: 'ma_don_hang', header: 'Đơn hàng', copyText: (r) => r.ma_don_hang, render: (r) => r.ma_don_hang || '—' },
+    { key: 'ma_hang', header: 'Mã hàng', copyText: (r) => r.ma_hang },
+    { key: 'mau_vai', header: 'Màu vải', copyText: (r) => r.mau_vai, render: (r) => r.mau_vai || '—' },
+    { key: 'kich_vai', header: 'Kích vải', copyText: (r) => r.kich_vai, render: (r) => r.kich_vai || '—' },
+    { key: 'kich_phim', header: 'Kích phim', copyText: (r) => r.kich_phim, render: (r) => r.kich_phim || '—' },
     // ⚠⚠ TÁCH DÒNG THEO TỪNG ĐỢT VẢI (16/09/2026 — trước đây theo LOẠI đợt vải): phần in đang chờ ≥2
     //   đợt ⇒ mỗi đợt 1 dòng, xác nhận Khuôn/Film/Mực riêng. 2 đợt CÙNG LOẠI cũng tách, nên phải hiện
     //   SL + ngày vải về — đó là thứ duy nhất phân biệt 2 dòng trên màn hình.
@@ -340,7 +340,7 @@ export default function ReadyPage() {
     ) },
     // Phương án in (ERP `Pain`, lấy từ HSKT đang hoạt động): 1 Bàn · 2 Máy · 3 Robot.
     // Đổi được ngay tại chỗ: ⟳ xoay Bàn → Robot → Máy, ✓ mới ghi (kèm đổi số cuối mã vạch HSKT).
-    { key: 'phuong_an_in', header: 'Phương án in', render: (r) => (
+    { key: 'phuong_an_in', header: 'Phương án in', copyText: (r) => (r.phuong_an_in != null ? PHUONG_AN_IN[r.phuong_an_in] : ''), render: (r) => (
       <PhuongAnInCell value={r.phuong_an_in} hsktId={r.hskt_id} barcode={r.barcode_hskt}
         disabled={!canDoiPain} show={show} onChanged={refresh} />
     ) },
@@ -349,17 +349,17 @@ export default function ReadyPage() {
     // "đủ mục KT"); trường hợp lẻ chỉ mới có Film mà chưa Khuôn thì hiện vàng để không giấu mất.
     // ⚠ Backend/quyền/checkpoint GIỮ NGUYÊN — Film vẫn là mục thật, vẫn bấm riêng được trong panel.
     // Hàng GIA CÔNG (II/AD) không làm khuôn lẫn film ⇒ ô này để trống.
-    { key: 'khuon_done', header: `Film-Khuôn${counts.khuon ? ` (${counts.khuon})` : ''}`, className: 'text-center',
+    { key: 'khuon_done', header: `Film-Khuôn${counts.khuon ? ` (${counts.khuon})` : ''}`, className: 'text-center', copy: false,
       render: (r) => (khuonRequired(r.ten_khach_hang)
         ? FilmKhuonCell(r)
         : <span className="text-ink-soft" title="Hàng gia công — không cần xác nhận Film/Khuôn">—</span>) },
-    { key: 'muc_done', header: `Mực${counts.muc ? ` (${counts.muc})` : ''}`, className: 'text-center', render: (r) => DoneCell(r.muc_done) },
+    { key: 'muc_done', header: `Mực${counts.muc ? ` (${counts.muc})` : ''}`, className: 'text-center', copy: false, render: (r) => DoneCell(r.muc_done) },
     { key: 'trang_thai_ready', header: 'Trạng thái', render: (r) => {
       const s = STATUS[r.trang_thai_ready] || STATUS.CHUA;
       return <Badge tone={s.tone}>{s.label}</Badge>;
     } },
-    { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => <HanGiaoCell value={r.han_giao_hang} /> },
-    { key: 'tg_qua_ready', header: 'Thời gian ERP lên MES', className: 'whitespace-nowrap', render: (r) => (
+    { key: 'han_giao_hang', header: 'Hạn giao', copyText: (r) => (r.han_giao_hang ? fmtDate(r.han_giao_hang) : ''), render: (r) => <HanGiaoCell value={r.han_giao_hang} /> },
+    { key: 'tg_qua_ready', header: 'Thời gian ERP lên MES', className: 'whitespace-nowrap', copyText: (r) => (r.tg_qua_ready ? fmtDateTime(r.tg_qua_ready) : ''), render: (r) => (
       <span className="text-ink-soft">{fmtDateTime(r.tg_qua_ready)}</span>
     ) },
     // Chép CẢ DÒNG (27/10/2026 — bấm dòng là mở panel nên không bôi đen chép được): các ô ngăn TAB ⇒ dán vào Excel tự
@@ -403,6 +403,10 @@ export default function ReadyPage() {
       <FieldFilters fields={FILTER_FIELDS} values={filters} onField={(k, v) => setFilters((f) => ({ ...f, [k]: v }))} onClear={() => setFilters({})} open={showFilters} />
 
       <DataTable columns={columns} rows={viewRows} rowKey="_key" loading={loading} sttStart={0}
+        // Double-click 1 ô = chép đúng chữ của ô đó (27/10/2026) — bấm 1 lần vẫn mở panel.
+        onCellCopy={(ok, text, col) => show(ok
+          ? `Đã chép${typeof col.header === 'string' ? ` ${col.header.replace(/\s*\(\d+\)$/, '')}` : ''}: ${text.length > 60 ? `${text.slice(0, 60)}…` : text}`
+          : 'Trình duyệt không cho chép — bôi đen chữ rồi Ctrl+C', ok ? 'success' : 'error')}
         onRowClick={(r) => setSel({
           id: r.id,
           // Luôn mở panel THEO ĐỢT khi dòng có đợt chờ (không chỉ khi tách dòng) — panel phải hiện

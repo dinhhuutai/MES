@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Spinner from './Spinner';
 import Pagination from './Pagination';
+import { chepChu } from './NutSaoChep';
 
 // columns: [{ key, header, render?(row), className?, headerClassName?, selection?, merge? }]
 //   - selection: true → cột chọn (checkbox); được render TRƯỚC cột STT.
@@ -12,6 +13,9 @@ import Pagination from './Pagination';
 //   Mỗi dòng con render với hàng hợp nhất `{...row, ...sub}` nên `render(r)` của cột dùng được ngay các
 //   trường của phần in. Cột `merge` (+ STT + ô chọn) chỉ vẽ Ở DÒNG ĐẦU với `rowSpan`. Phân trang/STT vẫn
 //   đếm theo BẢN GHI (1 lệnh = 1 STT) — đúng ý "hợp nhất ô ở STT".
+// onCellCopy(ok, text, col, row): có thì DOUBLE-CLICK 1 ô = chép chữ của ô đó (27/10/2026, màn READY). Chữ = `col.copyText(row)`
+//   nếu cột khai, không thì chữ đang hiện trong ô; cột `copy: false` / ô chọn không chép. Bấm 1 lần mở panel bị HOÃN ~250 ms
+//   (chỉ ở trang bật tính năng) để double-click không mở panel trước.
 // Responsive: md+ hiển thị dạng BẢNG; dưới md tự đổi sang dạng THẺ (card) cho mobile/tablet.
 
 // Kéo chuột BÔI ĐEN chữ trong dòng (để chép) thì nhả chuột KHÔNG mở panel của dòng (27/10/2026 — màn READY bấm vào là
@@ -24,8 +28,10 @@ function dangBoiDen(e) {
   } catch { return false; }
 }
 
-export default function DataTable({ columns, rows, loading, rowKey = 'id', emptyText = 'Không có dữ liệu', onRowClick, sttStart, rowClassName, pageSize = 20, subRows }) {
+export default function DataTable({ columns, rows, loading, rowKey = 'id', emptyText = 'Không có dữ liệu', onRowClick, sttStart, rowClassName, pageSize = 20, subRows, onCellCopy }) {
   const allRows = rows || [];
+  const henMo = useRef(null);
+  useEffect(() => () => clearTimeout(henMo.current), []);
   const clientPaged = pageSize > 0 && allRows.length > pageSize;
   const [cpage, setCpage] = useState(1);
   const totalPages = clientPaged ? Math.ceil(allRows.length / pageSize) : 1;
@@ -78,8 +84,17 @@ export default function DataTable({ columns, rows, loading, rowKey = 'id', empty
   // <input>, nên bấm vào PHẦN ĐỆM quanh checkbox vẫn kích onRowClick → mở SidePanel ngoài ý muốn.
   // Chặn ở cấp <td> để cả cột chọn không bao giờ mở panel (vd Release 2, Kế hoạch tạm, Giao hàng…).
   const stopSel = onRowClick ? (e) => e.stopPropagation() : undefined;
+  const chepO = (c, row) => (onCellCopy && !c.selection && c.copy !== false ? async (e) => {
+    if (e.target.closest && e.target.closest('button, input, select, textarea, a')) return; // nút trong ô (đổi PA in…)
+    e.stopPropagation();
+    clearTimeout(henMo.current);
+    const text = String(c.copyText ? (c.copyText(row) ?? '') : (e.currentTarget.innerText || '')).replace(/\s+/g, ' ').trim();
+    try { window.getSelection().removeAllRanges(); } catch { /* bỏ qua */ }
+    if (!text || /^[—–-]$/.test(text)) return;
+    onCellCopy(await chepChu(text), text, c, row);
+  } : undefined);
   const renderCell = (c, row, sticky, rowSpan) => (
-    <td key={c.key} onClick={c.selection ? stopSel : undefined} rowSpan={rowSpan}
+    <td key={c.key} onClick={c.selection ? stopSel : undefined} onDoubleClick={chepO(c, row)} rowSpan={rowSpan}
       className={`${PAD_C} ${sticky ? 'sticky right-0 z-10 bg-surface shadow-[-6px_0_6px_-6px_rgba(0,0,0,0.15)]' : ''} ${c.className || ''}`}>
       {cellValue(c, row)}
     </td>
@@ -90,8 +105,14 @@ export default function DataTable({ columns, rows, loading, rowKey = 'id', empty
     const subs = subsOf(row);
     const n = subs ? subs.length : 1;
     const lines = subs || [null];
-    const onClick = onRowClick ? (e) => { if (!dangBoiDen(e)) onRowClick(row); } : undefined;
-    const cls = `border-b border-line/70 transition hover:bg-surface-muted/40 ${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : ''}`;
+    const onClick = !onRowClick ? undefined : onCellCopy
+      ? (e) => {
+        if (e.detail > 1 || dangBoiDen(e)) return;            // cú bấm thứ 2 của double-click
+        clearTimeout(henMo.current);
+        henMo.current = setTimeout(() => onRowClick(row), 250);
+      }
+      : (e) => { if (!dangBoiDen(e)) onRowClick(row); };
+    const cls =`border-b border-line/70 transition hover:bg-surface-muted/40 ${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : ''}`;
     return lines.map((sub, j) => {
       const r = sub ? { ...row, ...sub } : row;      // dòng con ghi đè trường của phần in
       const dau = j === 0;

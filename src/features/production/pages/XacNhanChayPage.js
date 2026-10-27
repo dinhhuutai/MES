@@ -194,11 +194,12 @@ export default function XacNhanChayPage() {
   // Ô tích Ở TIÊU ĐỀ bảng Đang chạy (27/10/2026): tích / bỏ MỌI dòng đang hiện — tích thêm theo thứ tự bảng, trọn dòng
   //   (dòng gom = mọi lệnh của nó), tới trần "mở chung" TOI_DA_MO_CHUNG.
   const tichHetRun = bangRun.length > 0 && bangRun.every(daTichDong);
-  const tichMotPhanRun = !tichHetRun && bangRun.some((r) => lenhCuaDong(r).some((l) => chonRunSet.has(l.phieu_id)));
+  const tichMotPhanRun = !tichHetRun && chonRun.length > 0;
+  // ⚠ 27/10/2026 sửa lỗi: ĐANG có dòng tích ⇒ bấm là BỎ TÍCH HẾT (bản đầu chỉ bỏ khi "đã tích hết" — bảng > 30 lệnh không
+  //   bao giờ "hết" vì trần TOI_DA_MO_CHUNG ⇒ bấm lại không bỏ được).
   const doiTichTatCaRun = () => {
-    if (tichHetRun) {
-      const bo = new Set(bangRun.flatMap((r) => lenhCuaDong(r).map((l) => l.phieu_id)));
-      setChonRun((c) => c.filter((x) => !bo.has(x)));
+    if (chonRun.length) {
+      setChonRun([]);
     } else {
       const moi = [...chonRun];
       const co = new Set(moi);

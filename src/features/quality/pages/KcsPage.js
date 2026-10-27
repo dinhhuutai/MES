@@ -121,8 +121,11 @@ export default function KcsPage() {
   const viewRows = [...selectedRows, ...baseRows.filter((r) => !selected.has(r.tem_id))];
   const toggleOne = (row) => setChon((c) => (c.some((x) => x.tem_id === row.tem_id)
     ? c.filter((x) => x.tem_id !== row.tem_id) : [...c, row]));
+  // Ô tích tiêu đề: ĐANG có dòng tích ⇒ bấm là BỎ TÍCH HẾT; chưa tích ⇒ tích các dòng đang hiện (tối đa TOI_DA_TICH).
+  //   ⚠ 27/10/2026 sửa lỗi: bản đầu đảo theo "đã tích hết" ⇒ bảng > TOI_DA_TICH dòng không bao giờ "hết" ⇒ bấm lại không bỏ được.
   const allSelected = viewRows.length > 0 && viewRows.every((r) => selected.has(r.tem_id));
-  const toggleAll = () => setChon(() => (allSelected ? [] : viewRows.slice(0, TOI_DA_TICH)));
+  const someSelected = chon.length > 0 && !allSelected;
+  const toggleAll = () => setChon(() => (chon.length ? [] : viewRows.slice(0, TOI_DA_TICH)));
   const gopMixedPhanIn = selectedRows.length > 1 && new Set(selectedRows.map((r) => r.ma_phan)).size > 1;
 
   const openGop = () => {
@@ -240,6 +243,16 @@ export default function KcsPage() {
 
   // Prefill SL đạt = SL còn cần kiểm (con_kcs). Kiểm từng phần nhiều lần.
   const open = (row) => { setEditing(row); setForm({ ...empty, soLuongDat: String(row.con_kcs ?? row.so_luong ?? '') }); };
+  // Hộp KCS vừa mở ⇒ đặt con trỏ vào ô "Số lượng đạt" + bôi đen (SidePanel Headless UI tự đặt focus lúc mở ⇒ đợi vài nhịp).
+  const temDangMo = editing ? editing.tem_id : null;
+  useEffect(() => {
+    if (!temDangMo) return undefined;
+    const hen = [80, 250].map((ms) => setTimeout(() => {
+      const el = document.getElementById('kcs-o-dat');
+      if (el && document.activeElement !== el) { el.focus(); el.select(); }
+    }, ms));
+    return () => hen.forEach(clearTimeout);
+  }, [temDangMo]);
 
   // ⚠⚠ CÂN ĐỐI BẮT BUỘC (chốt 04/09/2026): **SL cần kiểm + dư − thiếu = đạt + hư**.
   //   Trước đây KCS cho nhập lệch rồi lặng lẽ coi phần chưa kiểm là "kiểm lần sau", nên số đạt/hư sai
@@ -278,34 +291,29 @@ export default function KcsPage() {
     } catch (e) { show(e.message || 'Không tra được tem', 'error'); }
   };
 
-  // QUÉT LIÊN TỤC ĐỂ TÍCH (27/10/2026): đầu đọc gõ mã + Enter ở ô tìm ⇒ tem chờ KCS khớp được TÍCH + lên ĐẦU bảng, ô tự
-  //   xóa, con trỏ ở lại ⇒ quét tiếp; xong bấm "Xác nhận KCS (N)" mở modal nhập nhiều tem. Khớp mã như nút Quét QR.
+  // QUÉT LIÊN TỤC (27/10/2026, người dùng chốt lại cùng ngày): vào trang con trỏ nằm sẵn ở ô tìm → quét mã tem + Enter
+  //   ⇒ ô tìm XÓA + MỞ NGAY hộp KCS của tem đó (con trỏ ở ô "Số lượng đạt", điền sẵn = còn kiểm) → Enter / bấm "Xác nhận
+  //   KCS" ⇒ lưu, hộp tự đóng, con trỏ về ô tìm để quét tem kế (`save` → `oTim.datConTro`). Khớp mã như nút Quét QR.
+  //   Tích nhiều tem + "Xác nhận KCS (N)" vẫn làm bằng ô tích của bảng.
   const quetKcs = async (giaTri) => {
     const code = String(giaTri || '').trim();
     setSearch('');
-    oTim.datConTro();
-    if (!code) return;
+    if (!code) { oTim.datConTro(); return; }
     try {
       const res = await listKcsCandidates({ search: code });
       const row = timTheoMaTem(res.data || [], code);
       if (!row) {
         setVuaQuet({ ma: code, tone: 'loi', chu: 'Không có tem chờ KCS khớp mã này' });
         show(`Tem ${code} không có phần chờ KCS`, 'error');
+        oTim.datConTro();
         return;
       }
-      if (selected.has(row.tem_id)) {
-        setChon((c) => [row, ...c.filter((x) => x.tem_id !== row.tem_id)]);
-        setVuaQuet({ ma: code, tone: 'info', chu: `${row.ma_tem} đã tích từ trước` });
-        return;
-      }
-      if (chon.length >= TOI_DA_TICH) {
-        setVuaQuet({ ma: code, tone: 'loi', chu: `Tối đa ${TOI_DA_TICH} tem mỗi lượt xác nhận` });
-        return;
-      }
-      setChon((c) => [row, ...c]);
-      setVuaQuet({ ma: code, tone: 'ok', chu: `Đã tích ${row.ma_tem} · ${row.ma_phan || row.ma_hang || ''} · còn kiểm ${fmtNum(row.con_kcs)}` });
+      setVuaQuet({ ma: code, tone: 'ok', chu: `Mở KCS ${row.ma_tem} · ${row.ma_phan || row.ma_hang || ''} · còn kiểm ${fmtNum(row.con_kcs)}` });
+      setJourney(null);
+      open(row);
     } catch (e) {
       setVuaQuet({ ma: code, tone: 'loi', chu: e.message || 'Không tra được tem' });
+      oTim.datConTro();
     }
   };
   // Modal nhiều tem lưu xong: bỏ tích dòng đã lưu; hết lỗi ⇒ đóng modal, con trỏ về ô tìm.
@@ -360,7 +368,8 @@ export default function KcsPage() {
 
   const columns = [
     { key: 'sel', selection: true,
-      header: <input type="checkbox" aria-label="Chọn tất cả" checked={allSelected} onChange={toggleAll} />,
+      header: <input type="checkbox" aria-label="Chọn tất cả / bỏ tích tất cả" checked={allSelected}
+        ref={(el) => { if (el) el.indeterminate = someSelected; }} onChange={toggleAll} />,
       render: (r) => (
         <input type="checkbox" aria-label="Chọn tem" checked={selected.has(r.tem_id)}
           onClick={(e) => e.stopPropagation()} onChange={() => toggleOne(r)} />
@@ -403,7 +412,8 @@ export default function KcsPage() {
 
   const N = (k) => (
     <Field label={k.label} key={k.f}>
-      <Input type="number" min="0" value={form[k.f]}
+      <Input type="number" min="0" value={form[k.f]} id={k.f === 'soLuongDat' ? 'kcs-o-dat' : undefined}
+        onKeyDown={(e) => { if (e.key === 'Enter' && !saving) { e.preventDefault(); save(); } }}
         onChange={k.onChange || ((e) => setForm((prev) => ({ ...prev, [k.f]: e.target.value })))} />
     </Field>
   );
@@ -412,7 +422,7 @@ export default function KcsPage() {
     <div>
       <Toolbar title="KCS — Kiểm tra chất lượng" subtitle="Kiểm theo tem (tem đã khô)"
         search={search} onSearch={setSearch} searchRef={oTim.ref} onSearchEnter={canKcs ? quetKcs : undefined}
-        searchPlaceholder="Quét mã tem rồi Enter để tích — gõ để tìm...">
+        searchPlaceholder="Quét mã tem rồi Enter để mở KCS — gõ để tìm...">
         {canKcs && <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét QR</Button>}
         {canKcs && chon.length > 0 && (
           <Button icon="check-circle" onClick={() => setNhieuOpen(true)}>Xác nhận KCS ({chon.length})</Button>

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import Toolbar from '../../../components/common/Toolbar';
 import DataTable from '../../../components/common/DataTable';
 import Button from '../../../components/common/Button';
@@ -11,6 +11,8 @@ import useOTimKiem from '../../../hooks/useOTimKiem';
 import usePermissions from '../../../hooks/usePermissions';
 import useHuyLichSu from '../../../hooks/useHuyLichSu';
 import PhanLoaiLoiPanel from '../components/PhanLoaiLoiPanel';
+import PhanLoaiNhieuModal, { slHuCua } from '../components/PhanLoaiNhieuModal';
+import VuaQuet from '../../../components/common/VuaQuet';
 import { listLoaiLoi } from '../../../services/qualityService';
 import {
   listPhanLoaiLoi, traTemPhanLoai, luuPhanLoaiLoi, listBienPhap, huyPhanLoaiLoi,
@@ -41,6 +43,10 @@ const TT_TABS = [
 const TEN_TT = { CHUA: 'chưa phân loại', DA: 'đã phân loại' };
 
 const O_MA = 'h-11 w-full rounded-input border border-line bg-surface px-3.5 text-base md:text-sm outline-none focus:border-primary';
+// Tối đa số tem tích để phân loại 1 lượt (27/10/2026, như KCS) — mỗi tem 1 lần gọi lưu tuần tự.
+const TOI_DA_TICH = 100;
+// Chỉ tem CHƯA phân loại + có hàng hư mới tích được (tem đã phân loại sửa lại từng tem trong panel).
+const tichDuoc = (r) => !r.da_phan_loai && !!r.tem_id && slHuCua(r) > 0;
 
 export default function PhanLoaiLoiPage() {
   const { toast, show } = useToast();
@@ -66,6 +72,21 @@ export default function PhanLoaiLoiPage() {
   const [loaiLoi, setLoaiLoi] = useState([]);
   const [bienPhap, setBienPhap] = useState([]);
   const [dangXuat, setDangXuat] = useState(false);
+  const canPll = can('PHAN_LOAI_LOI');
+  // TEM ĐÃ TÍCH (27/10/2026, như KCS): giữ BẢN DÒNG lúc tích ⇒ sang trang khác vẫn còn; "Phân loại (N)" mở modal nhiều tem.
+  const [tich, setTich] = useState([]);
+  const daTich = useMemo(() => new Set(tich.map((r) => r.tem_id)), [tich]);
+  const [nhieuOpen, setNhieuOpen] = useState(false);
+  const [vuaQuet, setVuaQuet] = useState(null);
+  const tichTrang = rows.filter(tichDuoc);
+  const tichHetTrang = tichTrang.length > 0 && tichTrang.every((r) => daTich.has(r.tem_id));
+  const doiTich = (r) => {
+    if (daTich.has(r.tem_id)) { setTich((ds) => ds.filter((x) => x.tem_id !== r.tem_id)); return; }
+    if (tich.length >= TOI_DA_TICH) { show(`Tối đa ${TOI_DA_TICH} tem một lượt`, 'error'); return; }
+    setTich((ds) => [...ds, r]);
+  };
+  // Ô tích tiêu đề: đang có dòng tích ⇒ BỎ TÍCH HẾT; chưa tích ⇒ tích mọi dòng tích được của trang đang xem.
+  const doiTichTrang = () => setTich(() => (tich.length ? [] : tichTrang.slice(0, TOI_DA_TICH)));
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -106,14 +127,44 @@ export default function PhanLoaiLoiPage() {
 
   const traTem = async (code) => {
     const ma = String(code || '').trim();
-    if (!ma) return;
+    if (!ma) return null;
     setDangTra(true);
+    let data = null;
     try {
       const res = await traTemPhanLoai(ma);
-      setChon(res.data);
+      data = res.data;
+      setChon(data);
       setMoThem(false); setMaNhap(''); setQuet(false);
     } catch (e) { show(e.message || 'Không tìm thấy tem', 'error'); }
     setDangTra(false);
+    return data;
+  };
+
+  // QUÉT LIÊN TỤC (27/10/2026, như KCS): con trỏ nằm sẵn ở ô tìm → quét mã tem + Enter ⇒ ô tìm xóa + MỞ NGAY panel phân loại
+  //   của tem (con trỏ ở ô mã lỗi, SL sửa điền sẵn = SL hư) → chọn mã lỗi → Enter ⇒ lưu, con trỏ về ô tìm quét tem kế.
+  const quetPll = async (giaTri) => {
+    const code = String(giaTri || '').trim();
+    setSearch(''); setPage(1);
+    if (!code) { oTim.datConTro(); return; }
+    const data = await traTem(code);
+    if (data?.tem) {
+      const t = data.tem;
+      setVuaQuet({ ma: code, tone: 'ok', chu: `Mở phân loại ${temCode(t.ma_tem, 16)} · ${t.ma_phan || t.ma_hang || ''} · hư ${Number(t.sl_hu) || 0}${data.phieu ? ' · đã phân loại (sửa lại)' : ''}` });
+    } else {
+      setVuaQuet({ ma: code, tone: 'loi', chu: 'Không tìm thấy tem để phân loại' });
+      oTim.datConTro();
+    }
+  };
+  const sauNhieu = (okIds, loi) => {
+    setTich((ds) => ds.filter((x) => !okIds.includes(x.tem_id)));
+    load();
+    if (!loi.length) {
+      show(`Đã phân loại lỗi ${okIds.length} tem`);
+      setNhieuOpen(false);
+      oTim.datConTro();
+    } else {
+      show(`Đã lưu ${okIds.length}/${okIds.length + loi.length} tem — lỗi: ${loi.join(', ')}`, 'error');
+    }
   };
 
   const doLuu = async ({ dong, ghiChu }) => {
@@ -166,6 +217,13 @@ export default function PhanLoaiLoiPage() {
   };
 
   const columns = [
+    ...(canPll ? [{ key: 'sel', selection: true,
+      header: <input type="checkbox" aria-label="Chọn tất cả / bỏ tích tất cả" checked={tichHetTrang}
+        ref={(el) => { if (el) el.indeterminate = tich.length > 0 && !tichHetTrang; }} onChange={doiTichTrang} />,
+      render: (r) => (tichDuoc(r) ? (
+        <input type="checkbox" aria-label="Chọn tem" checked={daTich.has(r.tem_id)}
+          onClick={(e) => e.stopPropagation()} onChange={() => doiTich(r)} />
+      ) : null) }] : []),
     { key: 'tg_kcs', header: 'Giờ KCS', render: (r) => fmtDateTime(r.tg_kcs), width: 130 },
     { key: 'created_date', header: 'Giờ phân loại', width: 150,
       render: (r) => (r.created_date ? fmtDateTime(r.created_date)
@@ -202,8 +260,13 @@ export default function PhanLoaiLoiPage() {
       <Toolbar
         title="Phân loại lỗi" subtitle="Tem đã KCS có hàng hư — chia SL hư thành sửa / hủy theo từng loại lỗi và biện pháp xử lý"
         search={search} onSearch={(v) => { setSearch(v); setPage(1); }}
-        searchPlaceholder="Tìm mã tem / code phần / khách hàng..." searchRef={oTim.ref}
+        searchPlaceholder="Quét mã tem rồi Enter để mở phân loại — gõ để tìm..." searchRef={oTim.ref}
+        onSearchEnter={canPll ? quetPll : undefined}
       >
+        {canPll && tich.length > 0 && (
+          <Button icon="check-circle" onClick={() => setNhieuOpen(true)}>Phân loại ({tich.length})</Button>
+        )}
+        {tich.length > 0 && <Button chiXemOk variant="ghost" icon="x" onClick={() => setTich([])}>Bỏ tích</Button>}
         <input type="date" value={ngay} onChange={(e) => { setNgay(e.target.value); setPage(1); }}
           className="h-11 rounded-input border border-line bg-surface px-3 text-sm outline-none focus:border-primary" />
         {ngay && <Button variant="ghost" onClick={() => { setNgay(''); setPage(1); }}>Mọi ngày</Button>}
@@ -211,6 +274,7 @@ export default function PhanLoaiLoiPage() {
           loading={dangXuat} disabled={!total}>Excel ({total})</Button>
         <Button icon="plus" onClick={() => { setMoThem(true); setMaNhap(''); }}>Thêm</Button>
       </Toolbar>
+      <VuaQuet ket={vuaQuet} className="mb-3" />
 
       <ChipTabs tabs={TT_TABS} value={tinhTrang} counts={dem}
         onChange={(v) => { setTinhTrang(v); setPage(1); }} />
@@ -247,8 +311,10 @@ export default function PhanLoaiLoiPage() {
         onResult={(text) => { setQuet(false); traTem(text); }} />
 
       <PhanLoaiLoiPanel
-        open={!!chon} onClose={() => setChon(null)} data={chon}
+        open={!!chon} onClose={() => { setChon(null); oTim.datConTro(); }} data={chon}
         loaiLoi={loaiLoi} bienPhap={bienPhap} onLuu={doLuu} dangLuu={dangLuu} />
+      <PhanLoaiNhieuModal open={nhieuOpen} rows={tich} loaiLoi={loaiLoi} bienPhap={bienPhap}
+        onClose={() => { setNhieuOpen(false); oTim.datConTro(); }} onXong={sauNhieu} show={show} />
 
       {huyLs.modal}
       <Toast toast={toast} />
