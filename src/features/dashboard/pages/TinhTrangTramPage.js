@@ -255,11 +255,12 @@ function TraVeKhoi({ r, refFn }) {
 }
 const dsTraVe = (ds, reg) => (ds || []).map((r) => <TraVeKhoi key={r.id} r={r} refFn={reg ? reg(`tv-${r.id}`) : undefined} />);
 
-function ReadyNode({ checklists, lan = 0, traVe, reg, nodeRef }) {
+// `theoDot` = lần READY mở vì ĐỢT VẢI MỚI về (27/10/2026); mục có `giu` = giữ xác nhận KT của lần trước (trả về chỉ hủy QC).
+function ReadyNode({ checklists, lan = 0, theoDot, tuDong, traVe, reg, nodeRef }) {
   const byMa = Object.fromEntries((checklists || []).map((c) => [c.ma_checkpoint, c]));
   return (
     <span ref={nodeRef} className="inline-flex shrink-0 self-center">
-      <Node title={`READY${lan ? ` · lần ${lan}` : ''} · Chuẩn bị KT`} tone="primary" w={190}>
+      <Node title={`READY${lan ? ` · lần ${lan}` : ''}${theoDot ? ' · đợt mới về' : ''}${tuDong ? ' · hệ thống tự xác nhận' : ''} · Chuẩn bị KT`} tone="primary" w={190}>
         <div className="space-y-1">
           {['KHUON', 'FILM', 'MUC', 'QC_XAC_NHAN'].map((ma) => {
             const c = byMa[ma];
@@ -268,7 +269,7 @@ function ReadyNode({ checklists, lan = 0, traVe, reg, nodeRef }) {
                 <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${c ? 'bg-emerald-500' : 'bg-line'}`} />
                 <div className="min-w-0 flex-1">
                   <span className="font-semibold text-ink">{CL_LABEL[ma]}</span>
-                  {c ? <span className="ml-1 text-[10px] text-ink-soft">{c.nguoi || 'Hệ thống (tự động)'}{c.tg ? ` · ${fmtDateTime(c.tg)}` : ''}</span>
+                  {c ? <span className="ml-1 text-[10px] text-ink-soft">{c.nguoi || 'Hệ thống (tự động)'}{c.tg ? ` · ${fmtDateTime(c.tg)}` : ''}{c.giu ? ' · giữ từ lần trước' : ''}</span>
                     : <span className="ml-1 text-[10px] text-ink-soft">chưa XN</span>}
                 </div>
               </div>
@@ -830,7 +831,7 @@ export default function TinhTrangTramPage() {
   // Mỗi CHU KỲ READY = 1 nhánh: ReadyNode → các đợt SX của chu kỳ đó (+ đợt vải chờ release).
   const cycleBranches = graph ? graph.ready_cycles.map((cy, ci) => (
     <Fork key={ci}
-      parent={<ReadyNode checklists={cy.checklists} lan={graph.ready_cycles.length > 1 ? ci + 1 : 0}
+      parent={<ReadyNode checklists={cy.checklists} lan={graph.ready_cycles.length > 1 ? ci + 1 : 0} theoDot={cy.theo_dot} tuDong={cy.tu_dong}
         traVe={traVeCycle(ci)} reg={reg} nodeRef={reg(`rd-${ci}`)} />}
       items={[
         ...(cy.lenh_huy || []).map((l) => <LenhHuyNode key={`huy-${l.id}`} l={l} />),

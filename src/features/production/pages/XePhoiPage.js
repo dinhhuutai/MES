@@ -147,22 +147,29 @@ export default function XePhoiPage() {
       {loading ? (
         <div className="py-10 text-center text-ink-soft">Đang tải...</div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        // 27/10/2026 (người dùng: "phân bổ tem đều ra 4 cột cho dễ nhìn"): bản cũ mỗi XE 1 cột ⇒ xe đầy (prod 27/10: XP01 36
+        //   tem, 3 xe kia trống) thành 1 cột rất dài. Nay xe CÓ TEM chiếm cả bề ngang, tem chia đều 4 cột; xe trống gom 1 hàng thẻ nhỏ.
+        <div className="space-y-4">
           {q && xeHien.length === 0 && (
-            <div className="col-span-full py-10 text-center text-sm text-ink-soft">Không có tem nào trên xe phơi khớp "{tim.trim()}"</div>
+            <div className="py-10 text-center text-sm text-ink-soft">Không có tem nào trên xe phơi khớp "{tim.trim()}"</div>
           )}
-          {xeHien.map((x) => (
-            <div key={x.id} className="card flex flex-col p-4">
+          {xeHien.filter((x) => x.tems.length > 0).map((x) => (
+            <div key={x.id} className="card p-4">
               <div className="mb-3 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Icon name="truck" size={18} className="text-primary" />
                   <span className="font-bold text-ink">{x.ma_xe_phoi}</span>
+                  <Badge tone="info">{x.tems.length} tem</Badge>
                 </div>
-                <Badge tone={x.tems.length ? 'info' : 'default'}>{x.tems.length} tem</Badge>
+                {canXe && (
+                  <button onClick={() => openAdd(x.id)}
+                    className="rounded-control border border-dashed border-line px-3 py-1.5 text-xs font-medium text-ink-soft hover:bg-surface-muted">
+                    + Thêm tem
+                  </button>
+                )}
               </div>
 
-              <div className="flex-1 space-y-2">
-                {x.tems.length === 0 && <div className="py-6 text-center text-xs text-ink-soft">Trống</div>}
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
                 {x.tems.map((t) => {
                   const ms = new Date(t.tg_kt_phoi).getTime() - now;
                   const done = ms <= 0;
@@ -203,15 +210,27 @@ export default function XePhoiPage() {
                   );
                 })}
               </div>
-
-              {canXe && (
-                <button onClick={() => openAdd(x.id)}
-                  className="mt-3 rounded-control border border-dashed border-line py-2 text-xs font-medium text-ink-soft hover:bg-surface-muted">
-                  + Thêm tem
-                </button>
-              )}
             </div>
           ))}
+          {xeHien.some((x) => x.tems.length === 0) && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {xeHien.filter((x) => x.tems.length === 0).map((x) => (
+                <div key={x.id} className="card flex items-center justify-between gap-2 p-3">
+                  <div className="flex items-center gap-2">
+                    <Icon name="truck" size={18} className="text-primary" />
+                    <span className="font-bold text-ink">{x.ma_xe_phoi}</span>
+                    <span className="text-xs text-ink-soft">Trống</span>
+                  </div>
+                  {canXe && (
+                    <button onClick={() => openAdd(x.id)}
+                      className="rounded-control border border-dashed border-line px-3 py-1.5 text-xs font-medium text-ink-soft hover:bg-surface-muted">
+                      + Thêm tem
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

@@ -303,10 +303,7 @@ export default function ReadyPage() {
     }] : []),
     { key: 'ma_phan', header: 'Code phần', className: 'font-medium text-ink', copyText: (r) => r.ma_phan, render: (r) => (
       <div>
-        <div className="flex items-center gap-0.5">
-          <span>{r.ma_phan || '—'}</span>
-          {r.ma_phan && <NutSaoChep layChu={r.ma_phan} title="Chép code phần" />}
-        </div>
+        <div>{r.ma_phan || '—'}</div>
         {btMap.has(r.id) && (
           <span title={btMap.get(r.id)} className="mt-1 inline-block"><Badge tone="danger"><Icon name="alert-triangle" size={12} className="mr-1" />Bất thường</Badge></span>
         )}
