@@ -3,33 +3,7 @@
 // (backend `production/dsReleaseSx.js`). Cách hiện chuyền · PO · tên hàng · giờ · thợ in dùng lại bộ cột Danh sách
 // release của Kế hoạch (`cotChecklistRelease`) — không chép luật.
 import { COT_CHECKLIST, maChuyenIn, slReleaseDong } from '../../planning/utils/cotChecklistRelease';
-import { hopChipChuyen, demChip, LOAI_TABS, nhanChip } from '../../../utils/khuChuyen';
-import { chuanMaChuyen } from '../../../utils/maChuyen';
-
-// ─── CHIP RIÊNG CHO 1 CHUYỀN (26/10/2026, người dùng: "cho RB1 ra 1 toggle riêng") ────────────────────────────────
-// Chỉ modal này: chip `CHUYEN:<mã ERP>` lọc đúng 1 chuyền và chuyền đó TÁCH khỏi chip khu chứa nó (RB1 thuộc Bàn khu A)
-//   — xưởng in danh sách RB1 riêng, để cả hai là đếm đôi. Thêm chuyền tách riêng = thêm vào `CHUYEN_RIENG`.
-const CHUYEN_RIENG = [{ ma: 'RB1', label: 'RB1', khu: 'KHU:BAN_A' }];
-export const TABS_DS_RELEASE = (() => {
-  const iMay = LOAI_TABS.findIndex((t) => t.v === 'MAY');
-  return [...LOAI_TABS.slice(0, iMay), ...CHUYEN_RIENG.map((c) => ({ v: `CHUYEN:${c.ma}`, label: c.label })), ...LOAI_TABS.slice(iMay)];
-})();
-const laChuyenRieng = (r, khu) => CHUYEN_RIENG.some((c) => c.khu === khu && chuanMaChuyen(r.ma_chuyen) === c.ma);
-export const hopChipDs = (r, chip) => {
-  if (chip && chip.startsWith('CHUYEN:')) return chuanMaChuyen(r.ma_chuyen) === chip.slice(7);
-  return hopChipChuyen(r, chip) && !(chip && laChuyenRieng(r, chip));
-};
-export const nhanChipDs = (chip) => (TABS_DS_RELEASE.find((t) => t.v === chip) || {}).label || nhanChip(chip);
-// Số trên chip: như `demChip` (đếm DÒNG) + chip chuyền riêng, trừ các dòng đó khỏi chip khu chứa nó.
-export function demChipDs(rows) {
-  const c = demChip(rows);
-  CHUYEN_RIENG.forEach((x) => {
-    const n = (rows || []).filter((r) => chuanMaChuyen(r.ma_chuyen) === x.ma).length;
-    c[`CHUYEN:${x.ma}`] = n;
-    if (c[x.khu] != null) c[x.khu] = Math.max(0, c[x.khu] - n);
-  });
-  return c;
-}
+import { hopChipChuyen } from '../../../utils/khuChuyen';
 
 const tuChecklist = (key) => (COT_CHECKLIST.find((c) => c.key === key) || { value: () => '' }).value;
 const so = (v) => (v == null || v === '' ? 0 : Number(v) || 0);
@@ -87,7 +61,7 @@ export function tieuDeNhom(cols = COT_DS_RELEASE_SX) {
 // `locThem(r)` (26/10/2026) = ô tìm + bộ lọc trường của modal — áp SAU chip, STT đánh lại trên tập còn lại.
 export function locDsRelease(items, chip, themMa = [], locThem = null) {
   const them = new Set(themMa);
-  return (items || []).filter((r) => (hopChipDs(r, chip) || them.has(r.ma_chuyen)) && (!locThem || locThem(r)))
+  return (items || []).filter((r) => (hopChipChuyen(r, chip) || them.has(r.ma_chuyen)) && (!locThem || locThem(r)))
     .map((r, i) => ({ ...r, _stt: i + 1 }));
 }
 

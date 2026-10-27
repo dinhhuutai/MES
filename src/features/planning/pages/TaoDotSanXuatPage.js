@@ -123,7 +123,7 @@ export default function TaoDotSanXuatPage() {
       const skip = res.data?.skipped_test;
       const chuaLuuTho = res.data?.tho_in_chua_luu ? ' · CHƯA lưu thợ in (hệ thống chưa cập nhật cơ sở dữ liệu)' : '';
       if (res.data?.chi_tam) show(`Phần in chưa Ready → đã lưu Kế hoạch tạm (${res.data.ke_hoach_tam_count || 0} đợt). Xác nhận lại ở màn Kế hoạch tạm khi Ready xong.${chuaLuuTho}`, chuaLuuTho ? 'error' : 'success');
-      else show(`${skip ? 'Đã gom đợt vải thành 1 đợt sản xuất — bỏ Test Run (vào thẳng Release 2)' : 'Đã gom đợt vải thành 1 đợt sản xuất — chờ Test Run'}${chuaLuuTho}`, chuaLuuTho ? 'error' : 'success');
+      else show(`${skip ? 'Đã gom đợt vải thành 1 đợt sản xuất — bỏ Test Run (vào thẳng Chờ sản xuất)' : 'Đã gom đợt vải thành 1 đợt sản xuất — chờ Test Run'}${chuaLuuTho}`, chuaLuuTho ? 'error' : 'success');
       setBasket([]); setChuyenId(''); setNgayKeHoach(tomorrowStr()); setGioBd(''); setGioKt(''); setThoIn('');
       load();
     } catch (e) {

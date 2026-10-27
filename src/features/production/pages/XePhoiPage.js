@@ -5,8 +5,9 @@ import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
 import Icon from '../../../components/common/Icon';
 import Toast from '../../../components/common/Toast';
-import ConfirmDialog from '../../../components/common/ConfirmDialog';
-import { Field, Select, Input } from '../../../components/common/controls';
+import { Field, Select, Input, Textarea } from '../../../components/common/controls';
+import NhieuNguoiSelect from '../../../components/common/NhieuNguoiSelect';
+import { listUserOptions } from '../../../services/userService';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import useNow, { fmtRemain } from '../../../hooks/useNow';
@@ -41,6 +42,10 @@ export default function XePhoiPage() {
   const [adjust, setAdjust] = useState(null); // { tem_xe_id, ma_tem } đang chỉnh giờ
   const [adjustMin, setAdjustMin] = useState('60');
   const [kho, setKho] = useState(null); // tem đang hỏi "Xác nhận khô" (khô sớm hơn giờ phơi dự kiến)
+  // Khô SỚM hơn giờ phơi dự kiến ⇒ BẮT BUỘC owner cho khô + lý do (27/10/2026, BE 422 THIEU_OWNER_KHO / THIEU_LY_DO_KHO).
+  const [khoOwner, setKhoOwner] = useState('');
+  const [khoLyDo, setKhoLyDo] = useState('');
+  const [userOpts, setUserOpts] = useState([]);
   const [tim, setTim] = useState('');
   const q = chuanMa(tim);
   const xeHien = !q ? xe : xe
@@ -113,10 +118,16 @@ export default function XePhoiPage() {
 
   // XÁC NHẬN KHÔ TAY (19/10/2026): tem khô sớm / trường hợp ngoài mong muốn ⇒ chuyển ngay sang chờ KCS, không đợi hết
   //   giờ phơi (BE `production.service confirmDry` — kẹp giờ phơi xong về bây giờ + ghi audit `XAC_NHAN_KHO`).
+  const khoSom = !!kho && new Date(kho.tg_kt_phoi).getTime() > now;
+  const moKho = (t) => {
+    setKho(t); setKhoOwner(''); setKhoLyDo('');
+    if (!userOpts.length) listUserOptions({ limit: 500 }).then((r) => setUserOpts(r.data || [])).catch(() => {});
+  };
   const doKho = async () => {
+    if (khoSom && (!khoOwner.trim() || !khoLyDo.trim())) { show('Khô sớm hơn giờ phơi — nhập owner cho khô và lý do', 'error'); return; }
     setSaving(true);
     try {
-      await confirmDry(kho.tem_id);
+      await confirmDry(kho.tem_id, khoSom ? { owner: khoOwner.trim(), lyDo: khoLyDo.trim() } : {});
       show(`Đã xác nhận khô tem ${kho.ma_tem} — tem chuyển sang chờ KCS`);
       setKho(null);
       load(true);
@@ -183,7 +194,7 @@ export default function XePhoiPage() {
                           <span className="flex items-center gap-3">
                             <button onClick={() => openAdjust(t)}
                               className="text-xs font-medium text-primary hover:underline">Chỉnh giờ</button>
-                            <button onClick={() => setKho(t)} title="Tem đã khô — chuyển ngay sang chờ KCS, không đợi hết giờ phơi"
+                            <button onClick={() => moKho(t)} title="Tem đã khô — chuyển ngay sang chờ KCS, không đợi hết giờ phơi"
                               className="text-xs font-semibold text-emerald-700 hover:underline dark:text-emerald-400">Xác nhận khô</button>
                           </span>
                         )}
@@ -264,17 +275,40 @@ export default function XePhoiPage() {
         <p className="text-xs text-ink-soft">Đếm ngược sẽ được đặt lại = bây giờ + số phút nhập.</p>
       </Modal>
 
-      <ConfirmDialog
+      <Modal
         open={!!kho}
-        onClose={() => setKho(null)}
-        onConfirm={doKho}
-        loading={saving}
-        title="Xác nhận khô"
-        confirmText="Xác nhận khô"
-        message={kho
-          ? `Tem ${kho.ma_tem} (${fmtNum(kho.so_luong_phoi)} pcs) đã khô? Tem rời xe phơi và chuyển ngay sang chờ KCS — không đợi hết giờ phơi (còn ${fmtRemain(new Date(kho.tg_kt_phoi).getTime() - now)}).`
-          : ''}
-      />
+        onClose={() => (saving ? null : setKho(null))}
+        size="md"
+        title={`Xác nhận khô — ${kho?.ma_tem || ''}`}
+        footer={(
+          <>
+            <Button chiXemOk variant="ghost" onClick={() => setKho(null)} disabled={saving}>Hủy</Button>
+            <Button onClick={doKho} loading={saving} disabled={khoSom && (!khoOwner.trim() || !khoLyDo.trim())}>Xác nhận khô</Button>
+          </>
+        )}
+      >
+        {kho && (
+          <div className="space-y-3">
+            <p className="text-sm text-ink-soft">
+              Tem <b className="text-ink">{kho.ma_tem}</b> ({fmtNum(kho.so_luong_phoi)} pcs) đã khô? Tem rời xe phơi và chuyển ngay sang chờ KCS.
+            </p>
+            {khoSom && (
+              <>
+                <div className="rounded-control border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
+                  Chưa tới giờ phơi xong — còn <b>{fmtRemain(new Date(kho.tg_kt_phoi).getTime() - now)}</b>. Cho khô sớm phải có owner và lý do.
+                </div>
+                <Field label="Owner cho khô sớm" required>
+                  <NhieuNguoiSelect value={khoOwner} onChange={setKhoOwner} options={userOpts} placeholder="Chọn hoặc gõ tên rồi Enter..." />
+                </Field>
+                <Field label="Lý do" required>
+                  <Textarea rows={2} maxLength={500} value={khoLyDo} onChange={(e) => setKhoLyDo(e.target.value)}
+                    placeholder="Vì sao cho khô sớm (vd: mực khô nhanh, hàng gấp)..." />
+                </Field>
+              </>
+            )}
+          </div>
+        )}
+      </Modal>
 
       <Toast toast={toast} />
     </div>

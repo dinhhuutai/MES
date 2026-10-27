@@ -167,6 +167,28 @@ export default function ChoChayModal({
     else tichNhieu(ds);
     datConTroTim(); // bấm ô tích xong ⇒ con trỏ về ô tìm cho lần quét kế
   };
+  // Ô tích Ở TIÊU ĐỀ (27/10/2026): tích / bỏ MỌI dòng đang hiện. Tích thêm theo thứ tự bảng, trọn dòng, tới trần 1 lượt chạy.
+  const tichHetBang = bang.length > 0 && bang.every(daTichHet);
+  const tichMotPhanBang = !tichHetBang && bang.some((r) => lenhCuaDong(r).some((l) => chonSet.has(l.id)));
+  const doiTichTatCa = () => {
+    if (tichHetBang) {
+      const bo = new Set(bang.flatMap((r) => lenhCuaDong(r).map((l) => l.id)));
+      dat(chon.filter((x) => !bo.has(x)));
+    } else {
+      const moi = [...chon];
+      const co = new Set(moi);
+      let thieuCho = false;
+      for (const r of bang) {
+        const them = lenhCuaDong(r).map((l) => l.id).filter((id) => !co.has(id));
+        if (!them.length) continue;
+        if (moi.length + them.length > TOI_DA_CHAY_MOT_LUOT) { thieuCho = true; break; }
+        them.forEach((id) => { co.add(id); moi.push(id); });
+      }
+      dat(moi);
+      if (thieuCho) toast(`Chỉ tích được tối đa ${TOI_DA_CHAY_MOT_LUOT} lệnh mỗi lần xác nhận chạy`, 'error');
+    }
+    datConTroTim();
+  };
 
   // ENTER ở ô tìm = 1 lần quét.
   const quet = () => {
@@ -226,7 +248,13 @@ export default function ChoChayModal({
   });
 
   const cols = [
-    ...(canRun ? [{ key: 'chon', header: '', selection: true, render: (r) => (
+    ...(canRun ? [{ key: 'chon', selection: true,
+      header: (
+        <input type="checkbox" className="h-4 w-4 cursor-pointer accent-primary" aria-label="Tích tất cả dòng đang hiện"
+          ref={(el) => { if (el) el.indeterminate = tichMotPhanBang; }}
+          checked={tichHetBang} disabled={!bang.length} onChange={doiTichTatCa} />
+      ),
+      render: (r) => (
       <input type="checkbox" className="h-4 w-4 cursor-pointer accent-primary" aria-label="Tích để xác nhận chạy"
         ref={(el) => { if (el) el.indeterminate = tichMotPhan(r); }}
         checked={daTichHet(r)} onChange={() => doiTich(r)} />

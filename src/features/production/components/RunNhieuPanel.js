@@ -447,7 +447,7 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh, t
       const thieu = thieuNgayCaCt(temMeta);
       if (thieu) { show(thieu, 'error'); return; }
       // Lệnh chưa LƯU phân công có thợ in (hoặc ca này chuyền chưa phân công) ⇒ không in (gương BE `kiemThoInPhanCong`).
-      const chuaTho = inTem.map((g) => g.run).filter((r) => chuaPhanCongThoIn(r?.phan_cong));
+      const chuaTho = inTem.map((g) => g.run).filter((r) => chuaPhanCongThoIn(r?.phan_cong, toInDs.length > 0));
       if (chuaTho.length) {
         show(`${CHUA_THO_IN}: ${chuaTho.map(tenLenh).join(', ')}`, 'error');
         return;

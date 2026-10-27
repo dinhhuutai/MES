@@ -211,13 +211,16 @@ export default function TestRunPanel({ lenhId, onClose, onChanged, truocXacNhan,
     }
   };
 
-  // Không test run → bỏ Test Run, duyệt thẳng Release 2 (đợt SX vào chờ sản xuất).
+  // Không test run → bỏ Test Run, duyệt thẳng Release 2 (đợt SX vào chờ sản xuất). Phần in đang có lệnh CHẠY ⇒ BE cộng
+  // thẳng số lượng vào lệnh đó (27/10/2026, `cong_vao_lenh_chay`).
   const doSkip = async () => {
     if (truocXacNhan && !(await truocXacNhan())) return;
     setBusy('skip');
     try {
-      await skipTestRun(lenhId);
-      show('Đã bỏ Test Run — đợt sản xuất vào danh sách chờ sản xuất');
+      const res = await skipTestRun(lenhId);
+      const cv = res?.data?.cong_vao_lenh_chay;
+      show(cv ? `Đã bỏ Test Run — cộng thẳng số lượng vào lệnh đang chạy ${cv.ma_lenh}`
+        : 'Đã bỏ Test Run — đợt sản xuất vào danh sách chờ sản xuất');
       onChanged?.();
       onClose?.();
     } catch (e) {

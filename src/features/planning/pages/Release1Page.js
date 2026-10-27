@@ -411,7 +411,11 @@ export default function Release1Page() {
       const tam = res?.data?.ke_hoach_tam_count || 0;
       const tamMsg = tam > 0 ? ` · ${tam} phần chưa Ready → lưu Kế hoạch tạm` : '';
       if (res?.data?.chi_tam) show(`${tam} phần chưa Ready → đã lưu Kế hoạch tạm (xác nhận lại khi Ready xong)${canhBaoThoIn(res)}`, 'success');
-      else show((skipped > 0 ? `Đã tạo lệnh — ${skipped} đợt vải vào thẳng Release 2` : 'Đã Release 1 — tạo lệnh sản xuất') + tamMsg + canhBaoThoIn(res));
+      else {
+        const chinh = skipped > 0 ? `Đã tạo lệnh — ${skipped} lệnh bỏ Test Run, vào thẳng Chờ sản xuất`
+          : 'Đã Release 1 — tạo lệnh sản xuất';
+        show(chinh + tamMsg + canhBaoThoIn(res));
+      }
       setSelected((s) => { const n = { ...s }; dotVaiIds.forEach((id) => delete n[id]); return n; });
       setDetail(null);
       load();

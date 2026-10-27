@@ -191,6 +191,29 @@ export default function XacNhanChayPage() {
     setChonRun((c) => (boHet ? c.filter((x) => !ids.includes(x)) : [...ids, ...c.filter((x) => !ids.includes(x))]));
     oTim.datConTro();
   };
+  // Ô tích Ở TIÊU ĐỀ bảng Đang chạy (27/10/2026): tích / bỏ MỌI dòng đang hiện — tích thêm theo thứ tự bảng, trọn dòng
+  //   (dòng gom = mọi lệnh của nó), tới trần "mở chung" TOI_DA_MO_CHUNG.
+  const tichHetRun = bangRun.length > 0 && bangRun.every(daTichDong);
+  const tichMotPhanRun = !tichHetRun && bangRun.some((r) => lenhCuaDong(r).some((l) => chonRunSet.has(l.phieu_id)));
+  const doiTichTatCaRun = () => {
+    if (tichHetRun) {
+      const bo = new Set(bangRun.flatMap((r) => lenhCuaDong(r).map((l) => l.phieu_id)));
+      setChonRun((c) => c.filter((x) => !bo.has(x)));
+    } else {
+      const moi = [...chonRun];
+      const co = new Set(moi);
+      let thieuCho = false;
+      for (const r of bangRun) {
+        const them = lenhCuaDong(r).map((l) => l.phieu_id).filter((id) => !co.has(id));
+        if (!them.length) continue;
+        if (moi.length + them.length > TOI_DA_MO_CHUNG) { thieuCho = true; break; }
+        them.forEach((id) => { co.add(id); moi.push(id); });
+      }
+      setChonRun(moi);
+      if (thieuCho) show(`Chỉ chọn được tối đa ${TOI_DA_MO_CHUNG} lệnh mỗi lần mở chung`, 'error');
+    }
+    oTim.datConTro();
+  };
   // ⚠ 26/10/2026 (người dùng: "gom số lượng đợt vải nếu giống code phần thì hiện modal sản xuất như 1 phần"): các
   //   lệnh ĐANG CHẠY cùng code phần + cùng chuyền ⇒ GỘP THẬT thành 1 lệnh (`POST /production/gop-lenh`, luật 25/10)
   //   rồi mở `RunPanel` của lệnh đích — như 1 phần in. Gộp lỗi (vd lệnh vừa đổi trạng thái) ⇒ lùi về sidebar nhiều lệnh.
@@ -440,7 +463,13 @@ export default function XacNhanChayPage() {
 
   const runCols = [
     // Ô tích (selection — DataTable vẽ ở dòng đầu bản ghi, chặn click mở panel): gom lệnh để "Mở (N)" chung.
-    { key: 'chon', header: '', selection: true, render: (r) => (
+    { key: 'chon', selection: true,
+      header: (
+        <input type="checkbox" className="h-4 w-4 cursor-pointer accent-primary" aria-label="Chọn tất cả dòng đang hiện"
+          ref={(el) => { if (el) el.indeterminate = tichMotPhanRun; }}
+          checked={tichHetRun} disabled={!bangRun.length} onChange={doiTichTatCaRun} />
+      ),
+      render: (r) => (
       <input type="checkbox" className="h-4 w-4 cursor-pointer accent-primary" aria-label="Chọn để mở chung"
         checked={daTichDong(r)} onChange={() => doiTichRun(r)} />
     ) },

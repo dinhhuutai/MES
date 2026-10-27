@@ -48,10 +48,16 @@ export const thuocKhu = (maChuyen, khuKey) => !!khuKey && khuCuaChuyen(maChuyen)
 //   Bỏ đi cũng làm Σ các chip bớt vênh so với chip "Tất cả" (xem ghi chú ở `demChip`).
 // ⚠ KHÔNG đụng `loai_chuyen='ROBOT'` trong DB và KHÔNG đụng `hopChipChuyen`/`locSiSoTheoChip` — chúng
 //   vẫn hiểu giá trị `'ROBOT'`, chỉ là không còn chip nào phát ra giá trị đó nữa.
+// ⚠ CHIP 1 CHUYỀN RIÊNG (26/10/2026, người dùng: "RB1→RB3 là của khu A, thêm 1 toggle cho Robot 1; chỗ nào có toggle
+//   theo khu chuyền thì sửa như vậy"): chip `CHUYEN:<mã ERP>` lọc đúng 1 chuyền (so qua `chuanMaChuyen` — khớp cả
+//   `MRB1`). Chuyền đó VẪN nằm trong chip khu của nó (Robot 1 vẫn thuộc Bàn khu A) — giống chip "Bàn" tổng chồng lên
+//   các chip khu. Thêm chuyền tách riêng = thêm vào đây; mọi màn dùng dải chip này tự có.
+export const CHUYEN_RIENG = [{ ma: 'RB1', label: 'Robot 1' }];
 export const LOAI_TABS = [
   { v: '', label: 'Tất cả' },
   { v: 'BAN', label: 'Bàn' },
   ...KHU_BAN.map((k) => ({ v: `KHU:${k.key}`, label: k.label, khu: k.key })),
+  ...CHUYEN_RIENG.map((c) => ({ v: `CHUYEN:${c.ma}`, label: c.label, chuyen: c.ma })),
   { v: 'MAY', label: 'Máy' },
   // Máy tròn (mig 110, 02/10/2026) — loại chuyền mới, nhóm "MT" của Báo cáo sản xuất.
   { v: 'MAY_TRON', label: 'Máy tròn' },
@@ -77,6 +83,7 @@ export const LOAI_TABS_TACH_ROBOT = [
 // 1 hàng có khớp chip đang chọn không: chip khu lọc theo `ma_chuyen`, còn lại theo `ma_loai_chuyen`.
 export const hopChipChuyen = (row, v, { tachRobot = false } = {}) => {
   if (!v) return true;
+  if (v.startsWith('CHUYEN:')) return chuanMaChuyen(row.ma_chuyen) === v.slice(7);
   if (v.startsWith('KHU:')) return thuocKhu(row.ma_chuyen, v.slice(4)) && !(tachRobot && laChuyenRobot(row));
   return row.ma_loai_chuyen === v;
 };
@@ -89,6 +96,7 @@ export const hopChipChuyen = (row, v, { tachRobot = false } = {}) => {
 //   đó, sẽ khớp rỗng và dải số ra 0 trong khi bảng vẫn đầy hàng.
 export const locSiSoTheoChip = (v, { tachRobot = false } = {}) => {
   if (!v) return {};
+  if (v.startsWith('CHUYEN:')) return { maChuyen: v.slice(7) };
   if (v.startsWith('KHU:')) {
     const khu = KHU_BAN.find((k) => k.key === v.slice(4));
     if (!khu) return {};
@@ -128,6 +136,8 @@ export const demChip = (rows, layKhoa = null, { tachRobot = false } = {}) => {
     if (x.ma_loai_chuyen) them(x.ma_loai_chuyen, khoa);
     const k = khuCuaChuyen(x.ma_chuyen);
     if (k && !(tachRobot && laChuyenRobot(x))) them(`KHU:${k}`, khoa);
+    const ma = chuanMaChuyen(x.ma_chuyen);
+    if (CHUYEN_RIENG.some((c) => c.ma === ma)) them(`CHUYEN:${ma}`, khoa);
   });
   return Object.fromEntries(Object.entries(set).map(([k, v]) => [k, v.size]));
 };

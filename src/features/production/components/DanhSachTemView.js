@@ -666,13 +666,14 @@ function SuaTemModal({ tem, onClose, onDaLuu, show }) {
   const [gioBd, setGioBd] = useState('');
   const [gioKt, setGioKt] = useState('');
   const [maCa, setMaCa] = useState('');
+  const [ngayCt, setNgayCt] = useState('');
   const [lyDo, setLyDo] = useState('');
   const [dangLuu, setDangLuu] = useState(false);
   const [loi, setLoi] = useState('');
   useEffect(() => {
     if (!tem) return;
     setSl(String(tem.so_luong ?? '')); setGioBd(tem.gio_sx_bd || ''); setGioKt(tem.gio_sx_kt || '');
-    setMaCa(tem.ma_ngay_ca || ''); setLyDo(''); setLoi('');
+    setMaCa(tem.ma_ngay_ca || ''); setNgayCt(tem.ngay_ct || ''); setLyDo(''); setLoi('');
   }, [tem]);
   if (!tem) return null;
   const khoaSl = !!tem.da_kiem;
@@ -683,6 +684,9 @@ function SuaTemModal({ tem, onClose, onDaLuu, show }) {
   if ((gioBd || '') !== (tem.gio_sx_bd || '')) body.gioBd = gioBd || null;
   if ((gioKt || '') !== (tem.gio_sx_kt || '')) body.gioKt = gioKt || null;
   if (maCa && maCa !== (tem.ma_ngay_ca || '')) body.maNgayCa = maCa;
+  // Ngày chứng từ = ngày CT của phiếu in tem đã gửi ERP (27/10/2026) — tem chưa gửi ERP thì không sửa được.
+  const coNgayCt = !!tem.ngay_ct;
+  if (coNgayCt && ngayCt && ngayCt !== tem.ngay_ct) body.ngayCt = ngayCt;
   const coDoi = Object.keys(body).length > 0;
 
   const luu = async () => {
@@ -719,6 +723,10 @@ function SuaTemModal({ tem, onClose, onDaLuu, show }) {
             className={caSai ? 'border-danger' : ''} placeholder="YYMMDD + C1/C2/C3/D1/D2/HC" />
         </Field>
         {caSai && <p className="-mt-2 text-xs text-danger">Mã ngày ca phải đúng 8 ký tự: YYMMDD + C1·C2·C3·D1·D2·HC</p>}
+        <Field label="Ngày chứng từ (gửi ERP)">
+          <Input type="date" value={ngayCt} disabled={!coNgayCt} onChange={(e) => setNgayCt(e.target.value)} />
+        </Field>
+        {!coNgayCt && <p className="-mt-2 text-xs text-ink-soft">Tem chưa gửi phiếu in tem sang ERP — chưa có ngày chứng từ để sửa.</p>}
         <Field label="Lý do sửa" required>
           <Textarea rows={2} value={lyDo} onChange={(e) => setLyDo(e.target.value)} placeholder="Vì sao sửa tem (vd: nhập nhầm số lượng / ca)..." />
         </Field>

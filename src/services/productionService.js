@@ -123,7 +123,9 @@ export const chayDacBiet = (lenhId, body) => client.post(`/production/chay-dac-b
 
 // Chờ khô
 export const listDrying = (params) => client.get('/production/drying', { params });
-export const confirmDry = (temId) => client.post(`/production/drying/${temId}/confirm`);
+export const confirmDry = (temId, body = {}) => client.post(`/production/drying/${temId}/confirm`, body);
+// Báo cáo tem KCS kiểm trước giờ phơi xong dự kiến (27/10/2026).
+export const listKiemTruocKho = (params) => client.get('/production/kiem-truoc-kho', { params });
 // Phơi lại 1 tem (từ KCS)
 export const redryTem = (temId, phut) => client.post(`/production/tem/${temId}/phoi-lai`, { phut });
 // Hủy ngay tại "Tem đã in" của màn Xác nhận chạy (14/10/2026) — lý do bắt buộc; backend hủy tem rồi báo ERP hủy theo IDMES.

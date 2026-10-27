@@ -13,6 +13,17 @@ import Pagination from './Pagination';
 //   trường của phần in. Cột `merge` (+ STT + ô chọn) chỉ vẽ Ở DÒNG ĐẦU với `rowSpan`. Phân trang/STT vẫn
 //   đếm theo BẢN GHI (1 lệnh = 1 STT) — đúng ý "hợp nhất ô ở STT".
 // Responsive: md+ hiển thị dạng BẢNG; dưới md tự đổi sang dạng THẺ (card) cho mobile/tablet.
+
+// Kéo chuột BÔI ĐEN chữ trong dòng (để chép) thì nhả chuột KHÔNG mở panel của dòng (27/10/2026 — màn READY bấm vào là
+// hiện modal nên không chép được). Bấm thường thì vùng chọn đã thu về 1 điểm lúc nhấn chuột ⇒ vẫn mở như cũ.
+function dangBoiDen(e) {
+  try {
+    const s = window.getSelection && window.getSelection();
+    if (!s || s.isCollapsed || !String(s).trim()) return false;
+    return !!(e && e.currentTarget && s.anchorNode && e.currentTarget.contains(s.anchorNode));
+  } catch { return false; }
+}
+
 export default function DataTable({ columns, rows, loading, rowKey = 'id', emptyText = 'Không có dữ liệu', onRowClick, sttStart, rowClassName, pageSize = 20, subRows }) {
   const allRows = rows || [];
   const clientPaged = pageSize > 0 && allRows.length > pageSize;
@@ -79,7 +90,7 @@ export default function DataTable({ columns, rows, loading, rowKey = 'id', empty
     const subs = subsOf(row);
     const n = subs ? subs.length : 1;
     const lines = subs || [null];
-    const onClick = onRowClick ? () => onRowClick(row) : undefined;
+    const onClick = onRowClick ? (e) => { if (!dangBoiDen(e)) onRowClick(row); } : undefined;
     const cls = `border-b border-line/70 transition hover:bg-surface-muted/40 ${onRowClick ? 'cursor-pointer' : ''} ${rowClassName ? rowClassName(row) : ''}`;
     return lines.map((sub, j) => {
       const r = sub ? { ...row, ...sub } : row;      // dòng con ghi đè trường của phần in
@@ -144,7 +155,7 @@ export default function DataTable({ columns, rows, loading, rowKey = 'id', empty
             const labelCols = restCols.filter((c) => c.header);
             const actionCols = restCols.filter((c) => !c.header);
             return (
-              <div key={row[rowKey]} onClick={onRowClick ? () => onRowClick(row) : undefined}
+              <div key={row[rowKey]} onClick={onRowClick ? (e) => { if (!dangBoiDen(e)) onRowClick(row); } : undefined}
                 className={`card p-3.5 ${onRowClick ? 'cursor-pointer active:bg-surface-muted/60' : ''} ${rowClassName ? rowClassName(row) : ''}`}>
                 {(selCols.length > 0 || showStt) && (
                   <div className="mb-2 flex items-center justify-between gap-2">

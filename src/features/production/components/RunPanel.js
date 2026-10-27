@@ -97,7 +97,7 @@ export const thieuNgayCaCt = (m) => {
   if (thieu.length) return `Chưa nhập ${thieu.join(' và ')} — nhập 1 lần đầu ca rồi mới in tem được`;
   return maNgayCaSai(m?.ngayCa);
 };
-export const CHUA_THO_IN = 'Chưa phân công thợ in — chọn thợ in ở khối Phân công rồi bấm Lưu trước khi in tem';
+export const CHUA_THO_IN = 'Chưa phân công thợ in / tổ in — chọn thợ in và tổ in ở khối Phân công rồi bấm Lưu trước khi in tem';
 // Phân công chưa đủ để in tem: chưa có thợ in, hoặc ca này chuyền chưa phân công (gương BE `kiemThoInPhanCong`).
 // TẢI NGẦM khi lệnh đang mở đổi ở MÁY KHÁC (21/10/2026): sidebar trước đây chỉ tải lúc mở ⇒ chuyền vừa được phân
 //   công ở máy khác mà máy này vẫn hiện "chưa phân công + Lưu phân công" (khóa In tem). Nghe `production:updated`,
@@ -121,7 +121,9 @@ export function useTaiNgamKhiLenhDoi(lenhIds, taiLai) {
   }, [khoa]);
 }
 
-export const chuaPhanCongThoIn = (pc) =>!!pc?.can_phan_cong_lai || !String(pc?.tho_in || '').trim();
+// `coToIn` = danh mục tổ in đang có tổ (27/10/2026: thiếu TỔ IN cũng khóa in tem — gương BE `CHUA_PHAN_CONG_TO_IN`).
+export const chuaPhanCongThoIn = (pc, coToIn = false) => !!pc?.can_phan_cong_lai || !String(pc?.tho_in || '').trim()
+  || (coToIn && !pc?.to_in_id);
 // Đưa gợi ý của BE vào ô: chỉ điền ô người dùng CHƯA gõ; lượt ca đã đổi so với lúc gõ ⇒ bỏ ngày ca / ngày chứng
 // từ của ca cũ trước (để trống lại cho ca mới).
 export const apGoiYTem = (m, g) => {
@@ -657,7 +659,7 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
   const coGomSet = !!data?.co_gom_set;
   // Chưa LƯU phân công có thợ in ⇒ khóa In tem 15|16 (18/10/2026, gương BE `kiemThoInPhanCong` — thợ in kế hoạch
   // chỉ điền sẵn ô, không tính). 19/10/2026: sang ca mới mà chuyền chưa phân công (`can_phan_cong_lai`) cũng khóa.
-  const chuaThoIn = !!data && chuaPhanCongThoIn(data.phan_cong);
+  const chuaThoIn = !!data && chuaPhanCongThoIn(data.phan_cong, toInDs.length > 0);
 
   const load = useCallback(async () => {
     setLoading(true);

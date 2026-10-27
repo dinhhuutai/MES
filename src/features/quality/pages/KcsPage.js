@@ -35,12 +35,17 @@ import exportCheckpointExcel, { cotTemChung, moTaBoLoc } from '../../../utils/ex
 import useNow from '../../../hooks/useNow';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 import useLyDoNghen from '../../../hooks/useLyDoNghen';
+import VuaQuet from '../../../components/common/VuaQuet';
+import KcsNhieuModal, { danhGiaKcs } from '../components/KcsNhieuModal';
+import KiemTruocKhoModal from '../components/KiemTruocKhoModal';
 import { trangThaiSla } from '../../../utils/nghen';
 
 // ⚠ ĐÃ BỎ 2 Ô `soLuongSua` (Quyết định sửa) + `soLuongHuy` (Số lượng hủy) — chốt 04/09/2026:
 //   KCS chỉ chốt ĐẠT/HƯ, việc chia HƯ thành sửa–hủy làm ở trang *Sản xuất › Phân loại lỗi* (mig 075,
 //   "con số ở đó là CHÍNH THỨC"). Backend vẫn nhận 2 khóa này để tương thích ngược — xem `recordKcs`.
-const empty = { soLuongDat: '', soLuongHu: '', soLuongThieu: '', soLuongDu: '', soLuongMau: '' };
+const empty = { soLuongDat: '', soLuongHu: '', soLuongThieu: '', soLuongDu: '', soLuongMau: '', kiemMotPhan: false };
+// Tối đa số tem tích để xác nhận 1 lượt (27/10/2026) — mỗi tem 1 lần gọi recordKcs tuần tự.
+const TOI_DA_TICH = 100;
 
 const FILTER_FIELDS = [
   { key: 'khach', label: 'Khách hàng' },
@@ -98,16 +103,26 @@ export default function KcsPage() {
 
   const [journey, setJourney] = useState(null); // { temId, maTem } — panel hành trình
   const [scanOpen, setScanOpen] = useState(false);
-  const [selected, setSelected] = useState(() => new Set()); // tem_id đã chọn để GỘP
+  // TEM ĐÃ TÍCH (27/10/2026): mảng dòng theo thứ tự tích — mới quét lên ĐẦU. Dùng cho "Xác nhận KCS (N)" (modal nhiều tem)
+  //   và "Gộp tem". Giữ bản dòng lúc tích ⇒ dòng đã tích luôn hiện (ghim đầu bảng) kể cả khi bộ lọc / ô tìm loại nó.
+  const [chon, setChon] = useState([]);
+  const selected = useMemo(() => new Set(chon.map((r) => r.tem_id)), [chon]);
+  const [vuaQuet, setVuaQuet] = useState(null);
+  const [nhieuOpen, setNhieuOpen] = useState(false);
+  const [kiemTruocOpen, setKiemTruocOpen] = useState(false);
   const [gopOpen, setGopOpen] = useState(false);
   const [targetId, setTargetId] = useState('');
   const [gopping, setGopping] = useState(false);
 
-  const viewRows = onlyReturned ? locTraVe(rows, traVeRange) : rows;
-  const toggleOne = (id) => setSelected((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  // Dòng đã tích lấy bản MỚI từ danh sách (số còn kiểm cập nhật theo socket), không còn thì giữ bản lúc tích.
+  const rowById = useMemo(() => new Map(rows.map((r) => [r.tem_id, r])), [rows]);
+  const selectedRows = useMemo(() => chon.map((c) => rowById.get(c.tem_id) || c), [chon, rowById]);
+  const baseRows = onlyReturned ? locTraVe(rows, traVeRange) : rows;
+  const viewRows = [...selectedRows, ...baseRows.filter((r) => !selected.has(r.tem_id))];
+  const toggleOne = (row) => setChon((c) => (c.some((x) => x.tem_id === row.tem_id)
+    ? c.filter((x) => x.tem_id !== row.tem_id) : [...c, row]));
   const allSelected = viewRows.length > 0 && viewRows.every((r) => selected.has(r.tem_id));
-  const toggleAll = () => setSelected(() => (allSelected ? new Set() : new Set(viewRows.map((r) => r.tem_id))));
-  const selectedRows = viewRows.filter((r) => selected.has(r.tem_id));
+  const toggleAll = () => setChon(() => (allSelected ? [] : viewRows.slice(0, TOI_DA_TICH)));
   const gopMixedPhanIn = selectedRows.length > 1 && new Set(selectedRows.map((r) => r.ma_phan)).size > 1;
 
   const openGop = () => {
@@ -120,7 +135,7 @@ export default function KcsPage() {
     try {
       const r = await gopTem({ targetTemId: targetId, sourceTemIds: sources });
       show(`Đã gộp ${r.data.so_tem_gop} tem vào ${r.data.ma_tem} · +${fmtNum(r.data.sl_gop_them)} pcs → SL mới ${fmtNum(r.data.so_luong_moi)}`);
-      setGopOpen(false); setSelected(new Set()); load();
+      setGopOpen(false); setChon([]); load();
     } catch (e) {
       show(e.message || 'Gộp tem thất bại', 'error');
     } finally {
@@ -232,6 +247,7 @@ export default function KcsPage() {
   // ⚠ Quy ước dấu GIỮ NGUYÊN như sổ cái đang chạy (`sl_chenh_lech` = dư − thiếu): **dư làm TĂNG** tổng
   //   cần kiểm, **thiếu làm GIẢM**. Đổi dấu ở đây là lệch với `addKcsLedger` ⇒ sai tổng cần kiểm về sau.
   // ⚠ `mẫu` CỐ Ý không vào công thức — nó là hàng lấy ra làm mẫu, không thuộc số kiểm (luật cũ, giữ).
+  // "Kiểm một phần" (27/10/2026): kiểm trước một phần, phần còn lại tem ở lại màn KCS — luật GƯƠNG BE (`danhGiaKcs`).
   const canDoi = useMemo(() => {
     const n = (v) => Math.max(0, Math.trunc(Number(v) || 0));
     const canKiem = Number(editing?.con_kcs ?? editing?.so_luong ?? 0) || 0;
@@ -239,7 +255,9 @@ export default function KcsPage() {
     const thieu = n(form.soLuongThieu); const du = n(form.soLuongDu);
     const tong = canKiem + du - thieu;
     const daNhap = dat + hu;
-    return { canKiem, dat, hu, thieu, du, tong, daNhap, lech: daNhap - tong, can: daNhap === tong && daNhap > 0 };
+    const motPhan = form.kiemMotPhan ? danhGiaKcs(canKiem, form) : null;
+    return { canKiem, dat, hu, thieu, du, tong, daNhap, lech: daNhap - tong, motPhan,
+      can: motPhan ? motPhan.ok : (daNhap === tong && daNhap > 0) };
   }, [editing, form]);
 
   // Quét QR (ma_tem) → tra tem đang chờ KCS → mở modal nhập.
@@ -256,6 +274,49 @@ export default function KcsPage() {
       if (row) open(row);
       else show(`Tem ${code} không có phần chờ KCS`, 'error');
     } catch (e) { show(e.message || 'Không tra được tem', 'error'); }
+  };
+
+  // QUÉT LIÊN TỤC ĐỂ TÍCH (27/10/2026): đầu đọc gõ mã + Enter ở ô tìm ⇒ tem chờ KCS khớp được TÍCH + lên ĐẦU bảng, ô tự
+  //   xóa, con trỏ ở lại ⇒ quét tiếp; xong bấm "Xác nhận KCS (N)" mở modal nhập nhiều tem. Khớp mã như nút Quét QR.
+  const quetKcs = async (giaTri) => {
+    const code = String(giaTri || '').trim();
+    setSearch('');
+    oTim.datConTro();
+    if (!code) return;
+    try {
+      const res = await listKcsCandidates({ search: code });
+      const row = timTheoMaTem(res.data || [], code);
+      if (!row) {
+        setVuaQuet({ ma: code, tone: 'loi', chu: 'Không có tem chờ KCS khớp mã này' });
+        show(`Tem ${code} không có phần chờ KCS`, 'error');
+        return;
+      }
+      if (selected.has(row.tem_id)) {
+        setChon((c) => [row, ...c.filter((x) => x.tem_id !== row.tem_id)]);
+        setVuaQuet({ ma: code, tone: 'info', chu: `${row.ma_tem} đã tích từ trước` });
+        return;
+      }
+      if (chon.length >= TOI_DA_TICH) {
+        setVuaQuet({ ma: code, tone: 'loi', chu: `Tối đa ${TOI_DA_TICH} tem mỗi lượt xác nhận` });
+        return;
+      }
+      setChon((c) => [row, ...c]);
+      setVuaQuet({ ma: code, tone: 'ok', chu: `Đã tích ${row.ma_tem} · ${row.ma_phan || row.ma_hang || ''} · còn kiểm ${fmtNum(row.con_kcs)}` });
+    } catch (e) {
+      setVuaQuet({ ma: code, tone: 'loi', chu: e.message || 'Không tra được tem' });
+    }
+  };
+  // Modal nhiều tem lưu xong: bỏ tích dòng đã lưu; hết lỗi ⇒ đóng modal, con trỏ về ô tìm.
+  const sauKcsNhieu = (okIds, loi) => {
+    setChon((c) => c.filter((x) => !okIds.includes(x.tem_id)));
+    load(true);
+    if (!loi.length) {
+      show(`Đã xác nhận KCS ${okIds.length} tem`);
+      setNhieuOpen(false);
+      oTim.datConTro();
+    } else {
+      show(`Đã lưu ${okIds.length}/${okIds.length + loi.length} tem — lỗi: ${loi.join(', ')}`, 'error');
+    }
   };
 
   const doRedry = async () => {
@@ -275,7 +336,7 @@ export default function KcsPage() {
 
   const save = async () => {
     // Chốt chặn thật ở backend (422 LECH_CAN_DOI); đây chỉ để khỏi bắn request chắc chắn hỏng.
-    if (!canDoi.can) { show('Chênh lệch phải bằng 0 mới lưu được', 'error'); return; }
+    if (!canDoi.can) { show(canDoi.motPhan ? canDoi.motPhan.chu : 'Chênh lệch phải bằng 0 mới lưu được', 'error'); return; }
     if (!(await hoiLyDoNghen([editing]))) return; // tem quá SLA ⇒ nhập lý do nghẽn (mig 106)
     setSaving(true);
     try {
@@ -300,7 +361,7 @@ export default function KcsPage() {
       header: <input type="checkbox" aria-label="Chọn tất cả" checked={allSelected} onChange={toggleAll} />,
       render: (r) => (
         <input type="checkbox" aria-label="Chọn tem" checked={selected.has(r.tem_id)}
-          onClick={(e) => e.stopPropagation()} onChange={() => toggleOne(r.tem_id)} />
+          onClick={(e) => e.stopPropagation()} onChange={() => toggleOne(r)} />
       ) },
     { key: 'ma_tem', header: 'Tem', render: (r) => (
       <div>
@@ -348,8 +409,15 @@ export default function KcsPage() {
   return (
     <div>
       <Toolbar title="KCS — Kiểm tra chất lượng" subtitle="Kiểm theo tem (tem đã khô)"
-        search={search} onSearch={setSearch} searchPlaceholder="Quét/nhập mã tem..." searchRef={oTim.ref}>
+        search={search} onSearch={setSearch} searchRef={oTim.ref} onSearchEnter={canKcs ? quetKcs : undefined}
+        searchPlaceholder="Quét mã tem rồi Enter để tích — gõ để tìm...">
         {canKcs && <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét QR</Button>}
+        {canKcs && chon.length > 0 && (
+          <Button icon="check-circle" onClick={() => setNhieuOpen(true)}>Xác nhận KCS ({chon.length})</Button>
+        )}
+        {chon.length > 0 && (
+          <Button chiXemOk variant="ghost" icon="x" onClick={() => setChon([])}>Bỏ tích</Button>
+        )}
         {canKcs && selected.size >= 2 && (
           <Button variant="secondary" icon="git-branch" onClick={openGop}>Gộp tem ({selected.size})</Button>
         )}
@@ -367,10 +435,12 @@ export default function KcsPage() {
         <Button chiXemOk variant="secondary" icon="download" onClick={doExcel} disabled={!viewRows.length}>
           Excel ({viewRows.length})
         </Button>
+        <Button chiXemOk variant="ghost" icon="clock" onClick={() => setKiemTruocOpen(true)}>Kiểm trước giờ phơi</Button>
         <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
         <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         <Badge tone="warning">{rows.length} tem chờ kiểm</Badge>
       </Toolbar>
+      <VuaQuet ket={vuaQuet} className="mb-3" />
 
       {showFilters && (
         <div className="mb-3 card p-4">
@@ -428,11 +498,17 @@ export default function KcsPage() {
           {editing?.ma_lenh_san_xuat} · {editing?.phan_list} · SL in {fmtNum(editing?.so_luong)}
           <span className="ml-1 font-semibold text-primary">· còn cần kiểm {fmtNum(editing?.con_kcs)}</span>
         </div>
+        <label className="mb-3 flex cursor-pointer items-center gap-2 rounded-control border border-line px-3 py-2 text-sm">
+          <input type="checkbox" checked={!!form.kiemMotPhan}
+            onChange={(e) => setForm((f) => ({ ...f, kiemMotPhan: e.target.checked,
+              ...(e.target.checked ? { soLuongThieu: '', soLuongDu: '' } : {}) }))} />
+          <span><b>Kiểm một phần</b> <span className="text-ink-soft">— kiểm trước một phần, số còn lại tem ở lại màn KCS kiểm sau</span></span>
+        </label>
         <div className="grid grid-cols-2 gap-x-4">
           {N({ f: 'soLuongDat', label: 'Số lượng đạt' })}
           {N({ f: 'soLuongHu', label: 'Số lượng hư' })}
-          {N({ f: 'soLuongThieu', label: 'Số lượng thiếu' })}
-          {N({ f: 'soLuongDu', label: 'Số lượng dư' })}
+          {!form.kiemMotPhan && N({ f: 'soLuongThieu', label: 'Số lượng thiếu' })}
+          {!form.kiemMotPhan && N({ f: 'soLuongDu', label: 'Số lượng dư' })}
           {N({ f: 'soLuongMau', label: 'Số lượng mẫu (không tính)' })}
         </div>
 
@@ -452,10 +528,12 @@ export default function KcsPage() {
               {' = '}<b className="text-ink">{fmtNum(canDoi.daNhap)}</b>
             </span>
           </div>
-          <div className={`mt-1 font-semibold ${canDoi.can ? 'text-success' : 'text-danger'}`}>
-            {canDoi.can
-              ? '✓ Chênh lệch 0 — cân đối, lưu được'
-              : `Chênh lệch ${canDoi.lech > 0 ? '+' : ''}${fmtNum(canDoi.lech)} — chưa lưu được`}
+          <div className={`mt-1 font-semibold ${canDoi.can ? (canDoi.motPhan ? 'text-amber-700 dark:text-amber-400' : 'text-success') : 'text-danger'}`}>
+            {canDoi.motPhan
+              ? `${canDoi.motPhan.ok ? '✓ ' : ''}${canDoi.motPhan.chu}`
+              : canDoi.can
+                ? '✓ Chênh lệch 0 — cân đối, lưu được'
+                : `Chênh lệch ${canDoi.lech > 0 ? '+' : ''}${fmtNum(canDoi.lech)} — chưa lưu được`}
           </div>
         </div>
 
@@ -563,6 +641,9 @@ export default function KcsPage() {
       )}
 
       <QrScanner open={scanOpen} onClose={() => setScanOpen(false)} onResult={onScan} />
+      <KcsNhieuModal open={nhieuOpen} rows={selectedRows} onClose={() => { setNhieuOpen(false); oTim.datConTro(); }}
+        onXong={sauKcsNhieu} truocXacNhan={(rs) => hoiLyDoNghen(rs)} show={show} />
+      <KiemTruocKhoModal open={kiemTruocOpen} onClose={() => setKiemTruocOpen(false)} />
 
       <TraVeListModal open={traVeOpen} onClose={() => setTraVeOpen(false)}
         tenMan="KCS" loais={TRA_VE_THEO_MAN.SX_KCS} tenFile="tra-ve-kcs" />
