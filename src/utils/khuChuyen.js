@@ -74,10 +74,13 @@ export const MA_CHUYEN_ROBOT = ['RB1', 'RB2', 'RB3'];
 const laChuyenRobot = (row) => row?.ma_loai_chuyen === 'ROBOT'
   || MA_CHUYEN_ROBOT.includes(chuanMaChuyen(row?.ma_chuyen));
 
+// ⚠ 28/10/2026 (người dùng: "bỏ toggle Robot 1 ở Test Run"): màn này đã có chip "Robot" tổng ⇒ BỎ chip chuyền riêng
+//   (`CHUYEN:…`). Các màn khác vẫn có chip Robot 1.
+const TABS_KHONG_CHUYEN_RIENG = LOAI_TABS.filter((t) => !t.v.startsWith('CHUYEN:'));
 export const LOAI_TABS_TACH_ROBOT = [
-  ...LOAI_TABS.slice(0, LOAI_TABS.findIndex((t) => t.v === 'MAY') + 1),
+  ...TABS_KHONG_CHUYEN_RIENG.slice(0, TABS_KHONG_CHUYEN_RIENG.findIndex((t) => t.v === 'MAY') + 1),
   { v: 'ROBOT', label: 'Robot' },
-  ...LOAI_TABS.slice(LOAI_TABS.findIndex((t) => t.v === 'MAY') + 1),
+  ...TABS_KHONG_CHUYEN_RIENG.slice(TABS_KHONG_CHUYEN_RIENG.findIndex((t) => t.v === 'MAY') + 1),
 ];
 
 // 1 hàng có khớp chip đang chọn không: chip khu lọc theo `ma_chuyen`, còn lại theo `ma_loai_chuyen`.
@@ -107,7 +110,7 @@ export const locSiSoTheoChip = (v, { tachRobot = false } = {}) => {
 };
 
 // Nhãn chip (cho phụ đề Excel / câu "không có hàng nào thuộc loại …").
-export const nhanChip = (v) => (LOAI_TABS_TACH_ROBOT.find((t) => t.v === v) || {}).label || '';
+export const nhanChip = (v) => ([...LOAI_TABS_TACH_ROBOT, ...LOAI_TABS].find((t) => t.v === v) || {}).label || '';
 
 // Đếm cho từng chip (kể cả chip khu) → hiện số nhỏ trên mỗi chip.
 //

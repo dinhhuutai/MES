@@ -723,7 +723,9 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
     moTa: (t) => <>Tem <b>{t.ma_tem}</b> · {fmtNum(t.so_luong)} pcs</>,
     hauQua: 'Tem về lại trạng thái trước khi hủy (chờ khô / chờ kiểm); số lượng tính lại vào "đã in" của lệnh (không vượt 110% SL release).',
     nhanNut: 'Mở lại tem',
-    baoXong: (t) => `Đã mở lại tem ${t.ma_tem}`,
+    baoXong: (t, d) => `Đã mở lại tem ${t.ma_tem}${d.gui_lai_erp
+      ? ' — đang gửi lại phiếu in tem sang ERP (cùng IDMES)'
+      : ' — tem chưa từng gửi ERP nên không gửi lại'}`,
     sauKhiHuy: () => { load(); onChanged?.(); },
     modalProps: {
       nhanLyDo: 'Lý do mở lại', kieuNut: 'primary', goiY: 'Vì sao mở lại (vd: hủy nhầm tem)...',

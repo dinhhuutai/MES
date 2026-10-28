@@ -2,6 +2,7 @@
 // Định dạng sẵn: tiêu đề, header tô nền, viền, ✓ xanh, hạn giao trễ tô đỏ. Lazy import exceljs.
 
 import { khuonRequired, filmHien, soMucKtCan } from '../../technical-ready/constants';
+import slDongReady from '../../technical-ready/utils/slDongReady';
 
 const pad = (n) => String(n).padStart(2, '0');
 // Số mục PHẢI BẤM: gia công 1 (Mực) · còn lại 2 (Khuôn + Mực). Film tự đạt theo Khuôn nên không tính.
@@ -24,6 +25,7 @@ const COLS = [
   { h: 'Kích vải', w: 12, key: (r) => r.kich_vai || '' },
   { h: 'Kích phim', w: 12, key: (r) => r.kich_phim || '' },
   { h: 'Loại đợt vải', w: 14, key: (r) => r.loai_dot_vai || '' },
+  { h: 'Số lượng', w: 10, key: (r) => slDongReady(r) ?? '' },
   { h: 'Film', w: 8, key: (r) => (!filmHien(r.ten_khach_hang) ? '—' : r.film_done ? '✓' : '–'), center: true, done: (r) => filmHien(r.ten_khach_hang) && r.film_done },
   { h: 'Khuôn', w: 8, key: (r) => (!khuonRequired(r.ten_khach_hang) ? '—' : r.khuon_done ? '✓' : '–'), center: true, done: (r) => khuonRequired(r.ten_khach_hang) && r.khuon_done },
   { h: 'Mực', w: 8, key: (r) => (r.muc_done ? '✓' : '–'), center: true, done: (r) => r.muc_done },

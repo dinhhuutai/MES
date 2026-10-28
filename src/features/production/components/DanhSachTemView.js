@@ -10,7 +10,10 @@ import Toast from '../../../components/common/Toast';
 import { Input, Select, Field, Textarea } from '../../../components/common/controls';
 import Modal from '../../../components/common/Modal';
 import TimeSelect from '../../../components/common/TimeSelect';
-import { listChuyen, getVaiTem, suaVaiTem, suaTem, reprintTem, getTemLabel } from '../../../services/productionService';
+import { listChuyen, getVaiTem, suaVaiTem, suaTem, reprintTem, getTemLabel, listToIn } from '../../../services/productionService';
+import { listUserOptions } from '../../../services/userService';
+import SearchableSelect from '../../../components/common/SearchableSelect';
+import NhieuNguoiSelect from '../../../components/common/NhieuNguoiSelect';
 import FieldFilters, { FilterToggle } from '../../../components/common/FieldFilters';
 import DateRangePicker from '../../../components/common/DateRangePicker';
 import { CA_LOC } from '../../../utils/caLoc';
@@ -218,7 +221,9 @@ export default function DanhSachTemView({
     moTa: (t) => <>Tem <b>{t.ma_tem}</b> · {fmtNum(t.so_luong)} pcs · {t.ma_lenh_san_xuat || ''}</>,
     hauQua: 'Tem về lại trạng thái trước khi hủy; số lượng tính lại vào "đã in" của lệnh (không vượt 110% SL release).',
     nhanNut: 'Mở lại tem',
-    baoXong: (t) => `Đã mở lại tem ${t.ma_tem}`,
+    baoXong: (t, d) => `Đã mở lại tem ${t.ma_tem}${d.gui_lai_erp
+      ? ' — đang gửi lại phiếu in tem sang ERP (cùng IDMES)'
+      : ' — tem chưa từng gửi ERP nên không gửi lại'}`,
     sauKhiHuy: () => load(),
     modalProps: {
       nhanLyDo: 'Lý do mở lại', kieuNut: 'primary', goiY: 'Vì sao mở lại (vd: hủy nhầm tem)...',
@@ -675,7 +680,13 @@ function TemPanel({ tem, onClose, laGiaCong, layNhan, coSuaVai = false, show, on
 // Sửa SL in (chỉ khi tem CHƯA kiểm) · giờ SX · mã ngày ca; lý do bắt buộc. Backend `PUT /production/tem/:id/sua`
 // (`production.service suaTem`) kiểm lại trong transaction (chưa kiểm · trần 110%) rồi gửi lại phiếu in tem sang ERP
 // CÙNG IDMES (ERP ghi đè phiếu, không thêm phiếu).
+// 28/10/2026 (người dùng: "cho thêm sửa các thông tin trong phân công"): khối PHÂN CÔNG của RIÊNG tem này (ca trưởng ·
+//   chuyền trưởng · thợ in · tổ in) — đổ sẵn từ nhãn tem (`GET /production/tem/:id/label`: phân công riêng của tem nếu
+//   đã sửa, không thì của phiếu). Lưu = ghi đè riêng tem (không đổi phiếu / tem khác), rồi gửi lại ERP cùng IDMES.
+//   Vải hủy / thiếu KHÔNG ở đây — sửa ở khối "Vải hủy / thiếu" của panel tem (đã gửi lại ERP).
 const NGAY_CA_RE = /^\d{6}(C1|C2|C3|D1|D2|HC)$/;
+const PC_TRONG = { caTruongId: '', chuyenTruong: '', thoIn: '', toInId: '' };
+const chuanTho = (v) => String(v || '').split(',').map((s) => s.trim()).filter(Boolean).join(', ');
 function SuaTemModal({ tem, onClose, onDaLuu, show }) {
   const [sl, setSl] = useState('');
   const [gioBd, setGioBd] = useState('');
@@ -685,12 +696,36 @@ function SuaTemModal({ tem, onClose, onDaLuu, show }) {
   const [lyDo, setLyDo] = useState('');
   const [dangLuu, setDangLuu] = useState(false);
   const [loi, setLoi] = useState('');
+  const [pcGoc, setPcGoc] = useState(null);     // phân công đang hiện của tem (null = đang tải / lỗi)
+  const [pc, setPc] = useState(PC_TRONG);
+  const [users, setUsers] = useState([]);
+  const [toIns, setToIns] = useState([]);
+  const temId = tem?.id;
   useEffect(() => {
     if (!tem) return;
     setSl(String(tem.so_luong ?? '')); setGioBd(tem.gio_sx_bd || ''); setGioKt(tem.gio_sx_kt || '');
     setMaCa(tem.ma_ngay_ca || ''); setNgayCt(tem.ngay_ct || ''); setLyDo(''); setLoi('');
   }, [tem]);
+  useEffect(() => {
+    if (!temId) return undefined;
+    let song = true;
+    setPcGoc(null); setPc(PC_TRONG);
+    getTemLabel(temId).then((r) => {
+      if (!song) return;
+      const d = r.data || {};
+      const g = { caTruongId: d.ca_truong_id || '', chuyenTruong: d.chuyen_truong || '', thoIn: d.tho_in || '', toInId: d.to_in_id || '', rieng: !!d.phan_cong_rieng };
+      setPcGoc(g); setPc(g);
+    }).catch(() => { if (song) setPcGoc(null); });
+    listUserOptions({ limit: 500 }).then((r) => { if (song) setUsers(r.data || []); }).catch(() => {});
+    listToIn().then((r) => { if (song) setToIns(r.data || []); }).catch(() => {});
+    return () => { song = false; };
+  }, [temId]);
   if (!tem) return null;
+  const coToIn = toIns.length > 0;
+  const doiPc = !!pcGoc && (
+    (pc.caTruongId || '') !== (pcGoc.caTruongId || '') || (pc.chuyenTruong || '').trim() !== (pcGoc.chuyenTruong || '').trim()
+    || chuanTho(pc.thoIn) !== chuanTho(pcGoc.thoIn) || (coToIn && (pc.toInId || '') !== (pcGoc.toInId || '')));
+  const pcThieuTho = doiPc && !chuanTho(pc.thoIn);
   const khoaSl = !!tem.da_kiem;
   const slSai = !khoaSl && (!/^\d+$/.test(String(sl).trim()) || Number(sl) <= 0);
   const caSai = !!maCa && !NGAY_CA_RE.test(maCa);
@@ -702,7 +737,14 @@ function SuaTemModal({ tem, onClose, onDaLuu, show }) {
   // Ngày chứng từ = ngày CT của phiếu in tem đã gửi ERP (27/10/2026) — tem chưa gửi ERP thì không sửa được.
   const coNgayCt = !!tem.ngay_ct;
   if (coNgayCt && ngayCt && ngayCt !== tem.ngay_ct) body.ngayCt = ngayCt;
+  if (doiPc) {
+    body.phanCong = {
+      caTruongId: pc.caTruongId || null, chuyenTruong: pc.chuyenTruong || '', thoIn: pc.thoIn || '',
+      ...(coToIn ? { toInId: pc.toInId || null } : {}),
+    };
+  }
   const coDoi = Object.keys(body).length > 0;
+  const setP = (k, v) => setPc((x) => ({ ...x, [k]: v }));
 
   const luu = async () => {
     setDangLuu(true); setLoi('');
@@ -716,11 +758,11 @@ function SuaTemModal({ tem, onClose, onDaLuu, show }) {
   };
 
   return (
-    <Modal open={!!tem} onClose={() => (dangLuu ? null : onClose())} size="md" title={`Sửa tem ${tem.ma_tem}`}
+    <Modal open={!!tem} onClose={() => (dangLuu ? null : onClose())} size="lg" title={`Sửa tem ${tem.ma_tem}`}
       footer={(
         <>
           <Button chiXemOk variant="ghost" onClick={onClose} disabled={dangLuu}>Hủy</Button>
-          <Button onClick={luu} loading={dangLuu} disabled={!coDoi || slSai || caSai || !lyDo.trim()}>Lưu &amp; gửi ERP</Button>
+          <Button onClick={luu} loading={dangLuu} disabled={!coDoi || slSai || caSai || pcThieuTho || !lyDo.trim()}>Lưu &amp; gửi ERP</Button>
         </>
       )}>
       <div className="space-y-3">
@@ -742,6 +784,42 @@ function SuaTemModal({ tem, onClose, onDaLuu, show }) {
           <Input type="date" value={ngayCt} disabled={!coNgayCt} onChange={(e) => setNgayCt(e.target.value)} />
         </Field>
         {!coNgayCt && <p className="-mt-2 text-xs text-ink-soft">Tem chưa gửi phiếu in tem sang ERP — chưa có ngày chứng từ để sửa.</p>}
+        <div className="space-y-2 rounded-control border border-line p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h4 className="text-sm font-semibold text-ink">Phân công của tem này</h4>
+            {pcGoc?.rieng && <Badge tone="info">Đã sửa riêng cho tem</Badge>}
+          </div>
+          {!pcGoc ? (
+            <div className="flex items-center gap-2 text-sm text-ink-soft"><Spinner size={16} />Đang tải phân công…</div>
+          ) : (
+            <>
+              <Field label="Ca trưởng">
+                <SearchableSelect value={pc.caTruongId} onChange={(v) => setP('caTruongId', v || '')} options={users}
+                  getValue={(u) => u.id} getLabel={(u) => u.ho_ten || u.ten_dang_nhap || ''}
+                  getSearch={(u) => `${u.ho_ten || ''} ${u.ten_dang_nhap || ''}`} placeholder="Gõ tên hoặc MSNV để tìm..." />
+              </Field>
+              <Field label="Chuyền trưởng">
+                <SearchableSelect chapNhanTuDo value={pc.chuyenTruong} onChange={(v) => setP('chuyenTruong', v || '')} options={users}
+                  getValue={(u) => u.ho_ten || u.ten_dang_nhap || ''} getLabel={(u) => u.ho_ten || u.ten_dang_nhap || ''}
+                  getSearch={(u) => `${u.ho_ten || ''} ${u.ten_dang_nhap || ''}`} placeholder="Gõ tên hoặc MSNV để tìm..." />
+              </Field>
+              <Field label="Thợ in">
+                <NhieuNguoiSelect value={pc.thoIn} onChange={(v) => setP('thoIn', v)} options={users}
+                  placeholder="Gõ tên thợ in để tìm rồi chọn / Enter..." />
+              </Field>
+              {pcThieuTho && <p className="-mt-1 text-xs text-danger">Thợ in không được để trống.</p>}
+              {coToIn && (
+                <Field label="Tổ in">
+                  <SearchableSelect moNgay value={pc.toInId} onChange={(v) => setP('toInId', v || '')} options={toIns}
+                    getValue={(t) => t.id} getLabel={(t) => `${t.ma_to} — ${t.ten_to}`} getSearch={(t) => `${t.ma_to} ${t.ten_to}`}
+                    placeholder="Chọn tổ in..." />
+                </Field>
+              )}
+              <p className="text-xs text-ink-soft">Chỉ đổi phân công của RIÊNG tem này (nhãn + dữ liệu gửi ERP) — phiếu và các tem khác giữ nguyên.</p>
+            </>
+          )}
+        </div>
+        <p className="text-xs text-ink-soft">Vải hủy / thiếu: sửa ở khối &quot;Vải hủy / thiếu&quot; trong panel tem (bấm vào dòng tem) — lưu ở đó cũng tự gửi lại ERP.</p>
         <Field label="Lý do sửa" required>
           <Textarea rows={2} value={lyDo} onChange={(e) => setLyDo(e.target.value)} placeholder="Vì sao sửa tem (vd: nhập nhầm số lượng / ca)..." />
         </Field>

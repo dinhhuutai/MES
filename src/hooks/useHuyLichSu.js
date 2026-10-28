@@ -28,8 +28,9 @@ export default function useHuyLichSu({
 
   const xacNhan = async (r, lyDo) => {
     try {
-      await goiHuy(r, lyDo);
-      if (show) show(typeof baoXong === 'function' ? baoXong(r) : baoXong);
+      const res = await goiHuy(r, lyDo);
+      // `baoXong(dong, duLieuTraVe)` — tham số 2 = `data` API trả (vd `gui_lai_erp` của Mở lại tem in).
+      if (show) show(typeof baoXong === 'function' ? baoXong(r, (res && res.data) || {}) : baoXong);
       setMuc(null);
       setTaiLai((n) => n + 1);
       if (sauKhiHuy) sauKhiHuy(r);

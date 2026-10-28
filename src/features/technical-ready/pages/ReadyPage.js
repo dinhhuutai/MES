@@ -35,7 +35,8 @@ import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import PhuongAnInCell from '../../../components/common/PhuongAnInCell';
 import { PHUONG_AN_IN } from '../../../components/common/PhuongAnInBadge';
-import { fmtDateTime, fmtDate } from '../../../utils/format';
+import { fmtDateTime, fmtDate, fmtNum } from '../../../utils/format';
+import slDongReady from '../utils/slDongReady';
 import { khuonRequired } from '../constants';
 import exportReadyExcel from '../utils/exportReadyExcel';
 import useLyDoNghen from '../../../hooks/useLyDoNghen';
@@ -325,6 +326,9 @@ export default function ReadyPage() {
         )}
       </div>
     ) },
+    // Số lượng (28/10/2026, người dùng yêu cầu): SL vải của ĐỢT trên dòng; dòng không có đợt chờ ⇒ Σ đợt sống.
+    { key: 'so_luong_dot', header: 'Số lượng', className: 'text-right tabular-nums', copyText: (r) => String(slDongReady(r) ?? ''),
+      render: (r) => (slDongReady(r) == null ? '—' : fmtNum(slDongReady(r))) },
     // Phương án in (ERP `Pain`, lấy từ HSKT đang hoạt động): 1 Bàn · 2 Máy · 3 Robot.
     // Đổi được ngay tại chỗ: ⟳ xoay Bàn → Robot → Máy, ✓ mới ghi (kèm đổi số cuối mã vạch HSKT).
     { key: 'phuong_an_in', header: 'Phương án in', copyText: (r) => (r.phuong_an_in != null ? PHUONG_AN_IN[r.phuong_an_in] : ''), render: (r) => (

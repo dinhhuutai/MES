@@ -479,7 +479,8 @@ export default function ReleaseListModal({ open, onClose }) {
         </table>
       </div>
       {/* SidePanel nằm TRÊN modal (Headless UI xếp chồng theo thứ tự mở) nên không cần đóng modal. */}
-      <PhanInTraCuuPanel open={!!traCuu} onClose={() => setTraCuu(null)} row={traCuu} />
+      <PhanInTraCuuPanel open={!!traCuu} onClose={() => setTraCuu(null)} row={traCuu} show={show}
+        onDaSuaKeHoach={() => { setTraCuu(null); load(); }} />
       <InLenhSanXuatModal open={inLsxOpen} onClose={() => setInLsxOpen(false)} rows={chipItems}
         onLoi={(m) => show(m, 'error')} />
 

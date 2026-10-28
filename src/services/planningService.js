@@ -68,6 +68,8 @@ export const listReplanMaQuet = (params) => client.get('/planning/replan/ma-quet
 export const replan = (id, body) => client.post(`/planning/replan/${id}`, body);
 // Chi tiết kế hoạch hiện tại + danh sách đợt vải kèm SL release (để panel đổ sẵn mọi ô).
 export const getReplanDetail = (id) => client.get(`/planning/replan/${id}`);
+// Sửa kế hoạch 1 lệnh từ sidebar Danh sách release (28/10/2026) — cả lệnh đã chạy, lý do bắt buộc, BE báo ERP hủy cũ + gửi mới.
+export const suaKeHoachTuDsRelease = (lenhId, body) => client.put(`/planning/release-list/lenh/${lenhId}/ke-hoach`, body);
 export const replanBatch = (body) => client.post('/planning/replan/batch', body);
 export const planHistory = (date) => client.get('/planning/plan-history', { params: { date } });
 
@@ -121,3 +123,7 @@ export const release2Done = (date) => client.get('/planning/release2/done', { pa
 export const replanDone = (date) => client.get('/planning/replan/done', { params: { date } });
 // Hủy tem gia công ngay tại "Lịch sử chuyển" (14/10/2026) — chỉ cần quyền công đoạn, lý do bắt buộc, báo ERP hủy theo IDMES.
 export const huyGiaCongTemLichSu = (temId, lyDo) => client.post(`/planning/gia-cong/tem/${temId}/huy-lich-su`, { lyDo });
+
+// BTP khác kế hoạch (mig 120, 28/10/2026) — trang Hệ thống: tìm phần in, bật/tắt cờ theo đợt vải (lý do bắt buộc).
+export const timBtpKhacKh = (q) => client.get('/planning/btp-khac-kh', { params: { q } });
+export const datBtpKhacKh = (dotVaiId, { bat, lyDo }) => client.put(`/planning/btp-khac-kh/${dotVaiId}`, { bat: !!bat, lyDo });

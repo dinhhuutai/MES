@@ -201,6 +201,9 @@ export const MODULES = [
       // Quản trị phần in (mig 078) — trang GỠ RỐI: sửa dữ liệu gốc + đặt lại giai đoạn theo đợt vải.
       // Quyền riêng PHAN_IN_ADMIN, cấp hẹp (role ADMIN có '*' nên dùng được ngay).
       { ten: 'Quản trị phần in', route: '/he-thong/quan-tri-phan-in', perm: 'PHAN_IN_ADMIN' },
+      // BTP khác kế hoạch (mig 120, 28/10/2026) — tìm phần in, bật cờ cho đợt in BTP 2 đầu ở 2 kế hoạch khác nhau
+      // (quên tích lúc Release 1) ⇒ đợt quay về Release 1 lập kế hoạch đầu kia.
+      { ten: 'BTP khác kế hoạch', route: '/he-thong/btp-khac-ke-hoach', perm: ['RELEASE1', 'RELEASE2', 'PHAN_IN_ADMIN'] },
       { ten: 'Hiển thị theo phương án in', route: '/he-thong/hien-thi-pain', perm: 'WORKFLOW_VIEW' },
       // Cài đặt API (mig 083) — bật/tắt 3 API ERP ngay trên giao diện, khỏi sửa .env + restart BE.
       { ten: 'Cài đặt API', route: '/he-thong/cai-dat-api', perm: 'WORKFLOW_VIEW' },
@@ -252,7 +255,7 @@ export const NHOM_HE_THONG = [
     '/he-thong/workflow-version', '/he-thong/chuyen', '/he-thong/tram-checkpoint', '/he-thong/dieu-kien',
     '/he-thong/owner', '/he-thong/trang-thai', '/he-thong/hien-thi-pain'] },
   { ma: 'DU_LIEU', ten: 'Dữ liệu & ERP', icon: 'database', routes: [
-    '/he-thong/erp-sync', '/he-thong/nhap-tay', '/he-thong/cap-nhat-vai', '/he-thong/quan-tri-phan-in',
+    '/he-thong/erp-sync', '/he-thong/nhap-tay', '/he-thong/cap-nhat-vai', '/he-thong/quan-tri-phan-in', '/he-thong/btp-khac-ke-hoach',
     '/he-thong/khach-hang', '/he-thong/kpi-don-hang'] },
   { ma: 'THAO_TAC', ten: 'Hủy / tích tem', icon: 'history', routes: [
     '/he-thong/lich-su-trang-thai', '/he-thong/tich-giao'] },

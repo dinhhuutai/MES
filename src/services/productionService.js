@@ -101,6 +101,9 @@ export const closeProduction = (phieuId, lyDo) => client.post(`/production/dong-
 // Mở lại lệnh sản xuất (đã đóng/hoàn tất trong 2 ngày) — trang Đóng lệnh sản xuất
 export const listReopenCandidates = () => client.get('/production/mo-lai/candidates');
 export const reopenProduction = (phieuId) => client.post(`/production/mo-lai/${phieuId}`);
+// Lịch sử Chạy hoàn tất ở màn Xác nhận chạy (28/10/2026) — lọc server; mở lại lý do bắt buộc.
+export const lichSuHoanTat = (params) => client.get('/production/lich-su-hoan-tat', { params });
+export const moLaiTuLichSu = (phieuId, lyDo) => client.post(`/production/lich-su-hoan-tat/${phieuId}/mo-lai`, { lyDo });
 
 // Ngừng lệnh chạy (ngừng phần in để in hàng gấp) → lệnh về chờ chạy — màn Xác nhận chạy
 export const pauseLenhChay = (phieuId) => client.post(`/production/phieu/${phieuId}/ngung-lenh`);

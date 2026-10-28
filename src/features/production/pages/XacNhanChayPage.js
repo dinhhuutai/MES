@@ -37,6 +37,7 @@ import { LOAI_TABS, hopChipChuyen, nhanChip, demChip, locSiSoTheoChip } from '..
 import RunPanel from '../components/RunPanel';
 import RunNhieuPanel from '../components/RunNhieuPanel';
 import DsReleaseSxModal from '../components/DsReleaseSxModal';
+import LichSuHoanTatModal from '../components/LichSuHoanTatModal';
 import ChoChayModal, { LocLenhPanel } from '../components/ChoChayModal';
 import {
   locLenhChay, coLoc, LOC_TRONG, timLenhTheoMa, gomTheoCodePhan, lenhCuaDong, gomDangChayTheoCodePhan,
@@ -95,6 +96,7 @@ export default function XacNhanChayPage() {
   const [filters, setFilters] = useState(LOC_TRONG);
   const [sel, setSel] = useState(null);
   const [selNhieu, setSelNhieu] = useState(null);
+  const [lichSuHtOpen, setLichSuHtOpen] = useState(false); // modal Lịch sử chạy hoàn tất (28/10/2026)
   const [dsReleaseOpen, setDsReleaseOpen] = useState(false); // modal Danh sách release sản xuất (26/10/2026) // lenhIds[] — sidebar nhiều lệnh đang chạy
   const [chonRun, setChonRun] = useState([]);     // phieu_id[] đã quét/tích ở bảng Đang chạy (mới nhất đứng đầu)
   const oTim = useOTimKiem();
@@ -515,6 +517,8 @@ export default function XacNhanChayPage() {
         </Button>
         {/* Danh sách release CỦA SẢN XUẤT (26/10/2026) — mẫu "DANH SÁCH RELEASE BÀN …" theo khu + chuyền thêm. */}
         <Button chiXemOk variant="ghost" icon="file-spreadsheet" onClick={() => setDsReleaseOpen(true)}>Danh sách release</Button>
+        {/* Lịch sử Chạy hoàn tất (28/10/2026) — lọc barcode đầy đủ, mở lại phiếu (lý do bắt buộc). */}
+        <Button chiXemOk variant="ghost" icon="history" onClick={() => setLichSuHtOpen(true)}>Lịch sử hoàn tất</Button>
         {can('PROD_MONITOR') && (
           <Button chiXemOk variant="ghost" icon="activity" onClick={() => setMoTrang('theo-doi-chuyen')}>Theo dõi chuyền</Button>
         )}
@@ -676,6 +680,7 @@ export default function XacNhanChayPage() {
       </Modal>
 
       {dsReleaseOpen && <DsReleaseSxModal open onClose={() => setDsReleaseOpen(false)} />}
+      {lichSuHtOpen && <LichSuHoanTatModal open onClose={() => setLichSuHtOpen(false)} show={show} onDaMoLai={() => load(true)} />}
       {selNhieu && <RunNhieuPanel lenhIds={selNhieu} onClose={() => { setSelNhieu(null); oTim.datConTro(); }}
         onChanged={() => load(true)} onMoLenh={(id) => { setSelNhieu(null); setSel(id); }}
         truocXacNhan={(ids) => hoiLyDoNghen(rowsNghen.filter((r) => ids.includes(r.lenh_id)))} />}

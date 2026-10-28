@@ -32,7 +32,7 @@ import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import TraVeBadge from '../../../components/common/TraVeBadge';
 import DateRangePicker from '../../../components/common/DateRangePicker';
-import { fmtDate, trongKhoangNgay } from '../../../utils/format';
+import { fmtDate, fmtNum, trongKhoangNgay } from '../../../utils/format';
 import { LOAI_TABS_TACH_ROBOT, hopChipChuyen as hopChip, nhanChip, demChip, locSiSoTheoChip } from '../../../utils/khuChuyen';
 import { ungVienTuLenh } from '../../../utils/phanInTraVeGn';
 import ChipTabs from '../../../components/common/ChipTabs';
@@ -305,6 +305,9 @@ export default function TestRunPage() {
     { key: 'phuong_an_in', header: 'Phương án in', merge: true, render: (r) => <PhuongAnInBadge value={r.phuong_an_in} /> },
     { key: 'loai_dot_vai', header: 'Loại đợt vải', merge: true, render: (r) => <LoaiDotVaiBadge value={r.loai_dot_vai} /> },
     { key: 'nha_gia_cong', header: 'Nhà gia công', merge: true, render: (r) => r.nha_gia_cong || '—' },
+    // SL release của LỆNH (27/10/2026, người dùng yêu cầu) — Excel đã có cột này (`COT_LENH`).
+    { key: 'so_luong_release', header: 'SL release', className: 'text-right tabular-nums whitespace-nowrap', headerClassName: 'text-right',
+      merge: true, render: (r) => (r.so_luong_release != null ? fmtNum(r.so_luong_release) : '—') },
     { key: 'han_giao_hang', header: 'Hạn giao', merge: true, render: (r) => <HanGiaoCell value={r.han_giao_hang} /> },
     // Hiện luôn cột đang được lọc — lọc theo một giá trị không nhìn thấy thì không đối chiếu được.
     { key: 'ngay_ke_hoach', header: 'Ngày SX KH', className: 'whitespace-nowrap', merge: true, render: (r) => fmtDate(r.ngay_ke_hoach) },

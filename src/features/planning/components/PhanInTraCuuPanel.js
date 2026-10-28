@@ -7,9 +7,18 @@ import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import TraVeGnNote from '../../../components/common/TraVeGnNote';
 import HanhTrinhGiaCong from '../../../components/common/HanhTrinhGiaCong';
+import Button from '../../../components/common/Button';
 import { getPhanIn } from '../../../services/orderService';
+import { getReplanDetail, suaKeHoachTuDsRelease, listChuyen } from '../../../services/planningService';
+import { listUserOptions } from '../../../services/userService';
+import usePermissions from '../../../hooks/usePermissions';
+import { KeHoachModal } from '../../system/components/QuanTriToanCanh';
 import { fmtNum, fmtDate, fmtDateTime } from '../../../utils/format';
 import { hienDsMa } from '../../../utils/maPhanIn';
+
+// Hàm MỨC MODULE (ổn định) cho `KeHoachModal` — nằm trong deps effect của modal.
+const xemKeHoachDs = (lenhId) => getReplanDetail(lenhId);
+const suaKeHoachDs = (lenhId, body) => suaKeHoachTuDsRelease(lenhId, body);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TRA CỨU 1 PHẦN IN TỪ "DANH SÁCH RELEASE" — trả lời đúng câu người dùng hay bị hỏi:
@@ -72,10 +81,22 @@ function TramNode({ t }) {
   );
 }
 
-export default function PhanInTraCuuPanel({ open, onClose, row }) {
+export default function PhanInTraCuuPanel({ open, onClose, row, show, onDaSuaKeHoach }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loi, setLoi] = useState('');
+  // SỬA KẾ HOẠCH LỆNH (28/10/2026, người dùng: "bấm vào 1 phần in hiện sidebar thì cho sửa thông tin kế hoạch luôn, có gửi
+  //   ERP — hủy cái cũ rồi gửi cái mới") — dùng lại modal của Quản trị phần in; BE gọi CHÍNH Lập lại kế hoạch.
+  const { can } = usePermissions();
+  const coSuaKh = !!show && can('RELEASE1', 'RELEASE2') && !!row?.lenh_id && row?.lenh_trang_thai !== 'HUY';
+  const [keHoachMuc, setKeHoachMuc] = useState(null);
+  const [dsChuyen, setDsChuyen] = useState([]);
+  const [users, setUsers] = useState([]);
+  const moSuaKeHoach = () => {
+    if (!dsChuyen.length) listChuyen().then((r) => setDsChuyen(r.data || [])).catch(() => setDsChuyen([]));
+    if (!users.length) listUserOptions({ limit: 500 }).then((r) => setUsers(r.data || [])).catch(() => {});
+    setKeHoachMuc({ kieu: 'LENH', lenh: { id: row.lenh_id, ma_lenh_san_xuat: row.ma_lenh_san_xuat } });
+  };
 
   const load = useCallback(async () => {
     if (!open || !row?.phan_in_id) return;
@@ -126,7 +147,18 @@ export default function PhanInTraCuuPanel({ open, onClose, row }) {
             <Dong label="Người release">{row.owner}</Dong>
             <Dong label="Giờ release">{fmtDt(row.created_date)}</Dong>
             <Dong label="Loại chuyền">{row.ten_loai_chuyen}</Dong>
+            <Dong label="Giờ KH">{[row.tg_bd_kh, row.tg_kt_kh].some(Boolean)
+              ? `${row.tg_bd_kh ? new Date(row.tg_bd_kh).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '—'} → ${row.tg_kt_kh ? new Date(row.tg_kt_kh).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '—'}`
+              : '—'}</Dong>
           </div>
+          {coSuaKh && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-control border border-line px-3 py-2">
+              <span className="text-xs text-ink-soft">
+                Sửa chuyền · ngày · giờ · SL release · thợ in kế hoạch của lệnh {row.ma_lenh_san_xuat} — lưu xong hệ thống hủy kế hoạch cũ bên ERP rồi gửi kế hoạch mới.
+              </span>
+              <Button variant="secondary" icon="edit" onClick={moSuaKeHoach}>Sửa kế hoạch</Button>
+            </div>
+          )}
 
           {data && (
             <div className="grid grid-cols-2 gap-x-4 gap-y-3 border-t border-line pt-3 sm:grid-cols-3">
@@ -207,6 +239,12 @@ export default function PhanInTraCuuPanel({ open, onClose, row }) {
             )}
           </div>
         </div>
+      )}
+      {keHoachMuc && (
+        <KeHoachModal phanInId={row?.phan_in_id} muc={keHoachMuc} chuyen={dsChuyen} users={users} show={show}
+          apiXem={xemKeHoachDs} apiSua={suaKeHoachDs}
+          onClose={() => setKeHoachMuc(null)}
+          onDone={() => { setKeHoachMuc(null); if (onDaSuaKeHoach) onDaSuaKeHoach(); }} />
       )}
     </SidePanel>
   );

@@ -241,15 +241,20 @@ export function ToanCanhLenh({ tc, onLuiVe, onHuyLe, onPhanCong, onSuaKeHoach })
 // `muc` = { kieu: 'LENH', lenh } | { kieu: 'TAM', kt }. Lệnh ⇒ BE gọi CHÍNH "Lập lại kế hoạch" (`planning.replan`, nhận
 //   cả lệnh đã chạy: chỉ sửa thông tin, không đổi chặng, không qua gia công; SL release trần theo vải + không dưới đã in;
 //   báo ERP kế hoạch). Kế hoạch tạm ⇒ `planning.updateKeHoachTam`. Lý do bắt buộc.
-export function KeHoachModal({ phanInId, muc, chuyen, users, onClose, onDone, show }) {
+// 28/10/2026 — dùng lại ở sidebar Danh sách release (Kế hoạch): truyền `apiXem(lenhId)` / `apiSua(lenhId, body)` (hàm
+//   MỨC MODULE — nằm trong deps) thay API Quản trị phần in; kế hoạch hiện tại đổ lại từ `apiXem` (= `GET /replan/:id`).
+export function KeHoachModal({ phanInId, muc, chuyen, users, onClose, onDone, show, apiXem = null, apiSua = null }) {
   const laLenh = muc?.kieu === 'LENH';
   const goc = laLenh ? muc?.lenh : muc?.kt;
-  const daChay = laLenh && !!goc?.co_phieu && goc?.trang_thai !== 'GIA_CONG';
+  const [chiTiet, setChiTiet] = useState(null);
+  const nguon = chiTiet || goc;
+  const daChay = laLenh && !!nguon?.co_phieu && nguon?.trang_thai !== 'GIA_CONG';
   const [f, setF] = useState(null);
   const [dsDot, setDsDot] = useState([]);
   const [dangTai, setDangTai] = useState(false);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
+    setChiTiet(null);
     if (!muc || !goc) { setF(null); setDsDot([]); return undefined; }
     const ngay = ngayStr(goc.ngay_ke_hoach);
     setF({
@@ -260,17 +265,27 @@ export function KeHoachModal({ phanInId, muc, chuyen, users, onClose, onDone, sh
     if (!laLenh) return undefined;
     let song = true;
     setDangTai(true);
-    getKeHoachLenhQt(phanInId, goc.id)
+    (apiXem ? apiXem(goc.id) : getKeHoachLenhQt(phanInId, goc.id))
       .then((r) => {
         if (!song) return;
-        const ds = (r.data && r.data.dot_vai) || [];
+        const d0 = r.data || {};
+        const ds = d0.dot_vai || [];
         setDsDot(ds);
-        setF((x) => (x ? { ...x, slRelease: Object.fromEntries(ds.map((d) => [d.dot_vai_id, String(d.so_luong)])) } : x));
+        if (apiXem) setChiTiet(d0);
+        setF((x) => (x ? {
+          ...x,
+          // Nguồn ngoài (Danh sách release) chỉ có dòng release ⇒ đổ lại kế hoạch đang lưu từ server.
+          ...(apiXem ? {
+            chuyenId: d0.chuyen_id || '', ngayKeHoach: ngayStr(d0.ngay_ke_hoach), gioBd: gioStr(d0.tg_bd_kh),
+            gioKt: gioStr(d0.tg_kt_kh), thoIn: d0.tho_in_kh || '',
+          } : {}),
+          slRelease: Object.fromEntries(ds.map((d) => [d.dot_vai_id, String(d.so_luong)])),
+        } : x));
       })
       .catch((e) => { if (song) show(e.message || 'Không tải được kế hoạch lệnh', 'error'); })
       .finally(() => { if (song) setDangTai(false); });
     return () => { song = false; };
-  }, [muc, goc, laLenh, phanInId, show]);
+  }, [muc, goc, laLenh, phanInId, show, apiXem]);
 
   // Lệnh đã chạy trong xưởng ⇒ bỏ chuyền gia công khỏi danh sách (BE cũng chặn 409 `DA_CHAY`).
   const dsChuyen = useMemo(() => (daChay ? (chuyen || []).filter((c) => !laChuyenGiaCong(chuyen, c.id)) : (chuyen || [])), [chuyen, daChay]);
@@ -292,12 +307,13 @@ export function KeHoachModal({ phanInId, muc, chuyen, users, onClose, onDone, sh
         chuyenId: f.chuyenId || null, ngayKeHoach: f.ngayKeHoach, tgBdKh: mkTs(f.ngayKeHoach, f.gioBd), tgKtKh: mkTs(f.ngayKeHoach, f.gioKt),
         thoIn: f.thoIn, lyDo: f.lyDo.trim(),
       };
+      const bodyLenh = {
+        ...chung,
+        slRelease: Object.fromEntries(dsDot.filter((d) => Number(f.slRelease[d.dot_vai_id]) !== d.so_luong)
+          .map((d) => [d.dot_vai_id, Number(f.slRelease[d.dot_vai_id])])),
+      };
       const r = laLenh
-        ? await suaKeHoachLenhQt(phanInId, goc.id, {
-          ...chung,
-          slRelease: Object.fromEntries(dsDot.filter((d) => Number(f.slRelease[d.dot_vai_id]) !== d.so_luong)
-            .map((d) => [d.dot_vai_id, Number(f.slRelease[d.dot_vai_id])])),
-        })
+        ? await (apiSua ? apiSua(goc.id, bodyLenh) : suaKeHoachLenhQt(phanInId, goc.id, bodyLenh))
         : await suaKeHoachTamQt(phanInId, goc.id, { ...chung, soLuong: f.soLuong === '' ? null : Number(f.soLuong) });
       show(r.message || 'Đã sửa kế hoạch');
       onDone();

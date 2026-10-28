@@ -30,6 +30,7 @@ import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import PhuongAnInCell from '../../../components/common/PhuongAnInCell';
 import exportReadyQcExcel from '../utils/exportReadyQcExcel';
+import slDongReady from '../../technical-ready/utils/slDongReady';
 import { khuonRequired } from '../../technical-ready/constants';
 
 // Thứ tự hiển thị: FILM → KHUÔN → MỰC (HSKT đã bỏ khỏi checklist READY).
@@ -367,6 +368,9 @@ export default function ReadyQcPage() {
         )}
       </div>
     ) },
+    // Số lượng (28/10/2026, người dùng yêu cầu) — cùng luật màn READY Kỹ thuật (`slDongReady`).
+    { key: 'so_luong_dot', header: 'Số lượng', className: 'text-right tabular-nums',
+      render: (r) => (slDongReady(r) == null ? '—' : Number(slDongReady(r)).toLocaleString('vi-VN')) },
     // Phương án in (ERP `Pain` trên HSKT): 1 Bàn · 2 Máy · 3 Robot.
     // Đổi được ngay tại chỗ như màn READY của Kỹ thuật: ⟳ xoay Bàn → Robot → Máy, ✓ mới ghi
     // (kèm đổi số cuối mã vạch HSKT + đặt `pa_in_sua_tay` để job ERP không đè lại).

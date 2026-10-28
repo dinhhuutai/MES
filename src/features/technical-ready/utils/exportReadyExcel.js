@@ -3,6 +3,7 @@
 // Định dạng sẵn: tiêu đề, header tô nền + gộp nhóm, viền, zebra, ✓ xanh, hạn giao trễ tô đỏ. Lazy import exceljs.
 
 import { khuonRequired, filmHien, soMucKtCan } from '../constants';
+import slDongReady from './slDongReady';
 
 const pad = (n) => String(n).padStart(2, '0');
 // Số mục PHẢI BẤM: gia công 1 (Mực) · còn lại 2 (Khuôn + Mực). Film tự đạt theo Khuôn nên không tính.
@@ -34,6 +35,7 @@ const COLS = [
   { h: 'Kích vải', w: 12, key: (r) => r.kich_vai || '' },
   { h: 'Kích phim', w: 12, key: (r) => r.kich_phim || '' },
   { h: 'Loại đợt vải', w: 14, key: (r) => r.loai_dot_vai || '' },
+  { h: 'Số lượng', w: 10, key: (r) => slDongReady(r) ?? '' },
   // --- FILM (hàng gia công II/AD không cần; khách khác thì Film tự đạt theo Khuôn nên người/giờ
   //     ở đây chính là người đã bấm Khuôn) ---
   { h: 'XN', w: 6, grp: 'FILM', center: true,

@@ -44,6 +44,7 @@ export function gomDotCungCodePhan(rows) {
       ma_set: dau.ma_set || ds.find((r) => r.ma_set)?.ma_set || null,
       tra_ve: dau.tra_ve || ds.find((r) => r.tra_ve)?.tra_ve || null,
       tra_ve_ly_do: dau.tra_ve_ly_do || ds.find((r) => r.tra_ve_ly_do)?.tra_ve_ly_do || null,
+      btp_khac_kh: ds.some((r) => r.btp_khac_kh), // BTP khác KH (mig 120) — có đợt nào có cờ
     };
   });
 }

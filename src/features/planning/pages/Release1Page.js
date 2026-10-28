@@ -78,6 +78,39 @@ const FILTER_FIELDS = [
 ];
 
 // Các ô dữ liệu chung cho cả row lẻ lẫn member của set.
+// BTP KHÁC KẾ HOẠCH (mig 120, 28/10/2026): in BTP 2 đầu tấm vải ở 2 kế hoạch khác nhau ⇒ đợt release được 2 × SL vải,
+// ở lại Release 1 sau đầu 1. Đầu đang lập = gương BE `utils/btpKhacKh.js dauDangLap`.
+const dauBtp = (r) => {
+  const sl = Number(r.so_luong_vai_ve) || 0;
+  return sl > 0 ? Math.min(2, Math.floor((Number(r.da_release) || 0) / sl) + 1) : 1;
+};
+const dotBtp = (r) => (r?._dots || (r ? [r] : [])).find((d) => d.btp_khac_kh) || null;
+function BtpBadge({ r }) {
+  const d = dotBtp(r);
+  if (!d) return null;
+  return (
+    <span title="In BTP 2 đầu tấm vải ở 2 kế hoạch khác nhau — đợt được lập kế hoạch 2 lần">
+      <Badge tone="info">BTP khác KH · đầu {dauBtp(d)}/2</Badge>
+    </span>
+  );
+}
+// Ô tích ở form release. `daBat` = đợt đã có cờ (lần lập đầu 2) ⇒ tích sẵn, khóa (tắt ở Hệ thống › BTP khác kế hoạch).
+function BtpKhacKhField({ checked, onChange, daBat }) {
+  return (
+    <label className="mt-3 flex items-start gap-2 rounded-control border border-line px-3 py-2 text-sm">
+      <input type="checkbox" className="mt-0.5 h-4 w-4 accent-primary" checked={daBat || !!checked} disabled={daBat}
+        onChange={(e) => onChange(e.target.checked)} />
+      <span>
+        <b className="text-ink">BTP khác KH</b>
+        <span className="block text-xs text-ink-soft">
+          {daBat ? 'Đợt đã đánh dấu BTP khác KH — đang lập kế hoạch đầu còn lại'
+            : 'In 2 đầu tấm vải ở 2 kế hoạch khác nhau — release xong, phần in vẫn ở lại Release 1 để lập kế hoạch đầu kia'}
+        </span>
+      </span>
+    </label>
+  );
+}
+
 function DataCells({ r }) {
   return (
     <>
@@ -91,6 +124,7 @@ function DataCells({ r }) {
           {r._dots && r._dots.length > 1 && (
             <Badge tone="info" title="Các đợt vải cùng code phần được gom — release ra 1 lệnh, SL = tổng">Gom {r._dots.length} đợt</Badge>
           )}
+          <BtpBadge r={r} />
           {/* Badge nhóm gom set — chỉ để BIẾT, KHÔNG còn ràng buộc release chung (chốt 15/08/2026). */}
           {r.ma_set && (
             <Badge tone="info" title="Thuộc gom set — vẫn release riêng từng phần in được">
@@ -196,9 +230,9 @@ export default function Release1Page() {
   const [cpage, setCpage] = useState(1);             // phân trang CLIENT (chọn-tất-cả vẫn spanning mọi trang)
 
   const [detail, setDetail] = useState(null);        // row lẻ đang xem
-  const [form, setForm] = useState({ chuyenId: '', soLuongRelease: '', ngayKeHoach: '', gioBd: '', gioKt: '', thoIn: '' });
+  const [form, setForm] = useState({ chuyenId: '', soLuongRelease: '', ngayKeHoach: '', gioBd: '', gioKt: '', thoIn: '', btp: false });
   const [releaseOpen, setReleaseOpen] = useState(false); // modal release gộp
-  const [relForm, setRelForm] = useState({ chuyenId: '', ngayKeHoach: '', gioBd: '', gioKt: '', thoIn: '' });
+  const [relForm, setRelForm] = useState({ chuyenId: '', ngayKeHoach: '', gioBd: '', gioKt: '', thoIn: '', btp: false });
   const [users, setUsers] = useState([]);            // tài khoản cho ô "Thợ in" (mig 111)
   const [saving, setSaving] = useState(false);
   const [traVeOpen, setTraVeOpen] = useState(false);     // modal "Trả về Kỹ thuật" (lý do bắt buộc)
@@ -376,10 +410,12 @@ export default function Release1Page() {
   const openDetail = (row) => {
     setDetail(row);
     // Mặc định release phần CÒN LẠI (SL vải về − đã release); release theo số lượng, giữ phần còn.
-    setForm({ chuyenId: chuyen[0]?.id || '', soLuongRelease: String(row.con_release ?? row.so_luong_vai_ve ?? ''), ngayKeHoach: dateOffsetStr(1), gioBd: '', gioKt: '', thoIn: '' });
+    setForm({ chuyenId: chuyen[0]?.id || '', soLuongRelease: String(row.con_release ?? row.so_luong_vai_ve ?? ''), ngayKeHoach: dateOffsetStr(1), gioBd: '', gioKt: '', thoIn: '', btp: false });
   };
   // Backend chưa chạy mig 111 ⇒ release vẫn xong nhưng thợ in không được lưu — nói rõ thay vì im lặng.
-  const canhBaoThoIn = (res) => (res?.data?.tho_in_chua_luu ? ' · CHƯA lưu thợ in (hệ thống chưa cập nhật cơ sở dữ liệu)' : '');
+  const canhBaoThoIn = (res) => (res?.data?.tho_in_chua_luu ? ' · CHƯA lưu thợ in (hệ thống chưa cập nhật cơ sở dữ liệu)' : '')
+    + (res?.data?.btp_chua_luu ? ' · CHƯA lưu "BTP khác KH" (hệ thống chưa cập nhật cơ sở dữ liệu)' : '')
+    + (res?.data?.btp_khac_kh ? ' · BTP khác KH: phần in ở lại Release 1 để lập kế hoạch đầu kia' : '');
 
   // Release 1 phần in lẻ (từ side panel chi tiết)
   // ⚠ CHỐT BẤM ĐÚP (21/10/2026): `saving` chỉ khóa nút SAU khi React vẽ lại (và sau `await hoiLyDoNghen`) ⇒ bấm đúp
@@ -406,6 +442,7 @@ export default function Release1Page() {
         ngayKeHoach: form.ngayKeHoach || null,
         tgBdKh: mkTs(form.gioBd), tgKtKh: mkTs(form.gioKt),
         thoIn: form.thoIn || null,
+        btpKhacKh: !!form.btp,
       });
       const tam = res?.data?.ke_hoach_tam_count || 0;
       const tamMsg = tam > 0 ? ` · ${tam} phần chưa Ready → lưu Kế hoạch tạm` : '';
@@ -443,7 +480,7 @@ export default function Release1Page() {
   };
 
   const openReleaseAll = () => {
-    setRelForm({ chuyenId: chuyen[0]?.id || '', ngayKeHoach: dateOffsetStr(1), gioBd: '', gioKt: '', thoIn: '' });
+    setRelForm({ chuyenId: chuyen[0]?.id || '', ngayKeHoach: dateOffsetStr(1), gioBd: '', gioKt: '', thoIn: '', btp: false });
     setReleaseOpen(true);
   };
 
@@ -466,6 +503,7 @@ export default function Release1Page() {
         chuyenId: relForm.chuyenId, soLuongRelease: null, ngayKeHoach: relForm.ngayKeHoach || null,
         tgBdKh: mkTsR(relForm.gioBd), tgKtKh: mkTsR(relForm.gioKt),
         thoIn: relForm.thoIn || null,
+        btpKhacKh: !!relForm.btp,
       });
       const tam = res?.data?.ke_hoach_tam_count || 0;
       const daTao = res?.data?.created_count || 0;
@@ -707,6 +745,8 @@ export default function Release1Page() {
         </div>
         <ThoInField value={relForm.thoIn} users={users}
           onChange={(v) => setRelForm((f) => ({ ...f, thoIn: v }))} />
+        <BtpKhacKhField checked={relForm.btp} onChange={(v) => setRelForm((f) => ({ ...f, btp: v }))}
+          daBat={looseList.length > 0 && looseList.every((r) => r.btp_khac_kh)} />
       </Modal>
 
       {/* Chi tiết / release 1 đợt vải lẻ */}
@@ -799,6 +839,8 @@ export default function Release1Page() {
               </div>
               <ThoInField value={form.thoIn} users={users}
                 onChange={(v) => setForm((f) => ({ ...f, thoIn: v }))} />
+              <BtpKhacKhField checked={form.btp} onChange={(v) => setForm((f) => ({ ...f, btp: v }))}
+                daBat={(detail._dots || [detail]).every((d) => d.btp_khac_kh)} />
             </div>
           </div>
         )}
