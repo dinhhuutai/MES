@@ -32,10 +32,12 @@ const TONES = {
   emerald: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300',
   slate: 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-900/40 dark:text-slate-300',
 };
+// `basis` (28/10/2026): điện thoại 2 ô / hàng, máy tính bảng tối thiểu 11rem rồi giãn — bản `flex-1` (basis 0) không bao
+//   giờ xuống dòng ⇒ 5–7 ô bị bóp vào 1 hàng trên điện thoại. Từ `lg` về như cũ (`basis-0` = `flex-1`, 29/10/2026).
 export function KpiCard({ tone = 'slate', icon, label, value, sub, onClick }) {
   return (
     <button type="button" onClick={onClick} disabled={!onClick}
-      className={`flex min-w-0 flex-1 items-center gap-2.5 rounded-card border px-3 py-2.5 text-left transition ${TONES[tone]} ${onClick ? 'hover:brightness-95' : 'cursor-default'}`}>
+      className={`flex min-w-0 grow basis-[calc(50%-0.75rem)] items-center gap-2.5 rounded-card border px-3 py-2.5 text-left transition sm:basis-44 lg:basis-0 ${TONES[tone]} ${onClick ? 'hover:brightness-95' : 'cursor-default'}`}>
       {icon && <span className="text-lg">{icon}</span>}
       <div className="min-w-0">
         <div className="text-xl font-bold tabular-nums leading-none">{value}</div>

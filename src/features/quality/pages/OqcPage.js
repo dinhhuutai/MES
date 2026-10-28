@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import Toolbar from '../../../components/common/Toolbar';
+import MenuNut from '../../../components/common/MenuNut';
 import OwnerHint from '../../../components/common/OwnerHint';
 import DataTable from '../../../components/common/DataTable';
 import Badge from '../../../components/common/Badge';
@@ -366,9 +367,17 @@ export default function OqcPage() {
         )}
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
         <NghenButton rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} onClick={() => setNghenOpen(true)} />
-        <Button chiXemOk variant="ghost" icon="file-spreadsheet" onClick={() => setFinishOpen(true)}>Danh sách finish</Button>
-        <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
-        <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
+        {/* Laptop/PC (từ `md`) giữ NGUYÊN dãy nút cũ (29/10/2026, người dùng chốt); điện thoại gom vào menu "Thêm". */}
+        <span className="hidden md:contents">
+          <Button chiXemOk variant="ghost" icon="file-spreadsheet" onClick={() => setFinishOpen(true)}>Danh sách finish</Button>
+          <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
+          <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
+        </span>
+        <MenuNut className="md:hidden" nhom={[{ muc: [
+          { ten: 'Danh sách finish', icon: 'file-spreadsheet', chiXemOk: true, onClick: () => setFinishOpen(true) },
+          { ten: 'Đã hoàn thành', icon: 'check-circle', chiXemOk: true, onClick: () => setDoneOpen(true) },
+          { ten: 'Lịch sử', icon: 'history', chiXemOk: true, onClick: () => setHistOpen(true) },
+        ] }]} />
         <Badge tone="warning">{displayRows.length} dòng chờ OQC</Badge>
       </Toolbar>
 

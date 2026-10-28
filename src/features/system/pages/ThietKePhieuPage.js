@@ -140,7 +140,7 @@ export default function ThietKePhieuPage() {
           <span className="text-xs text-ink-soft">— chọn mẫu cho từng nút; để trống = dùng bố cục mặc định trong code</span>
         </div>
         <div className="overflow-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[640px] text-sm">
             <thead>
               <tr className="bg-surface-muted text-left text-xs uppercase tracking-wide text-ink-soft">
                 <th className="px-3 py-2">Nút in</th>

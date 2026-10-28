@@ -10,6 +10,7 @@ import Spinner from '../../../components/common/Spinner';
 import { Field, Input, Textarea } from '../../../components/common/controls';
 import { fmtNum, fmtDateTime, fmtDate } from '../../../utils/format';
 import { laChuyenGiaCong } from '../../planning/utils/chuyenGiaCong';
+import BtpKeHoachField, { btpBanDau, btpGuiDi } from '../../planning/components/BtpKeHoachField';
 import {
   luiVeTram, huyLeQt, luuPhanCongQt, getKeHoachLenhQt, suaKeHoachLenhQt, suaKeHoachTamQt,
 } from '../../../services/quanTriPhanInService';
@@ -280,6 +281,7 @@ export function KeHoachModal({ phanInId, muc, chuyen, users, onClose, onDone, sh
             gioKt: gioStr(d0.tg_kt_kh), thoIn: d0.tho_in_kh || '',
           } : {}),
           slRelease: Object.fromEntries(ds.map((d) => [d.dot_vai_id, String(d.so_luong)])),
+          btp: btpBanDau(ds),
         } : x));
       })
       .catch((e) => { if (song) show(e.message || 'Không tải được kế hoạch lệnh', 'error'); })
@@ -311,6 +313,8 @@ export function KeHoachModal({ phanInId, muc, chuyen, users, onClose, onDone, sh
         ...chung,
         slRelease: Object.fromEntries(dsDot.filter((d) => Number(f.slRelease[d.dot_vai_id]) !== d.so_luong)
           .map((d) => [d.dot_vai_id, Number(f.slRelease[d.dot_vai_id])])),
+        // BTP (29/10/2026): chỉ gửi khi đổi — tích ⇒ đợt hiện lại ở Release 1, bỏ ⇒ rời Release 1.
+        ...btpGuiDi(f.btp, dsDot),
       };
       const r = laLenh
         ? await (apiSua ? apiSua(goc.id, bodyLenh) : suaKeHoachLenhQt(phanInId, goc.id, bodyLenh))
@@ -379,6 +383,9 @@ export function KeHoachModal({ phanInId, muc, chuyen, users, onClose, onDone, sh
         <Field label="Thợ in kế hoạch">
           <NhieuNguoiSelect value={f.thoIn} onChange={(v) => set('thoIn', v)} options={users} placeholder="Gõ tên hoặc MSNV để tìm rồi chọn / Enter..." />
         </Field>
+        {laLenh && !dangTai && dsDot.length > 0 && (
+          <BtpKeHoachField checked={f.btp} onChange={(v) => set('btp', v)} dsDot={dsDot} />
+        )}
         <Field label="Lý do" required hint={laLenh ? 'Lưu xong hệ thống báo lại kế hoạch lệnh sang ERP' : undefined}>
           <Textarea rows={2} value={f.lyDo} onChange={(e) => set('lyDo', e.target.value)} />
         </Field>

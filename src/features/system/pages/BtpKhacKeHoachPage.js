@@ -15,7 +15,8 @@ import { timBtpKhacKh, datBtpKhacKh } from '../../../services/planningService';
 // BTP KHÁC KẾ HOẠCH (mig 120, 28/10/2026, người dùng yêu cầu). In bán thành phẩm = in 2 ĐẦU tấm vải; 2 đầu có thể ở 2
 // kế hoạch khác nhau (máy / ngày khác) ⇒ đợt vải phải Release 1 HAI LẦN. Lúc Release 1 có ô tích "BTP khác KH"; quên
 // tích ⇒ tìm phần in ở đây, bật cờ cho đợt ⇒ đợt quay về Release 1 với "Còn release" = SL vải cho đầu kia.
-// Luật số ở BE `utils/btpKhacKh.js` (BE trả sẵn `con_release`); trang chỉ hiện + bật/tắt (lý do bắt buộc).
+// Luật số ở BE `utils/btpKhacKh.js` (BE trả sẵn `con_release`, `so_dau_btp`, `btp_cho`); trang chỉ hiện + thêm / bỏ đầu
+// (lý do bắt buộc). 29/10/2026: nhiều đầu — "Thêm 1 đầu" khi không có đầu chờ, "Bỏ đầu chờ" khi đợt đang có đầu chờ.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const TT_LENH = { RELEASE_1: 'Test Run', RELEASE_2: 'Chờ SX', SAN_XUAT: 'Đang SX', HOAN_TAT: 'Hoàn tất', GIA_CONG: 'Gia công', CHO_IN_XONG: 'Chờ in xong' };
@@ -38,9 +39,12 @@ function tinhTrang(d) {
   return { ten: 'Đã release hết', tone: 'success' };
 }
 
+// Số đầu BTP của đợt (1 = thường) — BE trả `so_dau_btp` (29/10/2026: nhiều đầu, mỗi lần "Thêm 1 đầu" +1).
+const soDau = (d) => Math.max(1, Number(d.so_dau_btp) || (d.btp_khac_kh ? 2 : 1));
+
 function DotRow({ d, onDoi, khoa }) {
   const tt = tinhTrang(d);
-  const daLap2 = d.btp_khac_kh && d.da_release > d.so_luong_vai_ve;
+  const n = soDau(d);
   return (
     <tr className="border-t border-line align-top">
       <td className="px-3 py-2">
@@ -65,28 +69,25 @@ function DotRow({ d, onDoi, khoa }) {
       </td>
       <td className="px-3 py-2"><Badge tone={tt.tone}>{tt.ten}</Badge></td>
       <td className="px-3 py-2">
-        {d.btp_khac_kh ? (
+        {n > 1 ? (
           <div>
-            <Badge tone="info">BTP khác KH</Badge>
+            <Badge tone="info">BTP {n} đầu</Badge>
+            {d.btp_cho && <div className="mt-0.5 text-[11px] text-primary">Có đầu đang chờ lập kế hoạch</div>}
             {d.btp_khac_kh_tg && (
               <div className="mt-0.5 text-[11px] text-ink-soft">{d.btp_khac_kh_nguoi || '—'} · {fmtDateTime(d.btp_khac_kh_tg)}</div>
             )}
           </div>
         ) : <span className="text-ink-soft">—</span>}
       </td>
-      <td className="px-3 py-2 text-right">
-        {d.btp_khac_kh ? (
-          <span title={daLap2 ? 'Đã lập kế hoạch cả đầu 2 — hủy lệnh đầu 2 trước rồi mới tắt' : undefined}>
-            <Button variant="secondary" disabled={khoa || daLap2} onClick={() => onDoi(d, false)}>Tắt</Button>
-          </span>
-        ) : (
-          <Button disabled={khoa} onClick={() => onDoi(d, true)}>Bật BTP khác KH</Button>
-        )}
+      <td className="whitespace-nowrap px-3 py-2 text-right">
+        <span className="inline-flex gap-1.5">
+          {d.btp_cho && <Button variant="secondary" disabled={khoa} onClick={() => onDoi(d, false)}>Bỏ đầu chờ</Button>}
+          {!d.btp_cho && <Button disabled={khoa} onClick={() => onDoi(d, true)}>Thêm 1 đầu</Button>}
+        </span>
       </td>
     </tr>
   );
 }
-
 export default function BtpKhacKeHoachPage() {
   const { toast, show } = useToast();
   const [q, setQ] = useState('');
@@ -125,7 +126,9 @@ export default function BtpKhacKeHoachPage() {
     setSaving(true);
     try {
       const r = await datBtpKhacKh(hoi.d.dot_vai_id, { bat: hoi.bat, lyDo: ly });
-      show(r.message || (hoi.bat ? 'Đã bật BTP khác KH' : 'Đã tắt BTP khác KH'));
+      show(hoi.bat
+        ? `Đã thêm 1 đầu — đợt ${hoi.d.ma_dot_vai} có ${r.data?.so_dau_btp || ''} đầu, hiện lại ở Release 1`
+        : `Đã bỏ đầu chờ — đợt ${hoi.d.ma_dot_vai} rời Release 1`);
       setHoi(null);
       tai(true);
     } catch (e) {
@@ -181,11 +184,11 @@ export default function BtpKhacKeHoachPage() {
       <Modal
         open={!!hoi}
         onClose={() => setHoi(null)}
-        title={hoi ? `${hoi.bat ? 'Bật' : 'Tắt'} BTP khác KH — ${hoi.d.ma_dot_vai}` : ''}
+        title={hoi ? `${hoi.bat ? 'Thêm 1 đầu BTP' : 'Bỏ đầu BTP đang chờ'} — ${hoi.d.ma_dot_vai}` : ''}
         footer={(
           <>
             <Button chiXemOk variant="ghost" onClick={() => setHoi(null)}>Hủy</Button>
-            <Button onClick={xacNhan} loading={saving} disabled={!lyDo.trim()}>{hoi?.bat ? 'Bật' : 'Tắt'}</Button>
+            <Button onClick={xacNhan} loading={saving} disabled={!lyDo.trim()}>{hoi?.bat ? 'Thêm 1 đầu' : 'Bỏ đầu chờ'}</Button>
           </>
         )}
       >
@@ -193,10 +196,8 @@ export default function BtpKhacKeHoachPage() {
           <div className="space-y-3 text-sm">
             <div className="rounded-control bg-surface-muted px-3 py-2 text-ink-soft">
               {hoi.bat
-                ? <>Đợt được lập kế hoạch <b>2 lần</b> (mỗi đầu tấm vải {fmtNum(hoi.d.so_luong_vai_ve)} pcs).
-                    {hoi.d.da_release >= hoi.d.so_luong_vai_ve && hoi.d.da_len_ready
-                      ? <> Đã release {fmtNum(hoi.d.da_release)} ⇒ đợt <b>quay về Release 1</b> để lập kế hoạch đầu kia.</> : null}</>
-                : <>Đợt về lập kế hoạch <b>1 lần</b> như thường{hoi.d.da_release >= hoi.d.so_luong_vai_ve ? ' — đợt rời Release 1' : ''}.</>}
+                ? <>Thêm 1 đầu tấm vải ({fmtNum(hoi.d.so_luong_vai_ve)} pcs) — như thêm 1 đợt vải mới. Đợt {hoi.d.da_len_ready ? <b>hiện lại ở Release 1</b> : 'sẽ ở Release 1 khi lên READY'} để lập kế hoạch đầu đó.</>
+                : <>Bỏ đầu đang chờ lập kế hoạch — đợt <b>rời Release 1</b>. Lệnh đã lập giữ nguyên.</>}
             </div>
             <Field label="Lý do" required>
               <Textarea rows={3} value={lyDo} onChange={(e) => setLyDo(e.target.value)} maxLength={300} />

@@ -235,7 +235,7 @@ export default function HoSoKyThuatPage() {
 
       <div className="card overflow-hidden">
         <div className="overflow-auto max-h-[calc(100vh-16rem)]">
-          <table className="min-w-full text-sm">
+          <table className="w-full min-w-[900px] text-[13px] lg:text-sm">
             <thead className="sticky top-0 z-10 bg-surface-muted text-left text-xs font-semibold uppercase text-ink-soft">
               <tr>
                 <th className="px-3 py-2">STT</th>

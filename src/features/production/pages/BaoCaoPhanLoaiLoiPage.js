@@ -333,7 +333,7 @@ export default function BaoCaoPhanLoaiLoiPage() {
 
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs font-medium text-ink-soft">Xem theo</span>
-              <div className="flex h-9 items-center gap-1 rounded-control border border-line bg-surface-muted p-1">
+              <div className="flex h-9 max-w-full items-center gap-1 overflow-x-auto rounded-control border border-line bg-surface-muted p-1">
                 {DS_CHIEU.map((c) => (
                   <button key={c.v} type="button" onClick={() => doiChieu(c.v)}
                     className={`h-7 whitespace-nowrap rounded-[10px] px-3 text-xs font-medium transition-colors ${

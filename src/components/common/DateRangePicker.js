@@ -10,16 +10,41 @@ const dispVN = (s) => { const d = fromISO(s); return d ? `${pad(d.getDate())}/${
 const sameDay = (a, b) => a && b && a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 const WD = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 
-export default function DateRangePicker({ value = {}, onChange, placeholder = 'Chọn khoảng ngày' }) {
+// ⚠ LỊCH NỔI `fixed` (28/10/2026): bản cũ `absolute` bị CẮT khi ô nằm trong vùng cuộn (dải nút cuộn ngang của Toolbar
+//   trên điện thoại, thân modal `overflow-y-auto`). Nay tính vị trí theo ô bấm, canh trong màn hình (thiếu chỗ phía
+//   dưới ⇒ mở lên trên), cuộn / đổi cỡ cửa sổ thì tính lại.
+const RONG_LICH = 280;
+const CAO_LICH = 340;
+const viTriLich = (el) => {
+  const r = el.getBoundingClientRect();
+  const left = Math.max(8, Math.min(r.left, window.innerWidth - RONG_LICH - 8));
+  const duoi = window.innerHeight - r.bottom;
+  const top = duoi >= CAO_LICH + 8 || r.top < CAO_LICH + 8 ? r.bottom + 4 : r.top - CAO_LICH - 4;
+  return { left, top: Math.max(8, top) };
+};
+
+// `gon` (29/10/2026) ⇒ ô thấp + chữ nhỏ, lớn dần theo màn — trang Xác nhận chạy dồn đầu trang còn 3 hàng.
+export default function DateRangePicker({ value = {}, onChange, placeholder = 'Chọn khoảng ngày', gon = false }) {
   const { from, to } = value;
   const [open, setOpen] = useState(false);
   const [view, setView] = useState(() => fromISO(from) || new Date());
+  const [pos, setPos] = useState(null);
   const ref = useRef(null);
+  const nutRef = useRef(null);
   useEffect(() => {
     if (!open) return undefined;
     const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const tinhLai = () => { if (nutRef.current) setPos(viTriLich(nutRef.current)); };
     document.addEventListener('mousedown', h);
-    return () => document.removeEventListener('mousedown', h);
+    document.addEventListener('touchstart', h);
+    window.addEventListener('resize', tinhLai);
+    window.addEventListener('scroll', tinhLai, true);
+    return () => {
+      document.removeEventListener('mousedown', h);
+      document.removeEventListener('touchstart', h);
+      window.removeEventListener('resize', tinhLai);
+      window.removeEventListener('scroll', tinhLai, true);
+    };
   }, [open]);
 
   const fromD = fromISO(from);
@@ -46,20 +71,29 @@ export default function DateRangePicker({ value = {}, onChange, placeholder = 'C
     }
   };
 
-  const toggle = () => { if (!open) setView(fromISO(from) || new Date()); setOpen(!open); };
+  const toggle = () => {
+    if (!open) {
+      setView(fromISO(from) || new Date());
+      if (nutRef.current) setPos(viTriLich(nutRef.current));
+    }
+    setOpen(!open);
+  };
   const shift = (n) => setView(new Date(view.getFullYear(), view.getMonth() + n, 1));
   const inRange = (d) => fromD && toD && d > fromD && d < toD;
   const label = from ? `${dispVN(from)}${to && to !== from ? ' – ' + dispVN(to) : ''}` : '';
 
   return (
     <div className="relative" ref={ref}>
-      <button type="button" onClick={toggle}
-        className="flex h-10 min-w-[220px] items-center gap-2 rounded-input border border-line bg-surface px-3 text-sm">
-        <Icon name="calendar-days" size={16} className="text-ink-soft" />
+      <button type="button" onClick={toggle} ref={nutRef}
+        className={`flex items-center whitespace-nowrap rounded-input border border-line bg-surface ${gon
+          ? 'h-8 min-w-[150px] gap-1.5 px-2 text-xs 2xl:h-9 2xl:min-w-[190px] 2xl:text-sm'
+          : 'h-10 min-w-[200px] gap-2 px-3 text-sm sm:min-w-[220px]'}`}>
+        <Icon name="calendar-days" size={gon ? 14 : 16} className="shrink-0 text-ink-soft" />
         <span className={label ? 'text-ink' : 'text-ink-soft'}>{label || placeholder}</span>
       </button>
       {open && (
-        <div className="absolute z-40 mt-1 w-[280px] rounded-card border border-line bg-surface p-3 shadow-card-hover">
+        <div className="fixed z-[75] w-[280px] rounded-card border border-line bg-surface p-3 shadow-card-hover"
+          style={pos || undefined}>
           <div className="mb-2 flex items-center justify-between">
             <button type="button" onClick={() => shift(-1)} className="rounded p-1 hover:bg-surface-muted"><Icon name="chevron-left" size={16} /></button>
             <span className="text-sm font-semibold text-ink">Th{view.getMonth() + 1}/{view.getFullYear()}</span>
@@ -75,7 +109,7 @@ export default function DateRangePicker({ value = {}, onChange, placeholder = 'C
               const mid = inRange(d);
               return (
                 <button key={i} type="button" onClick={() => pick(d)}
-                  className={`h-8 rounded text-xs ${sel ? 'bg-primary font-semibold text-white' : mid ? 'bg-primary-wash text-primary' : 'text-ink hover:bg-surface-muted'}`}>
+                  className={`h-9 rounded text-sm sm:h-8 sm:text-xs ${sel ? 'bg-primary font-semibold text-white' : mid ? 'bg-primary-wash text-primary' : 'text-ink hover:bg-surface-muted'}`}>
                   {d.getDate()}
                 </button>
               );

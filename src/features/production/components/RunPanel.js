@@ -1149,7 +1149,10 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
   const pct = target ? Math.min(100, Math.round((printed / target) * 100)) : 0;
   const maxTotal = target ? Math.floor(target * 1.1) : 0;       // trần 110% SL release
   const minFinish = target ? Math.ceil(target * 0.9) : 0;       // tối thiểu 90% SL release (cho -10%) mới hoàn tất được
-  const remain = target ? Math.max(0, maxTotal - printed) : null; // còn được in
+  // Còn được in — tem BTP trước có TRẦN RIÊNG (29/10/2026, gương BE `kiemTranIn`): tích BTP trước ⇒ trừ phần BTP trước
+  //   đã in; không tích ⇒ trừ phần tem thường. Không có tem BTP trước ⇒ đúng luật 110% cũ.
+  const printedBtp = Number(data?.printed_btp) || 0;
+  const remain = target ? Math.max(0, maxTotal - (temMeta.btpTruoc ? printedBtp : printed - printedBtp)) : null;
   const nTem = soTemHopLe(soTem);
   const overMax = target > 0 && Number(soLuong) * nTem > remain; // trần tính trên TỔNG N tem
 
@@ -1278,7 +1281,8 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
               )}
               {target > 0 && (
                 <p className={`mt-1.5 text-xs ${overMax ? 'text-danger' : 'text-ink-soft'}`}>
-                  Trần 110%: tối đa {fmtNum(maxTotal)} · còn in được <b>{fmtNum(remain)}</b>
+                  Trần 110%{temMeta.btpTruoc ? ' (tem BTP trước — trần riêng)' : ''}: tối đa {fmtNum(maxTotal)} · còn in được <b>{fmtNum(remain)}</b>
+                  {!temMeta.btpTruoc && printedBtp > 0 ? ` · đã cộng thêm ${fmtNum(printedBtp)} BTP trước` : ''}
                   {overMax ? ' — vượt giới hạn!' : ''}
                 </p>
               )}

@@ -4,6 +4,7 @@ import TraVeListModal, { TraVeListButton, TRA_VE_THEO_MAN } from '../../../compo
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import { useLocation } from 'react-router-dom';
 import Toolbar from '../../../components/common/Toolbar';
+import MenuNut from '../../../components/common/MenuNut';
 import DataTable from '../../../components/common/DataTable';
 import Badge from '../../../components/common/Badge';
 import Icon from '../../../components/common/Icon';
@@ -369,16 +370,31 @@ export default function ReadyPage() {
         <TraVeFilter checked={onlyReturned} onChecked={setOnlyReturned}
           range={traVeRange} onRange={setTraVeRange} label="Chỉ hiện phần bị trả về" />
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
-        <Button chiXemOk variant="secondary" icon="file-spreadsheet" loading={exporting} onClick={doExport}>Excel ({viewRows.length})</Button>
+        {/* Laptop/PC (từ `md`) giữ NGUYÊN dãy nút cũ (29/10/2026, người dùng chốt); điện thoại gom vào menu "Thêm". */}
+        <span className="hidden md:contents">
+          <Button chiXemOk variant="secondary" icon="file-spreadsheet" loading={exporting} onClick={doExport}>Excel ({viewRows.length})</Button>
+        </span>
         <NghenButton rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} onClick={() => setNghenOpen(true)} />
         {/* Cảnh báo = hàng VÀNG (SLA theo hạn giao: còn 2 ngày mà chưa xác nhận đủ) — cùng vị từ với bảng. */}
         <NghenButton loai="SAP_NGHEN" rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} onClick={() => setCanhBaoOpen(true)} />
-        <TraVeListButton onClick={() => setTraVeOpen(true)} />
-        <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
-        <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
-        <Button chiXemOk variant={btMap.size ? 'secondary' : 'ghost'} icon="alert-triangle" onClick={() => setBtOpen(true)}>
-          Bất thường{btMap.size ? ` (${btMap.size})` : ''}
-        </Button>
+        <span className="hidden md:contents">
+          <TraVeListButton onClick={() => setTraVeOpen(true)} />
+          <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
+          <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
+          <Button chiXemOk variant={btMap.size ? 'secondary' : 'ghost'} icon="alert-triangle" onClick={() => setBtOpen(true)}>
+            Bất thường{btMap.size ? ` (${btMap.size})` : ''}
+          </Button>
+        </span>
+        <MenuNut className="md:hidden" nhan={btMap.size ? `Thêm · ${btMap.size} bất thường` : 'Thêm'} nhom={[
+          { muc: [
+            { ten: 'Bất thường', icon: 'alert-triangle', chiXemOk: true, ghi: btMap.size || '', onClick: () => setBtOpen(true) },
+            { ten: 'Danh sách trả về', icon: 'undo', chiXemOk: true, onClick: () => setTraVeOpen(true) },
+            { ten: 'Đã hoàn thành', icon: 'check-circle', chiXemOk: true, onClick: () => setDoneOpen(true) },
+            { ten: 'Lịch sử', icon: 'history', chiXemOk: true, onClick: () => setHistOpen(true) },
+          ] },
+          { muc: [{ ten: exporting ? 'Đang xuất Excel…' : 'Xuất Excel', icon: 'file-spreadsheet', chiXemOk: true, ghi: viewRows.length,
+            disabled: exporting, onClick: doExport }] },
+        ]} />
         {/* Đang lọc ngày trả về → nói rõ đang thấy bao nhiêu trên tổng số phần bị trả về. */}
         {onlyReturned
           ? <Badge tone="danger">{viewRows.length}/{tongTraVe} bị trả về</Badge>

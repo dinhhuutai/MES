@@ -9,7 +9,7 @@ import Button from '../../../components/common/Button';
 import Modal from '../../../components/common/Modal';
 import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import Toast from '../../../components/common/Toast';
-import { Field, Textarea } from '../../../components/common/controls';
+import { Field, Textarea, Select } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import { QUYEN_XEM_HE_THONG } from '../../../constants/modules';
@@ -2419,6 +2419,15 @@ function KeHoachTamCancelSection({ show }) {
   );
 }
 
+// Nhóm tab theo CÔNG ĐOẠN (28/10/2026) — chỉ để hiển thị gọn; khóa tab + quyền vẫn ở danh sách `tabs` bên dưới.
+const NHOM_TAB_HUY = [
+  { ten: 'Kỹ thuật', keys: ['ready', 'moready', 'huyphanin', 'mophanin', 'huydotvai', 'modotvai'] },
+  { ten: 'Kế hoạch', keys: ['lenh', 'huykht', 'huytest', 'huytemgiacong'] },
+  { ten: 'Sản xuất', keys: ['tem', 'motem', 'dong', 'huychay'] },
+  { ten: 'Chất lượng', keys: ['huykcs', 'huysua', 'huytemsua', 'motemsua', 'huyoqc'] },
+  { ten: 'Giao hàng', keys: ['huyphieugiao', 'huytich'] },
+];
+
 export default function LichSuTrangThaiPage() {
   const { can: canGoc } = usePermissions();
   // Quyền "xem module Hệ thống" (30/09/2026) thấy ĐỦ mọi tab — nút thao tác tự khóa qua `useChiXem`.
@@ -2457,23 +2466,41 @@ export default function LichSuTrangThaiPage() {
   ].filter(Boolean);
 
   const [tab, setTab] = useState(tabs[0]?.key);
+  // ĐIỆN THOẠI (28/10/2026): 19 tab ⇒ 1 ô chọn có nhóm THEO CÔNG ĐOẠN (`NHOM_TAB_HUY`; tab không thuộc nhóm nào rơi
+  //   vào "Khác"). Máy tính giữ dải tab kiểu cũ (29/10/2026).
+  const nhomTab = NHOM_TAB_HUY.map((g) => ({ ...g, ds: tabs.filter((t) => g.keys.includes(t.key)) }))
+    .concat([{ ten: 'Khác', ds: tabs.filter((t) => !NHOM_TAB_HUY.some((g) => g.keys.includes(t.key))) }])
+    .filter((g) => g.ds.length);
 
   return (
     <div>
       {tabs.length > 1 && (
-        <div className="mb-4 inline-flex rounded-control border border-line bg-surface p-1">
-          {tabs.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`rounded-control px-4 py-1.5 text-sm font-medium transition ${
-                tab === t.key ? 'bg-primary-wash text-primary' : 'text-ink-soft hover:text-ink'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
+        <>
+          <div className="mb-4 sm:hidden">
+            <Select value={tab} onChange={(e) => setTab(e.target.value)} aria-label="Chọn thao tác">
+              {nhomTab.map((g) => (
+                <optgroup key={g.ten} label={g.ten}>
+                  {g.ds.map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+                </optgroup>
+              ))}
+            </Select>
+          </div>
+          {/* Máy tính: dải tab KIỂU CŨ (29/10/2026, người dùng: "laptop/PC về như cũ") — chỉ thêm xuống dòng: bản cũ
+              1 hàng dài hơn màn hình ⇒ các tab cuối bị cắt mất, không bấm được. */}
+          <div className="mb-4 hidden max-w-full flex-wrap rounded-control border border-line bg-surface p-1 sm:inline-flex">
+            {tabs.map((t) => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={`rounded-control px-4 py-1.5 text-sm font-medium transition ${
+                  tab === t.key ? 'bg-primary-wash text-primary' : 'text-ink-soft hover:text-ink'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </>
       )}
 
       {tab === 'ready' && <ReadyCancelSection show={show} />}

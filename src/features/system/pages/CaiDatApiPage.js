@@ -119,7 +119,8 @@ export default function CaiDatApiPage() {
             const t = thu[r.ma] || {};
             return (
               <div key={r.ma} className="rounded-card border border-line bg-surface p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
+                {/* Điện thoại (28/10/2026): chữ ở trên, nút xuống hàng dưới — trước đứng chung 1 hàng ⇒ mô tả bị bóp còn ~10px. */}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-base font-semibold text-ink">{r.ten}</h3>
@@ -144,7 +145,7 @@ export default function CaiDatApiPage() {
                       </p>
                     )}
                   </div>
-                  <div className="flex shrink-0 items-center gap-2">
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
                     {CO_LICH_SU.has(r.ma) && (
                       <Button chiXemOk variant="secondary" icon="history"
                         onClick={() => setLichSu({ ma: r.ma, ten: r.ten })}>

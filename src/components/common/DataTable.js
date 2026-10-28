@@ -28,7 +28,10 @@ function dangBoiDen(e) {
   } catch { return false; }
 }
 
-export default function DataTable({ columns, rows, loading, rowKey = 'id', emptyText = 'Không có dữ liệu', onRowClick, sttStart, rowClassName, pageSize = 20, subRows, onCellCopy }) {
+// gon (29/10/2026, trang Xác nhận chạy — người dùng: "chữ trong bảng nhỏ lại để thấy được nhiều cột nhất mà không cần
+//   cuộn ngang"): chữ + đệm ô nhỏ hơn, lớn dần theo màn (11px laptop → 12px lg → 13px 2xl), vùng cuộn cao hơn. Không
+//   truyền ⇒ như cũ.
+export default function DataTable({ columns, rows, loading, rowKey = 'id', emptyText = 'Không có dữ liệu', onRowClick, sttStart, rowClassName, pageSize = 20, subRows, onCellCopy, gon = false }) {
   const allRows = rows || [];
   const henMo = useRef(null);
   useEffect(() => () => clearTimeout(henMo.current), []);
@@ -71,8 +74,14 @@ export default function DataTable({ columns, rows, loading, rowKey = 'id', empty
     return Array.isArray(s) && s.length > 1 ? s : null;
   };
   // Padding/kích thước co theo bề rộng: laptop (md→xl) gọn để đỡ kéo ngang; chỉ màn RẤT rộng (2xl+) mới giãn.
-  const PAD_H = 'px-1.5 py-2 lg:px-2.5 2xl:px-4 2xl:py-3 text-[10px] lg:text-[11px] 2xl:text-xs font-semibold uppercase tracking-tight lg:tracking-wide text-ink-soft';
-  const PAD_C = 'px-1.5 py-1.5 lg:px-2.5 lg:py-2 2xl:px-4 2xl:py-3 align-middle';
+  // ⚠ 28/10/2026 (người dùng: "thông tin của bảng dữ liệu phải to ra"): chữ thân bảng 13px → 14px (lg) → 15px (2xl)
+  //   (trước 11 / 12 / 14px), tiêu đề 11 / 12px. Bảng nhiều cột thì cuộn ngang (vùng cuộn riêng) thay vì chữ tí hon.
+  const PAD_H = gon
+    ? 'px-1.5 py-1.5 2xl:px-2.5 2xl:py-2 text-[10px] lg:text-[11px] 2xl:text-xs font-semibold uppercase text-ink-soft'
+    : 'px-2 py-2 lg:px-3 lg:py-2.5 2xl:px-4 2xl:py-3 text-[11px] lg:text-xs font-semibold uppercase tracking-wide text-ink-soft';
+  const PAD_C = gon
+    ? 'px-1.5 py-1.5 2xl:px-2.5 2xl:py-2 align-middle'
+    : 'px-2 py-2 lg:px-3 lg:py-2.5 2xl:px-4 2xl:py-3 align-middle';
   // Header dính đỉnh (sticky top-0) để cuộn dọc trong bảng vẫn thấy tiêu đề.
   // sticky (cột thao tác ghim phải) → thêm right-0 + z cao hơn để đè phần thân.
   const renderHeader = (c, sticky) => (
@@ -122,7 +131,7 @@ export default function DataTable({ columns, rows, loading, rowKey = 'id', empty
           className={`${cls} ${!dau ? 'border-t-0' : ''}`}>
           {dau && selCols.map((c) => renderCell(c, row, false, span))}
           {dau && showStt && (
-            <td rowSpan={span} className="px-1.5 py-1.5 lg:px-2.5 lg:py-2 2xl:px-4 2xl:py-3 align-middle text-right tabular-nums text-ink-soft">{stt}</td>
+            <td rowSpan={span} className={`${PAD_C} text-right tabular-nums text-ink-soft`}>{stt}</td>
           )}
           {bodyCols.map((c) => ((c.merge && !dau) ? null : renderCell(c, r, false, c.merge ? span : undefined)))}
           {trailingActions.map((c) => ((c.merge && !dau) ? null : renderCell(c, r, true, c.merge ? span : undefined)))}
@@ -136,13 +145,13 @@ export default function DataTable({ columns, rows, loading, rowKey = 'id', empty
       {/* ===== BẢNG (md trở lên) ===== */}
       <div className="hidden md:block card overflow-hidden" aria-busy={loading || undefined}>
         {dangTaiNgam && <VachTai />}
-        <div className="overflow-auto max-h-[calc(100vh-13rem)]">
-          <table className="w-full text-[11px] lg:text-[12px] 2xl:text-sm">
+        <div className={`overflow-auto ${gon ? 'max-h-[calc(100vh-11rem)]' : 'max-h-[calc(100vh-13rem)]'}`}>
+          <table className={`w-full ${gon ? 'text-[11px] lg:text-xs 2xl:text-[13px]' : 'text-[13px] lg:text-sm 2xl:text-[15px]'}`}>
             <thead>
               <tr className="border-b border-line bg-surface-muted/60 text-left">
                 {selCols.map(renderHeader)}
                 {showStt && (
-                  <th className="sticky top-0 z-20 bg-surface-muted px-1.5 py-2 lg:px-2.5 2xl:px-4 2xl:py-3 text-[10px] lg:text-[11px] 2xl:text-xs font-semibold uppercase tracking-tight lg:tracking-wide text-ink-soft w-10 text-right">STT</th>
+                  <th className={`sticky top-0 z-20 bg-surface-muted w-10 text-right ${PAD_H}`}>STT</th>
                 )}
                 {bodyCols.map((c) => renderHeader(c))}
                 {trailingActions.map((c) => renderHeader(c, true))}

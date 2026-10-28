@@ -3,6 +3,7 @@ import { useSelector } from 'react-redux';
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
 import Toolbar from '../../../components/common/Toolbar';
+import MenuNut from '../../../components/common/MenuNut';
 import DataTable from '../../../components/common/DataTable';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
@@ -533,16 +534,30 @@ export default function GiaoHangPage() {
             Tích tem ({choTich.length})
           </Button>
         )}
-        {/* Nút Excel bám TAB đang mở — 2 tab là 2 tập dữ liệu khác hẳn nhau (tem ↔ phiếu). */}
-        <Button chiXemOk variant="secondary" icon="download"
-          onClick={tab === 'tem' ? doExcelTem : doExcelPhieu}
-          disabled={tab === 'tem' ? !displayRows.length : !phieus.length}>
-          Excel ({tab === 'tem' ? displayRows.length : phieus.length})
-        </Button>
-        {/* Tem đã kiểm phẩm (KCS) mà chưa giao — chia theo chặng Chờ sửa · Chờ OQC · Chờ GN tích · Chờ giao (14/10/2026). */}
-        <Button chiXemOk variant="secondary" icon="package" onClick={() => setTonKcsOpen(true)}>Tồn từ KCS</Button>
-        <Button chiXemOk variant="ghost" icon="history" onClick={() => setHisOpen(true)}>Lịch sử</Button>
-        <Button chiXemOk variant="ghost" icon="check" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
+        {/* Laptop/PC (từ `md`) giữ NGUYÊN dãy nút cũ (29/10/2026, người dùng chốt); điện thoại gom vào menu "Thêm".
+            · Excel bám TAB đang mở — 2 tab là 2 tập dữ liệu khác hẳn nhau (tem ↔ phiếu).
+            · Tồn từ KCS = tem đã kiểm phẩm mà chưa giao — Chờ sửa · Chờ OQC · Chờ GN tích · Chờ giao (14/10/2026). */}
+        <span className="hidden md:contents">
+          <Button chiXemOk variant="secondary" icon="download"
+            onClick={tab === 'tem' ? doExcelTem : doExcelPhieu}
+            disabled={tab === 'tem' ? !displayRows.length : !phieus.length}>
+            Excel ({tab === 'tem' ? displayRows.length : phieus.length})
+          </Button>
+          <Button chiXemOk variant="secondary" icon="package" onClick={() => setTonKcsOpen(true)}>Tồn từ KCS</Button>
+          <Button chiXemOk variant="ghost" icon="history" onClick={() => setHisOpen(true)}>Lịch sử</Button>
+          <Button chiXemOk variant="ghost" icon="check" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
+        </span>
+        <MenuNut className="md:hidden" nhom={[
+          { muc: [
+            { ten: 'Tồn từ KCS', icon: 'package', chiXemOk: true, onClick: () => setTonKcsOpen(true) },
+            { ten: 'Đã hoàn thành', icon: 'check', chiXemOk: true, onClick: () => setDoneOpen(true) },
+            { ten: 'Lịch sử', icon: 'history', chiXemOk: true, onClick: () => setHisOpen(true) },
+          ] },
+          { muc: [{ ten: tab === 'tem' ? 'Xuất Excel tem chờ giao' : 'Xuất Excel phiếu giao', icon: 'download', chiXemOk: true,
+            ghi: tab === 'tem' ? displayRows.length : phieus.length,
+            disabled: tab === 'tem' ? !displayRows.length : !phieus.length,
+            onClick: tab === 'tem' ? doExcelTem : doExcelPhieu }] },
+        ]} />
       </Toolbar>
 
       <div className="mb-4 flex gap-1 rounded-control bg-surface-muted p-1">

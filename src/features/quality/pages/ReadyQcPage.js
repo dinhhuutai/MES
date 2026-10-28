@@ -4,6 +4,7 @@ import TraVeGnModal, { ungVienGn } from '../../../components/common/TraVeGnModal
 import TraVeListModal, { TraVeListButton, TRA_VE_THEO_MAN } from '../../../components/common/TraVeListModal';
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import Toolbar from '../../../components/common/Toolbar';
+import MenuNut from '../../../components/common/MenuNut';
 import DataTable from '../../../components/common/DataTable';
 import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
 import Badge from '../../../components/common/Badge';
@@ -406,11 +407,25 @@ export default function ReadyQcPage() {
           <Button loading={batching} onClick={doBatch}>QC xác nhận ({selected.size})</Button>
         )}
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
-        <Button chiXemOk variant="secondary" icon="file-spreadsheet" loading={exporting} onClick={doExport}>Excel ({filtered.length})</Button>
+        {/* Laptop/PC (từ `md`) giữ NGUYÊN dãy nút cũ (29/10/2026, người dùng chốt); điện thoại gom vào menu "Thêm". */}
+        <span className="hidden md:contents">
+          <Button chiXemOk variant="secondary" icon="file-spreadsheet" loading={exporting} onClick={doExport}>Excel ({filtered.length})</Button>
+        </span>
         <NghenButton rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} onClick={() => setNghenOpen(true)} />
-        <TraVeListButton onClick={() => setTraVeOpen(true)} />
-        <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
-        <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
+        <span className="hidden md:contents">
+          <TraVeListButton onClick={() => setTraVeOpen(true)} />
+          <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
+          <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
+        </span>
+        <MenuNut className="md:hidden" nhom={[
+          { muc: [
+            { ten: 'Danh sách trả về', icon: 'undo', chiXemOk: true, onClick: () => setTraVeOpen(true) },
+            { ten: 'Đã hoàn thành', icon: 'check-circle', chiXemOk: true, onClick: () => setDoneOpen(true) },
+            { ten: 'Lịch sử', icon: 'history', chiXemOk: true, onClick: () => setHistOpen(true) },
+          ] },
+          { muc: [{ ten: exporting ? 'Đang xuất Excel…' : 'Xuất Excel', icon: 'file-spreadsheet', chiXemOk: true, ghi: filtered.length,
+            disabled: exporting, onClick: doExport }] },
+        ]} />
         {/* ⚠ "Chờ QC" = đợt KỸ THUẬT ĐÃ XÁC NHẬN HẾT checklist (`tech_done` theo đợt) — gương ô "Tồn cuối"
             của dải Theo dõi (`siSoTram DV.READY_QC`). Bảng vẫn hiện CẢ đợt KT chưa xong (chốt 23/09) nên
             KHÔNG đếm `rows.length` (24/09/2026: badge ghi 68 trong khi hàng đợi QC thật nhỏ hơn nhiều). */}

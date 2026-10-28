@@ -3,6 +3,7 @@ import NghenListModal, { NghenButton } from '../../../components/common/NghenLis
 import TraVeListModal, { TraVeListButton, TRA_VE_THEO_MAN } from '../../../components/common/TraVeListModal';
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import Toolbar from '../../../components/common/Toolbar';
+import MenuNut from '../../../components/common/MenuNut';
 import OwnerHint from '../../../components/common/OwnerHint';
 import DataTable from '../../../components/common/DataTable';
 import Badge from '../../../components/common/Badge';
@@ -443,13 +444,25 @@ export default function KcsPage() {
         <TraVeFilter checked={onlyReturned} onChecked={setOnlyReturned}
           range={traVeRange} onRange={setTraVeRange} label="Chỉ hiện tem bị trả về" />
         <NghenButton rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} onClick={() => setNghenOpen(true)} />
-        <TraVeListButton onClick={() => setTraVeOpen(true)} />
-        <Button chiXemOk variant="secondary" icon="download" onClick={doExcel} disabled={!viewRows.length}>
-          Excel ({viewRows.length})
-        </Button>
-        <Button chiXemOk variant="ghost" icon="clock" onClick={() => setKiemTruocOpen(true)}>Kiểm trước giờ phơi</Button>
-        <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
-        <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
+        {/* Laptop/PC (từ `md`) giữ NGUYÊN dãy nút cũ (29/10/2026, người dùng chốt); điện thoại gom vào menu "Thêm". */}
+        <span className="hidden md:contents">
+          <TraVeListButton onClick={() => setTraVeOpen(true)} />
+          <Button chiXemOk variant="secondary" icon="download" onClick={doExcel} disabled={!viewRows.length}>
+            Excel ({viewRows.length})
+          </Button>
+          <Button chiXemOk variant="ghost" icon="clock" onClick={() => setKiemTruocOpen(true)}>Kiểm trước giờ phơi</Button>
+          <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
+          <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
+        </span>
+        <MenuNut className="md:hidden" nhom={[
+          { muc: [
+            { ten: 'Danh sách trả về', icon: 'undo', chiXemOk: true, onClick: () => setTraVeOpen(true) },
+            { ten: 'Kiểm trước giờ phơi', icon: 'clock', chiXemOk: true, onClick: () => setKiemTruocOpen(true) },
+            { ten: 'Đã hoàn thành', icon: 'check-circle', chiXemOk: true, onClick: () => setDoneOpen(true) },
+            { ten: 'Lịch sử', icon: 'history', chiXemOk: true, onClick: () => setHistOpen(true) },
+          ] },
+          { muc: [{ ten: 'Xuất Excel', icon: 'download', chiXemOk: true, ghi: viewRows.length, disabled: !viewRows.length, onClick: doExcel }] },
+        ]} />
         <Badge tone="warning">{rows.length} tem chờ kiểm</Badge>
       </Toolbar>
       <VuaQuet ket={vuaQuet} className="mb-3" />

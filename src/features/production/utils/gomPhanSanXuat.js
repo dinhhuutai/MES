@@ -11,10 +11,15 @@ import { khoaNgc } from '../../../utils/nhaGiaCong';
 const n = (v) => Number(v) || 0;
 export const slRelease = (run) => n(run?.lenh?.so_luong_release);
 export const daIn = (run) => n(run?.printed);
+// Phần đã in là tem BTP TRƯỚC (BE `getRun.printed_btp`, 29/10/2026; BE cũ không trả ⇒ 0 = luật cũ).
+export const daInBtp = (run) => n(run?.printed_btp);
+// Đã in theo trần đang xét: tem BTP trước có TRẦN RIÊNG 110% SL release ⇒ tích BTP trước = cộng thêm đúng số tem đó
+//   vào mức tối đa in được (gương BE `production.service kiemTranIn`).
+export const daInTheoTran = (run, btp = false) => (btp ? daInBtp(run) : daIn(run) - daInBtp(run));
 // Còn in được của LỆNH (trần 110% SL release, trừ đã in). Không có SL release ⇒ null (không chặn) — gương BE.
-export const conDuocIn = (run) => {
+export const conDuocIn = (run, btp = false) => {
   const t = slRelease(run);
-  return t > 0 ? Math.max(0, Math.floor(t * 1.1) - daIn(run)) : null;
+  return t > 0 ? Math.max(0, Math.floor(t * 1.1) - daInTheoTran(run, btp)) : null;
 };
 // Vải còn lại CHƯA in của lệnh (tới 100% SL release) — số mặc định khi trả về Kế hoạch.
 export const conLai = (run) => Math.max(0, slRelease(run) - daIn(run));
@@ -39,8 +44,8 @@ export function gomPhan(runs) {
 
 export const tongNhom = (runs, f) => (runs || []).reduce((s, r) => s + f(r), 0);
 // Còn in được của cả nhóm; 1 lệnh không có SL release ⇒ cả nhóm không chặn (null).
-export const conDuocInNhom = (runs) => {
-  const ds = (runs || []).map(conDuocIn);
+export const conDuocInNhom = (runs, btp = false) => {
+  const ds = (runs || []).map((r) => conDuocIn(r, btp));
   return ds.some((x) => x == null) ? null : ds.reduce((s, x) => s + x, 0);
 };
 

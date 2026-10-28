@@ -19,9 +19,9 @@ export default function Pagination({ page, totalPages, total, onPage }) {
   const btn = 'flex h-9 min-w-9 items-center justify-center rounded-control border border-line px-2 text-sm disabled:opacity-40 hover:bg-surface-muted';
 
   return (
-    <div className="mt-4 flex items-center justify-between text-sm text-ink-soft">
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm text-ink-soft">
       <span>Tổng {total} bản ghi</span>
-      <div className="flex items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
         <button disabled={page <= 1} onClick={() => onPage(page - 1)} className={btn} aria-label="Trang trước">
           <Icon name="chevron-right" size={16} className="rotate-180" />
         </button>

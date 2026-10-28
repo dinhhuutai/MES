@@ -901,7 +901,7 @@ export default function DashboardPage() {
           }[tone];
           return (
             <button type="button" onClick={onClick} disabled={!onClick}
-              className={`flex min-w-0 flex-1 items-center gap-2.5 rounded-card border px-3 py-2.5 text-left transition ${T} ${onClick ? 'hover:brightness-95' : 'cursor-default'}`}>
+              className={`flex min-w-0 items-center gap-2.5 rounded-card border px-3 py-2.5 text-left transition lg:flex-1 ${T} ${onClick ? 'hover:brightness-95' : 'cursor-default'}`}>
               <span className="text-lg">{icon}</span>
               <div className="min-w-0">
                 <div className="text-xl font-bold tabular-nums leading-none">{value}</div>
@@ -912,7 +912,9 @@ export default function DashboardPage() {
           );
         };
         return (
-          <div className="mb-5 flex flex-wrap gap-2.5">
+          // Điện thoại / máy tính bảng: lưới 2 → 4 cột (28/10/2026 — bản `flex-1` bóp 7 ô vào 1 hàng). Từ `lg` về như cũ
+          //   (29/10/2026): 1 hàng, các ô chia đều.
+          <div className="mb-5 grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:flex lg:flex-wrap">
             <KpiCard tone="rose" icon="🔴" label="Trễ hạn giao" value={co('dieuPhoi') ? fmtNum(dieuPhoi?.tre_han?.qua_han || 0) : <SoCho />}
               sub="đã quá hạn, chưa giao" onClick={dieuPhoi ? () => moTreHan({ kind: 'qua' }) : undefined} />
             <KpiCard tone="amber" icon="🟡" label="Sắp đến hạn" value={co('dieuPhoi') ? fmtNum(dieuPhoi?.tre_han?.sap_han || 0) : <SoCho />}

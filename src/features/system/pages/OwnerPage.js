@@ -219,7 +219,7 @@ export default function OwnerPage() {
       <div className="card mb-4 overflow-hidden">
         <div className="border-b border-line px-4 py-2.5 text-sm font-semibold text-ink">Tổng quan owner theo checkpoint</div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[680px] text-sm">
             <thead>
               <tr className="border-b border-line bg-surface-muted/60 text-left text-xs uppercase tracking-wide text-ink-soft">
                 <th className="px-4 py-2 font-semibold">Checkpoint</th>
@@ -265,7 +265,7 @@ export default function OwnerPage() {
             </div>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[680px] text-sm">
               <thead>
                 <tr className="border-b border-line bg-surface-muted/60 text-left text-xs uppercase tracking-wide text-ink-soft">
                   <th className="px-3 py-2 font-semibold">#</th>

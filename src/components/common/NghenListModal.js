@@ -403,7 +403,8 @@ export default function NghenListModal({
 
 // Nút mở "Danh sách nghẽn" + số đếm. Hiện số ĐỎ khi có hàng nghẽn để nhìn là thấy ngay.
 // ⚠ Đếm bằng CHÍNH `trangThai` của trang ⇒ số trên nút luôn khớp số dòng trong modal.
-export function NghenButton({ rows = [], trangThai, onClick, loai = 'NGHEN' }) {
+// `className` (29/10/2026) — cộng thêm class (vd nút gọn ở trang Xác nhận chạy).
+export function NghenButton({ rows = [], trangThai, onClick, loai = 'NGHEN', className = '' }) {
   const L = LOAI[loai] || LOAI.NGHEN;
   const n = useMemo(
     () => (rows || []).filter((r) => trangThai && trangThai(r) === loai).length,
@@ -411,7 +412,7 @@ export function NghenButton({ rows = [], trangThai, onClick, loai = 'NGHEN' }) {
   );
   return (
     <Button variant={n ? 'secondary' : 'ghost'} icon={loai === 'SAP_NGHEN' ? 'clock' : 'alert-triangle'} chiXemOk onClick={onClick}
-      className={n ? (loai === 'SAP_NGHEN' ? 'text-warning' : 'text-danger') : undefined}>
+      className={`${n ? (loai === 'SAP_NGHEN' ? 'text-warning' : 'text-danger') : ''} ${className}`}>
       {L.nut}{n ? ` (${n})` : ''}
     </Button>
   );

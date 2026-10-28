@@ -3,6 +3,7 @@ import NghenListModal, { NghenButton } from '../../../components/common/NghenLis
 import TraVeListModal, { TraVeListButton, TRA_VE_THEO_MAN } from '../../../components/common/TraVeListModal';
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import Toolbar from '../../../components/common/Toolbar';
+import MenuNut from '../../../components/common/MenuNut';
 import Modal from '../../../components/common/Modal';
 import SearchableSelect from '../../../components/common/SearchableSelect';
 import OwnerHint from '../../../components/common/OwnerHint';
@@ -436,12 +437,23 @@ export default function SuaPage() {
         <Button chiXemOk variant={showFilters || activeFilters.length ? 'secondary' : 'ghost'} icon="filter"
           onClick={() => setShowFilters((v) => !v)}>Bộ lọc{activeFilters.length ? ` (${activeFilters.length})` : ''}</Button>
         <NghenButton rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} onClick={() => setNghenOpen(true)} />
-        <TraVeListButton onClick={() => setTraVeOpen(true)} />
-        <Button chiXemOk variant="secondary" icon="download" onClick={doExcel} disabled={!rows.length}>
-          Excel ({rows.length})
-        </Button>
-        <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
-        <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
+        {/* Laptop/PC (từ `md`) giữ NGUYÊN dãy nút cũ (29/10/2026, người dùng chốt); điện thoại gom vào menu "Thêm". */}
+        <span className="hidden md:contents">
+          <TraVeListButton onClick={() => setTraVeOpen(true)} />
+          <Button chiXemOk variant="secondary" icon="download" onClick={doExcel} disabled={!rows.length}>
+            Excel ({rows.length})
+          </Button>
+          <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
+          <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
+        </span>
+        <MenuNut className="md:hidden" nhom={[
+          { muc: [
+            { ten: 'Danh sách trả về', icon: 'undo', chiXemOk: true, onClick: () => setTraVeOpen(true) },
+            { ten: 'Đã hoàn thành', icon: 'check-circle', chiXemOk: true, onClick: () => setDoneOpen(true) },
+            { ten: 'Lịch sử', icon: 'history', chiXemOk: true, onClick: () => setHistOpen(true) },
+          ] },
+          { muc: [{ ten: 'Xuất Excel', icon: 'download', chiXemOk: true, ghi: rows.length, disabled: !rows.length, onClick: doExcel }] },
+        ]} />
         <Badge tone="warning">{rows.length} tem chờ sửa</Badge>
       </Toolbar>
       <VuaQuet ket={vuaQuet} className="mb-3" />

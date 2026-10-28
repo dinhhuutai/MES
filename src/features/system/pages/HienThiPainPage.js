@@ -158,7 +158,7 @@ export default function HienThiPainPage() {
       ) : (
         <div className="card overflow-hidden">
           <div className="overflow-auto max-h-[calc(100vh-17rem)]">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[560px] text-sm">
               <thead className="sticky top-0 z-10 bg-surface-muted text-left text-xs font-semibold uppercase text-ink-soft">
                 <tr>
                   <th className="px-3 py-2">Trang</th>

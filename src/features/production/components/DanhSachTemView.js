@@ -79,7 +79,8 @@ const TOI_DA_HUY = 100;
 const MA_HIEN_TOI_DA = 12; // số mã tem liệt kê trong hộp xác nhận, dư thì "… và N tem khác"
 
 // Trạng thái tem: IN → DANG_PHOI → DA_KHO → CHO_SUA/CHO_OQC/LOAI → OQC_DAT → DA_GIAO; HUY.
-const TT = {
+// Export dùng chung với modal "Tem của tôi" (`TemCuaToiModal`, màn Xác nhận chạy).
+export const TT = {
   IN: ['Đã in', 'default'],
   DANG_PHOI: ['Đang phơi', 'info'],
   DA_KHO: ['Đã khô', 'info'],
@@ -90,7 +91,7 @@ const TT = {
   DA_GIAO: ['Đã giao', 'success'],
   HUY: ['Đã hủy', 'danger'],
 };
-const ttBadge = (v) => {
+export const ttBadge = (v) => {
   const [ten, tone] = TT[v] || [v || '—', 'default'];
   return <Badge tone={tone}>{ten}</Badge>;
 };
@@ -291,7 +292,7 @@ export default function DanhSachTemView({
   };
   const clearFilters = () => { setFilters({}); setPage(1); };
   // Bỏ `ngayDen` / `ngayCaDen` khi đếm: khoảng ngày là MỘT bộ lọc, không phải hai. Ô chọn chuyền nằm ngoài panel.
-  const filterCount = Object.entries(filters).filter(([k, v]) => v && !['ngayDen', 'ngayCaDen', 'chuyenId', 'ca', 'khu', 'trangThai'].includes(k)).length;
+  const filterCount = Object.entries(filters).filter(([k, v]) => v && !['ngayDen', 'ngayCaDen', 'chuyenId', 'ca', 'khu', 'trangThai', 'cuaToi'].includes(k)).length;
 
   const fields = laGiaCong ? FIELDS_CHUNG : [...FIELDS_CHUNG, FIELD_CHUYEN, FIELD_MA_NGAY_CA, FIELD_MA_LO];
   const textFilters = Object.fromEntries(fields.map((f) => [f.key, filters[f.key] || '']));
@@ -335,6 +336,7 @@ export default function DanhSachTemView({
           ca: filters.ca || '',
           'khu chuyền': (KHU_LOC.find((t) => t.v === filters.khu) || {}).label || '',
           'trạng thái': (TT[filters.trangThai] || [])[0] || '',
+          'tem của tôi': filters.cuaToi ? 'có' : '',
           ...Object.fromEntries(fields.map((f) => [f.label.toLowerCase(), filters[f.key] || ''])),
         }),
       });
@@ -457,6 +459,14 @@ export default function DanhSachTemView({
             {Object.entries(TT).map(([v, [ten]]) => <option key={v} value={v}>{ten}</option>)}
           </Select>
         </div>
+        {/* TEM CỦA TÔI (28/10/2026) — chỉ tem do chính tài khoản đang đăng nhập in (backend `cuaToi=1`, id lấy từ token). */}
+        {!laGiaCong && (
+          <label className="inline-flex h-10 cursor-pointer select-none items-center gap-2 rounded-control border border-line px-3 text-sm text-ink hover:bg-surface-muted">
+            <input type="checkbox" className="h-4 w-4 accent-primary" checked={!!filters.cuaToi}
+              onChange={(e) => setField('cuaToi', e.target.checked ? '1' : '')} />
+            Tem của tôi
+          </label>
+        )}
         <FilterToggle open={showFilter} count={filterCount} onClick={() => setShowFilter((v) => !v)} />
         <Button chiXemOk variant="secondary" icon="download" onClick={doExcel}
           loading={dangXuat} disabled={!meta.total}>Excel ({fmtNum(meta.total)})</Button>

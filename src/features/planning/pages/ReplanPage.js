@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import Toolbar from '../../../components/common/Toolbar';
+import MenuNut from '../../../components/common/MenuNut';
 import DataTable from '../../../components/common/DataTable';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
@@ -8,7 +9,8 @@ import Modal from '../../../components/common/Modal';
 import Toast from '../../../components/common/Toast';
 import HistoryPanel from '../../../components/common/HistoryPanel';
 import DonePanel from '../../../components/common/DonePanel';
-import { Field, Input, Textarea } from '../../../components/common/controls';
+import { Field, Input, Textarea, Select } from '../../../components/common/controls';
+import BtpKeHoachField, { btpBanDau, btpGuiDi } from '../components/BtpKeHoachField';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import CanhBaoGiaCong from '../components/CanhBaoGiaCong';
 import { laChuyenGiaCong, tenChuyen } from '../utils/chuyenGiaCong';
@@ -191,6 +193,7 @@ export default function ReplanPage() {
       lyDo: '',
       slRelease: {},
       thoIn: row.tho_in_kh || '',
+      btp: false,
     });
     try {
       const r = await getReplanDetail(row.id);
@@ -199,7 +202,7 @@ export default function ReplanPage() {
       // Gắn thêm SL đã nhận về (lệnh gia công nhận hàng nhiều lần) để panel cảnh báo đúng con số.
       setDetail((d) => (d && d.id === row.id
         ? { ...d, da_nhan: r.data.da_nhan, so_luong_release: r.data.so_luong_release ?? d.so_luong_release } : d));
-      setForm((f) => ({ ...f, slRelease: Object.fromEntries(ds.map((d) => [d.dot_vai_id, String(d.so_luong)])) }));
+      setForm((f) => ({ ...f, slRelease: Object.fromEntries(ds.map((d) => [d.dot_vai_id, String(d.so_luong)])), btp: btpBanDau(ds) }));
     } catch (e) { /* im lặng — vẫn dời được ngày/chuyền/giờ */ }
   };
 
@@ -225,11 +228,12 @@ export default function ReplanPage() {
   };
 
   const openBatch = () => {
-    setBatchForm({ chuyenId: '', ngayKeHoach: '', gioBd: '', gioKt: '', lyDo: '', thoIn: '' });
+    setBatchForm({ chuyenId: '', ngayKeHoach: '', gioBd: '', gioKt: '', lyDo: '', thoIn: '', btp: '' });
     setBatchOpen(true);
   };
   // Backend chưa có cột thợ in kế hoạch (mig 111 chưa chạy) ⇒ lập lại kế hoạch vẫn xong, chỉ báo thêm.
-  const canhBaoThoIn = (res) => (res?.data?.tho_in_chua_luu ? ' · CHƯA lưu thợ in (hệ thống chưa cập nhật cơ sở dữ liệu)' : '');
+  const canhBaoThoIn = (res) => (res?.data?.tho_in_chua_luu ? ' · CHƯA lưu thợ in (hệ thống chưa cập nhật cơ sở dữ liệu)' : '')
+    + (res?.data?.btp_chua_luu ? ' · CHƯA lưu BTP (hệ thống chưa cập nhật cơ sở dữ liệu — migration 120)' : '');
 
   const submitBatch = async () => {
     if (!batchForm.ngayKeHoach) { show('Chọn ngày sản xuất kế hoạch', 'error'); return; }
@@ -244,6 +248,8 @@ export default function ReplanPage() {
         lyDo: batchForm.lyDo.trim(),
         // Trống = GIỮ thợ in kế hoạch riêng của từng lệnh (không gửi khóa ⇒ backend không đụng).
         ...(batchForm.thoIn.trim() ? { thoIn: batchForm.thoIn } : {}),
+        // BTP (29/10/2026): '' = giữ nguyên · THEM = thêm 1 đầu (hiện lại Release 1) · BO = bỏ đầu chờ (rời Release 1).
+        ...(batchForm.btp ? { btp: batchForm.btp === 'THEM' } : {}),
       });
       const { okCount, failedCount } = res.data;
       show((failedCount ? `Đã lập lại ${okCount} lệnh, ${failedCount} lỗi` : `Đã lập lại kế hoạch ${okCount} lệnh`) + canhBaoThoIn(res),
@@ -275,6 +281,8 @@ export default function ReplanPage() {
           .map((d) => [d.dot_vai_id, form.slRelease[d.dot_vai_id]])),
         // Thợ in kế hoạch: chỉ gửi khi đổi (xóa hết = gửi chuỗi rỗng ⇒ backend xóa).
         ...((form.thoIn || '') !== (detail.tho_in_kh || '') ? { thoIn: form.thoIn || '' } : {}),
+        // BTP (29/10/2026): chỉ gửi khi đổi so với lúc mở — tích ⇒ hiện lại ở Release 1, bỏ ⇒ rời Release 1.
+        ...btpGuiDi(form.btp, dsDot),
       });
       show(`Đã lập lại kế hoạch cho ${detail.ma_lenh_san_xuat}${canhBaoThoIn(res)}`);
       setDetail(null);
@@ -364,8 +372,15 @@ export default function ReplanPage() {
           <Button onClick={openBatch}>Lập lại kế hoạch ({selected.size})</Button>
         )}
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
-        <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
-        <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
+        {/* Laptop/PC (từ `md`) giữ NGUYÊN nút cũ (29/10/2026, người dùng chốt); điện thoại gom vào menu "Thêm". */}
+        <span className="hidden md:contents">
+          <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
+          <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
+        </span>
+        <MenuNut className="md:hidden" nhom={[{ muc: [
+          { ten: 'Đã hoàn thành', icon: 'check-circle', chiXemOk: true, onClick: () => setDoneOpen(true) },
+          { ten: 'Lịch sử', icon: 'history', chiXemOk: true, onClick: () => setHistOpen(true) },
+        ] }]} />
         <Badge tone="info">{meta.total} lệnh</Badge>
       </Toolbar>
 
@@ -491,6 +506,9 @@ export default function ReplanPage() {
                   onChange={(v) => setForm((f) => ({ ...f, thoIn: v }))}
                   placeholder="Gõ tên hoặc MSNV để tìm rồi chọn / Enter..." />
               </Field>
+              <div className="mb-3">
+                <BtpKeHoachField checked={form.btp} onChange={(v) => setForm((f) => ({ ...f, btp: v }))} dsDot={dsDot} />
+              </div>
               <Field label="Lý do lập lại" hint="Không bắt buộc — có nhập thì hiện ở sidebar Lịch sử">
                 <Textarea rows={3} value={form.lyDo}
                   onChange={(e) => setForm({ ...form, lyDo: e.target.value })}
@@ -546,6 +564,13 @@ export default function ReplanPage() {
           <NhieuNguoiSelect value={batchForm.thoIn} options={users}
             onChange={(v) => setBatchForm((f) => ({ ...f, thoIn: v }))}
             placeholder="Gõ tên hoặc MSNV để tìm rồi chọn / Enter..." />
+        </Field>
+        <Field label="BTP khác KH" hint="Thêm 1 đầu ⇒ đợt vải của các lệnh hiện lại ở Release 1 · Bỏ đầu chờ ⇒ rời Release 1">
+          <Select value={batchForm.btp} onChange={(e) => setBatchForm((f) => ({ ...f, btp: e.target.value }))}>
+            <option value="">Giữ nguyên</option>
+            <option value="THEM">Thêm 1 đầu (hiện lại Release 1)</option>
+            <option value="BO">Bỏ đầu đang chờ (rời Release 1)</option>
+          </Select>
         </Field>
         <Field label="Lý do lập lại" hint="Không bắt buộc — có nhập thì hiện ở sidebar Lịch sử">
           <Textarea rows={3} value={batchForm.lyDo}

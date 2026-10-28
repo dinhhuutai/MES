@@ -3,6 +3,7 @@ import NghenListModal, { NghenButton } from '../../../components/common/NghenLis
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import taiHetTrang, { LIMIT_TAI_LON } from '../../../utils/taiHetTrang';
 import Toolbar from '../../../components/common/Toolbar';
+import MenuNut from '../../../components/common/MenuNut';
 import DataTable from '../../../components/common/DataTable';
 import Badge from '../../../components/common/Badge';
 import GomBadge from '../../../components/common/GomBadge';
@@ -245,15 +246,27 @@ export default function Release2Page() {
         )}
         <DateRangePicker value={ngayKH} onChange={setNgayKH} placeholder="Ngày SX kế hoạch" />
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
-        <Button chiXemOk variant="secondary" icon="download" onClick={doExcel} disabled={!filtered.length}>
-          Excel ({filtered.length})
-        </Button>
+        {/* Laptop/PC (từ `md`) giữ NGUYÊN dãy nút cũ (29/10/2026, người dùng chốt); điện thoại gom vào menu "Thêm". */}
+        <span className="hidden md:contents">
+          <Button chiXemOk variant="secondary" icon="download" onClick={doExcel} disabled={!filtered.length}>
+            Excel ({filtered.length})
+          </Button>
+        </span>
         {/* Nút Nghẽn hiện ở MỌI chip (01/10/2026 — gỡ luật ẩn ở "Tất cả" của 26/09); đếm đúng chip đang
             đứng, modal mở sẵn chip đó (`chipMacDinh`). Chip '' ⇒ `hopChip` trả true ⇒ đếm mọi lệnh. */}
         <NghenButton rows={rows.filter((r) => hopChip(r, loai))} trangThai={(r) => statusLenh(r.id)}
           onClick={() => setNghenOpen(true)} />
-        <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
-        <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
+        <span className="hidden md:contents">
+          <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
+          <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
+        </span>
+        <MenuNut className="md:hidden" nhom={[
+          { muc: [
+            { ten: 'Đã hoàn thành', icon: 'check-circle', chiXemOk: true, onClick: () => setDoneOpen(true) },
+            { ten: 'Lịch sử', icon: 'history', chiXemOk: true, onClick: () => setHistOpen(true) },
+          ] },
+          { muc: [{ ten: 'Xuất Excel', icon: 'download', chiXemOk: true, ghi: filtered.length, disabled: !filtered.length, onClick: doExcel }] },
+        ]} />
         <Badge tone="info">{filtered.length} chờ duyệt</Badge>
       </Toolbar>
 

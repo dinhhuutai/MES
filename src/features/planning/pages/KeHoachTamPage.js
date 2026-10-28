@@ -4,6 +4,7 @@ import useNghenMap from '../../../hooks/useNghenMap';
 import useLyDoNghen from '../../../hooks/useLyDoNghen';
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import Toolbar from '../../../components/common/Toolbar';
+import MenuNut from '../../../components/common/MenuNut';
 import KeHoachTamListModal from '../components/KeHoachTamListModal';
 import DataTable from '../../../components/common/DataTable';
 import Badge from '../../../components/common/Badge';
@@ -333,9 +334,17 @@ export default function KeHoachTamPage() {
         )}
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
         <NghenButton rows={rows} trangThai={(r) => statusDot(r.dot_vai_ve_id)} onClick={() => setNghenOpen(true)} />
-        <Button chiXemOk variant="secondary" icon="list" onClick={() => setDsOpen(true)}>Danh sách kế hoạch tạm</Button>
-        <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
-        <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
+        {/* Laptop/PC (từ `md`) giữ NGUYÊN dãy nút cũ (29/10/2026, người dùng chốt); điện thoại gom vào menu "Thêm". */}
+        <span className="hidden md:contents">
+          <Button chiXemOk variant="secondary" icon="list" onClick={() => setDsOpen(true)}>Danh sách kế hoạch tạm</Button>
+          <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
+          <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
+        </span>
+        <MenuNut className="md:hidden" nhom={[{ muc: [
+          { ten: 'Danh sách kế hoạch tạm', icon: 'list', chiXemOk: true, onClick: () => setDsOpen(true) },
+          { ten: 'Đã hoàn thành', icon: 'check-circle', chiXemOk: true, onClick: () => setDoneOpen(true) },
+          { ten: 'Lịch sử', icon: 'history', chiXemOk: true, onClick: () => setHistOpen(true) },
+        ] }]} />
         <Badge tone="info">{activeCount ? `${filtered.length}/` : ''}{meta.total || rows.length} bản</Badge>
       </Toolbar>
 

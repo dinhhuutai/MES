@@ -6,6 +6,7 @@ import useNghenMap from '../../../hooks/useNghenMap';
 import useLyDoNghen from '../../../hooks/useLyDoNghen';
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import Toolbar from '../../../components/common/Toolbar';
+import MenuNut from '../../../components/common/MenuNut';
 import DataTable from '../../../components/common/DataTable';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
@@ -450,10 +451,20 @@ export default function GiaCongPage() {
           <Button icon="printer" onClick={openInTem}>In tem ({selected.size})</Button>
         )}
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
-        <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử chuyển</Button>
-        <Badge tone="info">{fmtNum(meta.total || 0)} lệnh</Badge>
+        {/* Laptop/PC (từ `md`) giữ NGUYÊN dãy nút cũ (29/10/2026, người dùng chốt); điện thoại gom vào menu "Thêm". */}
+        <span className="hidden md:contents">
+          <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử chuyển</Button>
+          <Badge tone="info">{fmtNum(meta.total || 0)} lệnh</Badge>
+        </span>
         <NghenButton rows={rows} trangThai={(r) => statusLenh(r.id)} onClick={() => setNghenOpen(true)} />
-        <TraVeListButton onClick={() => setTraVeOpen(true)} />
+        <span className="hidden md:contents">
+          <TraVeListButton onClick={() => setTraVeOpen(true)} />
+        </span>
+        <MenuNut className="md:hidden" nhom={[{ muc: [
+          { ten: 'Lịch sử chuyển', icon: 'history', chiXemOk: true, onClick: () => setHistOpen(true) },
+          { ten: 'Danh sách trả về', icon: 'undo', chiXemOk: true, onClick: () => setTraVeOpen(true) },
+        ] }]} />
+        <span className="md:hidden"><Badge tone="info">{fmtNum(meta.total || 0)} lệnh</Badge></span>
       </Toolbar>
 
       <FieldFilters fields={FILTER_FIELDS} values={filters}

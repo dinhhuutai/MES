@@ -5,6 +5,7 @@ import TraVeListModal, { TraVeListButton, TRA_VE_THEO_MAN } from '../../../compo
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import taiHetTrang, { LIMIT_TAI_LON } from '../../../utils/taiHetTrang';
 import Toolbar from '../../../components/common/Toolbar';
+import MenuNut from '../../../components/common/MenuNut';
 import Pagination from '../../../components/common/Pagination';
 import FieldFilters, { FilterToggle, filterRows } from '../../../components/common/FieldFilters';
 import Badge from '../../../components/common/Badge';
@@ -78,38 +79,44 @@ const FILTER_FIELDS = [
 ];
 
 // Các ô dữ liệu chung cho cả row lẻ lẫn member của set.
-// BTP KHÁC KẾ HOẠCH (mig 120, 28/10/2026): in BTP 2 đầu tấm vải ở 2 kế hoạch khác nhau ⇒ đợt release được 2 × SL vải,
-// ở lại Release 1 sau đầu 1. Đầu đang lập = gương BE `utils/btpKhacKh.js dauDangLap`.
+// BTP KHÁC KẾ HOẠCH (mig 120, 28/10/2026): in BTP nhiều đầu tấm vải ở các kế hoạch khác nhau ⇒ đợt release được
+// số đầu × SL vải, ở lại Release 1 sau mỗi đầu. 29/10/2026: mỗi lần tích BTP lúc release = THÊM 1 ĐẦU (in 3, 4 đầu…).
+// Đầu đang lập = gương BE `utils/btpKhacKh.js dauDangLap`.
+const soDauBtp = (r) => Math.max(1, Number(r.so_dau_btp) || (r.btp_khac_kh ? 2 : 1));
 const dauBtp = (r) => {
   const sl = Number(r.so_luong_vai_ve) || 0;
-  return sl > 0 ? Math.min(2, Math.floor((Number(r.da_release) || 0) / sl) + 1) : 1;
+  return sl > 0 ? Math.min(soDauBtp(r), Math.floor((Number(r.da_release) || 0) / sl) + 1) : 1;
 };
-const dotBtp = (r) => (r?._dots || (r ? [r] : [])).find((d) => d.btp_khac_kh) || null;
+const dotBtp = (r) => (r?._dots || (r ? [r] : [])).find((d) => soDauBtp(d) > 1) || null;
 function BtpBadge({ r }) {
   const d = dotBtp(r);
   if (!d) return null;
   return (
-    <span title="In BTP 2 đầu tấm vải ở 2 kế hoạch khác nhau — đợt được lập kế hoạch 2 lần">
-      <Badge tone="info">BTP khác KH · đầu {dauBtp(d)}/2</Badge>
+    <span title={`In BTP ${soDauBtp(d)} đầu tấm vải ở các kế hoạch khác nhau — đợt được lập kế hoạch ${soDauBtp(d)} lần`}>
+      <Badge tone="info">BTP khác KH · đầu {dauBtp(d)}/{soDauBtp(d)}</Badge>
     </span>
   );
 }
-// Ô tích ở form release. `daBat` = đợt đã có cờ (lần lập đầu 2) ⇒ tích sẵn, khóa (tắt ở Hệ thống › BTP khác kế hoạch).
-function BtpKhacKhField({ checked, onChange, daBat }) {
+// Ô tích ở form release — tích = THÊM 1 ĐẦU sau lần release này (tích ở lần 2 ⇒ đầu 3…). `dauDangLap` = chữ "đầu k/N"
+//   khi đợt đã là BTP. Bỏ đầu thừa ở Lập lại kế hoạch / Sửa kế hoạch / Hệ thống › BTP khác kế hoạch.
+function BtpKhacKhField({ checked, onChange, dauDangLap }) {
   return (
     <label className="mt-3 flex items-start gap-2 rounded-control border border-line px-3 py-2 text-sm">
-      <input type="checkbox" className="mt-0.5 h-4 w-4 accent-primary" checked={daBat || !!checked} disabled={daBat}
+      <input type="checkbox" className="mt-0.5 h-4 w-4 accent-primary" checked={!!checked}
         onChange={(e) => onChange(e.target.checked)} />
       <span>
-        <b className="text-ink">BTP khác KH</b>
+        <b className="text-ink">BTP khác KH{dauDangLap ? ` — đang lập ${dauDangLap}` : ''}</b>
         <span className="block text-xs text-ink-soft">
-          {daBat ? 'Đợt đã đánh dấu BTP khác KH — đang lập kế hoạch đầu còn lại'
-            : 'In 2 đầu tấm vải ở 2 kế hoạch khác nhau — release xong, phần in vẫn ở lại Release 1 để lập kế hoạch đầu kia'}
+          Tích = thêm 1 đầu tấm vải (như thêm 1 đợt vải): release xong, phần in vẫn ở lại Release 1 để lập kế hoạch đầu kế tiếp
         </span>
       </span>
     </label>
   );
 }
+const chuDauDangLap = (ds) => {
+  const d = (ds || []).find((x) => soDauBtp(x) > 1);
+  return d ? `đầu ${dauBtp(d)}/${soDauBtp(d)}` : '';
+};
 
 function DataCells({ r }) {
   return (
@@ -415,7 +422,7 @@ export default function Release1Page() {
   // Backend chưa chạy mig 111 ⇒ release vẫn xong nhưng thợ in không được lưu — nói rõ thay vì im lặng.
   const canhBaoThoIn = (res) => (res?.data?.tho_in_chua_luu ? ' · CHƯA lưu thợ in (hệ thống chưa cập nhật cơ sở dữ liệu)' : '')
     + (res?.data?.btp_chua_luu ? ' · CHƯA lưu "BTP khác KH" (hệ thống chưa cập nhật cơ sở dữ liệu)' : '')
-    + (res?.data?.btp_khac_kh ? ' · BTP khác KH: phần in ở lại Release 1 để lập kế hoạch đầu kia' : '');
+    + (res?.data?.btp_khac_kh ? ' · BTP khác KH: phần in ở lại Release 1 để lập kế hoạch đầu kế tiếp' : '');
 
   // Release 1 phần in lẻ (từ side panel chi tiết)
   // ⚠ CHỐT BẤM ĐÚP (21/10/2026): `saving` chỉ khóa nút SAU khi React vẽ lại (và sau `await hoiLyDoNghen`) ⇒ bấm đúp
@@ -533,15 +540,28 @@ export default function Release1Page() {
           <label className="flex items-center gap-1"><input type="checkbox" checked={showWait} onChange={(e) => setShowWait(e.target.checked)} />Chờ Ready</label>
         </span>
         <FilterToggle open={showFilters} count={activeCount} onClick={() => setShowFilters((v) => !v)} />
-        {/* Cùng modal với màn "Tạo đợt sản xuất" — người lập kế hoạch ở Release 1 cũng cần in/xuất
-            danh sách release cho chuyền mà không phải nhảy sang màn khác. */}
-        <Button chiXemOk variant="secondary" icon="list" onClick={() => setReleaseListOpen(true)}>Danh sách release</Button>
-        <Button chiXemOk variant="secondary" icon="download" onClick={doExcel}
-          disabled={!viewRowsGom.length}>Excel</Button>
+        {/* Laptop/PC (từ `md`) giữ NGUYÊN dãy nút cũ (29/10/2026, người dùng chốt); điện thoại gom vào menu "Thêm".
+            Danh sách release = cùng modal với màn "Gom đợt vải". */}
+        <span className="hidden md:contents">
+          <Button chiXemOk variant="secondary" icon="list" onClick={() => setReleaseListOpen(true)}>Danh sách release</Button>
+          <Button chiXemOk variant="secondary" icon="download" onClick={doExcel}
+            disabled={!viewRowsGom.length}>Excel</Button>
+        </span>
         <NghenButton rows={rows} trangThai={(r) => statusDot(r.dot_vai_id)} onClick={() => setNghenOpen(true)} />
-        <TraVeListButton onClick={() => setDsTraVeOpen(true)} />
-        <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
-        <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
+        <span className="hidden md:contents">
+          <TraVeListButton onClick={() => setDsTraVeOpen(true)} />
+          <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
+          <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
+        </span>
+        <MenuNut className="md:hidden" nhom={[
+          { muc: [
+            { ten: 'Danh sách release', icon: 'list', chiXemOk: true, onClick: () => setReleaseListOpen(true) },
+            { ten: 'Danh sách trả về', icon: 'undo', chiXemOk: true, onClick: () => setDsTraVeOpen(true) },
+            { ten: 'Đã hoàn thành', icon: 'check-circle', chiXemOk: true, onClick: () => setDoneOpen(true) },
+            { ten: 'Lịch sử', icon: 'history', chiXemOk: true, onClick: () => setHistOpen(true) },
+          ] },
+          { muc: [{ ten: 'Xuất Excel', icon: 'download', chiXemOk: true, ghi: viewRowsGom.length, disabled: !viewRowsGom.length, onClick: doExcel }] },
+        ]} />
         <Badge tone="info">{activeCount || loaiPain ? `${viewRows.length}/` : ''}{meta.total} đợt vải · {viewRowsGom.length} dòng</Badge>
       </Toolbar>
 
@@ -556,7 +576,7 @@ export default function Release1Page() {
             <Icon name="undo" size={15} /> Test Run trả về ({tvView.length})
           </div>
           <div className="max-h-72 overflow-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[1000px] text-[13px] lg:text-sm">
               <thead>
                 <tr className="border-b border-line bg-surface-muted/60 text-left">
                   {['Lệnh', 'Khách hàng · Đơn hàng', 'Mã hàng', 'Code phần', 'Màu · Kích (vải/phim)', 'Phương án in', 'Chuyền', 'Ngày KH', 'SL', 'Trả về'].map((h) => (
@@ -598,7 +618,7 @@ export default function Release1Page() {
 
       <div className="card overflow-hidden">
         <div className="overflow-auto max-h-[calc(100vh-13rem)]">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[1000px] text-[13px] lg:text-sm">
             <thead>
               <tr className="border-b border-line bg-surface-muted/60 text-left">
                 <th className={`${TH} w-10`}>
@@ -746,7 +766,7 @@ export default function Release1Page() {
         <ThoInField value={relForm.thoIn} users={users}
           onChange={(v) => setRelForm((f) => ({ ...f, thoIn: v }))} />
         <BtpKhacKhField checked={relForm.btp} onChange={(v) => setRelForm((f) => ({ ...f, btp: v }))}
-          daBat={looseList.length > 0 && looseList.every((r) => r.btp_khac_kh)} />
+          dauDangLap={looseList.length === 1 ? chuDauDangLap(looseList[0]._dots || [looseList[0]]) : ''} />
       </Modal>
 
       {/* Chi tiết / release 1 đợt vải lẻ */}
@@ -840,7 +860,7 @@ export default function Release1Page() {
               <ThoInField value={form.thoIn} users={users}
                 onChange={(v) => setForm((f) => ({ ...f, thoIn: v }))} />
               <BtpKhacKhField checked={form.btp} onChange={(v) => setForm((f) => ({ ...f, btp: v }))}
-                daBat={(detail._dots || [detail]).every((d) => d.btp_khac_kh)} />
+                dauDangLap={chuDauDangLap(detail._dots || [detail])} />
             </div>
           </div>
         )}

@@ -19,7 +19,7 @@ import { fmtNum } from '../../../utils/format';
 import { TemMetaFields, PhanCongInline, META_MAC_DINH, metaGuiDi, gioHienTai, thieuNgayCaCt, CHUA_THO_IN, chuaPhanCongThoIn, useTaiNgamKhiLenhDoi } from './RunPanel';
 import TraVeKeHoachModal from './TraVeKeHoachModal';
 import {
-  gomPhan, thuTuIn, conDuocIn, conDuocInNhom, tongNhom, daIn, slRelease, duHoanTatNhom, toiThieuHoanTatNhom,
+  gomPhan, thuTuIn, conDuocIn, conDuocInNhom, tongNhom, daIn, daInTheoTran, slRelease, duHoanTatNhom, toiThieuHoanTatNhom,
 } from '../utils/gomPhanSanXuat';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -112,16 +112,20 @@ function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn 
   };
   // Trần: Σ dòng của 1 lệnh ≤ còn in được của lệnh; dòng đợt vải ≤ 110% SL vào SX của đợt (backend chặn lại y vậy).
   //   Dòng nhóm (nhiều lệnh cùng code phần, sẽ GỘP thành 1 lệnh khi in) ≤ 110% TỔNG SL release − tổng đã in.
-  const tongLenh = (lenhId) => dong.filter((d) => !d.nhom && d.run.lenh.id === lenhId).reduce((s, d) => s + so(d.key), 0);
+  //   29/10/2026: dòng tích BTP trước tính trần RIÊNG (tem BTP trước cộng thêm vào mức tối đa — gương BE `kiemTranIn`).
+  const btpDong = (d) => !!giaTri(d.key, 'btpTruoc', !!meta.btpTruoc);
+  const tongLenh = (lenhId, btp) => dong.filter((d) => !d.nhom && d.run.lenh.id === lenhId && btpDong(d) === btp)
+    .reduce((s, d) => s + so(d.key), 0);
   const conCuaDong = (d) => {
-    if (!d.nhom) return conDuocIn(d.run);
-    if (conDuocInNhom(d.nhom) == null) return null;
-    return Math.max(0, Math.floor(tongNhom(d.nhom, slRelease) * 1.1) - tongNhom(d.nhom, daIn));
+    const btp = btpDong(d);
+    if (!d.nhom) return conDuocIn(d.run, btp);
+    if (conDuocInNhom(d.nhom, btp) == null) return null;
+    return Math.max(0, Math.floor(tongNhom(d.nhom, slRelease) * 1.1) - tongNhom(d.nhom, (r) => daInTheoTran(r, btp)));
   };
   const vuot = (d) => {
     const con = conCuaDong(d);
     if (d.nhom) return con != null && so(d.key) > con;
-    return (con != null && tongLenh(d.run.lenh.id) > con) || (d.capDot > 0 && so(d.key) > d.capDot);
+    return (con != null && tongLenh(d.run.lenh.id, btpDong(d)) > con) || (d.capDot > 0 && so(d.key) > d.capDot);
   };
   // 1 dòng = 1 tem (25/10/2026): dòng nhóm KHÔNG còn tách tem theo lệnh — các lệnh của nhóm được gộp thành 1 lệnh
   //   ngay trước khi in (`doInNhieu` → `POST /production/gop-lenh`), rồi in 1 tem đủ số.

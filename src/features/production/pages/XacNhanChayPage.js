@@ -1,8 +1,10 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import MenuNut from '../../../components/common/MenuNut';
 import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
-import Toolbar from '../../../components/common/Toolbar';
+import Icon from '../../../components/common/Icon';
+import HangDau from '../../../components/layout/HangDau';
 import VuaQuet from '../../../components/common/VuaQuet';
 import DataTable from '../../../components/common/DataTable';
 import Badge from '../../../components/common/Badge';
@@ -38,6 +40,7 @@ import RunPanel from '../components/RunPanel';
 import RunNhieuPanel from '../components/RunNhieuPanel';
 import DsReleaseSxModal from '../components/DsReleaseSxModal';
 import LichSuHoanTatModal from '../components/LichSuHoanTatModal';
+import TemCuaToiModal from '../components/TemCuaToiModal';
 import ChoChayModal, { LocLenhPanel } from '../components/ChoChayModal';
 import {
   locLenhChay, coLoc, LOC_TRONG, timLenhTheoMa, gomTheoCodePhan, lenhCuaDong, gomDangChayTheoCodePhan,
@@ -51,6 +54,9 @@ import XePhoiPage from './XePhoiPage';
 const TOI_DA_MO_CHUNG = 30;
 // 3 chế độ của modal "Theo dõi chuyền in" (21/10/2026).
 const CHE_DO_THEO_DOI = [['chuyen', 'Chuyền đang chạy'], ['tong', 'Tổng nhà máy'], ['to', 'Theo tổ']];
+// Nút GỌN của đầu trang (29/10/2026 — đầu trang chỉ còn 3 hàng): thấp + chữ nhỏ ở laptop, lớn dần ở PC màn rộng (2xl).
+//   `!` vì `Button` khai sẵn `px-5 py-2.5 text-sm` (thứ tự lớp CSS không theo thứ tự chữ trong `className`).
+const NUT_GON = '!h-8 !gap-1.5 !px-2.5 !py-0 !text-xs whitespace-nowrap 2xl:!h-9 2xl:!px-3 2xl:!text-sm';
 
 // ⚠⚠ GỌN LẠI 01/10/2026 (người dùng yêu cầu): trang chỉ còn bảng *Đang chạy*; danh sách *Chờ chạy* chuyển
 //   vào modal mở từ nút "Chờ chạy (N)" (`components/ChoChayModal`, bộ lọc RIÊNG đầy đủ). Ô tìm + panel lọc
@@ -97,6 +103,7 @@ export default function XacNhanChayPage() {
   const [sel, setSel] = useState(null);
   const [selNhieu, setSelNhieu] = useState(null);
   const [lichSuHtOpen, setLichSuHtOpen] = useState(false); // modal Lịch sử chạy hoàn tất (28/10/2026)
+  const [temCuaToiOpen, setTemCuaToiOpen] = useState(false); // modal Tem của tôi (28/10/2026)
   const [dsReleaseOpen, setDsReleaseOpen] = useState(false); // modal Danh sách release sản xuất (26/10/2026) // lenhIds[] — sidebar nhiều lệnh đang chạy
   const [chonRun, setChonRun] = useState([]);     // phieu_id[] đã quét/tích ở bảng Đang chạy (mới nhất đứng đầu)
   const oTim = useOTimKiem();
@@ -505,62 +512,81 @@ export default function XacNhanChayPage() {
     { key: 'tt', header: 'Trạng thái', merge: true, render: (r) =>
       r.dang_ngung ? <Badge tone="danger">Đang ngừng</Badge> : <Badge tone="success">Đang chạy</Badge> },
     { key: 'actions', header: '', className: 'text-right whitespace-nowrap', merge: true, render: (r) =>
-      <Button chiXemOk variant="secondary" className="px-2.5 py-1 text-xs" onClick={() => moDong(r)}>Mở</Button> },
+      <Button chiXemOk variant="secondary" className="!px-2 !py-0.5 !text-[11px] 2xl:!text-xs" onClick={() => moDong(r)}>Mở</Button> },
   ];
 
   return (
     <div>
-      <Toolbar title="Xác nhận chạy" search={search} onSearch={setSearch} searchRef={oTim.ref} onSearchEnter={quetRun}
-        searchPlaceholder="Quét mã vạch rồi Enter để chọn — gõ để tìm code phần, mã hàng, màu/kích, đơn...">
-        <Button chiXemOk icon="list" onClick={() => setChoChayOpen(true)}>
+      {/* ⚠⚠ BỐ CỤC 29/10/2026 (người dùng: "tối ưu không gian — đầu trang chỉ 3 hàng, bảng Đang chạy nhiều chỗ hơn"):
+            hàng 1 = ô tìm + Chờ chạy + Danh sách & theo dõi, THẲNG HÀNG dải sĩ số (portal vào hàng breadcrumb của
+            `ModuleLayout` qua `HangDau`) · hàng 2 = tiêu đề "Xác nhận chạy" + thanh Đang chạy (Nghẽn · Tem của tôi ·
+            2 ô ngày · Bộ lọc · Excel) · hàng 3 = chip khu chuyền 1 hàng. Nút / chữ nhỏ ở laptop, lớn dần ở PC (2xl). */}
+      <HangDau>
+        <div className="relative min-w-0 flex-1 md:max-w-md 2xl:max-w-lg">
+          <Icon name="search" size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-soft" />
+          <input ref={oTim.ref} value={search} onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); quetRun(e.currentTarget.value); } }}
+            placeholder="Quét mã vạch rồi Enter để chọn — gõ để tìm code phần, mã hàng, màu/kích, đơn..."
+            className="h-8 w-full rounded-control border border-line bg-surface pl-8 pr-2 text-base outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 md:text-xs 2xl:h-9 2xl:text-sm" />
+        </div>
+        <Button chiXemOk icon="list" className={NUT_GON} onClick={() => setChoChayOpen(true)}>
           Chờ chạy ({fmtNum(soDongChoChay)})
         </Button>
-        {/* Danh sách release CỦA SẢN XUẤT (26/10/2026) — mẫu "DANH SÁCH RELEASE BÀN …" theo khu + chuyền thêm. */}
-        <Button chiXemOk variant="ghost" icon="file-spreadsheet" onClick={() => setDsReleaseOpen(true)}>Danh sách release</Button>
-        {/* Lịch sử Chạy hoàn tất (28/10/2026) — lọc barcode đầy đủ, mở lại phiếu (lý do bắt buộc). */}
-        <Button chiXemOk variant="ghost" icon="history" onClick={() => setLichSuHtOpen(true)}>Lịch sử hoàn tất</Button>
-        {can('PROD_MONITOR') && (
-          <Button chiXemOk variant="ghost" icon="activity" onClick={() => setMoTrang('theo-doi-chuyen')}>Theo dõi chuyền</Button>
-        )}
-        {can('XEPHOI') && (
-          <Button chiXemOk variant="ghost" icon="truck" onClick={() => setMoTrang('xe-phoi')}>Xe phơi</Button>
-        )}
-        <Button chiXemOk variant={showFilter || hasFilter ? 'secondary' : 'ghost'} icon="filter" onClick={() => setShowFilter((v) => !v)}>
-          Bộ lọc{hasFilter ? ' ●' : ''}
-        </Button>
-        {/* Nghẽn gộp Đang chạy + Chờ chạy. Hiện ở MỌI chip (01/10/2026 — gỡ luật ẩn ở "Tất cả" của 26/09);
-            đếm đúng chip đang đứng, modal mở sẵn chip đó. */}
-        <NghenButton rows={locTheoChip(rowsNghen)} trangThai={(r) => statusLenh(r.lenh_id)}
-          onClick={() => setNghenOpen(true)} />
-      </Toolbar>
+        <MenuNut gon nhan="Danh sách & theo dõi" nhom={[
+          { ten: 'Danh sách', muc: [
+            // Danh sách release CỦA SẢN XUẤT (26/10/2026) — mẫu "DANH SÁCH RELEASE BÀN …" theo khu + chuyền thêm.
+            { ten: 'Danh sách release', icon: 'file-spreadsheet', chiXemOk: true, onClick: () => setDsReleaseOpen(true) },
+            // Lịch sử Chạy hoàn tất (28/10/2026) — lọc barcode đầy đủ, mở lại phiếu (lý do bắt buộc).
+            { ten: 'Lịch sử hoàn tất', icon: 'history', chiXemOk: true, onClick: () => setLichSuHtOpen(true) },
+          ] },
+          { ten: 'Theo dõi', muc: [
+            can('PROD_MONITOR') && { ten: 'Theo dõi chuyền', icon: 'activity', chiXemOk: true, onClick: () => setMoTrang('theo-doi-chuyen') },
+            can('XEPHOI') && { ten: 'Xe phơi', icon: 'truck', chiXemOk: true, onClick: () => setMoTrang('xe-phoi') },
+          ] },
+        ]} />
+      </HangDau>
 
-      <VuaQuet ket={vuaQuet} className="mb-2" />
-      {showFilter && <LocLenhPanel loc={filters} setLoc={setFilters} chuyen={chuyen} />}
-
-      <ChipTabs tabs={LOAI_TABS} value={loai} counts={countChip} onChange={setLoai} />
-
-      <div className="mb-2 mt-1 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <h3 className="text-sm font-semibold text-ink">Đang chạy ({soDongRun}{soDongRun !== soDongRunTatCa ? `/${soDongRunTatCa}` : ''})</h3>
-          <DateRangePicker value={ngayXnRun} onChange={setNgayXnRun} placeholder="Ngày xác nhận chạy" />
+      {/* Hàng 2: tiêu đề + thanh Đang chạy (Nghẽn · Tem của tôi) — "Vừa quét" chen giữa, tự co · bộ lọc của bảng (phải). */}
+      <div className="mb-2 flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center xl:flex-nowrap">
+        <div className="flex min-w-0 flex-wrap items-center gap-2 xl:shrink-0 xl:flex-nowrap">
+          <h1 className="whitespace-nowrap text-base font-bold text-ink lg:text-[17px] 2xl:text-xl">Xác nhận chạy</h1>
+          <span className="hidden h-5 w-px bg-line md:block" />
+          <h3 className="whitespace-nowrap text-xs font-semibold text-ink 2xl:text-sm">
+            Đang chạy ({soDongRun}{soDongRun !== soDongRunTatCa ? `/${soDongRunTatCa}` : ''})
+          </h3>
+          {/* Nghẽn gộp Đang chạy + Chờ chạy. Hiện ở MỌI chip (01/10/2026 — gỡ luật ẩn ở "Tất cả" của 26/09);
+              đếm đúng chip đang đứng, modal mở sẵn chip đó. */}
+          <NghenButton rows={locTheoChip(rowsNghen)} trangThai={(r) => statusLenh(r.lenh_id)}
+            onClick={() => setNghenOpen(true)} className={NUT_GON} />
+          <Button chiXemOk variant="secondary" icon="printer" className={NUT_GON} onClick={() => setTemCuaToiOpen(true)}>Tem của tôi</Button>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <DateRangePicker value={ngayRun} onChange={setNgayRun} placeholder="Ngày SX kế hoạch" />
-          <Button chiXemOk variant="secondary" icon="download" onClick={doExcelRunning} disabled={!runFiltered.length}>
+        <VuaQuet ket={vuaQuet} className="min-w-0 !py-1 !text-xs md:flex-1" />
+        {/* Điện thoại: 1 dải cuộn ngang (lịch ngày nổi `fixed` nên không bị dải cắt). */}
+        <div className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 pb-1 max-md:[&>*]:shrink-0 md:mx-0 md:ml-auto md:overflow-visible md:px-0 md:pb-0 xl:shrink-0">
+          <DateRangePicker gon value={ngayXnRun} onChange={setNgayXnRun} placeholder="Ngày xác nhận chạy" />
+          <DateRangePicker gon value={ngayRun} onChange={setNgayRun} placeholder="Ngày SX kế hoạch" />
+          <Button chiXemOk variant={showFilter || hasFilter ? 'secondary' : 'ghost'} icon="filter" className={NUT_GON}
+            onClick={() => setShowFilter((v) => !v)}>
+            Bộ lọc{hasFilter ? ' ●' : ''}
+          </Button>
+          <Button chiXemOk variant="secondary" icon="download" className={NUT_GON} onClick={doExcelRunning} disabled={!runFiltered.length}>
             Excel ({runFiltered.length})
           </Button>
         </div>
       </div>
+      {showFilter && <LocLenhPanel loc={filters} setLoc={setFilters} chuyen={chuyen} />}
+
+      <ChipTabs gon tabs={LOAI_TABS} value={loai} counts={countChip} onChange={setLoai} />
       {daChonRun.length > 0 && (
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-control border border-primary/30 bg-primary/5 px-3 py-2">
-          <span className="text-sm text-ink">Đã chọn <b>{fmtNum(daChonRun.length)}</b> lệnh</span>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2 rounded-control border border-primary/30 bg-primary/5 px-3 py-1">
+          <span className="text-xs text-ink 2xl:text-sm">Đã chọn <b>{fmtNum(daChonRun.length)}</b> lệnh</span>
           <div className="flex flex-wrap gap-2">
-            <Button chiXemOk variant="ghost" className="px-3 py-1.5" onClick={() => { setChonRun([]); oTim.datConTro(); }}>Bỏ chọn</Button>
-            <Button chiXemOk icon="eye" className="px-3 py-1.5" onClick={moDaChon}>Mở ({fmtNum(daChonRun.length)})</Button>
+            <Button chiXemOk variant="ghost" className={NUT_GON} onClick={() => { setChonRun([]); oTim.datConTro(); }}>Bỏ chọn</Button>
+            <Button chiXemOk icon="eye" className={NUT_GON} onClick={moDaChon}>Mở ({fmtNum(daChonRun.length)})</Button>
           </div>
         </div>
       )}
-      <DataTable columns={runCols} rows={bangRun} loading={loading} rowKey="phieu_id" sttStart={0}
+      <DataTable gon columns={runCols} rows={bangRun} loading={loading} rowKey="phieu_id" sttStart={0}
         subRows={subRows}
         rowClassName={(r) => lenhCuaDong(r).map((l) => slaRowClass(statusLenh(l.lenh_id))).find(Boolean)
           || (daTichDong(r) ? 'bg-primary/5' : '')}
@@ -681,6 +707,7 @@ export default function XacNhanChayPage() {
 
       {dsReleaseOpen && <DsReleaseSxModal open onClose={() => setDsReleaseOpen(false)} />}
       {lichSuHtOpen && <LichSuHoanTatModal open onClose={() => setLichSuHtOpen(false)} show={show} onDaMoLai={() => load(true)} />}
+      {temCuaToiOpen && <TemCuaToiModal open onClose={() => { setTemCuaToiOpen(false); oTim.datConTro(); }} show={show} />}
       {selNhieu && <RunNhieuPanel lenhIds={selNhieu} onClose={() => { setSelNhieu(null); oTim.datConTro(); }}
         onChanged={() => load(true)} onMoLenh={(id) => { setSelNhieu(null); setSel(id); }}
         truocXacNhan={(ids) => hoiLyDoNghen(rowsNghen.filter((r) => ids.includes(r.lenh_id)))} />}
