@@ -13,13 +13,14 @@ export const slRelease = (run) => n(run?.lenh?.so_luong_release);
 export const daIn = (run) => n(run?.printed);
 // Phần đã in là tem BTP TRƯỚC (BE `getRun.printed_btp`, 29/10/2026; BE cũ không trả ⇒ 0 = luật cũ).
 export const daInBtp = (run) => n(run?.printed_btp);
-// Đã in theo trần đang xét: tem BTP trước có TRẦN RIÊNG 110% SL release ⇒ tích BTP trước = cộng thêm đúng số tem đó
-//   vào mức tối đa in được (gương BE `production.service kiemTranIn`).
-export const daInTheoTran = (run, btp = false) => (btp ? daInBtp(run) : daIn(run) - daInBtp(run));
-// Còn in được của LỆNH (trần 110% SL release, trừ đã in). Không có SL release ⇒ null (không chặn) — gương BE.
+// Đã in tính vào trần: tem BTP trước KHÔNG tính (in bao nhiêu BTP trước thì mức tối đa cộng thêm bấy nhiêu — người dùng
+//   chốt 29/10/2026, gương BE `production.service kiemTranIn`).
+export const daInTheoTran = (run) => daIn(run) - daInBtp(run);
+// Còn in được của LỆNH (trần 110% SL release, trừ đã in). Không có SL release HOẶC đang in tem BTP trước ⇒ null (không
+//   chặn) — gương BE.
 export const conDuocIn = (run, btp = false) => {
   const t = slRelease(run);
-  return t > 0 ? Math.max(0, Math.floor(t * 1.1) - daInTheoTran(run, btp)) : null;
+  return t > 0 && !btp ? Math.max(0, Math.floor(t * 1.1) - daInTheoTran(run)) : null;
 };
 // Vải còn lại CHƯA in của lệnh (tới 100% SL release) — số mặc định khi trả về Kế hoạch.
 export const conLai = (run) => Math.max(0, slRelease(run) - daIn(run));

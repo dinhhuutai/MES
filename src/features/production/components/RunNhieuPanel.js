@@ -112,20 +112,22 @@ function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn 
   };
   // Trần: Σ dòng của 1 lệnh ≤ còn in được của lệnh; dòng đợt vải ≤ 110% SL vào SX của đợt (backend chặn lại y vậy).
   //   Dòng nhóm (nhiều lệnh cùng code phần, sẽ GỘP thành 1 lệnh khi in) ≤ 110% TỔNG SL release − tổng đã in.
-  //   29/10/2026: dòng tích BTP trước tính trần RIÊNG (tem BTP trước cộng thêm vào mức tối đa — gương BE `kiemTranIn`).
+  //   29/10/2026: dòng tích BTP trước KHÔNG bị chặn số lượng; tem BTP trước đã in không tính vào trần của tem thường
+  //   (in bao nhiêu BTP trước thì mức tối đa cộng thêm bấy nhiêu — gương BE `kiemTranIn`).
   const btpDong = (d) => !!giaTri(d.key, 'btpTruoc', !!meta.btpTruoc);
-  const tongLenh = (lenhId, btp) => dong.filter((d) => !d.nhom && d.run.lenh.id === lenhId && btpDong(d) === btp)
+  const tongLenh = (lenhId) => dong.filter((d) => !d.nhom && d.run.lenh.id === lenhId && !btpDong(d))
     .reduce((s, d) => s + so(d.key), 0);
   const conCuaDong = (d) => {
-    const btp = btpDong(d);
-    if (!d.nhom) return conDuocIn(d.run, btp);
-    if (conDuocInNhom(d.nhom, btp) == null) return null;
-    return Math.max(0, Math.floor(tongNhom(d.nhom, slRelease) * 1.1) - tongNhom(d.nhom, (r) => daInTheoTran(r, btp)));
+    if (btpDong(d)) return null;
+    if (!d.nhom) return conDuocIn(d.run);
+    if (conDuocInNhom(d.nhom) == null) return null;
+    return Math.max(0, Math.floor(tongNhom(d.nhom, slRelease) * 1.1) - tongNhom(d.nhom, daInTheoTran));
   };
   const vuot = (d) => {
+    if (btpDong(d)) return false;
     const con = conCuaDong(d);
     if (d.nhom) return con != null && so(d.key) > con;
-    return (con != null && tongLenh(d.run.lenh.id, btpDong(d)) > con) || (d.capDot > 0 && so(d.key) > d.capDot);
+    return (con != null && tongLenh(d.run.lenh.id) > con) || (d.capDot > 0 && so(d.key) > d.capDot);
   };
   // 1 dòng = 1 tem (25/10/2026): dòng nhóm KHÔNG còn tách tem theo lệnh — các lệnh của nhóm được gộp thành 1 lệnh
   //   ngay trước khi in (`doInNhieu` → `POST /production/gop-lenh`), rồi in 1 tem đủ số.
@@ -185,7 +187,9 @@ function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn 
                   <td className={TD}>{d.info.mau_vai || '—'}</td>
                   <td className={TD}>{d.info.kich_vai || '—'}</td>
                   <td className={TD}>{d.info.kich_phim || '—'}</td>
-                  <td className={`${TD} text-right tabular-nums text-ink-soft`}>{con == null ? '—' : fmtNum(con)}</td>
+                  <td className={`${TD} text-right tabular-nums text-ink-soft`}>
+                    {btpDong(d) ? <span title="Tem BTP trước không bị chặn số lượng">BTP trước</span> : con == null ? '—' : fmtNum(con)}
+                  </td>
                   <td className={`${TD} text-right`}>
                     <input type="number" min="0" value={(sl[d.key] || {}).sl || ''} placeholder="0"
                       onChange={(e) => datO(d.key, 'sl', e.target.value)}
