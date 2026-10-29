@@ -142,7 +142,11 @@ export default function BaoCaoSanXuatPage() {
 
   useEffect(() => { tai(ngay); }, [ngay, tai]);
   const laHomNay = ngay === homNay;
-  useSocketReload(['production:updated', 'dashboard:refresh'], () => { if (laHomNay) tai(ngay, true); }, 1200);
+  // Tự tải lại khi máy khác in tem (socket). Xem HÔM QUA cũng tải: ngày SX là 06:00 → 06:00 hôm sau, tem ca đêm in lúc
+  //   0–6 giờ sáng thuộc ngày hôm trước (29/10/2026). Ngày cũ hơn thì số không đổi nữa — không tải.
+  const homQua = ngayLocalISO(new Date(Date.now() - 86400000));
+  const conCapNhat = ngay >= homQua;
+  useSocketReload(['production:updated', 'dashboard:refresh'], () => { if (conCapNhat) tai(ngay, true); }, 1200);
 
   const chonBang = (v) => {
     if (v === bang) return;
