@@ -6,6 +6,7 @@ import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import Icon from '../../../components/common/Icon';
 import SidePanel from '../../../components/common/SidePanel';
+import Modal from '../../../components/common/Modal';
 import Toast from '../../../components/common/Toast';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
@@ -72,6 +73,17 @@ export default function ErpSyncPage() {
   };
   const doSync = () => runSync(syncPhieuNhanVai,
     (d) => `Đồng bộ ERP: ${d.soMoi} mới · ${d.soCapNhat} cập nhật · ${d.soLoi} lỗi (tổng ${d.tong})`);
+  // ĐỒNG BỘ LẠI TỪ NGÀY (29/10/2026): máy chủ / ERP lỗi một buổi ⇒ hôm sau chọn lại ngày đó để kéo bù đợt vải bị sót
+  //   (job 5 phút chỉ lấy vài giờ gần nhất). Đợt đã có chỉ cập nhật, không đẻ trùng. BE giới hạn 14 ngày.
+  const [ngayBu, setNgayBu] = useState(null); // null = hộp đóng
+  const doSyncTuNgay = async () => {
+    const ngay = ngayBu;
+    setNgayBu(null);
+    await runSync(() => syncPhieuNhanVai(ngay),
+      (d) => `Đồng bộ lại từ ${ngay.split('-').reverse().join('/')}: ${d.soMoi} mới · ${d.soCapNhat} cập nhật · ${d.soLoi} lỗi (tổng ${d.tong})`);
+  };
+  const homNay = ngayLocalISO(new Date());
+  const ngayXaNhat = ngayLocalISO(new Date(Date.now() - 14 * 86400000));
 
   const openRaw = async (log) => {
     setRaw({ log, text: '', loading: true });
@@ -120,9 +132,27 @@ export default function ErpSyncPage() {
             className="text-ink-soft hover:text-danger" aria-label="Xóa lọc ngày"><Icon name="x" size={14} /></button>}
         </div>
         {canSync && <Button variant="secondary" icon="search" onClick={() => setCapNhatOpen(true)}>Cập nhật theo code phần</Button>}
+        {canSync && <Button variant="secondary" icon="calendar-days" disabled={busy} onClick={() => setNgayBu(homNay)}>Đồng bộ lại từ ngày</Button>}
         {canSync && <Button icon="loader" loading={busy} onClick={doSync}>Đồng bộ ngay</Button>}
         <Badge tone="info">{meta.total} lần</Badge>
       </Toolbar>
+
+      <Modal open={ngayBu != null} onClose={() => setNgayBu(null)} size="sm" title="Đồng bộ lại từ ngày"
+        footer={<>
+          <Button chiXemOk variant="ghost" onClick={() => setNgayBu(null)}>Hủy</Button>
+          <Button icon="loader" disabled={!ngayBu} onClick={doSyncTuNgay}>Đồng bộ</Button>
+        </>}>
+        <div className="space-y-3">
+          <label className="block text-sm font-medium text-ink" htmlFor="erp-ngay-bu">Lấy lại đợt vải ERP từ ngày</label>
+          <input id="erp-ngay-bu" type="date" value={ngayBu || ''} min={ngayXaNhat} max={homNay}
+            onChange={(e) => setNgayBu(e.target.value)}
+            className="h-10 w-full rounded-input border border-line bg-surface px-3 text-base outline-none focus:border-primary md:text-sm" />
+          <p className="text-xs text-ink-soft">
+            Kéo mọi đợt vải ERP từ 00:00 ngày đã chọn tới bây giờ. Đợt đã có trên MES chỉ được cập nhật, không tạo trùng.
+            Tối đa 14 ngày trước; khoảng càng dài ERP chạy càng lâu.
+          </p>
+        </div>
+      </Modal>
 
       <DataTable columns={columns} rows={rows} loading={loading} onRowClick={openRaw} rowKey="id"
         sttStart={(meta.page - 1) * 20}
