@@ -37,7 +37,8 @@ import useNow from '../../../hooks/useNow';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 import useLyDoNghen from '../../../hooks/useLyDoNghen';
 import VuaQuet from '../../../components/common/VuaQuet';
-import KcsNhieuModal, { danhGiaKcs } from '../components/KcsNhieuModal';
+import KcsNhieuModal, { danhGiaKcs, formMoi as formKcsMoi, O_SO as O_SO_KCS } from '../components/KcsNhieuModal';
+import TichTemNhapModal from '../../../components/common/TichTemNhapModal';
 import KiemTruocKhoModal from '../components/KiemTruocKhoModal';
 import { trangThaiSla } from '../../../utils/nghen';
 
@@ -47,6 +48,8 @@ import { trangThaiSla } from '../../../utils/nghen';
 const empty = { soLuongDat: '', soLuongHu: '', soLuongThieu: '', soLuongDu: '', soLuongMau: '' };
 // Tối đa số tem tích để xác nhận 1 lượt (27/10/2026) — mỗi tem 1 lần gọi recordKcs tuần tự.
 const TOI_DA_TICH = 100;
+// Ô nhập của bảng "Tích tem" (29/10/2026) — cùng bộ ô với modal xác nhận nhiều tem.
+const TRUONG_KCS = O_SO_KCS.map(([k, label]) => ({ k, label }));
 
 const FILTER_FIELDS = [
   { key: 'khach', label: 'Khách hàng' },
@@ -110,6 +113,7 @@ export default function KcsPage() {
   const selected = useMemo(() => new Set(chon.map((r) => r.tem_id)), [chon]);
   const [vuaQuet, setVuaQuet] = useState(null);
   const [nhieuOpen, setNhieuOpen] = useState(false);
+  const [tichTemOpen, setTichTemOpen] = useState(false); // bảng "Tích tem" — quét + nhập nhiều tem theo dòng
   const [kiemTruocOpen, setKiemTruocOpen] = useState(false);
   const [gopOpen, setGopOpen] = useState(false);
   const [targetId, setTargetId] = useState('');
@@ -331,6 +335,23 @@ export default function KcsPage() {
     }
   };
 
+  // BẢNG "TÍCH TEM" (29/10/2026): mỗi dòng quét 1 tem (khớp mã như ô quét trang), nhập số rồi xác nhận cùng lúc.
+  const traTemKcs = async (code) => {
+    const res = await listKcsCandidates({ search: code });
+    const row = timTheoMaTem(res.data || [], code);
+    return row ? { row } : { loi: 'Không có tem chờ KCS khớp mã này' };
+  };
+  const sauTichTem = (so, loi) => {
+    load(true);
+    if (!loi.length) {
+      show(`Đã xác nhận KCS ${so} tem`);
+      setTichTemOpen(false);
+      oTim.datConTro();
+    } else {
+      show(`Đã lưu ${so}/${so + loi.length} tem — lỗi: ${loi.join(', ')}`, 'error');
+    }
+  };
+
   const doRedry = async () => {
     setRedrying(true);
     try {
@@ -426,6 +447,7 @@ export default function KcsPage() {
         search={search} onSearch={setSearch} searchRef={oTim.ref} onSearchEnter={canKcs ? quetKcs : undefined}
         searchPlaceholder="Quét mã tem rồi Enter để mở KCS — gõ để tìm...">
         {canKcs && <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét QR</Button>}
+        {canKcs && <Button icon="barcode" onClick={() => setTichTemOpen(true)}>Tích tem</Button>}
         {canKcs && chon.length > 0 && (
           <Button icon="check-circle" onClick={() => setNhieuOpen(true)}>Xác nhận KCS ({chon.length})</Button>
         )}
@@ -665,6 +687,19 @@ export default function KcsPage() {
       <QrScanner open={scanOpen} onClose={() => setScanOpen(false)} onResult={onScan} />
       <KcsNhieuModal open={nhieuOpen} rows={selectedRows} onClose={() => { setNhieuOpen(false); oTim.datConTro(); }}
         onXong={sauKcsNhieu} truocXacNhan={(rs) => hoiLyDoNghen(rs)} show={show} />
+      <TichTemNhapModal open={tichTemOpen} onClose={() => { setTichTemOpen(false); oTim.datConTro(); }}
+        title="Tích tem — xác nhận KCS nhiều tem" nhanXacNhan="Xác nhận KCS" show={show}
+        traMa={traTemKcs} khoaDong={(r) => r.tem_id} maHien={(r) => r.ma_tem}
+        soCan={(r) => r.con_kcs} nhanSoCan="Còn kiểm" truong={TRUONG_KCS} formMoi={formKcsMoi}
+        danhGia={(r, f) => danhGiaKcs(Number(r.con_kcs ?? r.so_luong ?? 0) || 0, f)}
+        luu={(r, f) => recordKcs(r.tem_id, { ...f })}
+        truocXacNhan={(rs) => hoiLyDoNghen(rs)} onXong={sauTichTem}
+        phuTro={({ apMoiDong, dangLuu, coDong }) => (
+          <Button variant="secondary" icon="check" disabled={dangLuu || !coDong}
+            onClick={() => apMoiDong((r, f) => ({ ...f, soLuongDat: String(r.con_kcs ?? ''), soLuongHu: '', soLuongThieu: '', soLuongDu: '' }))}>
+            Đạt hết
+          </Button>
+        )} />
       <KiemTruocKhoModal open={kiemTruocOpen} onClose={() => setKiemTruocOpen(false)} />
 
       <TraVeListModal open={traVeOpen} onClose={() => setTraVeOpen(false)}

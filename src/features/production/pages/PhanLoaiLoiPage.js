@@ -11,7 +11,9 @@ import useOTimKiem from '../../../hooks/useOTimKiem';
 import usePermissions from '../../../hooks/usePermissions';
 import useHuyLichSu from '../../../hooks/useHuyLichSu';
 import PhanLoaiLoiPanel from '../components/PhanLoaiLoiPanel';
-import PhanLoaiNhieuModal, { slHuCua } from '../components/PhanLoaiNhieuModal';
+import PhanLoaiNhieuModal, { slHuCua, formMoi as formPllMoi, danhGia as danhGiaPll } from '../components/PhanLoaiNhieuModal';
+import TichTemNhapModal from '../../../components/common/TichTemNhapModal';
+import SearchableSelect from '../../../components/common/SearchableSelect';
 import VuaQuet from '../../../components/common/VuaQuet';
 import { listLoaiLoi } from '../../../services/qualityService';
 import {
@@ -48,6 +50,35 @@ const TOI_DA_TICH = 100;
 // Chỉ tem CHƯA phân loại + có hàng hư mới tích được (tem đã phân loại sửa lại từng tem trong panel).
 const tichDuoc = (r) => !r.da_phan_loai && !!r.tem_id && slHuCua(r) > 0;
 
+// Thanh phụ trợ của bảng "Tích tem": mã lỗi / biện pháp chung + Tất cả SỬA / HỦY (như modal phân loại nhiều tem).
+function ChungPll({ optLoi, optBP, apMoiDong, dangLuu, coDong }) {
+  const [chung, setChung] = useState({ loaiLoiId: '', bienPhapId: '' });
+  return (
+    <>
+      <div className="w-64">
+        <div className="mb-1 text-xs font-medium text-ink-soft">Mã lỗi chung</div>
+        <SearchableSelect options={optLoi} value={chung.loaiLoiId} getSearch={(o) => o.search}
+          onChange={(v) => setChung((c) => ({ ...c, loaiLoiId: v }))} placeholder="Gõ mã hoặc tên lỗi…" />
+      </div>
+      <div className="w-56">
+        <div className="mb-1 text-xs font-medium text-ink-soft">Biện pháp chung</div>
+        <SearchableSelect options={optBP} value={chung.bienPhapId} getSearch={(o) => o.search}
+          onChange={(v) => setChung((c) => ({ ...c, bienPhapId: v }))} placeholder="Chọn biện pháp…" />
+      </div>
+      <Button variant="secondary" icon="check" disabled={dangLuu || !coDong || (!chung.loaiLoiId && !chung.bienPhapId)}
+        onClick={() => apMoiDong((r, f) => ({
+          ...f,
+          ...(chung.loaiLoiId ? { loaiLoiId: chung.loaiLoiId } : {}),
+          ...(chung.bienPhapId ? { bienPhapId: chung.bienPhapId } : {}),
+        }))}>Áp cho mọi dòng</Button>
+      <Button variant="secondary" disabled={dangLuu || !coDong}
+        onClick={() => apMoiDong((r, f) => ({ ...f, soLuongSua: String(slHuCua(r)), soLuongHuy: '' }))}>Tất cả SỬA</Button>
+      <Button variant="secondary" disabled={dangLuu || !coDong}
+        onClick={() => apMoiDong((r, f) => ({ ...f, soLuongSua: '', soLuongHuy: String(slHuCua(r)) }))}>Tất cả HỦY</Button>
+    </>
+  );
+}
+
 export default function PhanLoaiLoiPage() {
   const { toast, show } = useToast();
   const { can } = usePermissions();
@@ -77,6 +108,7 @@ export default function PhanLoaiLoiPage() {
   const [tich, setTich] = useState([]);
   const daTich = useMemo(() => new Set(tich.map((r) => r.tem_id)), [tich]);
   const [nhieuOpen, setNhieuOpen] = useState(false);
+  const [tichTemOpen, setTichTemOpen] = useState(false); // bảng "Tích tem" — quét + nhập nhiều tem theo dòng
   const [vuaQuet, setVuaQuet] = useState(null);
   const tichTrang = rows.filter(tichDuoc);
   const tichHetTrang = tichTrang.length > 0 && tichTrang.every((r) => daTich.has(r.tem_id));
@@ -164,6 +196,44 @@ export default function PhanLoaiLoiPage() {
       oTim.datConTro();
     } else {
       show(`Đã lưu ${okIds.length}/${okIds.length + loi.length} tem — lỗi: ${loi.join(', ')}`, 'error');
+    }
+  };
+
+  // BẢNG "TÍCH TEM" (29/10/2026, như KCS): mỗi dòng quét 1 tem CHƯA phân loại, 1 mã lỗi. Tem đã phân loại / cần nhiều mã
+  //   lỗi thì mở panel từng tem như cũ. Lưu đi ĐÚNG `luuPhanLoaiLoi` (guard sửa + hủy = hư ở BE).
+  const optLoi = useMemo(() => loaiLoi.map((l) => ({
+    id: l.id, label: `${l.ma_loi} — ${l.ten_loi}`, search: `${l.ma_loi} ${l.ten_loi} ${l.nhom_loi || ''}`,
+  })), [loaiLoi]);
+  const optBP = useMemo(() => bienPhap.map((b) => ({
+    id: b.id, label: b.ten_bien_phap, search: `${b.ma_bien_phap} ${b.ten_bien_phap}`,
+  })), [bienPhap]);
+  const truongPll = useMemo(() => [
+    { k: 'loaiLoiId', label: 'Mã lỗi', kieu: 'chon', options: optLoi, getSearch: (o) => o.search, placeholder: 'Gõ mã lỗi…', minW: 220 },
+    { k: 'bienPhapId', label: 'Biện pháp', kieu: 'chon', options: optBP, getSearch: (o) => o.search, placeholder: 'Biện pháp…', minW: 170 },
+    { k: 'soLuongSua', label: 'SL sửa' },
+    { k: 'soLuongHuy', label: 'SL hủy' },
+  ], [optLoi, optBP]);
+  const traTemPll = async (code) => {
+    const res = await traTemPhanLoai(code);
+    const { tem, phieu } = res.data || {};
+    if (!tem) return { loi: 'Không tìm thấy tem' };
+    if (phieu) return { loi: `Tem ${temCode(tem.ma_tem, 16)} đã phân loại — bấm dòng ở danh sách để sửa` };
+    if (slHuCua(tem) <= 0) return { loi: `Tem ${temCode(tem.ma_tem, 16)} KCS chưa ghi hư — không có gì để phân loại` };
+    return { row: tem };
+  };
+  const luuTichTem = (r, f) => luuPhanLoaiLoi(r.tem_id, {
+    dong: [{ loaiLoiId: f.loaiLoiId, bienPhapId: f.bienPhapId || null,
+      soLuongSua: Number(f.soLuongSua) || 0, soLuongHuy: Number(f.soLuongHuy) || 0, ghiChu: '' }],
+    ghiChu: '',
+  });
+  const sauTichTem = (so, loi) => {
+    load();
+    if (!loi.length) {
+      show(`Đã phân loại lỗi ${so} tem`);
+      setTichTemOpen(false);
+      oTim.datConTro();
+    } else {
+      show(`Đã lưu ${so}/${so + loi.length} tem — lỗi: ${loi.join(', ')}`, 'error');
     }
   };
 
@@ -263,6 +333,7 @@ export default function PhanLoaiLoiPage() {
         searchPlaceholder="Quét mã tem rồi Enter để mở phân loại — gõ để tìm..." searchRef={oTim.ref}
         onSearchEnter={canPll ? quetPll : undefined}
       >
+        {canPll && <Button icon="barcode" onClick={() => setTichTemOpen(true)}>Tích tem</Button>}
         {canPll && tich.length > 0 && (
           <Button icon="check-circle" onClick={() => setNhieuOpen(true)}>Phân loại ({tich.length})</Button>
         )}
@@ -315,6 +386,12 @@ export default function PhanLoaiLoiPage() {
         loaiLoi={loaiLoi} bienPhap={bienPhap} onLuu={doLuu} dangLuu={dangLuu} />
       <PhanLoaiNhieuModal open={nhieuOpen} rows={tich} loaiLoi={loaiLoi} bienPhap={bienPhap}
         onClose={() => { setNhieuOpen(false); oTim.datConTro(); }} onXong={sauNhieu} show={show} />
+      <TichTemNhapModal open={tichTemOpen} onClose={() => { setTichTemOpen(false); oTim.datConTro(); }}
+        title="Tích tem — phân loại lỗi nhiều tem" nhanXacNhan="Lưu phân loại" show={show}
+        traMa={traTemPll} khoaDong={(r) => r.tem_id} maHien={(r) => temCode(r.ma_tem, 16)}
+        soCan={slHuCua} nhanSoCan="SL hư" truong={truongPll} formMoi={formPllMoi} danhGia={danhGiaPll}
+        luu={luuTichTem} onXong={sauTichTem}
+        phuTro={(p) => <ChungPll optLoi={optLoi} optBP={optBP} {...p} />} />
 
       {huyLs.modal}
       <Toast toast={toast} />

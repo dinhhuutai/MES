@@ -30,11 +30,11 @@ export function danhGiaKcs(canKiem, f) {
   return { ok: true, chu: 'Cân đối' };
 }
 
-const formMoi = (r) => ({
+export const formMoi = (r) => ({
   soLuongDat: String(r.con_kcs ?? r.so_luong ?? ''), soLuongHu: '', soLuongThieu: '', soLuongDu: '', soLuongMau: '',
 });
 
-const O_SO = [
+export const O_SO = [
   ['soLuongDat', 'Đạt'], ['soLuongHu', 'Hư'], ['soLuongThieu', 'Thiếu'], ['soLuongDu', 'Dư'], ['soLuongMau', 'Mẫu'],
 ];
 

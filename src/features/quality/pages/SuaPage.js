@@ -37,11 +37,14 @@ import { printSuaOqcTem, moSanCuaSoIn, dongCuaSoIn } from '../../production/util
 import exportCheckpointExcel, { cotTemChung, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
 import { fmtNum, timTheoMaTem, temCode } from '../../../utils/format';
 import VuaQuet from '../../../components/common/VuaQuet';
-import SuaNhieuModal, { danhGiaSua } from '../components/SuaNhieuModal';
+import SuaNhieuModal, { danhGiaSua, formMoi as formSuaMoi, O_SO as O_SO_SUA } from '../components/SuaNhieuModal';
+import TichTemNhapModal from '../../../components/common/TichTemNhapModal';
 
 const empty = { soLuongHuyThang: '', soLuongSua: '', soLuongSuaDat: '', soLuongSuaHuy: '' };
 // Tối đa số tem tích để xác nhận sửa 1 lượt (27/10/2026, như KCS) — mỗi tem 1 lần gọi recordSua tuần tự.
 const TOI_DA_TICH = 100;
+// Ô nhập của bảng "Tích tem" (29/10/2026) — cùng bộ ô với modal xác nhận nhiều tem.
+const TRUONG_SUA = O_SO_SUA.map(([k, label]) => ({ k, label }));
 
 const FILTER_FIELDS = [
   { key: 'khach', label: 'Khách hàng' },
@@ -89,6 +92,7 @@ export default function SuaPage() {
   const [chon, setChon] = useState([]);
   const daChon = useMemo(() => new Set(chon.map((r) => r.tem_id)), [chon]);
   const [nhieuOpen, setNhieuOpen] = useState(false);
+  const [tichTemOpen, setTichTemOpen] = useState(false); // bảng "Tích tem" — quét + nhập nhiều tem theo dòng
   const [vuaQuet, setVuaQuet] = useState(null);
 
   const filtersKey = useMemo(() => JSON.stringify(filters), [filters]);
@@ -167,6 +171,23 @@ export default function SuaPage() {
       oTim.datConTro();
     } else {
       show(`Đã lưu ${okIds.length}/${okIds.length + loi.length} tem — lỗi: ${loi.join(', ')}`, 'error');
+    }
+  };
+
+  // BẢNG "TÍCH TEM" (29/10/2026, như KCS): mỗi dòng quét 1 tem, nhập số rồi xác nhận sửa cùng lúc.
+  const traTemSua = async (code) => {
+    const res = await listSuaCandidates({ search: code });
+    const row = timTheoMaTem(res.data || [], code);
+    return row ? { row } : { loi: 'Không có tem chờ sửa khớp mã này' };
+  };
+  const sauTichTem = (so, loi) => {
+    load(true);
+    if (!loi.length) {
+      show(`Đã xác nhận sửa ${so} tem — in tem 17 ở "Đã hoàn thành"`);
+      setTichTemOpen(false);
+      oTim.datConTro();
+    } else {
+      show(`Đã lưu ${so}/${so + loi.length} tem — lỗi: ${loi.join(', ')}`, 'error');
     }
   };
 
@@ -425,6 +446,7 @@ export default function SuaPage() {
         search={search} onSearch={setSearch} searchPlaceholder="Quét mã tem rồi Enter để mở Sửa — gõ để tìm..." searchRef={oTim.ref}
         onSearchEnter={canSua ? quetSua : undefined}>
         {canSua && <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét QR</Button>}
+        {canSua && <Button icon="barcode" onClick={() => setTichTemOpen(true)}>Tích tem</Button>}
         {canSua && chon.length > 0 && (
           <Button icon="check-circle" onClick={() => setNhieuOpen(true)}>Xác nhận sửa ({chon.length})</Button>
         )}
@@ -500,6 +522,19 @@ export default function SuaPage() {
 
       <SuaNhieuModal open={nhieuOpen} rows={chonRows} onClose={() => { setNhieuOpen(false); oTim.datConTro(); }}
         onXong={sauSuaNhieu} truocXacNhan={(rs) => hoiLyDoNghen(rs)} show={show} />
+      <TichTemNhapModal open={tichTemOpen} onClose={() => { setTichTemOpen(false); oTim.datConTro(); }}
+        title="Tích tem — xác nhận sửa nhiều tem" nhanXacNhan="Xác nhận sửa" show={show}
+        traMa={traTemSua} khoaDong={(r) => r.tem_id} maHien={(r) => r.ma_tem}
+        soCan={(r) => r.con_sua} nhanSoCan="Cần sửa" truong={TRUONG_SUA} formMoi={formSuaMoi}
+        danhGia={(r, f) => danhGiaSua(Number(r.con_sua) || 0, f)}
+        luu={(r, f) => recordSua(r.tem_id, { ...f })}
+        truocXacNhan={(rs) => hoiLyDoNghen(rs)} onXong={sauTichTem}
+        phuTro={({ apMoiDong, dangLuu, coDong }) => (
+          <Button variant="secondary" icon="check" disabled={dangLuu || !coDong}
+            onClick={() => apMoiDong((r, f) => ({ ...f, soLuongSuaDat: String(r.con_sua ?? ''), soLuongSuaHuy: '', soLuongHuyThang: '' }))}>
+            Đạt hết
+          </Button>
+        )} />
 
       <SidePanel
         open={!!editing}

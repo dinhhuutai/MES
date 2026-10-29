@@ -19,8 +19,8 @@ export function danhGiaSua(canSua, f) {
   return { ok: true, chu: 'Xử lý hết' };
 }
 
-const formMoi = (r) => ({ soLuongSuaDat: String(r.con_sua ?? ''), soLuongSuaHuy: '', soLuongHuyThang: '' });
-const O_SO = [['soLuongSuaDat', 'Sửa đạt'], ['soLuongSuaHuy', 'Sửa hủy'], ['soLuongHuyThang', 'Hủy thẳng']];
+export const formMoi = (r) => ({ soLuongSuaDat: String(r.con_sua ?? ''), soLuongSuaHuy: '', soLuongHuyThang: '' });
+export const O_SO = [['soLuongSuaDat', 'Sửa đạt'], ['soLuongSuaHuy', 'Sửa hủy'], ['soLuongHuyThang', 'Hủy thẳng']];
 
 export default function SuaNhieuModal({ open, rows, onClose, onXong, truocXacNhan, show }) {
   const [forms, setForms] = useState({});

@@ -12,9 +12,9 @@ import { fmtNum, temCode } from '../../../utils/format';
 //   "sửa + hủy = hư" + ERP), TUẦN TỰ, dòng lỗi không chặn dòng sau. Ô "Áp cho mọi dòng" điền 1 mã lỗi / biện pháp cho cả lượt.
 const so = (v) => Math.max(0, Math.trunc(Number(v) || 0));
 export const slHuCua = (r) => so(r.sl_kcs_sua) + so(r.sl_kcs_huy);
-const formMoi = (r) => ({ loaiLoiId: '', bienPhapId: '', soLuongSua: String(slHuCua(r)), soLuongHuy: '' });
+export const formMoi = (r) => ({ loaiLoiId: '', bienPhapId: '', soLuongSua: String(slHuCua(r)), soLuongHuy: '' });
 
-function danhGia(r, f) {
+export function danhGia(r, f) {
   const hu = slHuCua(r);
   if (hu <= 0) return { ok: false, chu: 'KCS chưa ghi hư' };
   if (!f.loaiLoiId) return { ok: false, chu: 'Chọn mã lỗi' };
