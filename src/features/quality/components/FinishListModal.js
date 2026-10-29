@@ -70,7 +70,16 @@ const GIAI_THICH = {
   'Ghi chú': 'Hàng còn dở của phần in (chờ kiểm / chờ sửa / chờ OQC)',
 };
 
-export default function FinishListModal({ open, onClose }) {
+// Giải thích riêng của chế độ Sản xuất (`nguon="SX"` — Xác nhận chạy, 29/10/2026).
+const GIAI_THICH_SX = {
+  ...GIAI_THICH,
+  'Ngày cập nhật DS': 'Ngày code phần đạt điều kiện finish: SL đã in + vải hư + vải thiếu ≥ SLNV',
+};
+
+// `nguon` (29/10/2026): 'SX' = mở từ Xác nhận chạy — finish khi SL đã in + vải hư + vải thiếu ≥ SLNV (BE
+//   `danhSachFinish D_SAN_XUAT`); không truyền = finish theo OQC cho qua giao (bảng / cột / nút giữ nguyên).
+export default function FinishListModal({ open, onClose, nguon }) {
+  const giaiThich = nguon === 'SX' ? GIAI_THICH_SX : GIAI_THICH;
   const { toast, show } = useToast();
   // 1 ô chọn KHOẢNG ngày (cùng component Hồ sơ kỹ thuật): bấm ngày đầu → ngày cuối; bấm 1 ngày 2 lần = đúng ngày đó.
   // ⚠ Giữ NGUYÊN giá trị ô trả về (`to` rỗng khi mới bấm ngày đầu) — tự điền `to = from` ngay là ô coi như đã
@@ -96,17 +105,18 @@ export default function FinishListModal({ open, onClose }) {
     if (!open) return;
     if (!ngam) setLoading(true);
     try {
-      const r = await getOqcFinishList(tuNgay, denNgay, heThong);
+      const r = await getOqcFinishList(tuNgay, denNgay, heThong, nguon);
       setData(r.data || null);
     } catch (e) {
       if (!ngam) { show(e.message || 'Lỗi tải danh sách finish', 'error'); setData(null); }
     } finally {
       if (!ngam) setLoading(false);
     }
-  }, [open, tuNgay, denNgay, heThong, show]);
+  }, [open, tuNgay, denNgay, heThong, nguon, show]);
 
   useEffect(() => { load(); }, [load]);
-  useSocketReload(['quality:updated', 'delivery:updated'], () => load(true), 800);
+  // Chế độ SX đổi số khi in tem / ghi vải hư-thiếu ⇒ nghe thêm `production:updated`.
+  useSocketReload(['quality:updated', 'delivery:updated', 'production:updated'], () => load(true), 800);
 
   const items = useMemo(() => data?.items || [], [data]);
   const mucTieuGoc = useMemo(() => data?.muc_tieu || [], [data]);
@@ -189,8 +199,8 @@ export default function FinishListModal({ open, onClose }) {
             <tr className="border-b border-line">
               <th className={`${th} w-10 text-center`}>STT</th>
               {COT.map(([ten, canh]) => (
-                <th key={ten} title={GIAI_THICH[ten] || undefined}
-                  className={`${th} ${canh === 'right' ? 'text-right' : 'text-left'} ${GIAI_THICH[ten] ? 'cursor-help' : ''}
+                <th key={ten} title={giaiThich[ten] || undefined}
+                  className={`${th} ${canh === 'right' ? 'text-right' : 'text-left'} ${giaiThich[ten] ? 'cursor-help' : ''}
                     ${ten === 'Ngày cập nhật kết quả' ? 'bg-yellow-100 dark:bg-yellow-900/40' : ''} ${ten === 'SL còn lại' ? 'text-danger' : ''}`}>
                   <div className="min-w-[3.5rem] max-w-[7rem] whitespace-normal leading-tight">{ten}</div>
                 </th>

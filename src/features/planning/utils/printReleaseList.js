@@ -25,8 +25,6 @@ export default function printReleaseList(items, meta) {
     const mucLenh = r._dau ? {
       stt: `<td class="n g"${rs}>${r._stt}</td>`,
       chuyen: `<td class="g"${rs}>${esc(r.ten_chuyen)}${r._span > 1 ? `<div class="gs">gom set ${r._span}</div>` : ''}</td>`,
-      daIn: `<td class="n g"${rs}>${r.sl_da_in == null ? '' : fmtNum(r.sl_da_in)}</td>`,
-      daGiao: `<td class="n g"${rs}>${r.sl_da_giao == null ? '' : fmtNum(r.sl_da_giao)}</td>`,
       owner: `<td class="g"${rs}></td>`,
       gioBd: `<td class="g"${rs}>${fmtClock(r.tg_bd_kh)}</td>`,
       gioKt: `<td class="g"${rs}>${fmtClock(r.tg_kt_kh)}</td>`,
@@ -45,8 +43,8 @@ export default function printReleaseList(items, meta) {
       <td>${esc(r.kich_phim)}</td>
       <td class="n">${fmtNum(r.so_luong_don_hang)}</td>
       <td class="n">${fmtNum(r.slnv)}</td>
-      ${mucLenh.daIn || ''}
-      ${mucLenh.daGiao || ''}
+      <td class="n">${fmtNum(r.sl_da_in_pin ?? r.sl_da_in)}</td>
+      <td class="n">${fmtNum(r.sl_da_giao_pin ?? r.sl_da_giao)}</td>
       <td class="n b">${fmtNum(r.sl_release_phan ?? r.so_luong_release)}</td>
       ${mucLenh.owner || ''}
       ${mucLenh.gioBd || ''}

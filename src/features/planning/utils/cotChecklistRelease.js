@@ -94,8 +94,12 @@ export const COT_CHECKLIST = [
   { key: 'tinh_chat_in', header: 'Tính chất in', width: 9, value: (r) => r.tinh_chat_in || '' },
   { key: 'sldh', header: 'SLĐH', width: 8, num: true, value: (r) => (r.so_luong_don_hang == null ? '' : Number(r.so_luong_don_hang)) },
   { key: 'slnv', header: 'SL nhận vải', width: 9, num: true, value: (r) => Number(r.slnv) || 0 },
-  { key: 'sl_da_in', header: 'SL đã in', width: 8, num: true, mucLenh: true, value: (r) => (r.sl_da_in == null ? '' : Number(r.sl_da_in)) },
-  { key: 'sl_giao', header: 'SL Giao', width: 8, num: true, mucLenh: true, value: (r) => (r.sl_da_giao == null ? '' : Number(r.sl_da_giao)) },
+  // SL đã in / SL Giao THEO CODE PHẦN (29/10/2026, người dùng: đợt vải trước của phần in đã in / đã giao thì phải hiện) —
+  //   mọi lệnh sống của phần in (BE `sl_da_in_pin` / `sl_da_giao_pin`), mỗi dòng phần in 1 ô. BE cũ ⇒ lùi số của lệnh.
+  { key: 'sl_da_in', header: 'SL đã in', width: 8, num: true,
+    value: (r) => { const v = r.sl_da_in_pin ?? r.sl_da_in; return v == null ? '' : Number(v); } },
+  { key: 'sl_giao', header: 'SL Giao', width: 8, num: true,
+    value: (r) => { const v = r.sl_da_giao_pin ?? r.sl_da_giao; return v == null ? '' : Number(v); } },
   { key: 'sl_release', header: 'SL Release', width: 10, num: true, value: slReleaseDong },
   // Doanh thu của DÒNG = đơn giá (mig 113, ERP `Dongia` = GiaIn + Giaep + giainkieng) × SL Release. Chưa có giá ⇒ trống.
   { key: 'doanh_thu', header: 'Doanh thu', width: 14, num: true, gia: true, value: doanhThu },

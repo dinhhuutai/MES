@@ -41,6 +41,7 @@ import RunNhieuPanel from '../components/RunNhieuPanel';
 import DsReleaseSxModal from '../components/DsReleaseSxModal';
 import LichSuHoanTatModal from '../components/LichSuHoanTatModal';
 import TemCuaToiModal from '../components/TemCuaToiModal';
+import FinishListModal from '../../quality/components/FinishListModal';
 import ChoChayModal, { LocLenhPanel } from '../components/ChoChayModal';
 import {
   locLenhChay, coLoc, LOC_TRONG, timLenhTheoMa, gomTheoCodePhan, lenhCuaDong, gomDangChayTheoCodePhan,
@@ -104,6 +105,7 @@ export default function XacNhanChayPage() {
   const [selNhieu, setSelNhieu] = useState(null);
   const [lichSuHtOpen, setLichSuHtOpen] = useState(false); // modal Lịch sử chạy hoàn tất (28/10/2026)
   const [temCuaToiOpen, setTemCuaToiOpen] = useState(false); // modal Tem của tôi (28/10/2026)
+  const [finishOpen, setFinishOpen] = useState(false);       // modal Danh sách finish — chế độ SX (29/10/2026)
   const [dsReleaseOpen, setDsReleaseOpen] = useState(false); // modal Danh sách release sản xuất (26/10/2026) // lenhIds[] — sidebar nhiều lệnh đang chạy
   const [chonRun, setChonRun] = useState([]);     // phieu_id[] đã quét/tích ở bảng Đang chạy (mới nhất đứng đầu)
   const oTim = useOTimKiem();
@@ -538,6 +540,8 @@ export default function XacNhanChayPage() {
             { ten: 'Danh sách release', icon: 'file-spreadsheet', chiXemOk: true, onClick: () => setDsReleaseOpen(true) },
             // Lịch sử Chạy hoàn tất (28/10/2026) — lọc barcode đầy đủ, mở lại phiếu (lý do bắt buộc).
             { ten: 'Lịch sử hoàn tất', icon: 'history', chiXemOk: true, onClick: () => setLichSuHtOpen(true) },
+            // Danh sách finish (29/10/2026 — chuyển từ màn OQC sang đây, cùng modal `quality/components/FinishListModal`).
+            { ten: 'Danh sách finish', icon: 'file-spreadsheet', chiXemOk: true, onClick: () => setFinishOpen(true) },
           ] },
           { ten: 'Theo dõi', muc: [
             can('PROD_MONITOR') && { ten: 'Theo dõi chuyền', icon: 'activity', chiXemOk: true, onClick: () => setMoTrang('theo-doi-chuyen') },
@@ -706,6 +710,7 @@ export default function XacNhanChayPage() {
       </Modal>
 
       {dsReleaseOpen && <DsReleaseSxModal open onClose={() => setDsReleaseOpen(false)} />}
+      {finishOpen && <FinishListModal open nguon="SX" onClose={() => { setFinishOpen(false); oTim.datConTro(); }} />}
       {lichSuHtOpen && <LichSuHoanTatModal open onClose={() => setLichSuHtOpen(false)} show={show} onDaMoLai={() => load(true)} />}
       {temCuaToiOpen && <TemCuaToiModal open onClose={() => { setTemCuaToiOpen(false); oTim.datConTro(); }} show={show} />}
       {selNhieu && <RunNhieuPanel lenhIds={selNhieu} onClose={() => { setSelNhieu(null); oTim.datConTro(); }}

@@ -63,4 +63,5 @@ export function demGiaiDoan(items) {
 // ⚠ CỐ Ý KHÔNG gộp Khách hàng / PO / Mã hàng: dữ liệu prod hiện cho thấy mọi lệnh gom set đều CÙNG
 //   khách·đơn·mã hàng nên gộp cũng đúng, NHƯNG nếu về sau ERP gửi set trộn đơn thì gộp sẽ GIẤU MẤT
 //   thông tin của dòng dưới. Để lặp lại giá trị thì cùng lắm là hơi thừa, không sai.
-export const COT_MUC_LENH = ['stt', 'chuyen', 'sl_da_in', 'sl_da_giao', 'owner', 'gio_bd', 'gio_kt', 'xac_nhan'];
+// (29/10/2026: SL đã in / SL giao nay theo CODE PHẦN — không còn mức lệnh.)
+export const COT_MUC_LENH = ['stt', 'chuyen', 'owner', 'gio_bd', 'gio_kt', 'xac_nhan'];

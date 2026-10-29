@@ -20,7 +20,6 @@ import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import FieldFilters, { FilterToggle } from '../../../components/common/FieldFilters';
 import Icon from '../../../components/common/Icon';
-import FinishListModal from '../components/FinishListModal';
 import useToast from '../../../hooks/useToast';
 import useSocketReload from '../../../hooks/useSocketReload';
 import useNow from '../../../hooks/useNow';
@@ -82,7 +81,6 @@ export default function OqcPage() {
   const [saving, setSaving] = useState(false);
   const [histOpen, setHistOpen] = useState(false);
   const [doneOpen, setDoneOpen] = useState(false);
-  const [finishOpen, setFinishOpen] = useState(false); // modal "Danh sách finish"
   const [users, setUsers] = useState([]);
   const [returnReason, setReturnReason] = useState('');
   const [returnMode, setReturnMode] = useState(false);
@@ -369,12 +367,10 @@ export default function OqcPage() {
         <NghenButton rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} onClick={() => setNghenOpen(true)} />
         {/* Laptop/PC (từ `md`) giữ NGUYÊN dãy nút cũ (29/10/2026, người dùng chốt); điện thoại gom vào menu "Thêm". */}
         <span className="hidden md:contents">
-          <Button chiXemOk variant="ghost" icon="file-spreadsheet" onClick={() => setFinishOpen(true)}>Danh sách finish</Button>
           <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
           <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
         </span>
         <MenuNut className="md:hidden" nhom={[{ muc: [
-          { ten: 'Danh sách finish', icon: 'file-spreadsheet', chiXemOk: true, onClick: () => setFinishOpen(true) },
           { ten: 'Đã hoàn thành', icon: 'check-circle', chiXemOk: true, onClick: () => setDoneOpen(true) },
           { ten: 'Lịch sử', icon: 'history', chiXemOk: true, onClick: () => setHistOpen(true) },
         ] }]} />
@@ -517,7 +513,6 @@ export default function OqcPage() {
         tenMan="OQC" rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} tenFile="nghen-oqc"
         maTrang="CL_OQC" />
       {lyDoNghenModal}
-      <FinishListModal open={finishOpen} onClose={() => setFinishOpen(false)} />
 
       {/* XÁC NHẬN NHANH — 1 bộ thông tin cho mọi tem đã tích (18/10/2026). */}
       <Modal open={nhanhOpen} onClose={() => (nhanhSaving ? null : setNhanhOpen(false))}
