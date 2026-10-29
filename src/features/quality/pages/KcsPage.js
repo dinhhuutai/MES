@@ -260,20 +260,21 @@ export default function KcsPage() {
   //   mà không ai biết. Nay lệch dù chỉ 1 pcs là KHÔNG lưu được (backend chặn 422 `LECH_CAN_DOI`).
   // ⚠ Quy ước dấu GIỮ NGUYÊN như sổ cái đang chạy (`sl_chenh_lech` = dư − thiếu): **dư làm TĂNG** tổng
   //   cần kiểm, **thiếu làm GIẢM**. Đổi dấu ở đây là lệch với `addKcsLedger` ⇒ sai tổng cần kiểm về sau.
-  // ⚠ `mẫu` CỐ Ý không vào công thức — nó là hàng lấy ra làm mẫu, không thuộc số kiểm (luật cũ, giữ).
+  // ⚠ MẪU TÍNH VÀO TỔNG (29/10/2026, người dùng: "616 = đạt 615 + mẫu 1 là ok"): vế phải = đạt + hư + mẫu; mẫu bị trừ
+  //   khỏi tổng cần kiểm của tem (BE `recordKcs`), không vào SL kiểm / đạt.
   // KIỂM MỘT PHẦN (27/10/2026): không nhập thiếu/dư mà đạt + hư < cần kiểm ⇒ TỰ là lượt một phần (không cần tích ô),
   //   phần còn lại tem ở lại màn KCS — luật GƯƠNG BE (`danhGiaKcs`).
   const canDoi = useMemo(() => {
     const n = (v) => Math.max(0, Math.trunc(Number(v) || 0));
     const canKiem = Number(editing?.con_kcs ?? editing?.so_luong ?? 0) || 0;
     const dat = n(form.soLuongDat); const hu = n(form.soLuongHu);
-    const thieu = n(form.soLuongThieu); const du = n(form.soLuongDu);
+    const thieu = n(form.soLuongThieu); const du = n(form.soLuongDu); const mau = n(form.soLuongMau);
     const tong = canKiem + du - thieu;
-    const daNhap = dat + hu;
+    const daNhap = dat + hu + mau;
     const dg = danhGiaKcs(canKiem, form);
     const motPhan = dg.motPhan ? dg : null;
-    return { canKiem, dat, hu, thieu, du, tong, daNhap, lech: daNhap - tong, motPhan,
-      can: motPhan ? motPhan.ok : (daNhap === tong && daNhap > 0) };
+    return { canKiem, dat, hu, thieu, du, mau, tong, daNhap, lech: daNhap - tong, motPhan,
+      can: motPhan ? motPhan.ok : (daNhap === tong && dat + hu > 0) };
   }, [editing, form]);
 
   // Quét QR (ma_tem) → tra tem đang chờ KCS → mở modal nhập.
@@ -528,7 +529,7 @@ export default function KcsPage() {
           {N({ f: 'soLuongHu', label: 'Số lượng hư' })}
           {N({ f: 'soLuongThieu', label: 'Số lượng thiếu' })}
           {N({ f: 'soLuongDu', label: 'Số lượng dư' })}
-          {N({ f: 'soLuongMau', label: 'Số lượng mẫu (không tính)' })}
+          {N({ f: 'soLuongMau', label: 'Số lượng mẫu' })}
         </div>
 
         {/* KHUNG CÂN ĐỐI — phải về 0 mới lưu được. Hiện đủ 2 vế để người nhập tự thấy sai ở đâu,
@@ -544,6 +545,7 @@ export default function KcsPage() {
             </span>
             <span className="text-ink-soft">
               Đã nhập: đạt <b className="text-ink">{fmtNum(canDoi.dat)}</b> + hư <b className="text-ink">{fmtNum(canDoi.hu)}</b>
+              {canDoi.mau ? <> + mẫu <b className="text-ink">{fmtNum(canDoi.mau)}</b></> : null}
               {' = '}<b className="text-ink">{fmtNum(canDoi.daNhap)}</b>
             </span>
           </div>
@@ -557,10 +559,10 @@ export default function KcsPage() {
         </div>
 
         <p className="mt-2 text-xs text-ink-soft">
-          Nhập đạt + hư <b>nhỏ hơn</b> số cần kiểm (không nhập thiếu/dư) = <b>kiểm trước một phần</b>, phần còn lại tem ở lại
-          màn này. Có nhập thiếu/dư thì <b>cần kiểm + dư − thiếu = đạt + hư</b> phải khớp tuyệt đối.
+          Nhập đạt + hư + mẫu <b>nhỏ hơn</b> số cần kiểm (không nhập thiếu/dư) = <b>kiểm trước một phần</b>, phần còn lại tem ở lại
+          màn này. Có nhập thiếu/dư thì <b>cần kiểm + dư − thiếu = đạt + hư + mẫu</b> phải khớp tuyệt đối.
           Toàn bộ <b>SL hư</b> vào <b>chờ sửa</b>; chia sửa/hủy theo từng loại lỗi làm ở trang{' '}
-          <b>Sản xuất › Phân loại lỗi</b> (số ở đó là chính thức). <b>Mẫu</b> không tính vào SL kiểm.
+          <b>Sản xuất › Phân loại lỗi</b> (số ở đó là chính thức). <b>Mẫu</b> tính vào tổng (lấy ra khỏi lô), không vào SL đạt.
           Đạt → chờ <b>OQC</b>. Phần chưa kiểm giữ lại kiểm lần sau.
         </p>
       </SidePanel>

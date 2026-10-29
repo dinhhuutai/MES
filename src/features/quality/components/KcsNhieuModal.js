@@ -14,11 +14,13 @@ import { fmtNum } from '../../../utils/format';
 //   · còn lại (có thiếu/dư, hoặc nhập ≥ cần kiểm): đạt + hư = cần kiểm + dư − thiếu (lệch là chặn).
 // Ô Đạt điền sẵn = còn cần kiểm (như panel 1 tem).
 const n = (v) => Math.max(0, Math.trunc(Number(v) || 0));
+//   · MẪU tính vào tổng (29/10/2026, người dùng: "616 = đạt 615 + mẫu 1 là ok") — cùng vế với đạt + hư.
 export function danhGiaKcs(canKiem, f) {
   const dat = n(f.soLuongDat); const hu = n(f.soLuongHu);
   const thieu = n(f.soLuongThieu); const du = n(f.soLuongDu);
-  const daNhap = dat + hu;
-  if (daNhap <= 0) return { ok: false, chu: 'Nhập đạt/hư' };
+  const mau = n(f.soLuongMau);
+  if (dat + hu <= 0) return { ok: false, chu: 'Nhập đạt/hư' };
+  const daNhap = dat + hu + mau;
   if (!thieu && !du && daNhap < canKiem) {
     return { ok: true, motPhan: true, chu: `Kiểm một phần ${fmtNum(daNhap)} · còn ${fmtNum(canKiem - daNhap)} ở lại KCS` };
   }
