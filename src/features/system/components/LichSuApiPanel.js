@@ -11,6 +11,7 @@ import Toast from '../../../components/common/Toast';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import { lichSuApi, guiLaiApi } from '../../../services/caiDatApiService';
+import { ngayLocalISO } from '../../../utils/format';
 import SuaGuiLaiModal from './SuaGuiLaiModal';
 import FieldFilters, { FilterToggle } from '../../../components/common/FieldFilters';
 
@@ -151,7 +152,8 @@ export default function LichSuApiPanel({ open, onClose, ma, ten, laGhiInTem }) {
   const [rows, setRows] = useState([]);
   const [meta, setMeta] = useState({ page: 1, totalPages: 1, total: 0 });
   const [page, setPage] = useState(1);
-  const [date, setDate] = useState('');
+  // Mở lịch sử lọc sẵn NGÀY = HÔM NAY (29/10/2026, người dùng: phân trang quá dài, như Danh sách tem in) — bấm ✕ ⇒ mọi ngày.
+  const [date, setDate] = useState(() => ngayLocalISO(new Date()));
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [chon, setChon] = useState(null); // dòng đang mở chi tiết
@@ -181,7 +183,7 @@ export default function LichSuApiPanel({ open, onClose, ma, ten, laGhiInTem }) {
   useEffect(() => { const t = setTimeout(load, 350); return () => clearTimeout(t); }, [load]);
 
   // Mở panel cho API khác / đóng rồi mở lại ⇒ về trang 1, bỏ chi tiết đang xem.
-  useEffect(() => { if (open) { setPage(1); setChon(null); } }, [open, ma]);
+  useEffect(() => { if (open) { setPage(1); setChon(null); setDate(ngayLocalISO(new Date())); } }, [open, ma]);
 
   const guiLai = async (r) => {
     setDangGui(r.id);

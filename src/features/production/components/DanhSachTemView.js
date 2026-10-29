@@ -20,7 +20,7 @@ import { CA_LOC } from '../../../utils/caLoc';
 import { LOAI_TABS, locSiSoTheoChip } from '../../../utils/khuChuyen';
 import useToast from '../../../hooks/useToast';
 import useHuyLichSu from '../../../hooks/useHuyLichSu';
-import { fmtNum, fmtDateTime, temCode } from '../../../utils/format';
+import { fmtNum, fmtDateTime, temCode, ngayLocalISO } from '../../../utils/format';
 import exportCheckpointExcel, { cotTemChung, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
 import taiHetTrang, { LIMIT_TAI_LON } from '../../../utils/taiHetTrang';
 import HuyLyDoModal from '../../../components/common/HuyLyDoModal';
@@ -173,7 +173,13 @@ export default function DanhSachTemView({
   const { toast, show } = useToast();
 
   const [search, setSearch] = useState('');
-  const [filters, setFilters] = useState({});   // mặc định KHÔNG lọc ngày (xem ghi chú ở DateRangePicker)
+  // Trang Sản xuất mở sẵn NGÀY IN TEM = HÔM NAY (29/10/2026, người dùng: "phân trang tới số lớn rồi, cho hiện theo ngày in
+  //   tem lúc mới vào") — Xóa lọc / xóa ô ngày ⇒ mọi ngày như cũ. Trang tem gia công giữ không lọc ngày (hàng về muộn).
+  const [filters, setFilters] = useState(() => {
+    if (laGiaCong) return {};
+    const homNay = ngayLocalISO(new Date());
+    return { ngayTu: homNay, ngayDen: homNay };
+  });
   const [showFilter, setShowFilter] = useState(false);
   const [rows, setRows] = useState([]);
   const [meta, setMeta] = useState({ page: 1, totalPages: 1, total: 0 });

@@ -10,7 +10,7 @@ import Toast from '../../../components/common/Toast';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import { syncPhieuNhanVai, syncHistory, syncRaw } from '../../../services/erpService';
-import { fmtNum } from '../../../utils/format';
+import { fmtNum, ngayLocalISO } from '../../../utils/format';
 import CapNhatCodePhanModal from '../components/CapNhatCodePhanModal';
 
 const fmtDt = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '—');
@@ -32,7 +32,8 @@ export default function ErpSyncPage() {
 
   const [rows, setRows] = useState([]);
   const [meta, setMeta] = useState({ page: 1, totalPages: 1, total: 0 });
-  const [date, setDate] = useState('');
+  // Lịch sử lọc sẵn NGÀY = HÔM NAY (29/10/2026 — lượt kéo 5 phút/lần, phân trang rất dài); bỏ ngày ⇒ mọi ngày.
+  const [date, setDate] = useState(() => ngayLocalISO(new Date()));
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
