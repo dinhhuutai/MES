@@ -11,6 +11,11 @@ import { khopTungTu } from '../../utils/timKiem';
 
 const todayStr = () => ngayLocalISO(new Date());
 const fmtTime = (t) => (t ? new Date(t).toLocaleTimeString('vi-VN') : '');
+const fmtNgayGio = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '');
+// Không chọn ngày ⇒ tìm MỌI NGÀY ở server theo ô tìm (code phần / mã) — 01/11/2026, người dùng: "clear ngày thì không
+// thấy gì, đáng lẽ không có ngày thì tìm theo code phần". Backend `utils/lichSuTim.js` (≥ 3 ký tự, ≤ 500 lượt mới nhất).
+const TU_KHOA_TOI_THIEU = 3;
+const TOI_DA_TIM = 500;
 
 // BỘ LỌC (27/10/2026, người dùng: "các modal chỗ lịch sử cho thêm bộ lọc") — lọc CLIENT-SIDE trên 1 ngày đã tải:
 //   ô tìm (không dấu, khớp từng từ, quét mọi trường chữ của dòng — kể cả trường phụ như code phần nếu fetcher trả) ·
@@ -24,12 +29,13 @@ const chuoiDong = (r) => Object.entries(r)
   .filter(([k, v]) => !k.startsWith('_') && (typeof v === 'string' || typeof v === 'number'))
   .map(([, v]) => String(v)).join(' ');
 
-// Panel lịch sử theo ngày dùng chung. fetcher(dateStr) -> [{ tg, nguoi, hanh_dong, doi_tuong, chi_tiet }].
+// Panel lịch sử theo ngày dùng chung. fetcher(dateStr, q) -> [{ tg, nguoi, hanh_dong, doi_tuong, chi_tiet }].
+//   dateStr rỗng + q ⇒ backend tìm mọi ngày. `timMoiNgay={false}` cho API chưa hỗ trợ (không ngày ⇒ báo chọn ngày).
 // `extraColumns`: cột PHỤ nối vào CUỐI bảng (vd nút "In lại phiếu" ở màn Giao hàng). Nhận mảng HOẶC
 // hàm (rows)=>mảng. Mặc định KHÔNG có ⇒ mọi màn đang dùng panel này giữ nguyên như cũ.
 // ⚠ Cột phụ CỐ Ý không vào Excel: nó thường là NÚT, xuất ra file chỉ được một ô trống.
 // `taiLai` (14/10/2026): số đếm do trang cha tăng lên để panel TẢI LẠI (vd sau khi bấm "Hủy" ở 1 dòng).
-export default function HistoryPanel({ open, onClose, title = 'Lịch sử', fetcher, extraColumns, taiLai = 0 }) {
+export default function HistoryPanel({ open, onClose, title = 'Lịch sử', fetcher, extraColumns, taiLai = 0, timMoiNgay = true }) {
   const { toast, show } = useToast();
   const [date, setDate] = useState(todayStr);
   const [rows, setRows] = useState([]);
@@ -40,12 +46,24 @@ export default function HistoryPanel({ open, onClose, title = 'Lịch sử', fet
   const [filters, setFilters] = useState({});
   const [showFilters, setShowFilters] = useState(false);
 
+  // Chế độ "mọi ngày": không chọn ngày. Từ khóa gửi server sau khi ngừng gõ 400 ms (tránh gọi mỗi phím).
+  const moiNgay = !date;
+  const [qTre, setQTre] = useState('');
+  useEffect(() => {
+    if (!moiNgay) { setQTre(''); return undefined; }
+    const h = setTimeout(() => setQTre(q.trim()), 400);
+    return () => clearTimeout(h);
+  }, [q, moiNgay]);
+  const qServer = moiNgay && timMoiNgay && qTre.length >= TU_KHOA_TOI_THIEU ? qTre : '';
+  const choTuKhoa = moiNgay && !qServer;
+
   const dsHanhDong = useMemo(() => [...new Set(rows.map((r) => r.hanh_dong).filter(Boolean))].sort(), [rows]);
   const viewRows = useMemo(() => rows.filter((r) => {
     if (hanhDong && r.hanh_dong !== hanhDong) return false;
     if (TRUONG_LOC.some((f) => (filters[f.key] || '').trim() && !khopTungTu(r[f.key], filters[f.key]))) return false;
-    return !q.trim() || khopTungTu(chuoiDong(r), q);
-  }), [rows, q, hanhDong, filters]);
+    // Mọi ngày: server đã lọc theo từ khóa (khớp code phần / mã của bản ghi kể cả khi dòng không ghi ra chữ đó).
+    return moiNgay || !q.trim() || khopTungTu(chuoiDong(r), q);
+  }), [rows, q, hanhDong, filters, moiNgay]);
   const soLoc = TRUONG_LOC.filter((f) => (filters[f.key] || '').trim()).length + (q.trim() ? 1 : 0) + (hanhDong ? 1 : 0);
   const xoaLoc = () => { setFilters({}); setQ(''); setHanhDong(''); };
 
@@ -57,9 +75,11 @@ export default function HistoryPanel({ open, onClose, title = 'Lịch sử', fet
 
   const load = useCallback(async () => {
     if (!open || !fetcherRef.current) return;
+    // Không ngày mà chưa đủ từ khóa ⇒ KHÔNG gọi (server sẽ trả hôm nay — dễ hiểu nhầm là kết quả tìm).
+    if (!date && !qServer) { setRows([]); return; }
     setLoading(true);
     try {
-      const res = await fetcherRef.current(date);
+      const res = await fetcherRef.current(date, qServer || undefined);
       setRows((res.data || []).map((r, i) => ({ ...r, _k: i })));
     } catch (e) {
       show(e.message || 'Lỗi tải lịch sử', 'error');
@@ -67,13 +87,16 @@ export default function HistoryPanel({ open, onClose, title = 'Lịch sử', fet
     } finally {
       setLoading(false);
     }
-  }, [open, date, show]);
+  }, [open, date, qServer, show]);
 
   useEffect(() => { load(); }, [load, taiLai]);
 
   const them = typeof extraColumns === 'function' ? (extraColumns(rows) || []) : (extraColumns || []);
   const columns = [
-    { key: 'tg', header: 'Giờ', className: 'whitespace-nowrap tabular-nums', render: (r) => fmtTime(r.tg) },
+    { key: 'tg', header: moiNgay ? 'Thời gian' : 'Giờ', className: 'whitespace-nowrap tabular-nums',
+      render: (r) => (moiNgay ? fmtNgayGio(r.tg) : fmtTime(r.tg)) },
+    ...(rows.some((r) => r.ma_phan) && moiNgay
+      ? [{ key: 'ma_phan', header: 'Code phần', className: 'whitespace-nowrap', render: (r) => r.ma_phan || '—' }] : []),
     { key: 'nguoi', header: 'Người', className: 'font-medium text-ink' },
     { key: 'hanh_dong', header: 'Hành động' },
     { key: 'doi_tuong', header: 'Đối tượng' },
@@ -86,7 +109,8 @@ export default function HistoryPanel({ open, onClose, title = 'Lịch sử', fet
     try {
       await exportPanelExcel({
         cols: [
-          { header: 'Giờ', value: (r) => fmtTime(r.tg) },
+          { header: moiNgay ? 'Thời gian' : 'Giờ', value: (r) => (moiNgay ? fmtNgayGio(r.tg) : fmtTime(r.tg)) },
+          ...(moiNgay ? [{ header: 'Code phần', value: (r) => r.ma_phan || '' }] : []),
           { header: 'Người', value: (r) => r.nguoi || '' },
           { header: 'Hành động', value: (r) => r.hanh_dong || '' },
           { header: 'Đối tượng', value: (r) => r.doi_tuong || '' },
@@ -94,7 +118,7 @@ export default function HistoryPanel({ open, onClose, title = 'Lịch sử', fet
         ],
         rows: viewRows,
         title: title.toUpperCase(),
-        subtitle: `Ngày ${date} · ${viewRows.length} lượt${soLoc ? ' (đang lọc)' : ''}`,
+        subtitle: `${moiNgay ? `Mọi ngày · tìm "${qServer}"` : `Ngày ${date}`} · ${viewRows.length} lượt${soLoc ? ' (đang lọc)' : ''}`,
         fileName: 'lich-su',
       });
     } catch (e) {
@@ -106,18 +130,29 @@ export default function HistoryPanel({ open, onClose, title = 'Lịch sử', fet
 
   return (
     <SidePanel open={open} onClose={onClose} title={title} width="max-w-2xl"
-      subtitle={soLoc ? `${viewRows.length}/${rows.length} lượt trong ngày (đang lọc)` : `${rows.length} lượt trong ngày`}>
+      subtitle={moiNgay
+        ? (qServer ? `${viewRows.length} lượt ở mọi ngày${rows.length >= TOI_DA_TIM ? ` (hiện ${TOI_DA_TIM} lượt mới nhất)` : ''}` : 'Mọi ngày — nhập code phần để tìm')
+        : (soLoc ? `${viewRows.length}/${rows.length} lượt trong ngày (đang lọc)` : `${rows.length} lượt trong ngày`)}>
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <label className="text-sm font-medium text-ink">Ngày</label>
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="h-10 rounded-input border border-line px-3 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
-        />
+        <div className="relative">
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="h-10 rounded-input border border-line px-3 pr-8 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
+          />
+          {date && timMoiNgay && (
+            <button onClick={() => setDate('')} aria-label="Bỏ ngày — tìm mọi ngày" title="Bỏ ngày — tìm theo code phần ở mọi ngày"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-soft hover:text-danger">
+              <Icon name="x" size={14} />
+            </button>
+          )}
+        </div>
         <div className="relative min-w-[12rem] flex-1">
           <Icon name="search" size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm người, mã, code phần, chi tiết..."
+          <input value={q} onChange={(e) => setQ(e.target.value)}
+            placeholder={moiNgay ? 'Nhập code phần / mã để tìm ở mọi ngày...' : 'Tìm người, mã, code phần, chi tiết...'}
             className="h-10 w-full rounded-input border border-line bg-surface pl-9 pr-8 text-base md:text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10" />
           {q && (
             <button onClick={() => setQ('')} aria-label="Xóa tìm kiếm"
@@ -157,7 +192,12 @@ export default function HistoryPanel({ open, onClose, title = 'Lịch sử', fet
         </div>
       )}
       <DataTable columns={columns} rows={viewRows} loading={loading} rowKey="_k" sttStart={0}
-        emptyText={soLoc ? 'Không có lượt nào khớp bộ lọc' : 'Không có lượt xác nhận nào trong ngày'} />
+        emptyText={choTuKhoa
+          ? (timMoiNgay
+            ? `Chưa chọn ngày — nhập code phần (từ ${TU_KHOA_TOI_THIEU} ký tự) để tìm ở mọi ngày`
+            : 'Chọn ngày để xem lịch sử')
+          : moiNgay ? `Không có lượt nào khớp "${qServer}" ở mọi ngày`
+            : soLoc ? 'Không có lượt nào khớp bộ lọc' : 'Không có lượt xác nhận nào trong ngày'} />
       <Toast toast={toast} />
     </SidePanel>
   );

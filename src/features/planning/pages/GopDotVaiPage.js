@@ -228,7 +228,7 @@ export default function GopDotVaiPage() {
         )}
       </Modal>
 
-      <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)} title="Lịch sử gộp đợt vải" fetcher={gopHistory} />
+      <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)} title="Lịch sử gộp đợt vải" fetcher={gopHistory} timMoiNgay={false} />
       <Toast toast={toast} />
     </div>
   );

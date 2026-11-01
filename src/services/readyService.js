@@ -40,7 +40,7 @@ export const reopenReady = (phanInId) => client.post(`/ready/reopen/${phanInId}`
 export const confirmReadyQcBatch = (items) =>
   client.post('/ready/qc-confirm-batch', { items });
 // Lịch sử theo ngày. scope: 'tech' | 'qc'.
-export const readyHistory = (date, scope) => client.get('/ready/history', { params: { date, scope } });
+export const readyHistory = (date, scope, q) => client.get('/ready/history', { params: { date, scope, q } });
 // Danh sách phần in đã hoàn thành checkpoint READY theo ngày. scope: 'tech' | 'qc'.
 export const readyDone = (date, scope) => client.get('/ready/done', { params: { date, scope } });
 

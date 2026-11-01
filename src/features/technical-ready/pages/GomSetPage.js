@@ -341,7 +341,7 @@ export default function GomSetPage() {
       />
 
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}
-        title="Lịch sử thao tác gom set" fetcher={gomHistory} />
+        title="Lịch sử thao tác gom set" fetcher={gomHistory} timMoiNgay={false} />
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
         title="Set đã tạo/release" columns={GOM_DONE_COLUMNS} fetcher={gomDone}
         excelColumns={[

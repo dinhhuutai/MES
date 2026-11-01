@@ -4,12 +4,12 @@ export const listKcsCandidates = (params) => client.get('/quality/kcs/candidates
 export const recordKcs = (temId, body) => client.post(`/quality/kcs/${temId}`, body);
 export const gopTem = (body) => client.post('/quality/kcs/gop-tem', body);
 export const getTemHanhTrinh = (temId) => client.get(`/quality/tem/${temId}/hanh-trinh`);
-export const kcsHistory = (date) => client.get('/quality/kcs/history', { params: { date } });
+export const kcsHistory = (date, q) => client.get('/quality/kcs/history', { params: { date, q } });
 export const kcsDone = (date) => client.get('/quality/kcs/done', { params: { date } });
 
 export const listSuaCandidates = (params) => client.get('/quality/sua/candidates', { params });
 export const recordSua = (temId, body) => client.post(`/quality/sua/${temId}`, body);
-export const suaHistory = (date) => client.get('/quality/sua/history', { params: { date } });
+export const suaHistory = (date, q) => client.get('/quality/sua/history', { params: { date, q } });
 export const suaDone = (date) => client.get('/quality/sua/done', { params: { date } });
 // Ghi NGƯỜI SỬA cho các lượt sửa được chọn, nhập ở modal In tem (mig 080).
 // items: [{ suaId, nguoiSuaId?, nguoiSua }]
@@ -20,7 +20,7 @@ export const guiLaiErpSua = (suaId) => client.post(`/quality/sua/luot/${suaId}/g
 export const listOqcCandidates = (params) => client.get('/quality/oqc/candidates', { params });
 export const recordOqc = (temId, body) => client.post(`/quality/oqc/${temId}`, body);
 export const returnOqcToKcs = (temId, body) => client.post(`/quality/oqc/${temId}/tra-ve`, body);
-export const oqcHistory = (date) => client.get('/quality/oqc/history', { params: { date } });
+export const oqcHistory = (date, q) => client.get('/quality/oqc/history', { params: { date, q } });
 export const oqcDone = (date) => client.get('/quality/oqc/done', { params: { date } });
 // Danh sách finish (03/10/2026): 1 dòng / (ngày OQC × phần in) + tập MỤC TIÊU (hạn giao = denNgay).
 // `nguon` 'SX' (29/10/2026, Xác nhận chạy) = finish khi đã in + vải hư/thiếu ≥ SLNV; mặc định theo OQC cho qua giao.
@@ -48,7 +48,7 @@ export const qcTraVeHistory = (loai, date) => client.get('/quality/qc-tra-ve', {
 export const listInlineCandidates = (params) => client.get('/quality/inline/candidates', { params });
 export const listInlineLoaiLoi = () => client.get('/quality/inline/loai-loi');
 export const recordInline = (phieuId, body) => client.post(`/quality/inline/${phieuId}`, body);
-export const inlineHistory = (date) => client.get('/quality/inline/history', { params: { date } });
+export const inlineHistory = (date, q) => client.get('/quality/inline/history', { params: { date, q } });
 export const inlineDone = (date) => client.get('/quality/inline/done', { params: { date } });
 
 // Danh mục lỗi

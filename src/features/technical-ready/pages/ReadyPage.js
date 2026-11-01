@@ -555,7 +555,7 @@ export default function ReadyPage() {
         open={histOpen}
         onClose={() => setHistOpen(false)}
         title="Lịch sử xác nhận kỹ thuật"
-        fetcher={(date) => readyHistory(date, 'tech')}
+        fetcher={(date, q) => readyHistory(date, 'tech', q)}
       />
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
         title="Phần in đã hoàn tất kỹ thuật (3 mục)" maHeader="Phần in"

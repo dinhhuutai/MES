@@ -17,7 +17,7 @@ export const datGiaoHangTai = (id, giaoHangTai) =>
   client.patch(`/giao-hang/${id}/giao-hang-tai`, { giaoHangTai });
 
 // Sidebar Lịch sử / Đã hoàn thành của màn *Danh sách tem giao* (khuôn chung các màn xác nhận).
-export const historyGiao = (date) => client.get('/giao-hang/history', { params: { date } });
+export const historyGiao = (date, q) => client.get('/giao-hang/history', { params: { date, q } });
 export const doneGiao = (date) => client.get('/giao-hang/done', { params: { date } });
 
 // Hủy phiếu giao (tab ở *Hệ thống → Hủy lệnh xác nhận*) — đảo sổ cái đã giao, tem quay lại màn Giao.

@@ -570,7 +570,7 @@ export default function ReadyQcPage() {
         open={histOpen}
         onClose={() => setHistOpen(false)}
         title="Lịch sử QC chuẩn bị kỹ thuật"
-        fetcher={(date) => readyHistory(date, 'qc')}
+        fetcher={(date, q) => readyHistory(date, 'qc', q)}
       />
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
         title="Phần in đã QC (READY hoàn thành)" maHeader="Phần in"

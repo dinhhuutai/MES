@@ -41,7 +41,16 @@ export default function TichTemNhapModal({
 
   const keys = useMemo(() => truong.map((t) => t.k), [truong]);
   const oCua = (d) => (d.tt === 'OK' ? keys : ['ma']);
-  const datConTro = useCallback((id, k) => setMuonFocus((m) => ({ id, k, n: (m?.n || 0) + 1 })), []);
+  // `chon` = bôi đen chữ trong ô (mặc định có — quét lại là thay mã cũ); tra trượt khi người đang GÕ TAY thì không bôi đen.
+  const datConTro = useCallback((id, k, chon = true) => setMuonFocus((m) => ({ id, k, chon, n: (m?.n || 0) + 1 })), []);
+  // TỰ TRA MÃ (29/10/2026, người dùng: "đủ 12 số tự tìm luôn khỏi Enter, tự gõ thì dừng ~0,5 s tự hiện"):
+  //   hẹn giờ tra của từng dòng · mã đang tra của từng dòng (chặn tra 2 lần cùng mã — đầu đọc vẫn gửi Enter sau 12 số)
+  //   · lúc gõ phím cuối ở ô quét (Enter của đầu đọc tới SAU khi con trỏ đã nhảy sang ô "Đạt" thì bỏ qua).
+  const henTra = useRef({});
+  const dangTra = useRef({});
+  const lucGoMa = useRef(0);
+  const huyHenTra = (id) => { clearTimeout(henTra.current[id]); delete henTra.current[id]; };
+  useEffect(() => () => Object.values(henTra.current).forEach(clearTimeout), []);
 
   // Mở modal ⇒ bảng mới 1 dòng trống, con trỏ ở ô quét (Headless UI tự đặt focus lúc mở ⇒ đợi vài nhịp như các panel khác).
   useEffect(() => {
@@ -58,7 +67,7 @@ export default function TichTemNhapModal({
     if (!muonFocus || daDat.current === muonFocus.n) return;
     const el = refs.current[`${muonFocus.id}|${muonFocus.k}`];
     const o = el && (el.tagName === 'INPUT' ? el : el.querySelector('input'));
-    if (o) { daDat.current = muonFocus.n; o.focus(); if (o.select) o.select(); }
+    if (o) { daDat.current = muonFocus.n; o.focus(); if (muonFocus.chon && o.select) o.select(); }
   }, [muonFocus, dong]);
 
   const sua = (id, patch) => setDong((ds) => ds.map((d) => (d.id === id ? { ...d, ...(typeof patch === 'function' ? patch(d) : patch) } : d)));
@@ -94,16 +103,24 @@ export default function TichTemNhapModal({
     else sang(id, ds[0], 1);
   };
 
-  const tra = async (id) => {
+  // `giaTri` = mã vừa gõ (gọi ngay trong onChange thì state chưa vẽ lại) · `goTay` = tra do hẹn giờ 0,5 s (người đang gõ).
+  const tra = async (id, giaTri, goTay = false) => {
+    huyHenTra(id);
     const d0 = dongRef.current.find((x) => x.id === id);
-    const code = String(d0?.ma || '').trim();
-    if (!code) return;
+    if (!d0 || d0.tt === 'OK') return;
+    const code = String(giaTri ?? d0.ma ?? '').trim();
+    if (!code || dangTra.current[id] === code) return;
+    dangTra.current[id] = code;
     sua(id, { tt: 'TRA', chu: 'Đang tra…' });
     let kq;
     try { kq = await traMa(code); } catch (e) { kq = { loi: e.message || 'Không tra được mã' }; }
+    delete dangTra.current[id];
+    // Trong lúc chờ người dùng đã sửa mã ⇒ bỏ kết quả cũ (lượt tra của mã mới tự chạy).
+    const hienTai = dongRef.current.find((x) => x.id === id);
+    if (!hienTai || String(hienTai.ma || '').trim() !== code) return;
     if (!kq?.row) {
       sua(id, { tt: 'LOI', chu: kq?.loi || 'Không tìm thấy tem' });
-      datConTro(id, 'ma');
+      datConTro(id, 'ma', !goTay);
       return;
     }
     const khoa = khoaDong(kq.row);
@@ -123,8 +140,21 @@ export default function TichTemNhapModal({
     return con.length ? con : [dongTrong()];
   });
 
+  // Gõ ở ô quét: ĐỦ 12 SỐ (mã tem ERP — đầu đọc / dán) ⇒ tra NGAY; còn lại (≥ 4 ký tự) ⇒ ngừng gõ 0,5 s mới tra.
+  const doiMa = (id, v) => {
+    lucGoMa.current = Date.now();
+    huyHenTra(id);
+    sua(id, { ma: v, tt: 'TRONG', chu: '' });
+    const ma = v.trim();
+    if (/^\d{12}$/.test(ma)) { tra(id, ma); return; }
+    if (ma.length >= 4) henTra.current[id] = setTimeout(() => tra(id, undefined, true), 500);
+  };
+
   const phim = (e, d, k) => {
     if (e.nativeEvent?.isComposing) return;
+    if (k === 'ma') lucGoMa.current = Date.now();
+    // Enter / mũi tên của đầu đọc tới sát sau 12 số mà con trỏ đã sang ô nhập ⇒ bỏ (không thì nhảy mất ô "Đạt").
+    else if (Date.now() - lucGoMa.current < 250 && ['Enter', 'ArrowDown', 'ArrowUp'].includes(e.key)) { e.preventDefault(); return; }
     if (e.key === 'Enter') {
       e.preventDefault();
       if (k === 'ma') tra(d.id); else oKe(d.id, k);
@@ -249,8 +279,8 @@ export default function TichTemNhapModal({
                           <span className="font-mono text-xs font-semibold text-primary">{maHien(r)}</span>
                         ) : (
                           <input ref={(el) => { refs.current[`${d.id}|ma`] = el; }} className={O_MA}
-                            value={d.ma} placeholder="Quét / gõ mã tem…" disabled={d.tt === 'TRA' || dangLuu}
-                            onChange={(e) => sua(d.id, { ma: e.target.value, tt: 'TRONG', chu: '' })}
+                            value={d.ma} placeholder="Quét / gõ mã tem…" disabled={dangLuu}
+                            onChange={(e) => doiMa(d.id, e.target.value)}
                             onKeyDown={(e) => phim(e, d, 'ma')} />
                         )}
                       </td>

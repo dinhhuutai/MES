@@ -16,7 +16,7 @@ export const createRelease1 = (body) => client.post('/planning/release1', body);
 export const release1TraVeKyThuat = (body) => client.post('/planning/release1/tra-ve-ky-thuat', body);
 // Tạo đợt sản xuất (gộp/tách nhiều đợt vải + SL từng đợt) — màn "Tạo đợt sản xuất"
 export const createDotSanXuat = (body) => client.post('/planning/dot-san-xuat', body);
-export const release1History = (date) => client.get('/planning/release1/history', { params: { date } });
+export const release1History = (date, q) => client.get('/planning/release1/history', { params: { date, q } });
 // Danh sách release theo ngày kế hoạch (modal/report + Excel/In)
 // mode: 'KE_HOACH' (mặc định — theo ngày kế hoạch) | 'RELEASE' (theo ngày bấm Release 1)
 export const getReleaseList = (date, mode) => client.get('/planning/release-list', { params: { date, mode } });
@@ -51,7 +51,7 @@ export const listOwnerChoIn = () => client.get('/planning/test-run/owner-cho-in'
 export const skipTestRun = (id, lyDo) => client.post(`/planning/test-run/${id}/skip`, { lyDo });
 export const confirmCNSPBatch = (lenhIds) => client.post('/planning/test-run/cnsp-confirm-batch', { lenhIds });
 export const confirmQABatch = (lenhIds, payload = {}) => client.post('/planning/test-run/qa-confirm-batch', { lenhIds, ...payload });
-export const testRunHistory = (date) => client.get('/planning/test-run/history', { params: { date } });
+export const testRunHistory = (date, q) => client.get('/planning/test-run/history', { params: { date, q } });
 export const testCnspDone = (date) => client.get('/planning/test-run/cnsp-done', { params: { date } });
 export const testQaDone = (date) => client.get('/planning/test-run/qa-done', { params: { date } });
 
@@ -71,7 +71,7 @@ export const getReplanDetail = (id) => client.get(`/planning/replan/${id}`);
 // Sửa kế hoạch 1 lệnh từ sidebar Danh sách release (28/10/2026) — cả lệnh đã chạy, lý do bắt buộc, BE báo ERP hủy cũ + gửi mới.
 export const suaKeHoachTuDsRelease = (lenhId, body) => client.put(`/planning/release-list/lenh/${lenhId}/ke-hoach`, body);
 export const replanBatch = (body) => client.post('/planning/replan/batch', body);
-export const planHistory = (date) => client.get('/planning/plan-history', { params: { date } });
+export const planHistory = (date, q) => client.get('/planning/plan-history', { params: { date, q } });
 
 // Gia công: Kế hoạch nhận lại hàng gia công → chuyển OQC
 export const listGiaCong = (params) => client.get('/planning/gia-cong', { params });
@@ -82,7 +82,7 @@ export const giaCongToOqc = (lenhId, soLuong) =>
 // `{ dot_vai_ve_id, so_luong }`. Trả về `data.tems = [{ tem_id, ma_tem, ma_phan, so_luong }]` để IN.
 export const giaCongNhanTheoPhan = (lenhId, items) =>
   client.post(`/planning/gia-cong/${lenhId}/chuyen-oqc`, { items });
-export const giaCongHistory = (date) => client.get('/planning/gia-cong/history', { params: { date } });
+export const giaCongHistory = (date, q) => client.get('/planning/gia-cong/history', { params: { date, q } });
 // Hàng bị OQC trả về → Kế hoạch mang trả lại nhà gia công (tắt badge, ghi người + giờ).
 export const giaCongTraLai = (lenhId, ghiChu) =>
   client.post(`/planning/gia-cong/${lenhId}/tra-lai`, { ghiChu });
@@ -102,7 +102,7 @@ export const confirmKeHoachTam = (id) => client.post(`/planning/ke-hoach-tam/${i
 export const updateKeHoachTam = (id, body) => client.patch(`/planning/ke-hoach-tam/${id}`, body);
 export const deleteKeHoachTam = (id) => client.delete(`/planning/ke-hoach-tam/${id}`);
 // Lịch sử thao tác (lập/sửa/xóa/xác nhận) + Đã hoàn thành (đã xác nhận Release 1) — theo ngày.
-export const keHoachTamHistory = (date) => client.get('/planning/ke-hoach-tam/history', { params: { date } });
+export const keHoachTamHistory = (date, q) => client.get('/planning/ke-hoach-tam/history', { params: { date, q } });
 export const keHoachTamDone = (date) => client.get('/planning/ke-hoach-tam/done', { params: { date } });
 // Danh sach ke hoach tam: MOI dot vai TUNG di qua ke hoach tam + tinh trang (da release 1 that su /
 // chua release vi chua Ready). Nguon `audit_log` — xem `planning.repository.keHoachTamTheoDoi`.

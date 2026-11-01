@@ -27,6 +27,9 @@ const chuoiTim = (r) => [...TRUONG_LOC.map((f) => r[f.key]), r.ma_tem, r.ly_do].
 
 const todayStr = () => ngayLocalISO(new Date());
 const fmtTime = (t) => (t ? new Date(t).toLocaleTimeString('vi-VN') : '');
+const fmtNgayGio = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '');
+// Bỏ ngày ⇒ tìm MỌI NGÀY ở server theo ô tìm (01/11/2026 — cùng luật `components/common/HistoryPanel`).
+const TU_KHOA_TOI_THIEU = 3;
 
 // 3 loại sự kiện trong lịch sử gia công (audit_log.hanh_dong). Chỉ lượt NHẬN HÀNG mới in được tem TH VỀ.
 const LOAI = {
@@ -49,11 +52,19 @@ export default function GiaCongHistoryPanel({ open, onClose, onPrint, onChanged 
   const [loai, setLoai] = useState('');
   const [filters, setFilters] = useState({});
   const [showFilters, setShowFilters] = useState(false);
+  const moiNgay = !date;
+  const [qTre, setQTre] = useState('');
+  useEffect(() => {
+    if (!moiNgay) { setQTre(''); return undefined; }
+    const h = setTimeout(() => setQTre(q.trim()), 400);
+    return () => clearTimeout(h);
+  }, [q, moiNgay]);
+  const qServer = moiNgay && qTre.length >= TU_KHOA_TOI_THIEU ? qTre : '';
   const viewRows = useMemo(() => rows.filter((r) => {
     if (loai && r.loai !== loai) return false;
     if (TRUONG_LOC.some((f) => (filters[f.key] || '').trim() && !khopTungTu(r[f.key], filters[f.key]))) return false;
-    return !q.trim() || khopTungTu(chuoiTim(r), q);
-  }), [rows, q, loai, filters]);
+    return moiNgay || !q.trim() || khopTungTu(chuoiTim(r), q);
+  }), [rows, q, loai, filters, moiNgay]);
   const soLoc = TRUONG_LOC.filter((f) => (filters[f.key] || '').trim()).length + (q.trim() ? 1 : 0) + (loai ? 1 : 0);
 
   const onPrintRef = useRef(onPrint);
@@ -61,9 +72,10 @@ export default function GiaCongHistoryPanel({ open, onClose, onPrint, onChanged 
 
   const load = useCallback(async () => {
     if (!open) return;
+    if (!date && !qServer) { setRows([]); return; }
     setLoading(true);
     try {
-      const res = await giaCongHistory(date);
+      const res = await giaCongHistory(date, qServer || undefined);
       setRows((res.data || []).map((r, i) => ({ ...r, _k: i })));
     } catch (e) {
       show(e.message || 'Lỗi tải lịch sử', 'error');
@@ -71,7 +83,7 @@ export default function GiaCongHistoryPanel({ open, onClose, onPrint, onChanged 
     } finally {
       setLoading(false);
     }
-  }, [open, date, show]);
+  }, [open, date, qServer, show]);
 
   const huyLs = useHuyLichSu({
     goiHuy: (r, ly) => huyGiaCongTemLichSu(r.tem_id, ly),
@@ -89,7 +101,8 @@ export default function GiaCongHistoryPanel({ open, onClose, onPrint, onChanged 
   useEffect(() => { load(); }, [load, taiLai]);
 
   const columns = [
-    { key: 'tg', header: 'Giờ', className: 'whitespace-nowrap tabular-nums', render: (r) => fmtTime(r.tg) },
+    { key: 'tg', header: moiNgay ? 'Thời gian' : 'Giờ', className: 'whitespace-nowrap tabular-nums',
+      render: (r) => (moiNgay ? fmtNgayGio(r.tg) : fmtTime(r.tg)) },
     { key: 'loai', header: 'Sự kiện', render: (r) => {
       const c = LOAI[r.loai] || { label: r.loai || '—', tone: 'default' };
       return <Badge tone={c.tone}>{c.label}</Badge>;
@@ -124,15 +137,26 @@ export default function GiaCongHistoryPanel({ open, onClose, onPrint, onChanged 
 
   return (
     <SidePanel open={open} onClose={onClose} title="Lịch sử gia công"
-      subtitle={`${soLoc ? `${viewRows.length}/${rows.length}` : rows.length} lượt trong ngày · nhận hàng · OQC trả về · trả lại nhà gia công`}
+      subtitle={moiNgay
+        ? (qServer ? `${viewRows.length} lượt ở mọi ngày` : 'Mọi ngày — nhập code phần để tìm')
+        : `${soLoc ? `${viewRows.length}/${rows.length}` : rows.length} lượt trong ngày · nhận hàng · OQC trả về · trả lại nhà gia công`}
       width="max-w-5xl" side="left">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <label className="text-sm font-medium text-ink">Ngày</label>
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
-          className="h-10 rounded-input border border-line px-3 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10" />
+        <div className="relative">
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
+            className="h-10 rounded-input border border-line px-3 pr-8 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10" />
+          {date && (
+            <button onClick={() => setDate('')} aria-label="Bỏ ngày — tìm mọi ngày" title="Bỏ ngày — tìm theo code phần ở mọi ngày"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-soft hover:text-danger">
+              <Icon name="x" size={14} />
+            </button>
+          )}
+        </div>
         <div className="relative min-w-[12rem] flex-1">
           <Icon name="search" size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm code phần, mã tem, khách, mã hàng..."
+          <input value={q} onChange={(e) => setQ(e.target.value)}
+            placeholder={moiNgay ? 'Nhập code phần / mã tem để tìm ở mọi ngày...' : 'Tìm code phần, mã tem, khách, mã hàng...'}
             className="h-10 w-full rounded-input border border-line bg-surface pl-9 pr-3 text-base md:text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10" />
         </div>
         <select value={loai} onChange={(e) => setLoai(e.target.value)} aria-label="Lọc theo sự kiện"
@@ -163,7 +187,9 @@ export default function GiaCongHistoryPanel({ open, onClose, onPrint, onChanged 
         </div>
       )}
       <DataTable columns={columns} rows={viewRows} loading={loading} rowKey="_k" sttStart={0}
-        emptyText={soLoc ? 'Không có lượt nào khớp bộ lọc' : 'Không có hoạt động gia công nào trong ngày'} />
+        emptyText={moiNgay
+          ? (qServer ? `Không có lượt nào khớp "${qServer}" ở mọi ngày` : `Chưa chọn ngày — nhập code phần (từ ${TU_KHOA_TOI_THIEU} ký tự) để tìm ở mọi ngày`)
+          : soLoc ? 'Không có lượt nào khớp bộ lọc' : 'Không có hoạt động gia công nào trong ngày'} />
       {huyLs.modal}
       <Toast toast={toast} />
     </SidePanel>

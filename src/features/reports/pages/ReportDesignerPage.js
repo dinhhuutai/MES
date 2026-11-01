@@ -758,7 +758,7 @@ export default function ReportDesignerPage({ idProp = null, onClose = null }) {
         rules={grid.dinh_dang?.dieu_kien || []} selectionRange={selectionRange} onSave={saveDieuKien} />
 
       <HistoryPanel open={histOpen} onClose={() => setHistOpen(false)}
-        title={`Lịch sử thao tác — ${rep.ma_bao_cao}`} fetcher={(date) => reportHistory(id, date)} />
+        title={`Lịch sử thao tác — ${rep.ma_bao_cao}`} fetcher={(date) => reportHistory(id, date)} timMoiNgay={false} />
 
       <Toast toast={toast} />
     </div>
