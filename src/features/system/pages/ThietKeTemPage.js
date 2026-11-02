@@ -176,7 +176,8 @@ export default function ThietKeTemPage() {
                   <td className="px-3 py-2">
                     <div className="w-64">
                       <Select value={v.mau_tem_id || ''} onChange={(e) => doGan(v.ma, e.target.value)}>
-                        <option value="">— Bố cục mặc định (code) —</option>
+                        {/* `theo_vi_tri` (BE VI_TRI_IN, 02/11/2026): để trống = in theo mẫu của vị trí kia (KCS ⇒ tem 15) */}
+                        <option value="">{v.theo_vi_tri ? `— ${v.theo_vi_tri.ten} —` : '— Bố cục mặc định (code) —'}</option>
                         {ds.map((m) => <option key={m.id} value={m.id}>{m.ten_mau}</option>)}
                       </Select>
                     </div>

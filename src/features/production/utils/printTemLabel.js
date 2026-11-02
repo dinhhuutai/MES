@@ -306,13 +306,23 @@ function layMau(maViTri) {
   return hua;
 }
 
-async function toTheoMau(maViTri, label, tienTo, suffix, labelPhai) {
-  let boCuc;
+// Bố cục mẫu đang gắn cho `maViTri` (null = chưa gắn / lỗi). `chiKhung` = 'trai' ⇒ chỉ lấy khung TRÁI của mẫu
+// đó và in nó ở CẢ 2 nhãn (vd tem 15 = khung trái của mẫu Sản xuất).
+async function boCucCua(maViTri, chiKhung) {
   try {
     const res = await layMau(maViTri);
-    boCuc = res?.data?.mau?.bo_cuc_json;
-    if (!boCuc || !boCuc.trai) return null;       // chưa gắn mẫu → dùng bố cục cứng
-  } catch { return null; }                         // chưa chạy migration / mất mạng → dùng bố cục cứng
+    const bc = res?.data?.mau?.bo_cuc_json;
+    if (!bc || !bc.trai) return null;
+    return chiKhung === 'trai' ? { ...bc, trai: bc.trai, phai: null } : bc;
+  } catch { return null; }                         // chưa chạy migration / mất mạng
+}
+
+// `theoViTri` (tùy chọn) = { ma, khung } — vị trí này CHƯA gắn mẫu riêng ⇒ dùng mẫu của vị trí kia (02/11/2026:
+// KCS in tem giao chưa gắn mẫu ⇒ in Y HỆT tem 15 = khung trái mẫu "Sản xuất — In tem"). Không có ⇒ bố cục cứng.
+async function toTheoMau(maViTri, label, tienTo, suffix, labelPhai, theoViTri) {
+  let boCuc = await boCucCua(maViTri);
+  if (!boCuc && theoViTri) boCuc = await boCucCua(theoViTri.ma, theoViTri.khung);
+  if (!boCuc) return null;                         // chưa gắn mẫu → dùng bố cục cứng
 
   try {
     const kTrai = boCuc.trai;
@@ -334,8 +344,8 @@ async function toTheoMau(maViTri, label, tienTo, suffix, labelPhai) {
 //   `duPhong()` : dựng inner HTML bằng BỐ CỤC CỨNG khi chưa gắn mẫu (mỗi vị trí in một kiểu).
 // ⚠ Hàm này KHÔNG mở cửa sổ nào ⇒ cũng không bao giờ ném lỗi "popup bị chặn"; việc đó do `moCuaSoIn`.
 // ─────────────────────────────────────────────────────────────────────────────
-async function dungToTem({ maViTri, label, tienTo, suffix, labelPhai, duPhong }) {
-  const mau = await toTheoMau(maViTri, label, tienTo, suffix, labelPhai);
+async function dungToTem({ maViTri, label, tienTo, suffix, labelPhai, duPhong, theoViTri }) {
+  const mau = await toTheoMau(maViTri, label, tienTo, suffix, labelPhai, theoViTri);
   if (mau) return mau;
   return toCung(await duPhong());
 }
@@ -382,19 +392,34 @@ export async function printTemLabelNhieu(labels, w = null) {
 
 // Tem GIAO cho KCS (đã hoàn thành) = tem 15 (KCS đạt): cấu trúc PHIẾU GIAO HÀNG (nhãn trái),
 // "IN" = số lượng đã kiểm (caller truyền qua label.so_luong). In 2 nhãn giống nhau cho vừa tờ 2-up.
+// ⚠ 02/11/2026 (người dùng: "tem in ở Đã hoàn thành KCS phải y hệt tem 15"): vị trí này CHƯA gắn mẫu riêng ⇒ dùng
+//   KHUNG TRÁI (tem 15) của mẫu đang gắn cho "Sản xuất — In tem" (`theoViTri`); SX cũng chưa gắn ⇒ bố cục cứng
+//   `leftLabel` (chính là nhãn 15 của bố cục cứng SX). Gắn mẫu riêng ở *Thiết kế tem* thì mẫu riêng thắng.
+//   Gương BE `utils/mauTem.js VI_TRI_IN[KCS_IN_TEM_GIAO].theo_vi_tri` (nhãn ô chọn ở trang Thiết kế tem).
+const specKcsGiao = (label) => ({
+  maViTri: 'KCS_IN_TEM_GIAO', label, tienTo: { trai: 15, phai: 15 },
+  theoViTri: { ma: 'SX_IN_TEM', khung: 'trai' },
+  duPhong: async () => {
+    const l = leftLabel(await buildData(label, temCode(label.ma_tem, 15)));
+    return l + l;
+  },
+});
 export function toTemKcsGiao(label) {
-  return dungToTem({
-    maViTri: 'KCS_IN_TEM_GIAO', label, tienTo: { trai: 15, phai: 15 },
-    duPhong: async () => {
-      const l = leftLabel(await buildData(label, temCode(label.ma_tem, 15)));
-      return l + l;
-    },
-  });
+  return dungToTem(specKcsGiao(label));
 }
 
-export async function printKcsGiaoTem(label) {
-  if (!label || !label.ma_tem) return;
-  moCuaSoIn(await toTemKcsGiao(label), `Tem 15 ${label.ma_tem}`);
+export async function printKcsGiaoTem(label, w = null) {
+  if (!label || !label.ma_tem) { dongCuaSoIn(w); return; }
+  moCuaSoIn(await toTemKcsGiao(label), `Tem 15 ${label.ma_tem}`, w);
+}
+
+// IN NHIỀU TEM GIAO 1 LẦN (02/11/2026 — ô tích ở sidebar "Đã hoàn thành" màn KCS): mỗi tem 1 TỜ (2 nhãn giống
+// nhau, như in lẻ), N tờ trong 1 cửa sổ in. `w` = cửa sổ mở sẵn bằng `moSanCuaSoIn()` trong cú bấm.
+export async function printKcsGiaoTemNhieu(labels, w = null) {
+  const ds = (labels || []).filter((x) => x && x.ma_tem);
+  if (!ds.length) { dongCuaSoIn(w); return; }
+  const tos = await dungNhieuTo(ds.map(specKcsGiao));
+  moCuaSoIn(tos, ds.length === 1 ? `Tem 15 ${ds[0].ma_tem}` : `${ds.length} tem 15`, w);
 }
 
 // In tem OQC (sau khi SỬA xong → OQC) = tem 17: bố cục Y HỆT tem 15 (nhãn trái PHIẾU GIAO HÀNG).

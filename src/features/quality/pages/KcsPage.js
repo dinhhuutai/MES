@@ -30,7 +30,7 @@ import useHuyLichSu from '../../../hooks/useHuyLichSu';
 import useOTimKiem from '../../../hooks/useOTimKiem';
 import { listKcsCandidates, recordKcs, gopTem, kcsHistory, kcsDone, getTemHanhTrinh, huyKcsLichSu } from '../../../services/qualityService';
 import { redryTem, getTemLabel } from '../../../services/productionService';
-import { printKcsGiaoTem } from '../../production/utils/printTemLabel';
+import { printKcsGiaoTem, printKcsGiaoTemNhieu, moSanCuaSoIn, dongCuaSoIn } from '../../production/utils/printTemLabel';
 import { fmtNum, fmtDateTime, timTheoMaTem } from '../../../utils/format';
 import exportCheckpointExcel, { cotTemChung, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
 import useNow from '../../../hooks/useNow';
@@ -171,11 +171,37 @@ export default function KcsPage() {
   }, [search, filtersKey, rangeKey, show]);
 
   // In tem GIAO (KCS đã hoàn thành) — cấu trúc tem 1, SL IN = số lượng đã kiểm.
+  // Mở sẵn cửa sổ in NGAY trong cú bấm (trước `await`) — mở sau khi chờ API là trình duyệt chặn popup.
+  // Mẫu in: mẫu riêng của "KCS — In tem giao" nếu đã gắn, không thì Y HỆT tem 15 (khung trái mẫu Sản xuất).
   const printKcsGiao = async (row) => {
+    let w;
+    try { w = moSanCuaSoIn(); } catch (e) { show(e.message, 'error'); return; }
     try {
       const res = await getTemLabel(row.tem_id);
-      await printKcsGiaoTem({ ...res.data, so_luong: row.so_luong_kiem });
-    } catch (e) { show(e.message || 'Không in được tem', 'error'); }
+      await printKcsGiaoTem({ ...res.data, so_luong: row.so_luong_kiem }, w);
+    } catch (e) { dongCuaSoIn(w); show(e.message || 'Không in được tem', 'error'); }
+  };
+
+  // IN NHIỀU TEM 1 LẦN (02/11/2026): tích ở sidebar "Đã hoàn thành" ⇒ mỗi tem 1 tờ, mọi tờ trong 1 cửa sổ in.
+  const [inNhieuBusy, setInNhieuBusy] = useState(false);
+  const printKcsGiaoNhieu = async (sel, clear) => {
+    const ds = sel.filter((r) => r.tem_id);
+    if (!ds.length) return;
+    let w;
+    try { w = moSanCuaSoIn(); } catch (e) { show(e.message, 'error'); return; }
+    setInNhieuBusy(true);
+    try {
+      const labels = await Promise.all(ds.map(async (r) => {
+        const res = await getTemLabel(r.tem_id);
+        return { ...res.data, so_luong: r.so_luong_kiem };
+      }));
+      await printKcsGiaoTemNhieu(labels, w);
+      show(`Đã mở ${labels.length} tem để in`);
+      clear();
+    } catch (e) {
+      dongCuaSoIn(w);
+      show(e.message || 'Không in được tem', 'error');
+    } finally { setInNhieuBusy(false); }
   };
 
   // Xuất Excel ĐÚNG danh sách đang hiện (sau ô tìm + panel lọc + ô tích "bị trả về" + khoảng ngày in
@@ -656,6 +682,19 @@ export default function KcsPage() {
       {huyLs.modal}
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
         title="Tem đã KCS" maHeader="Tem" fetcher={kcsDone} columns={doneColumns}
+        chonNhieu
+        chonDuoc={(r) => (r.tem_id ? true : 'Dòng này không có tem')}
+        footerChon={({ rows: sel, clear }) => (
+          <>
+            <span className="mr-auto text-xs text-ink-soft">
+              {sel.length === 0 ? 'Tích các dòng để in nhiều tem 15 cùng lúc (mỗi tem 1 tờ)' : `Đã chọn ${sel.length} tem · ${sel.length} tờ`}
+            </span>
+            {sel.length > 0 && <Button chiXemOk variant="ghost" onClick={clear}>Bỏ chọn</Button>}
+            <Button icon="printer" disabled={!sel.length} loading={inNhieuBusy} onClick={() => printKcsGiaoNhieu(sel, clear)}>
+              In tem{sel.length ? ` (${sel.length})` : ''}
+            </Button>
+          </>
+        )}
         excelColumns={[
           { header: 'Tem', value: (r) => r.ma || '' },
           { header: 'Khách hàng', value: (r) => r.ten_khach_hang || '' },

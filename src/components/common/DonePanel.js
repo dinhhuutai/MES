@@ -206,10 +206,26 @@ export default function DonePanel({
     return n;
   });
 
+  // Ô tích ở TIÊU ĐỀ (02/11/2026): chưa tích gì ⇒ tích mọi dòng ĐANG HIỆN chọn được (tới trần `toiDaChon`);
+  // đang có dòng tích ⇒ bỏ tích hết (cùng luật ô tiêu đề màn KCS / Xác nhận chạy).
+  const choChon = viewRows.filter((r) => { const kq = chonDuoc ? chonDuoc(r) : true; return kq === true; });
+  const doiChonHet = () => setChon(() => {
+    if (dsChon.length) return new Set();
+    const ds = toiDaChon > 0 ? choChon.slice(0, toiDaChon) : choChon;
+    return new Set(ds.map((r) => r._k));
+  });
   const colChon = {
     key: '_chon',
     selection: true,
-    header: '',
+    header: (
+      <input type="checkbox" aria-label="Chọn / bỏ chọn mọi dòng đang hiện"
+        title={dsChon.length ? 'Bỏ chọn hết' : 'Chọn mọi dòng đang hiện'}
+        disabled={!choChon.length && !dsChon.length}
+        checked={dsChon.length > 0 && dsChon.length >= Math.min(choChon.length, toiDaChon > 0 ? toiDaChon : Infinity)}
+        ref={(el) => { if (el) el.indeterminate = dsChon.length > 0 && dsChon.length < Math.min(choChon.length, toiDaChon > 0 ? toiDaChon : Infinity); }}
+        onChange={doiChonHet}
+        className="h-4 w-4 rounded border-line text-primary focus:ring-primary/30 disabled:opacity-40" />
+    ),
     render: (r) => {
       const khoa = lyDoKhoa(r);
       return (
