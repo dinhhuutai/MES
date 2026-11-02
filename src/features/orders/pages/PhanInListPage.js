@@ -17,7 +17,7 @@ import TraVeGnNote from '../../../components/common/TraVeGnNote';
 import HanhTrinhGiaCong from '../../../components/common/HanhTrinhGiaCong';
 import useToast from '../../../hooks/useToast';
 import { listVaiVe, getPhanIn, setChoKho } from '../../../services/orderService';
-import exportPhanInVaiVeExcel from '../utils/exportPhanInVaiVeExcel';
+import exportPhanInVaiVeExcel, { chuyenInThucTe } from '../utils/exportPhanInVaiVeExcel';
 import { fmtNum, fmtDate, fmtDateTime, fmtCurrency } from '../../../utils/format';
 import { hienDsMa } from '../../../utils/maPhanIn';
 
@@ -187,6 +187,7 @@ function aggSxRow(g) {
     ngayVai: dv.length ? dv[0].ngay_vai_ve : null,
     hanVai,
     soDotSx: sx.length,
+    chuyenTt: chuyenInThucTe(sx),
     slIn, slKcsDat, slSua: sum('sl_sua'), slSuaDat, slGiao: sum('sl_giao'),
     tongHuy, pctKiem: pctStr(slKcsDat, slIn), pctSua: pctStr(slKcsDat + slSuaDat, slIn),
     oqcDat: sx.filter((x) => x.tt_oqc === 'DAT').length,
@@ -367,10 +368,12 @@ export default function PhanInListPage() {
   // Chế độ TỔNG HỢP (1 dòng/phần in + nút Chi tiết): "Tất cả" + các chip tiền sản xuất.
   const AGG_STAGES = ['ALL', 'READY', 'RELEASE_1', 'TEST_RUN', 'RELEASE_2'];
   const showSxCols = !stage || AGG_STAGES.includes(stage);
+  const showChuyenTt = !stage || stage === 'ALL'; // cột "Chuyền in thực tế" — chỉ chip "Tất cả"
   const showTemQuality = showTemRows && !['KCS', 'CHO_KHO'].includes(stage); // KCS/Chờ khô chưa có chất lượng → ẩn cột
   // +1 ở cả 2 chế độ: cột "Tính chất in". Non-tem thêm +1 cột "Barcode";
   // showSxCols thêm 15 cột (13 cột SX + "Phương án in" + "BarCode TDTHĐH").
-  const COLS = showTemRows ? (11 + (showTemQuality ? 1 : 0)) : (13 + (showPcsCol ? 1 : 0) + (showSxCols ? 15 : 0));
+  const COLS = showTemRows ? (11 + (showTemQuality ? 1 : 0))
+    : (13 + (showPcsCol ? 1 : 0) + (showSxCols ? 15 : 0) + (showChuyenTt ? 1 : 0));
 
   return (
     <div>
@@ -501,6 +504,7 @@ export default function PhanInListPage() {
                     {showSxCols && (
                       <>
                         <th className={`${TH} border-l border-line/60`}>Đợt SX</th>
+                        {showChuyenTt && <th className={TH}>Chuyền in thực tế</th>}
                         {sortTh('SL in', 'slIn', 'text-right')}
                         {sortTh('Kiểm đạt', 'kiemDat', 'text-right')}
                         {sortTh('Sửa', 'sua', 'text-right')}
@@ -620,6 +624,7 @@ export default function PhanInListPage() {
                         <td className={`${TD} border-l border-line/60 font-medium text-ink`}>
                           {a.soDotSx > 0 ? <Badge tone="info">{a.soDotSx} đợt SX</Badge> : <span className="text-xs italic text-ink-soft">Chưa có đợt SX</span>}
                         </td>
+                        {showChuyenTt && <td className={TD}>{a.chuyenTt || '—'}</td>}
                         <td className={`${TD} text-right tabular-nums`}>{fmtNum(a.slIn)}</td>
                         <td className={`${TD} text-right tabular-nums`}>{fmtNum(a.slKcsDat)}</td>
                         <td className={`${TD} text-right tabular-nums`}>{fmtNum(a.slSua)}</td>

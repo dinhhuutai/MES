@@ -7,9 +7,14 @@ import { ngayLocalISO } from '../../../utils/format';
 const HEADERS = [
   'STT', 'Khách hàng', 'Đơn hàng', 'Mã hàng', 'Màu vải', 'Kích vải', 'Kích phim', 'SL đơn hàng',
   'SL vải về', 'Ngày vải về', 'Hạn giao',
-  'Đợt SX', 'SL in', 'Kiểm đạt', 'Sửa', 'Sửa đạt', 'OQC xác nhận', 'TT OQC', 'SL giao',
+  'Đợt SX', 'Chuyền in thực tế', 'SL in', 'Kiểm đạt', 'Sửa', 'Sửa đạt', 'OQC xác nhận', 'TT OQC', 'SL giao',
 ];
-const WIDTHS = [5, 22, 16, 14, 12, 11, 11, 11, 11, 13, 13, 16, 9, 10, 8, 9, 18, 12, 10];
+const WIDTHS = [5, 22, 16, 14, 12, 11, 11, 11, 11, 13, 13, 16, 14, 9, 10, 8, 9, 18, 12, 10];
+const COT_SO = [1, 8, 9, 14, 15, 16, 17, 20]; // cột số (căn phải), đánh số từ 1
+// Chuyền in THỰC TẾ của cả phần in = gộp không trùng chuyền chạy phiếu của mọi đợt SX (lệnh chưa bấm chạy thì chưa có).
+// Dùng chung cho cột trên màn + file Excel.
+export const chuyenInThucTe = (sx) => [...new Set((sx || [])
+  .flatMap((x) => String(x.chuyen_in_tt || '').split(', ')).filter(Boolean))].join(', ');
 const IDENTITY_COLS = 8; // 8 cột đầu gộp ô theo phần in
 
 const pad = (n) => String(n).padStart(2, '0');
@@ -38,7 +43,7 @@ export default async function exportPhanInVaiVeExcel(rows, fileName = 'danh-sach
 
   const alignRow = (row) => row.eachCell({ includeEmpty: true }, (cell, col) => {
     cell.border = border;
-    const numCol = [1, 8, 9, 13, 14, 15, 16, 19].includes(col);
+    const numCol = COT_SO.includes(col);
     cell.alignment = { vertical: 'middle', horizontal: numCol ? 'right' : 'left', wrapText: false };
   });
 
@@ -58,7 +63,7 @@ export default async function exportPhanInVaiVeExcel(rows, fileName = 'danh-sach
       alignRow(ws.addRow([
         stt, g.ten_khach_hang || '', donHangTong, g.ma_hang || '', g.mau_vai || '', g.kich_vai || '', g.kich_phim || '',
         g.so_luong_don_hang ?? '', tongVai, fmtDate(ngay), fmtDate(han),
-        sx.length ? `${sx.length} đợt SX` : '', sx.length ? sum('sl_in') : '', sx.length ? sum('sl_kcs_dat') : '',
+        sx.length ? `${sx.length} đợt SX` : '', chuyenInThucTe(sx), sx.length ? sum('sl_in') : '', sx.length ? sum('sl_kcs_dat') : '',
         sx.length ? sum('sl_sua') : '', sx.length ? sum('sl_sua_dat') : '', '',
         sx.length ? `${sx.filter((x) => x.tt_oqc === 'DAT').length}/${sx.length} đạt` : '', sx.length ? sum('sl_giao') : '',
       ]));
@@ -86,6 +91,7 @@ export default async function exportPhanInVaiVeExcel(rows, fileName = 'danh-sach
         d ? fmtDate(d.ngay_vai_ve) : '',
         d ? fmtDate(d.han_giao_hang) : '',
         maDot,
+        s ? (s.chuyen_in_tt || '') : '',
         s ? (s.sl_in ?? '') : '',
         s ? (s.sl_kcs_dat ?? '') : '',
         s ? (s.sl_sua ?? '') : '',
@@ -97,7 +103,7 @@ export default async function exportPhanInVaiVeExcel(rows, fileName = 'danh-sach
       const row = ws.addRow(values);
       row.eachCell({ includeEmpty: true }, (cell, col) => {
         cell.border = border;
-        const numCol = [1, 8, 9, 13, 14, 15, 16, 19].includes(col);
+        const numCol = COT_SO.includes(col);
         cell.alignment = { vertical: 'middle', horizontal: numCol ? 'right' : 'left', wrapText: false };
       });
     }

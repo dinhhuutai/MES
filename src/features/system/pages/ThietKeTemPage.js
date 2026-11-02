@@ -26,7 +26,7 @@ const DATA_XEM_TRUOC = {
   ma_ngay_ca: '260808C1', nguoi_in: 'Nguyễn Văn A', nha_gia_cong: 'KK',
   created_date: new Date().toISOString(), tg_bd_in: new Date().toISOString(),
   tg_bd_phoi: new Date().toISOString(), tg_kt_phoi: new Date(Date.now() + 36e5).toISOString(),
-  gio_sx_bd: '07:30', gio_sx_kt: '11:45', ngay_ca: new Date().toISOString(),
+  gio_sx_bd: '07:30', gio_sx_kt: '11:45', ngay_ca: new Date().toISOString(), ngay_ct: new Date().toISOString(),
   // Phân công (nhập ở khối Phân công màn Sản xuất)
   ca_truong: 'Trần Thị B', chuyen_truong: 'Lê Văn C', tho_in: 'Phạm D, Hoàng E', ma_to: 'C1',
   // Nhóm "Sửa" — CHỈ có giá trị thật ở vị trí in SUA_IN_TEM_OQC (tem 17 của trang Sửa).
