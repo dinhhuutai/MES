@@ -396,14 +396,22 @@ export async function printTemLabelNhieu(labels, w = null) {
 //   KHUNG TRÁI (tem 15) của mẫu đang gắn cho "Sản xuất — In tem" (`theoViTri`); SX cũng chưa gắn ⇒ bố cục cứng
 //   `leftLabel` (chính là nhãn 15 của bố cục cứng SX). Gắn mẫu riêng ở *Thiết kế tem* thì mẫu riêng thắng.
 //   Gương BE `utils/mauTem.js VI_TRI_IN[KCS_IN_TEM_GIAO].theo_vi_tri` (nhãn ô chọn ở trang Thiết kế tem).
-const specKcsGiao = (label) => ({
-  maViTri: 'KCS_IN_TEM_GIAO', label, tienTo: { trai: 15, phai: 15 },
-  theoViTri: { ma: 'SX_IN_TEM', khung: 'trai' },
-  duPhong: async () => {
-    const l = leftLabel(await buildData(label, temCode(label.ma_tem, 15)));
-    return l + l;
-  },
-});
+// `labelPhai` (02/11/2026, người dùng: "chọn 2 tem thì in ra 1 tờ của 2 tem"): khung PHẢI là tem THỨ HAI; vắng ⇒
+//   khung phải lặp tem trái (in 1 tem như cũ).
+const specKcsGiao = (label, labelPhai) => {
+  const l2 = labelPhai || label;
+  return {
+    maViTri: 'KCS_IN_TEM_GIAO', label, labelPhai: l2, tienTo: { trai: 15, phai: 15 },
+    theoViTri: { ma: 'SX_IN_TEM', khung: 'trai' },
+    duPhong: async () => {
+      const [d1, d2] = await Promise.all([
+        buildData(label, temCode(label.ma_tem, 15)),
+        buildData(l2, temCode(l2.ma_tem, 15)),
+      ]);
+      return leftLabel(d1) + leftLabel(d2);
+    },
+  };
+};
 export function toTemKcsGiao(label) {
   return dungToTem(specKcsGiao(label));
 }
@@ -413,13 +421,14 @@ export async function printKcsGiaoTem(label, w = null) {
   moCuaSoIn(await toTemKcsGiao(label), `Tem 15 ${label.ma_tem}`, w);
 }
 
-// IN NHIỀU TEM GIAO 1 LẦN (02/11/2026 — ô tích ở sidebar "Đã hoàn thành" màn KCS): mỗi tem 1 TỜ (2 nhãn giống
-// nhau, như in lẻ), N tờ trong 1 cửa sổ in. `w` = cửa sổ mở sẵn bằng `moSanCuaSoIn()` trong cú bấm.
+// IN NHIỀU TEM GIAO 1 LẦN (02/11/2026 — ô tích ở sidebar "Đã hoàn thành" màn KCS): mỗi TỜ 2 TEM KHÁC NHAU như
+// trang Sửa — tem 1 trái · tem 2 phải, tem 3–4 sang tờ 2…; số tem LẺ ⇒ tờ cuối in 2 nhãn giống nhau.
+// `w` = cửa sổ mở sẵn bằng `moSanCuaSoIn()` trong cú bấm.
 export async function printKcsGiaoTemNhieu(labels, w = null) {
   const ds = (labels || []).filter((x) => x && x.ma_tem);
   if (!ds.length) { dongCuaSoIn(w); return; }
-  const tos = await dungNhieuTo(ds.map(specKcsGiao));
-  moCuaSoIn(tos, ds.length === 1 ? `Tem 15 ${ds[0].ma_tem}` : `${ds.length} tem 15`, w);
+  const tos = await dungNhieuTo(chiaCap(ds).map((cap) => specKcsGiao(cap[0], cap[1])));
+  moCuaSoIn(tos, ds.length <= 2 ? `Tem 15 ${ds[0].ma_tem}${ds[1] ? ` + ${ds[1].ma_tem}` : ''}` : `${ds.length} tem 15`, w);
 }
 
 // In tem OQC (sau khi SỬA xong → OQC) = tem 17: bố cục Y HỆT tem 15 (nhãn trái PHIẾU GIAO HÀNG).

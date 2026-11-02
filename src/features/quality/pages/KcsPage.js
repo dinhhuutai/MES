@@ -687,7 +687,9 @@ export default function KcsPage() {
         footerChon={({ rows: sel, clear }) => (
           <>
             <span className="mr-auto text-xs text-ink-soft">
-              {sel.length === 0 ? 'Tích các dòng để in nhiều tem 15 cùng lúc (mỗi tem 1 tờ)' : `Đã chọn ${sel.length} tem · ${sel.length} tờ`}
+              {sel.length === 0
+                ? 'Tích các dòng để in nhiều tem cùng lúc (mỗi tờ 2 tem: dòng 1 → trái, dòng 2 → phải, dòng 3–4 sang tờ sau…)'
+                : `Đã chọn ${sel.length} tem · ${Math.ceil(sel.length / 2)} tờ`}
             </span>
             {sel.length > 0 && <Button chiXemOk variant="ghost" onClick={clear}>Bỏ chọn</Button>}
             <Button icon="printer" disabled={!sel.length} loading={inNhieuBusy} onClick={() => printKcsGiaoNhieu(sel, clear)}>
