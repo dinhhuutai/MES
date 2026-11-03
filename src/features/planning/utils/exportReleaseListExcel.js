@@ -14,7 +14,15 @@ const DO = 'FFFF0000';
 export default async function exportReleaseListExcel(items, meta, { chip = '', fileName = 'checklist-release' } = {}) {
   const ExcelJS = (await import('exceljs')).default || (await import('exceljs'));
   const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet('Checklist release');
+  // Cấu hình in lưu sẵn trong file (03/11/2026, người dùng: mỗi lần xuất phải chỉnh tay): A4 ngang · vừa mọi cột trên
+  // 1 trang, cao tự chia trang (fitToHeight 0) · lề trên/dưới 0 như xưởng đang đặt, trái/phải 0,5 cm (đơn vị inch).
+  // In 1 mặt / 2 mặt là cài đặt của MÁY IN trên từng máy tính — file Excel không ghi được.
+  const ws = wb.addWorksheet('Checklist release', {
+    pageSetup: {
+      paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0,
+      margins: { left: 0.2, right: 0.2, top: 0, bottom: 0, header: 0, footer: 0 },
+    },
+  });
   const cols = COT_CHECKLIST;
   const N = cols.length;
   ws.columns = cols.map((c) => ({ width: c.width }));
