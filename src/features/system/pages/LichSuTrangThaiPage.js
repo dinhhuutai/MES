@@ -2222,7 +2222,7 @@ function TichGiaoCancelSection({ show }) {
     { key: 'ma_tem', header: 'Mã tem', render: (r) => (
       <Badge tone={r.la_tem_sua ? 'warning' : 'info'}>{r.ma_tem}</Badge>
     ) },
-    { key: 'nguon', header: 'Loại', render: (r) => (r.la_tem_sua ? 'Hàng sửa (tem 17)' : 'KCS đạt (tem 15)') },
+    { key: 'nguon', header: 'Loại', render: (r) => (r.la_tem_sua ? 'Hàng sửa (tem 17)' : `KCS đạt (tem ${/^17/.test(r.ma_tem || '') ? 17 : 15})`) },
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.khach_list || '—' },
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.don_list || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },

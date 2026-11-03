@@ -22,7 +22,8 @@ export function danhGiaKcs(canKiem, f) {
   if (dat + hu <= 0) return { ok: false, chu: 'Nhập đạt/hư' };
   const daNhap = dat + hu + mau;
   if (!thieu && !du && daNhap < canKiem) {
-    return { ok: true, motPhan: true, chu: `Kiểm một phần ${fmtNum(daNhap)} · còn ${fmtNum(canKiem - daNhap)} ở lại KCS` };
+    // Phần đạt của lượt một phần thành TEM 17 riêng đi OQC (BE `recordKcs`, mig 122).
+    return { ok: true, motPhan: true, chu: `Kiểm một phần ${fmtNum(daNhap)} · còn ${fmtNum(canKiem - daNhap)} ở lại KCS${dat > 0 ? ` · ${fmtNum(dat)} đạt thành tem 17` : ''}` };
   }
   const tong = canKiem + du - thieu;
   const lech = daNhap - tong;

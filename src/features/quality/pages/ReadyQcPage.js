@@ -351,6 +351,7 @@ export default function ReadyQcPage() {
     { key: 'mau_kich', header: 'Màu · Kích (vải/phim)', render: (r) => (
       <div className="leading-tight">
         <div className="text-ink">{r.mau_vai || '—'}</div>
+        {r.mau_in && <div className="text-xs text-ink-soft">Mực: {r.mau_in}</div>}
         <div className="text-xs text-ink-soft">{[r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—'}</div>
       </div>
     ) },

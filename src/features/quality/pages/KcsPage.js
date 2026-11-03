@@ -197,7 +197,10 @@ export default function KcsPage() {
       const labels = await Promise.all(dong.map(async (r) => {
         const res = await getTemLabel(r.tem_id);
         // Của ĐÚNG lượt KCS đang in — nguồn của nhóm trường "KCS" ở Thiết kế tem, `getTemLabelData` không có.
-        return { ...res.data, so_luong: r.so_luong_kiem, nguoi_kiem_kcs: r.nguoiKiem, tg_kiem_kcs: r.tg || null };
+        // Lượt kiểm MỘT PHẦN (mig 122): nhãn là TEM 17 của lượt — mã 17, SL = phần đạt của lượt (lô đi OQC / giao).
+        //   `getTemLabel(r.tem_id)` trả nhãn tem gốc nên phải đè mã, như trang Sửa.
+        const tem17 = r.ma_tem_17 ? { ma_tem: r.ma_tem_17, so_luong: r.so_luong } : { so_luong: r.so_luong_kiem };
+        return { ...res.data, ...tem17, nguoi_kiem_kcs: r.nguoiKiem, tg_kiem_kcs: r.tg || null };
       }));
       await printKcsGiaoTemNhieu(labels, w);
       show(`Đã mở ${labels.length} tem để in`);
@@ -234,7 +237,12 @@ export default function KcsPage() {
   });
 
   const doneColumns = [
-    { key: 'ma', header: 'Tem', className: 'whitespace-nowrap', render: (r) => <Badge tone="info">{r.ma || '—'}</Badge> },
+    { key: 'ma', header: 'Tem', className: 'whitespace-nowrap', render: (r) => (
+      <div className="leading-tight">
+        <Badge tone="info">{r.ma || '—'}</Badge>
+        {r.ma_tem_goc && <div className="mt-0.5 text-xs text-ink-soft">Kiểm một phần · tem gốc {r.ma_tem_goc}</div>}
+      </div>
+    ) },
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
     { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
@@ -408,7 +416,7 @@ export default function KcsPage() {
       const r = await recordKcs(editing.tem_id, form);
       const d = r.data;
       const conLai = Number(d.con_kcs) || 0;
-      show(`KCS ${editing.ma_tem}: Đạt ${fmtNum(d.so_luong_dat)}→OQC · Hư ${fmtNum(d.so_luong_sua)}→chờ sửa`
+      show(`KCS ${editing.ma_tem}: Đạt ${fmtNum(d.so_luong_dat)}→OQC${d.ma_tem_17 ? ` (tem 17 ${d.ma_tem_17})` : ''} · Hư ${fmtNum(d.so_luong_sua)}→chờ sửa`
         + (conLai > 0 ? ` · còn ${fmtNum(conLai)} chờ kiểm` : ' · đã kiểm hết'));
       setEditing(null);
       // Ô tìm đang rỗng thì `load` không đổi ⇒ phải tự tải; có mã thì xóa ô cũng kéo `load` chạy lại.

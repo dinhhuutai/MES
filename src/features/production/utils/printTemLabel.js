@@ -405,8 +405,9 @@ const specKcsGiao = (label, labelPhai) => {
     theoViTri: { ma: 'SX_IN_TEM', khung: 'trai' },
     duPhong: async () => {
       const [d1, d2] = await Promise.all([
-        buildData(label, temCode(label.ma_tem, 15)),
-        buildData(l2, temCode(l2.ma_tem, 15)),
+        // `maTemNhan`, không `temCode`: lượt KCS một phần in tem 17 mã riêng (mig 122) — ghép 15 là đổi sang mã không có thật.
+        buildData(label, maTemNhan(label.ma_tem, 15)),
+        buildData(l2, maTemNhan(l2.ma_tem, 15)),
       ]);
       return leftLabel(d1) + leftLabel(d2);
     },
@@ -428,7 +429,7 @@ export async function printKcsGiaoTemNhieu(labels, w = null) {
   const ds = (labels || []).filter((x) => x && x.ma_tem);
   if (!ds.length) { dongCuaSoIn(w); return; }
   const tos = await dungNhieuTo(chiaCap(ds).map((cap) => specKcsGiao(cap[0], cap[1])));
-  moCuaSoIn(tos, ds.length <= 2 ? `Tem 15 ${ds[0].ma_tem}${ds[1] ? ` + ${ds[1].ma_tem}` : ''}` : `${ds.length} tem 15`, w);
+  moCuaSoIn(tos, ds.length <= 2 ? `Tem ${ds[0].ma_tem}${ds[1] ? ` + ${ds[1].ma_tem}` : ''}` : `${ds.length} tem KCS`, w);
 }
 
 // In tem OQC (sau khi SỬA xong → OQC) = tem 17: bố cục Y HỆT tem 15 (nhãn trái PHIẾU GIAO HÀNG).

@@ -87,7 +87,7 @@ const COT_EXCEL_DONE = [
   { header: 'Khách hàng', width: 14, value: (r) => r.ten_khach_hang || '' },
   { header: 'Đơn hàng', width: 18, value: (r) => r.ma_don_hang || '' },
   { header: 'Tem', width: 15, value: (r) => r.ma_tem_hien || '' },
-  { header: 'Nguồn', width: 12, value: (r) => (r.la_tem_sua || r.nguon === 'SUA' ? 'Sửa (tem 17)' : 'KCS (tem 15)') },
+  { header: 'Nguồn', width: 12, value: (r) => (r.la_tem_sua || r.nguon === 'SUA' ? 'Sửa (tem 17)' : `KCS (tem ${/^17/.test(r.ma_tem_hien || '') ? 17 : 15})`) },
   { header: 'Code phần', width: 24, value: (r) => r.ma_phan || '' },
   { header: 'Mã hàng', width: 20, value: (r) => r.ma_hang || '' },
   { header: 'Màu vải', width: 16, value: (r) => r.mau_vai || '' },

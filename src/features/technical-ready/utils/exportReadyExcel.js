@@ -32,6 +32,7 @@ const COLS = [
   { h: 'Đơn hàng', w: 16, key: (r) => r.ma_don_hang || '' },
   { h: 'Mã hàng', w: 16, key: (r) => r.ma_hang || '' },
   { h: 'Màu vải', w: 16, key: (r) => r.mau_vai || '' },
+  { h: 'Màu mực', w: 16, key: (r) => r.mau_in || '' },
   { h: 'Kích vải', w: 12, key: (r) => r.kich_vai || '' },
   { h: 'Kích phim', w: 12, key: (r) => r.kich_phim || '' },
   { h: 'Loại đợt vải', w: 14, key: (r) => r.loai_dot_vai || '' },

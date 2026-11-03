@@ -613,12 +613,16 @@ function TemTree({ tem, reg }) {
   const trv = tem.tra_ve || [];
   const traVeKcs = trv.filter((r) => r.loai !== 'OQC_SUA'); // OQC trả về → kiểm KCS lại
   const traVeSua = trv.filter((r) => r.loai === 'OQC_SUA'); // OQC trả về → sửa lại
-  const cons = tem.tem_con || []; // tem 17 (sửa đạt) của tem này — xem `suaTuTemCon`
+  // 2 loại tem con: tem 17 của lượt Sửa (nhánh Sửa, `suaTuTemCon`) · tem 17 của lượt KCS MỘT PHẦN (mig 122) — OQC / giao
+  //   của lượt đó nằm trên chính tem 17 nên nhánh "đạt" của lượt đọc từ đây, không đọc từ tem gốc.
+  const cons = (tem.tem_con || []).filter((c) => !c.kcs_tach_id);
+  const consKcs = (tem.tem_con || []).filter((c) => c.kcs_tach_id);
+  const temConCua = (r) => consKcs.find((c) => c.kcs_tach_id === r.id);
 
-  if (kcsRecs.length >= 2) {
+  if (kcsRecs.length >= 2 || consKcs.length > 0) {
     // Gán các lần giao cho từng lần kiểm theo THỨ TỰ thời gian (kiểm trước ↔ giao trước).
     // Lần kiểm ĐÃ QUA OQC (KHÔNG bị trả về) mới thực sự có hàng đi GIAO → loại lần bị trả về khỏi map giao.
-    const datRecs = kcsRecs.filter((r, idx) => (r.so_luong_dat || 0) > 0 && !traVeKcs[idx]);
+    const datRecs = kcsRecs.filter((r, idx) => (r.so_luong_dat || 0) > 0 && !traVeKcs[idx] && !temConCua(r));
     const suaRecs = kcsRecs.filter((r) => Math.max((r.so_luong_loi || 0) - (r.so_luong_huy || 0), 0) > 0);
     const giaoMap = new Map(); // record -> { kcs:[], sua:[] }
     kcsRecs.forEach((r) => giaoMap.set(r, { kcs: [], sua: [] }));
@@ -636,6 +640,7 @@ function TemTree({ tem, reg }) {
           <Q label="Đạt" v={dat} tone="text-emerald-600" />
           {sua > 0 && <Q label="Sửa" v={sua} tone="text-amber-600" />}
           {huy > 0 && <Q label="Hủy" v={huy} tone="text-danger" />}
+          {temConCua(r) && <div className="font-mono text-[10px] text-ink-soft">Tem 17: {temConCua(r).ma_tem}</div>}
           <Who nguoi={r.nguoi} tg={r.tg} />
         </Node>
       );
@@ -646,10 +651,12 @@ function TemTree({ tem, reg }) {
       const dat = r.so_luong_dat || 0;
       const sua = Math.max((r.so_luong_loi || 0) - (r.so_luong_huy || 0), 0);
       const gm = giaoMap.get(r) || { kcs: [], sua: [] };
-      const rej = !!traVeKcs[i];
+      const cKcs = temConCua(r);
+      const rej = !!traVeKcs[i] && !cKcs;
       const conNode = kcsBox(r, i);
+      const xKcs = cKcs ? suaTuTemCon([cKcs], {}, []) : null;
       // Lần bị OQC TRẢ VỀ: OQC(không đạt) + ô Trả về PHÍA TRÊN; mũi tên Trả về→KCS tổng do SVG overlay vẽ.
-      const dBranch = rej ? (
+      const dBranch = xKcs ? oqcGiaoSeg('KCS', xKcs.oqc, xKcs.giao, xKcs.choGiao) : rej ? (
         <OqcRejectedBranch
           oqc={<OqcNode nguon="KCS" qty={dat} nguoi={tem.oqc_kcs_nguoi} tg={tem.oqc_kcs_tg} rejected />}
           ret={<ReturnBox item={traVeKcs[i]} />}

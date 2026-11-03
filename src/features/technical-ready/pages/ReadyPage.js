@@ -310,6 +310,7 @@ export default function ReadyPage() {
     { key: 'ma_don_hang', header: 'Đơn hàng', copyText: (r) => r.ma_don_hang, render: (r) => r.ma_don_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', copyText: (r) => r.ma_hang },
     { key: 'mau_vai', header: 'Màu vải', copyText: (r) => r.mau_vai, render: (r) => r.mau_vai || '—' },
+    { key: 'mau_in', header: 'Màu mực', copyText: (r) => r.mau_in, render: (r) => r.mau_in || '—' },
     { key: 'kich_vai', header: 'Kích vải', copyText: (r) => r.kich_vai, render: (r) => r.kich_vai || '—' },
     { key: 'kich_phim', header: 'Kích phim', copyText: (r) => r.kich_phim, render: (r) => r.kich_phim || '—' },
     // ⚠⚠ TÁCH DÒNG THEO TỪNG ĐỢT VẢI (16/09/2026 — trước đây theo LOẠI đợt vải): phần in đang chờ ≥2

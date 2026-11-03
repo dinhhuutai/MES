@@ -153,7 +153,7 @@ export default function TichGiaoPage() {
     { key: 'ma_tem', header: 'Tem', render: (r) => (
       <Badge tone={r.la_tem_sua ? 'warning' : 'info'}>{r.ma_tem}</Badge>
     ) },
-    { key: 'nguon', header: 'Loại', render: (r) => (r.la_tem_sua ? 'Hàng sửa (tem 17)' : 'KCS đạt (tem 15)') },
+    { key: 'nguon', header: 'Loại', render: (r) => (r.la_tem_sua ? 'Hàng sửa (tem 17)' : `KCS đạt (tem ${/^17/.test(r.ma_tem || '') ? 17 : 15})`) },
     { key: 'khach_don', header: 'Khách hàng · Đơn hàng', render: (r) => (
       <div className="leading-tight">
         <div className="font-medium text-ink">{r.khach_list || '—'}</div>

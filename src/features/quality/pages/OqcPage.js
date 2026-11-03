@@ -404,7 +404,7 @@ export default function OqcPage() {
           {editing?.ma_lenh_san_xuat} · {editing?.phan_list} · SL in {fmtNum(editing?.so_luong)}
           <span className="ml-1 font-semibold text-primary">· cả lô chờ OQC {fmtNum(editing?.con_src ?? editing?.con_oqc)}</span>
           <span className={`ml-1 rounded px-1.5 py-0.5 text-[11px] font-semibold ${editing?.la_sua ? 'bg-amber-100 text-amber-700' : 'bg-sky-100 text-sky-700'}`}>
-            {editing?.la_sua ? 'Nguồn đã sửa (tem 17)' : 'Nguồn từ KCS (tem 15)'}
+            {editing?.la_sua ? 'Nguồn đã sửa (tem 17)' : `Nguồn từ KCS (tem ${/^17/.test(editing?.ma_tem_display || '') ? 17 : 15})`}
           </span>
         </div>
         <div className="mb-1 rounded-control border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/40 dark:text-sky-300">
@@ -467,7 +467,7 @@ export default function OqcPage() {
             <div className="rounded-control border border-rose-200 bg-rose-50 p-3 dark:border-rose-900/60 dark:bg-rose-950/40">
               <p className="mb-2 text-xs font-medium text-rose-700 dark:text-rose-300">
                 Trả <b>toàn bộ {fmtNum(editing?.con_src ?? editing?.con_oqc)} pcs</b> của lô{' '}
-                {editing?.nguon === 'SUA' ? <>đã sửa (tem 17-) về <b>Sửa</b> để sửa lại</> : <>từ KCS (tem 15-) về <b>KCS</b> để kiểm lại</>} (kèm lý do bắt buộc).
+                {editing?.nguon === 'SUA' ? <>đã sửa (tem 17-) về <b>Sửa</b> để sửa lại</> : <>từ KCS (tem {/^17/.test(editing?.ma_tem_display || '') ? 17 : 15}-) về <b>KCS</b> để kiểm lại</>} (kèm lý do bắt buộc).
               </p>
               <Field label={`Lý do trả về ${returnTram}`} required>
                 <Textarea rows={2} value={returnReason} onChange={(e) => setReturnReason(e.target.value)}

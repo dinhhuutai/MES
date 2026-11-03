@@ -44,7 +44,8 @@ const danhGia = (r) => {
   if (r.cho_giao) return 'Không đạt — giao ngoại lệ';
   return r.ket_qua ? 'Không đạt' : '';
 };
-const slIn = (r) => (r.la_tem_sua ? so(r.sl_kcs_dat_tem) : so(r.sl_in_tem));
+// Tem 17 (của Sửa hoặc KCS một phần) có SL in = 0, số lượng lô nằm ở `sl_kcs_dat`.
+const slIn = (r) => (so(r.sl_in_tem) ? so(r.sl_in_tem) : so(r.sl_kcs_dat_tem));
 
 // Nhóm cột (dòng 5) — `n` = số cột của nhóm; nhóm 1 cột thì tiêu đề gộp DỌC 2 dòng 5–6.
 const COT = [

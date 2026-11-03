@@ -33,6 +33,7 @@ export const COT_DOT_VAI = [
   { header: 'Đơn hàng', width: 18, value: (r) => txt(r.ma_don_hang) },
   { header: 'Mã hàng', width: 18, value: (r) => txt(r.ma_hang) },
   { header: 'Màu vải', width: 18, value: (r) => txt(r.mau_vai) },
+  { header: 'Màu mực', width: 18, value: (r) => txt(r.mau_in) },
   { header: 'Kích vải', width: 14, value: (r) => txt(r.kich_vai) },
   { header: 'Kích phim', width: 14, value: (r) => txt(r.kich_phim) },
   { header: 'Tính chất in', width: 16, value: (r) => txt(r.tinh_chat_in) },
