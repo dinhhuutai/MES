@@ -18,7 +18,7 @@ import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import TraVeKeHoachModal from './TraVeKeHoachModal';
 import { listUserOptions } from '../../../services/userService';
 import printTemLabel, { printTemLabelNhieu, moSanCuaSoIn, dongCuaSoIn } from '../utils/printTemLabel';
-import { fmtNum, fmtDate, ngayLocalISO } from '../../../utils/format';
+import { fmtNum, fmtDate } from '../../../utils/format';
 import { getSocket } from '../../../services/socket';
 
 // Ô "Số tem" (07/10/2026): in N tem cùng SL trong 1 lần bấm — mỗi tem 1 tờ (15 trái · 16 phải), mọi tờ trong
@@ -67,16 +67,17 @@ const INFO_HEADERS = ['STT', 'Khách hàng', 'Đơn hàng', 'Mã hàng', 'Code p
 //
 // NGÀY CA là Ô CHỮ dạng `YYMMDD` + mã ca (`260805D2` = 05/08/2026 ca Dài 2 · `C2` ca Ngắn 2 · `HC` hành chính).
 // `ngayCt` = NGÀY CHỨNG TỪ gửi lên ERP (`@pNgayct`).
-// ⚠⚠ "NHẬP ĐẦU CA" (13/10/2026, người dùng chốt): 2 ô này KHÔNG còn điền sẵn theo giờ / hôm nay — để TRỐNG, thiếu
-//   là KHÔNG cho in tem (FE báo + BE 422 `THIEU_NGAY_CA`). Người in nhập 1 lần đầu ca; BE nhớ theo LƯỢT CA
-//   (`goi_y_tem.ngay_ca` / `ngay_ct` / `khoa_ca`) nên các lượt in sau trong ca tự điền lại; hết ca ⇒ trống lại.
-//   `_khoaCa` = lượt ca mà giá trị đang gõ thuộc về — gửi kèm (`khoaCa`) để BE chặn 409 `HET_CA` khi sidebar mở
-//   sẵn từ ca trước.
+// ⚠⚠ NGÀY CA "NHẬP ĐẦU CA" (13/10/2026, người dùng chốt): để TRỐNG, thiếu là KHÔNG cho in tem (FE báo + BE 422
+//   `THIEU_NGAY_CA`). Người in nhập 1 lần đầu ca; BE nhớ theo LƯỢT CA (`goi_y_tem.ngay_ca` / `khoa_ca`) nên các lượt in
+//   sau trong ca tự điền lại; hết ca ⇒ trống lại. `_khoaCa` = lượt ca mà giá trị đang gõ thuộc về — gửi kèm (`khoaCa`)
+//   để BE chặn 409 `HET_CA` khi sidebar mở sẵn từ ca trước.
 // GIỜ dùng `TimeSelect` (0h–23h + phút) chứ KHÔNG `<input type="time">` — ô đó hiện AM/PM theo locale máy.
-// ⚠ 26/10/2026 (người dùng: "ngày chứng từ cho tự động hiện sẵn ngày hiện tại"): Ngày chứng từ TỰ ĐIỀN HÔM NAY
-//   (`_ctTuDong` = ô đang mang giá trị tự điền). Giá trị đã nhớ của lượt ca (người in nhập đầu ca) vẫn THẮNG giá trị tự
-//   điền; người dùng gõ tay thì giữ nguyên. Ngày ca vẫn để trống, bắt nhập đầu ca như cũ.
-const homNay = () => ngayLocalISO(new Date());
+// ⚠⚠ NGÀY CHỨNG TỪ LUÔN MẶC ĐỊNH HÔM NAY, KHÔNG KẾ THỪA ĐẦU CA (03/11/2026, người dùng chốt — sự cố sáng 03/11: 1 tem in
+//   bù gõ 02/11 được nhớ cho lượt ca ⇒ cả khu Bàn gửi ERP 02/11). `_ctTuDong` = ô đang mang giá trị tự điền; gõ tay thì
+//   chỉ giữ cho lượt in đó (in lẻ xong trả về hôm nay).
+// `homNay` tính theo GIỜ VIỆT NAM cố định (cộng 7 giờ vào mốc UTC) — KHÔNG theo múi giờ cài trên máy: máy đặt sai múi giờ
+//   từng làm 00:00–07:00 ra ngày hôm qua. Việt Nam không có giờ mùa hè nên cộng thẳng là đúng.
+const homNay = () => new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
 export const META_MAC_DINH = () => ({ ngayCa: '', gioBd: '', gioKt: '', btpTruoc: false, btpCuoi: false, gcMauVai: '', ngayCt: homNay(), _ctTuDong: true, _suaGioKt: false, _khoaCa: '' });
 export const gioHienTai = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
 // Mã ngày ca ĐÚNG 8 ký tự = YYMMDD (ngày có thật) + ca C1/C2/C3 · D1/D2 · HC, vd `261021HC` (21/10/2026 — ca thật tem
@@ -95,7 +96,7 @@ export const maNgayCaSai = (ma) => {
 // Thiếu Ngày ca / Ngày chứng từ, hoặc ngày ca sai dạng ⇒ câu báo (rỗng = đủ). Gọi TRƯỚC khi mở cửa sổ in.
 export const thieuNgayCaCt = (m) => {
   const thieu = [!String(m?.ngayCa || '').trim() && 'Ngày ca', !m?.ngayCt && 'Ngày chứng từ'].filter(Boolean);
-  if (thieu.length) return `Chưa nhập ${thieu.join(' và ')} — nhập 1 lần đầu ca rồi mới in tem được`;
+  if (thieu.length) return `Chưa nhập ${thieu.join(' và ')} — nhập đủ rồi mới in tem được`;
   return maNgayCaSai(m?.ngayCa);
 };
 export const CHUA_THO_IN = 'Chưa phân công thợ in / tổ in — chọn thợ in và tổ in ở khối Phân công rồi bấm Lưu trước khi in tem';
@@ -126,19 +127,19 @@ export function useTaiNgamKhiLenhDoi(lenhIds, taiLai) {
 // `coToIn` = danh mục tổ in đang có tổ (27/10/2026: thiếu TỔ IN cũng khóa in tem — gương BE `CHUA_PHAN_CONG_TO_IN`).
 export const chuaPhanCongThoIn = (pc, coToIn = false) => !!pc?.can_phan_cong_lai || !String(pc?.tho_in || '').trim()
   || (coToIn && !pc?.to_in_id);
-// Đưa gợi ý của BE vào ô: chỉ điền ô người dùng CHƯA gõ; lượt ca đã đổi so với lúc gõ ⇒ bỏ ngày ca / ngày chứng
-// từ của ca cũ trước (để trống lại cho ca mới).
+// Đưa gợi ý của BE vào ô: chỉ điền ô người dùng CHƯA gõ; lượt ca đã đổi so với lúc gõ ⇒ bỏ ngày ca + ngày chứng từ
+// đang gõ của ca cũ (ngày ca để trống lại, ngày chứng từ về hôm nay).
 export const apGoiYTem = (m, g) => {
   if (!g) return m;
   const sangCa = !!m._khoaCa && !!g.khoa_ca && m._khoaCa !== g.khoa_ca;
   const b = sangCa ? { ...m, ngayCa: '', ngayCt: '', _ctTuDong: true } : m;
-  // Ô Ngày chứng từ còn trống / đang mang giá trị TỰ ĐIỀN ⇒ lấy giá trị nhớ của lượt ca, không có thì hôm nay.
+  // Ô Ngày chứng từ còn trống / đang mang giá trị TỰ ĐIỀN ⇒ hôm nay; gõ tay thì giữ. KHÔNG lấy gì từ lượt ca.
   const ctTuDong = !b.ngayCt || b._ctTuDong;
   return {
     ...b,
     ngayCa: b.ngayCa || g.ngay_ca || '',
-    ngayCt: ctTuDong ? (g.ngay_ct || homNay()) : b.ngayCt,
-    _ctTuDong: ctTuDong ? !g.ngay_ct : false,
+    ngayCt: ctTuDong ? homNay() : b.ngayCt,
+    _ctTuDong: ctTuDong,
     gioBd: b.gioBd || g.gio_bd || '',
     gioKt: b.gioKt || g.gio_kt || '',
     _khoaCa: g.khoa_ca || '',
@@ -153,6 +154,15 @@ export const metaGuiDi = (m) => ({
   ...(m._ctTuDong ? { ngayCt: homNay() } : {}),
   khoaCa: m._khoaCa || '',
 });
+
+// Vòng 20 s của sidebar: "Đến giờ" chạy theo đồng hồ, Ngày chứng từ tự sang ngày mới (ô hiện gì = gửi nấy).
+// Giá trị người dùng đã gõ giữ nguyên. Không đổi gì ⇒ trả đúng object cũ để không render lại.
+export const lamMoiMeta = (m) => {
+  const gio = !m._suaGioKt && m.gioKt !== gioHienTai();
+  const ngay = !!m._ctTuDong && m.ngayCt !== homNay();
+  if (!gio && !ngay) return m;
+  return { ...m, ...(gio ? { gioKt: gioHienTai() } : {}), ...(ngay ? { ngayCt: homNay() } : {}) };
+};
 
 // `anGcMauVai`: lệnh GOM SET nhập GC màu vải RIÊNG từng dòng trong bảng → ẩn ô chung ở đây cho khỏi lẫn.
 // `anBtp` (25/10/2026): bảng In tem nhiều phần nhập BTP trước/cuối RIÊNG từng dòng ⇒ ẩn 2 ô chung.
@@ -184,7 +194,7 @@ export function TemMetaFields({ meta, setMeta, anGcMauVai = false, anBtp = false
         </label>
       </div>
       {/* NGÀY CHỨNG TỪ — con số gửi lên ERP (`Ngayct`), KHÔNG phải ngày ca (ô trên) — 2 thứ khác nhau.
-          Tự điền hôm nay (26/10/2026); ca đã có người nhập thì điền lại giá trị đó; sửa tay được, bắt buộc. */}
+          Luôn tự điền hôm nay, không kế thừa đầu ca (03/11/2026); sửa tay được, bắt buộc. */}
       <label className="mt-2 block">
         <span className="mb-1 block text-xs font-medium text-ink-soft">Ngày chứng từ (gửi ERP){batBuoc}</span>
         <Input type="date" value={meta.ngayCt || ''} onChange={(e) => set('ngayCt', e.target.value)}
@@ -735,7 +745,7 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
   });
   // "Đến giờ" chưa bị người dùng sửa ⇒ nhích theo đồng hồ (xem `metaGuiDi`).
   useEffect(() => {
-    const t = setInterval(() => setTemMeta((m) => (m._suaGioKt || m.gioKt === gioHienTai() ? m : metaGuiDi(m))), 20000);
+    const t = setInterval(() => setTemMeta(lamMoiMeta), 20000);
     return () => clearInterval(t);
   }, []);
   // Tài khoản cho ô "Ca trưởng" (dùng /users/options — chỉ cần đăng nhập, không đòi USER_VIEW).

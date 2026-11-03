@@ -6,11 +6,10 @@ export function getSocket() {
   if (!socket) {
     const base = process.env.REACT_APP_BASE_URL || 'http://localhost:5000';
     socket = io(base, {
-      // CHỈ dùng polling + KHÔNG nâng cấp WebSocket. Reverse proxy api-mes hiện không cho WS upgrade
-      // (wss://.../socket.io/ fail) → ép polling cho chạy ổn định qua HTTPS. Khi nào proxy bật WebSocket
-      // (config Upgrade/Connection) thì đổi lại transports: ['polling','websocket'] để nhẹ hơn.
-      transports: ['polling'],
-      upgrade: false,
+      // Bắt đầu bằng polling rồi nâng lên WebSocket (03/11/2026: IIS ARR đã trả 101). Mạng / proxy nào chặn WebSocket thì
+      // lượt nâng cấp hỏng và socket vẫn chạy polling như trước, không ảnh hưởng người dùng.
+      transports: ['polling', 'websocket'],
+      upgrade: true,
       withCredentials: true,
       reconnection: true,
       reconnectionAttempts: Infinity,

@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router-dom';
 import Topbar from './Topbar';
+import KhungTaiTrang from '../common/KhungTaiTrang';
 
 // Layout cho Home Portal (toàn chiều rộng, không sidebar).
 export default function PortalLayout() {
@@ -7,7 +8,7 @@ export default function PortalLayout() {
     <div className="flex min-h-full flex-col">
       <Topbar />
       <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-8">
-        <Outlet />
+        <KhungTaiTrang><Outlet /></KhungTaiTrang>
       </main>
     </div>
   );

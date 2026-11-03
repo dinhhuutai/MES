@@ -17,7 +17,7 @@ import {
 import { listUserOptions } from '../../../services/userService';
 import printTemLabel, { printTemLabelNhieu, moSanCuaSoIn, dongCuaSoIn } from '../utils/printTemLabel';
 import { fmtNum } from '../../../utils/format';
-import { TemMetaFields, PhanCongInline, META_MAC_DINH, metaGuiDi, gioHienTai, thieuNgayCaCt, CHUA_THO_IN, chuaPhanCongThoIn, useTaiNgamKhiLenhDoi } from './RunPanel';
+import { TemMetaFields, PhanCongInline, META_MAC_DINH, metaGuiDi, lamMoiMeta, thieuNgayCaCt, CHUA_THO_IN, chuaPhanCongThoIn, useTaiNgamKhiLenhDoi } from './RunPanel';
 import TraVeKeHoachModal from './TraVeKeHoachModal';
 import {
   gomPhan, thuTuIn, conDuocIn, conDuocInNhom, tongNhom, daIn, daInTheoTran, slRelease, duHoanTatNhom, toiThieuHoanTatNhom,
@@ -414,17 +414,14 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh, t
         try { return (await getRun(id)).data; } catch (e) { return { loi: e.message || 'Lỗi tải', lenh: { id } }; }
       }));
       setRuns(ds);
-      // Ngày ca + Ngày chứng từ NHẬP ĐẦU CA (13/10/2026): BE nhớ theo lượt ca của TỪNG nhóm chuyền ⇒ chỉ điền lại
-      // khi MỌI lệnh đang mở có cùng một giá trị đã nhớ; lệch nhau / chưa ai nhập ⇒ để trống, bắt nhập.
+      // Ngày ca NHẬP ĐẦU CA (13/10/2026): BE nhớ theo lượt ca của TỪNG nhóm chuyền ⇒ chỉ điền lại khi MỌI lệnh đang mở
+      // có cùng một giá trị đã nhớ; lệch nhau / chưa ai nhập ⇒ để trống, bắt nhập.
+      // Ngày chứng từ KHÔNG lấy ở đây: luôn mặc định hôm nay (03/11/2026, `META_MAC_DINH` + `metaGuiDi`).
       const dsG = ds.filter(dangChay).map((r) => r.goi_y_tem).filter(Boolean);
       const g = dsG[0];
       const chung = (k) => (dsG.length && dsG.every((x) => (x[k] || '') === (g[k] || '')) ? (g[k] || '') : '');
-      // Ngày chứng từ (26/10/2026): ô còn giá trị TỰ ĐIỀN (hôm nay) ⇒ thay bằng giá trị chung đã nhớ nếu có.
       if (g) {
-        setTemMeta((m) => {
-          const ct = (!m.ngayCt || m._ctTuDong) && chung('ngay_ct');
-          return { ...m, ngayCa: m.ngayCa || chung('ngay_ca'), ...(ct ? { ngayCt: ct, _ctTuDong: false } : {}), gioBd: m.gioBd || g.gio_bd || '', gioKt: m.gioKt || g.gio_kt || '' };
-        });
+        setTemMeta((m) => ({ ...m, ngayCa: m.ngayCa || chung('ngay_ca'), gioBd: m.gioBd || g.gio_bd || '', gioKt: m.gioKt || g.gio_kt || '' }));
       }
     } finally {
       setLoading(false);
@@ -433,7 +430,7 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh, t
   useEffect(() => { load(); }, [load]);
   useTaiNgamKhiLenhDoi(lenhIds, load);
   useEffect(() => {
-    const t = setInterval(() => setTemMeta((m) => (m._suaGioKt || m.gioKt === gioHienTai() ? m : metaGuiDi(m))), 20000);
+    const t = setInterval(() => setTemMeta(lamMoiMeta), 20000);
     return () => clearInterval(t);
   }, []);
   useEffect(() => {

@@ -251,9 +251,7 @@ export default function TaoDotSanXuatPage() {
               </CanhBaoGiaCong>
             )}
             <Field label="Ngày kế hoạch (tùy chọn)">
-              <Input type="date" value={ngayKeHoach} onChange={(e) => setNgayKeHoach(e.target.value)}
-                className="cursor-pointer"
-                onClick={(e) => { try { e.target.showPicker?.(); } catch { /* trình duyệt không hỗ trợ showPicker */ } }} />
+              <Input type="date" value={ngayKeHoach} onChange={(e) => setNgayKeHoach(e.target.value)} />
             </Field>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Giờ bắt đầu (tùy chọn)">

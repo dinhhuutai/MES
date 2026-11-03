@@ -5,7 +5,10 @@ import { PersistGate } from 'redux-persist/integration/react';
 import { BrowserRouter } from 'react-router-dom';
 import { store, persistor } from './app/store';
 import App from './App';
+import { batMoLichKhiBam } from './utils/moLichKhiBam';
 import './index.css';
+
+batMoLichKhiBam(); // bấm vào đâu trong ô chọn ngày cũng mở lịch, không cần trúng icon
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(

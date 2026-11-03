@@ -44,7 +44,7 @@ const CA_OPTIONS = [
 const NHOM_KHAC = 'KHAC';
 const CA_KHAC_MAC_DINH = 'HANH_CHINH';
 const LOAI_CHUYEN = [
-  { v: 'MAY', label: 'Máy' },
+  { v: 'MAY', label: 'Máy', title: 'Các chuyền Máy + chuyền Bàn 1A1B (chạy theo ca của Máy)' },
   { v: 'BAN', label: 'Bàn' },
   { v: 'ROBOT', label: 'Robot' },
   { v: NHOM_KHAC, label: 'Khác', cot: 'Chuyền khác', title: 'Gia công · Máy tròn · Logo · Ép' },

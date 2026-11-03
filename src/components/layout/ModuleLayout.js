@@ -6,6 +6,7 @@ import Sidebar from './Sidebar';
 import BottomNav from './BottomNav';
 import Icon from '../common/Icon';
 import SiSoTram from '../common/SiSoTram';
+import KhungTaiTrang from '../common/KhungTaiTrang';
 import { HangDauContext } from './HangDau';
 import { SiSoLocProvider } from '../../hooks/useSiSoLoc';
 import { openMobileNav, closeMobileNav } from '../../store/uiSlice';
@@ -78,7 +79,7 @@ export default function ModuleLayout() {
               </div>
             )}
           </div>
-          <Outlet />
+          <KhungTaiTrang><Outlet /></KhungTaiTrang>
         </main>
       </div>
       <BottomNav />

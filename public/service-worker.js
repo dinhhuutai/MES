@@ -34,10 +34,19 @@ async function safeMatch(request) {
   try { return (await cache.match(request)) || null; } catch (e) { return null; }
 }
 
+// Mỗi trang là 1 file JS riêng, tên đổi theo mỗi lần deploy ⇒ phải bỏ bớt file cũ, không cache lớn dần mãi.
+const TOI_DA_FILE_CACHE = 200;
+
 async function safePut(request, response) {
   const cache = await safeOpen();
   if (!cache) return;
-  try { await cache.put(request, response); } catch (e) { /* hết quota / không hỗ trợ — bỏ qua */ }
+  try {
+    await cache.put(request, response);
+    const ds = await cache.keys();
+    if (ds.length > TOI_DA_FILE_CACHE) {
+      await Promise.all(ds.slice(0, ds.length - TOI_DA_FILE_CACHE).map((k) => cache.delete(k)));
+    }
+  } catch (e) { /* hết quota / không hỗ trợ — bỏ qua */ }
 }
 
 // Chỉ cache tài nguyên tĩnh của app (KHÔNG cache /api — dữ liệu luôn lấy mới).
