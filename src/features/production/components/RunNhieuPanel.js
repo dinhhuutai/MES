@@ -6,12 +6,13 @@ import Badge from '../../../components/common/Badge';
 import Toast from '../../../components/common/Toast';
 import SearchableSelect from '../../../components/common/SearchableSelect';
 import TimeSelect from '../../../components/common/TimeSelect';
-import { Textarea } from '../../../components/common/controls';
+import ChuyenPicker from '../../../components/common/ChuyenPicker';
+import { Field, Textarea } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import {
   getRun, printTemBatch, getTemLabel, savePhanCong, listToIn, listLyDoNgung, stopLine, resumeLine, addVaiHuy, finishRun,
-  gopLenh, luuLyDoBoSungDotVai,
+  gopLenh, luuLyDoBoSungDotVai, doiChuyen, listChuyen,
 } from '../../../services/productionService';
 import { listUserOptions } from '../../../services/userService';
 import printTemLabel, { printTemLabelNhieu, moSanCuaSoIn, dongCuaSoIn } from '../utils/printTemLabel';
@@ -36,7 +37,9 @@ import {
 //   · CHẠY HOÀN TẤT (21/10/2026): nút xanh lá ở chân sidebar ⇒ hộp chọn lệnh đã in ≥ 90% ⇒ `finishRun` từng phiếu.
 //   · PHÂN CÔNG: lưu 1 lần ⇒ `savePhanCong` mọi phiếu.
 //   · NGỪNG CHUYỀN: ghi 1 lần ⇒ `stopLine` mọi phiếu chưa ngừng; "Hoạt động lại" ⇒ `resumeLine` mọi phiếu đang ngừng.
-//   · Việc riêng từng lệnh (vải hủy/thiếu, bổ sung, tem đã in, đổi chuyền, trả về KT, chạy hoàn tất) ⇒ nút "Mở".
+//   · ĐỔI CHUYỀN (03/11/2026, người dùng yêu cầu): chọn 1 chuyền ⇒ `doiChuyen` MỌI phiếu đang chạy đã chọn (lệnh đã ở
+//     đúng chuyền đó thì bỏ qua). Chỉ đổi chuyền thực tế của phiếu, chuyền kế hoạch + tem đã in giữ nguyên.
+//   · Việc riêng từng lệnh (vải hủy/thiếu, bổ sung, tem đã in, trả về KT, chạy hoàn tất) ⇒ nút "Mở".
 //   · 22/10/2026: lệnh CÙNG code phần + CÙNG chuyền gom thành 1 PHẦN (danh sách · In tem · Chạy hoàn tất —
 //     `utils/gomPhanSanXuat.js`) + nút "Trả về Kế hoạch" (`TraVeKeHoachModal`) cho phần vải còn lại sang máy khác.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -312,6 +315,75 @@ function HoanTatNhieuModal({ open, onClose, runs, busy, onXacNhan }) {
   );
 }
 
+// HỘP "ĐỔI CHUYỀN" NHIỀU LỆNH (03/11/2026) — mức module (luật §9). 1 dòng / phần (`gomPhan`). Lệnh đã ở đúng chuyền mới
+//   thì không gọi API (BE trả 409 `KHONG_DOI`, sẽ thành lỗi giả) — ghi "Đã ở chuyền này" ngay trên dòng.
+function DoiChuyenNhieuModal({ open, onClose, runs, busy, onXacNhan }) {
+  const [chuyenList, setChuyenList] = useState([]);
+  const [chuyenId, setChuyenId] = useState('');
+  const [ghiChu, setGhiChu] = useState('');
+  useEffect(() => {
+    if (!open) return;
+    setChuyenId('');
+    setGhiChu('');
+    listChuyen().then((r) => setChuyenList(r.data || [])).catch(() => setChuyenList([]));
+  }, [open]);
+  const canDoi = chuyenId ? runs.filter((r) => r.lenh.chuyen_id !== chuyenId) : [];
+  const moi = chuyenList.find((c) => c.id === chuyenId);
+  return (
+    <Modal open={open} onClose={onClose} size="lg" title={`Đổi chuyền — ${fmtNum(gomPhan(runs).length)} phần in`}
+      footer={<>
+        <Button chiXemOk variant="ghost" onClick={onClose}>Hủy</Button>
+        <Button icon="shuffle" loading={busy} disabled={busy || !canDoi.length}
+          onClick={() => onXacNhan(canDoi, { chuyenId, ghiChu, tenMoi: moi?.ten_chuyen || moi?.ma_chuyen || '' })}>
+          Đổi chuyền ({fmtNum(canDoi.length)} lệnh)
+        </Button>
+      </>}>
+      <div className="mb-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
+        Chỉ đổi chuyền <b>thực tế</b> của các lệnh đang chạy — <b>chuyền kế hoạch giữ nguyên</b> bên Kế hoạch;
+        <b> tem đã in giữ nguyên</b> — không in lại, không đụng xe phơi.
+      </div>
+      <Field label="Chuyền mới" required>
+        <ChuyenPicker chuyen={chuyenList} value={chuyenId} onChange={setChuyenId} />
+      </Field>
+      <Field label="Ghi chú" hint="Không bắt buộc — ghi vào nhật ký để sau tra được vì sao đổi">
+        <Textarea rows={2} value={ghiChu} onChange={(e) => setGhiChu(e.target.value)}
+          placeholder="vd: máy M5 hỏng trục, chuyển sang M7" />
+      </Field>
+      <div className="mt-3 overflow-auto rounded-card border border-line">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="border-b border-line bg-surface-muted">
+              <th className={TH}>Code phần · Lệnh</th>
+              <th className={TH}>Chuyền hiện tại</th>
+              {chuyenId && <th className={TH}>Sau khi đổi</th>}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-line">
+            {gomPhan(runs).map((g) => {
+              const r = g.runs[0];
+              const daO = r.lenh.chuyen_id === chuyenId;
+              return (
+                <tr key={g.key}>
+                  <td className={`${TD} !whitespace-normal`}>
+                    <div className="font-medium">{tenLenh(r) || '—'}</div>
+                    <div className="text-xs text-ink-soft">{g.runs.map((x) => x.lenh.ma_lenh_san_xuat).join(', ')}</div>
+                  </td>
+                  <td className={TD}>{r.lenh.ma_chuyen || '—'}</td>
+                  {chuyenId && (
+                    <td className={TD}>
+                      {daO ? <span className="text-xs text-ink-soft">Đã ở chuyền này</span> : <b>{moi?.ma_chuyen || '—'}</b>}
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </Modal>
+  );
+}
+
 // `truocXacNhan(lenhIds)` — Promise<bool>: trang hỏi LÝ DO NGHẼN trước khi chạy hoàn tất (như `RunPanel`).
 export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh, truocXacNhan }) {
   const { can } = usePermissions();
@@ -329,6 +401,7 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh, t
   const [gioHoatDongLai, setGioHoatDongLai] = useState('');
   const [hoanTatOpen, setHoanTatOpen] = useState(false);
   const [traVeOpen, setTraVeOpen] = useState(false);
+  const [doiChuyenOpen, setDoiChuyenOpen] = useState(false);
   const [moRong, setMoRong] = useState(() => new Set()); // khóa nhóm đang bung danh sách lệnh
   const khoaLenh = (lenhIds || []).join(',');
 
@@ -407,6 +480,11 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh, t
     if (truocXacNhan && !(await truocXacNhan(ds.map((r) => r.lenh.id)))) return; // quá SLA ⇒ lý do nghẽn
     const n = await lamTungPhieu(ds, (r) => finishRun(r.phieu.id), 'Đã chạy hoàn tất');
     if (!n) setHoanTatOpen(false);
+  };
+  // ĐỔI CHUYỀN nhiều lệnh (03/11/2026) — tuần tự từng phiếu; lỗi lệnh nào báo lệnh đó, lần bấm sau tự bỏ lệnh đã sang chuyền mới.
+  const doDoiChuyen = async (ds, { chuyenId, ghiChu, tenMoi }) => {
+    const n = await lamTungPhieu(ds, (r) => doiChuyen(r.phieu.id, { chuyenId, ghiChu }), `Đã đổi sang chuyền ${tenMoi}`);
+    if (!n) setDoiChuyenOpen(false);
   };
   const nhomChay = gomPhan(chay);
   const soDuHoanTat = nhomChay.filter((g) => duHoanTatNhom(g.runs)).length;
@@ -557,7 +635,10 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh, t
       title={tieuDe}
       subtitle={`Chuyền ${dsChuyen} · đã in ${fmtNum(tongIn)} / ${fmtNum(tongTarget)}`}
       footer={canRun && chay.length > 0 && (
-        <div className="flex flex-wrap justify-end gap-2">
+        <div className="flex w-full flex-wrap justify-end gap-2">
+          <Button variant="secondary" icon="shuffle" className="mr-auto" onClick={() => setDoiChuyenOpen(true)} disabled={busy}>
+            Đổi chuyền
+          </Button>
           <Button variant="secondary" icon="undo" onClick={() => setTraVeOpen(true)} disabled={busy}>
             Trả về Kế hoạch
           </Button>
@@ -717,6 +798,7 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh, t
       <InTemNhieuModal open={inOpen} onClose={() => setInOpen(false)} runs={chay} meta={temMeta} setMeta={setTemMeta}
         goiY={chay[0]?.goi_y_tem} busy={busy} onIn={doInNhieu} />
       <HoanTatNhieuModal open={hoanTatOpen} onClose={() => setHoanTatOpen(false)} runs={chay} busy={busy} onXacNhan={doHoanTat} />
+      <DoiChuyenNhieuModal open={doiChuyenOpen} onClose={() => setDoiChuyenOpen(false)} runs={chay} busy={busy} onXacNhan={doDoiChuyen} />
       <TraVeKeHoachModal open={traVeOpen} onClose={() => setTraVeOpen(false)} runs={chay}
         onXong={async ({ thongBao }) => { setTraVeOpen(false); show(thongBao); await load(); onChanged?.(); }} />
       <Toast toast={toast} />

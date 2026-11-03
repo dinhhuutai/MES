@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
 import TraVeListModal, { TraVeListButton, TRA_VE_THEO_MAN } from '../../../components/common/TraVeListModal';
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
@@ -28,9 +28,10 @@ import useSocketReload from '../../../hooks/useSocketReload';
 import usePermissions from '../../../hooks/usePermissions';
 import useHuyLichSu from '../../../hooks/useHuyLichSu';
 import useOTimKiem from '../../../hooks/useOTimKiem';
-import { listKcsCandidates, recordKcs, gopTem, kcsHistory, kcsDone, getTemHanhTrinh, huyKcsLichSu } from '../../../services/qualityService';
+import { listKcsCandidates, recordKcs, gopTem, kcsHistory, kcsDone, getTemHanhTrinh, huyKcsLichSu, luuNguoiKiemKcs } from '../../../services/qualityService';
 import { redryTem, getTemLabel } from '../../../services/productionService';
-import { printKcsGiaoTem, printKcsGiaoTemNhieu, moSanCuaSoIn, dongCuaSoIn } from '../../production/utils/printTemLabel';
+import { printKcsGiaoTemNhieu, moSanCuaSoIn, dongCuaSoIn } from '../../production/utils/printTemLabel';
+import InTemKcsModal from '../components/InTemKcsModal';
 import { fmtNum, fmtDateTime, timTheoMaTem } from '../../../utils/format';
 import exportCheckpointExcel, { cotTemChung, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
 import useNow from '../../../hooks/useNow';
@@ -170,38 +171,42 @@ export default function KcsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, filtersKey, rangeKey, show]);
 
-  // In tem GIAO (KCS đã hoàn thành) — cấu trúc tem 1, SL IN = số lượng đã kiểm.
-  // Mở sẵn cửa sổ in NGAY trong cú bấm (trước `await`) — mở sau khi chờ API là trình duyệt chặn popup.
+  // In tem GIAO (KCS đã hoàn thành) — cấu trúc tem 1, SL IN = số lượng đã kiểm. In 1 hay nhiều tem đều qua modal nhập
+  // NGƯỜI KIỂM (03/11/2026). Mỗi tờ 2 tem, mọi tờ trong 1 cửa sổ in.
   // Mẫu in: mẫu riêng của "KCS — In tem giao" nếu đã gắn, không thì Y HỆT tem 15 (khung trái mẫu Sản xuất).
-  const printKcsGiao = async (row) => {
-    let w;
-    try { w = moSanCuaSoIn(); } catch (e) { show(e.message, 'error'); return; }
-    try {
-      const res = await getTemLabel(row.tem_id);
-      await printKcsGiaoTem({ ...res.data, so_luong: row.so_luong_kiem }, w);
-    } catch (e) { dongCuaSoIn(w); show(e.message || 'Không in được tem', 'error'); }
+  const [inRows, setInRows] = useState(null);
+  const [inBusy, setInBusy] = useState(false);
+  const clearChonIn = useRef(null);
+  // Tên vừa lưu trong phiên này: sidebar không tự tải lại sau khi in, nên cột + lần in lại đọc từ đây trước.
+  const [nguoiKiemDaLuu, setNguoiKiemDaLuu] = useState({});
+  const tenNguoiKiem = (r) => nguoiKiemDaLuu[r.kcs_id] ?? r.nguoi_kiem ?? '';
+  const moInTem = (ds, clear) => {
+    const coTem = ds.filter((r) => r.tem_id);
+    if (!coTem.length) return;
+    clearChonIn.current = clear || null;
+    setInRows(coTem.map((r) => ({ ...r, nguoi_kiem: tenNguoiKiem(r) })));
   };
-
-  // IN NHIỀU TEM 1 LẦN (02/11/2026): tích ở sidebar "Đã hoàn thành" ⇒ mỗi tem 1 tờ, mọi tờ trong 1 cửa sổ in.
-  const [inNhieuBusy, setInNhieuBusy] = useState(false);
-  const printKcsGiaoNhieu = async (sel, clear) => {
-    const ds = sel.filter((r) => r.tem_id);
-    if (!ds.length) return;
+  const doInTem = async (dong) => {
+    // Mở sẵn cửa sổ in NGAY trong cú bấm (trước `await`) — mở sau khi chờ API là trình duyệt chặn popup.
     let w;
     try { w = moSanCuaSoIn(); } catch (e) { show(e.message, 'error'); return; }
-    setInNhieuBusy(true);
+    setInBusy(true);
     try {
-      const labels = await Promise.all(ds.map(async (r) => {
+      await luuNguoiKiemKcs(dong.map((r) => ({ kcsId: r.kcs_id, nguoiKiem: r.nguoiKiem, nguoiKiemId: r.nguoiKiemId })));
+      setNguoiKiemDaLuu((m) => ({ ...m, ...Object.fromEntries(dong.map((r) => [r.kcs_id, r.nguoiKiem])) }));
+      const labels = await Promise.all(dong.map(async (r) => {
         const res = await getTemLabel(r.tem_id);
-        return { ...res.data, so_luong: r.so_luong_kiem };
+        // Của ĐÚNG lượt KCS đang in — nguồn của nhóm trường "KCS" ở Thiết kế tem, `getTemLabelData` không có.
+        return { ...res.data, so_luong: r.so_luong_kiem, nguoi_kiem_kcs: r.nguoiKiem, tg_kiem_kcs: r.tg || null };
       }));
       await printKcsGiaoTemNhieu(labels, w);
       show(`Đã mở ${labels.length} tem để in`);
-      clear();
+      setInRows(null);
+      clearChonIn.current?.();
     } catch (e) {
       dongCuaSoIn(w);
       show(e.message || 'Không in được tem', 'error');
-    } finally { setInNhieuBusy(false); }
+    } finally { setInBusy(false); }
   };
 
   // Xuất Excel ĐÚNG danh sách đang hiện (sau ô tìm + panel lọc + ô tích "bị trả về" + khoảng ngày in
@@ -238,8 +243,9 @@ export default function KcsPage() {
     { key: 'so_luong', header: 'SL đạt', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
     { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => <HanGiaoCell value={r.han_giao_hang} /> },
     { key: 'tg', header: 'Giờ', className: 'whitespace-nowrap tabular-nums', render: (r) => (r.tg ? new Date(r.tg).toLocaleTimeString('vi-VN') : '') },
+    { key: 'nguoi_kiem', header: 'Người kiểm', render: (r) => tenNguoiKiem(r) || '—' },
     { key: 'in_tem', header: '', className: 'text-right', render: (r) => (
-      r.tem_id ? <Button variant="secondary" className="!px-3 !py-1.5 !text-xs" onClick={() => printKcsGiao(r)}>In tem</Button> : null
+      r.tem_id ? <Button variant="secondary" className="!px-3 !py-1.5 !text-xs" onClick={() => moInTem([r])}>In tem</Button> : null
     ) },
   ];
 
@@ -692,7 +698,7 @@ export default function KcsPage() {
                 : `Đã chọn ${sel.length} tem · ${Math.ceil(sel.length / 2)} tờ`}
             </span>
             {sel.length > 0 && <Button chiXemOk variant="ghost" onClick={clear}>Bỏ chọn</Button>}
-            <Button icon="printer" disabled={!sel.length} loading={inNhieuBusy} onClick={() => printKcsGiaoNhieu(sel, clear)}>
+            <Button icon="printer" disabled={!sel.length} onClick={() => moInTem(sel, clear)}>
               In tem{sel.length ? ` (${sel.length})` : ''}
             </Button>
           </>
@@ -708,7 +714,9 @@ export default function KcsPage() {
           { header: 'Hạn giao', value: (r) => r.han_giao_hang || '', type: 'date' },
           COT_EXCEL_GIO_HT,
           { header: 'Người', value: (r) => r.nguoi || '' },
+          { header: 'Người kiểm', value: (r) => tenNguoiKiem(r) },
         ]} />
+      <InTemKcsModal open={!!inRows} rows={inRows} busy={inBusy} onClose={() => setInRows(null)} onIn={doInTem} />
       {journey && (
         <TemJourneyPanel temId={journey.temId} maTem={journey.maTem}
           fetcher={getTemHanhTrinh} onClose={() => setJourney(null)} side="left"

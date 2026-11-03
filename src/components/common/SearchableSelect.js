@@ -18,7 +18,14 @@ import { khopTungTu, chuoiTimNguoi } from '../../utils/timKiem';
 //   CHÍNH LÀ nhãn (vd Chuyền trưởng / Người sửa lưu TÊN) — với ô lưu `id` thì nhận chữ thô là ghi
 //   rác vào DB. Có nó thì **1 ô là đủ**: đừng đặt thêm 1 `<input>` "hoặc gõ tay" bên dưới nữa —
 //   người dùng thấy 2 ô nhập tên cạnh nhau sẽ tưởng lỗi (đã mắc thật ở modal In tem trang Sửa).
+//
+// `onMuiTen(huong, giaTri)` (tùy chọn, ô nằm trong BẢNG nhập theo dòng): phím ↑ ↓ dùng để ĐI SANG DÒNG KHÁC khi danh
+//   sách đang đóng, khi gõ ra đúng 1 gợi ý (tự chọn gợi ý đó) hoặc khi gõ tên ngoài danh sách (tự nhận). Danh sách đang
+//   mở nhiều gợi ý thì ↑ ↓ vẫn đi trong danh sách. `huong` = 'xuong' | 'len'; `giaTri` = giá trị ô sau khi chốt.
+// `inputRef`: ref tới ô nhập, để bảng đặt con trỏ khi đổi dòng.
 export default function SearchableSelect({
+  inputRef,
+  onMuiTen,
   value,
   onChange,
   options = [],
@@ -48,6 +55,7 @@ export default function SearchableSelect({
       immediate={moNgay}>
       <div className="relative">
         <ComboboxInput
+          ref={inputRef}
           className={`${inputClass} bg-surface`}
           placeholder={placeholder}
           autoComplete="off"
@@ -56,10 +64,34 @@ export default function SearchableSelect({
           displayValue={() => (selected ? getLabel(selected) : (chapNhanTuDo ? (value || '') : ''))}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
+            if (onMuiTen && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+              const dangMo = e.currentTarget.getAttribute('aria-expanded') === 'true';
+              const go = query.trim();
+              const tuDo = chapNhanTuDo && go && filtered.length === 0;
+              const motGoiY = go && filtered.length === 1;
+              if (!dangMo || tuDo || motGoiY) {
+                // ⚠ preventDefault TRƯỚC: Headless UI bỏ qua phím đã bị chặn, không tự bung danh sách.
+                e.preventDefault();
+                let giaTri = value || '';
+                if (tuDo) { giaTri = go; chotTuDo(); } else if (motGoiY) { giaTri = getValue(filtered[0]); onChange(giaTri); }
+                setQuery('');
+                // ⚠ Danh sách đang mở thì Headless UI khóa (`inert`) mọi ô khác ⇒ phải ĐÓNG trước (rời ô là đóng + ô hiện
+                //   lại đúng giá trị đã chốt), bảng mới đặt con trỏ sang dòng khác được.
+                if (dangMo) e.currentTarget.blur();
+                onMuiTen(e.key === 'ArrowDown' ? 'xuong' : 'len', giaTri);
+                return;
+              }
+            }
             if (e.key === 'Enter' && chapNhanTuDo && query.trim() && filtered.length === 0) {
               e.preventDefault();
               chotTuDo();
               setQuery('');
+              // Ô trong bảng nhập theo dòng: đóng danh sách, giữ con trỏ ⇒ bấm ↓ đi tiếp được ngay.
+              if (onMuiTen) {
+                const el = e.currentTarget;
+                el.blur();
+                setTimeout(() => el.focus(), 0);
+              }
             }
           }}
         />

@@ -33,6 +33,8 @@ const DATA_XEM_TRUOC = {
   // Để dữ liệu mẫu ở đây cho người thiết kế xem trước thấy ngay, khỏi phải in thử mới biết.
   nguoi_sua: 'Nguyễn Văn Sửa', sl_sua: 42, sl_sua_dat: 38, sl_sua_huy: 4,
   ty_le_sua_dat: '90%', nguoi_xn_sua: 'Từ Thị Bích Quyền', tg_sua: new Date().toISOString(),
+  // Nhóm "KCS" — CHỈ có giá trị thật ở vị trí in KCS_IN_TEM_GIAO (sidebar Đã hoàn thành màn KCS).
+  nguoi_kiem_kcs: 'Kim Thị Như Ý', tg_kiem_kcs: new Date().toISOString(),
   // Nhóm "Gia công" — CHỈ có giá trị thật ở vị trí in GIA_CONG_IN_TEM_VE (tem 13 "TH VỀ").
   // Hàng gia công về nhiều lần: `so_luong` ở trên = SL của ĐÚNG lần nhận, 3 số này cho biết
   // lần đó nằm ở đâu trong tổng đơn (release 1200 · đã nhận 504 · còn 696).
