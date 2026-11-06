@@ -12,6 +12,7 @@ import exportPanelExcel from './exportPanelExcel';
 import useToast from '../../hooks/useToast';
 import { fmtNum, ngayLocalISO } from '../../utils/format';
 import { chuanTim } from '../../utils/timKiem';
+import NgayInput from './NgayInput';
 
 const todayStr = () => ngayLocalISO(new Date());
 const fmtTime = (t) => (t ? new Date(t).toLocaleTimeString('vi-VN') : '');
@@ -60,7 +61,7 @@ const FILTER_FIELDS = [
 // fetcher(dateStr) -> { data: [{ ma, ten_khach_hang, ma_don_hang, ma_hang, mau_vai, kich_vai,
 //                                kich_phim, so_luong, tg, nguoi }] }.
 // maHeader: nhãn cột mã (Tem / Phần in / Lệnh / Set...). columns: override toàn bộ cột nếu cần.
-// showChuyen: chèn thêm cột "Chuyền" NGAY SAU "Tính chất in" (cả bảng lẫn Excel) — cần fetcher trả `ten_chuyen`.
+// showChuyen: cột "Chuyền" NGAY SAU "Tính chất in" (cả bảng lẫn Excel), mặc định BẬT từ 05/11/2026 — fetcher trả `ten_chuyen`.
 // showLoaiDotVai: cột "Loại đợt vải" sau "Tính chất in" (QC READY, 11/10/2026) — cần fetcher trả `loai_dot_vai`.
 // showGioLenMes: cột "Giờ lên MES" ngay TRƯỚC "Giờ HT" (READY KT, 18/10/2026) — cần fetcher trả `tg_len_mes`.
 // extraColumns / extraExcelColumns: cột PHỤ nối vào CUỐI bộ cột mặc định. Nhận mảng HOẶC hàm (rows)=>mảng
@@ -75,7 +76,7 @@ const FILTER_FIELDS = [
 // XUẤT EXCEL THEO KHUÔN RIÊNG (14/10/2026): `xuatExcel({ rows, date })` (async) thay hẳn bộ xuất mặc định — vd màn OQC
 //   xuất đúng tờ "DANH SÁCH KIỂM TRA CHẤT LƯỢNG ĐẦU RA QCO". `rows` = danh sách ĐANG LỌC (như bộ xuất mặc định).
 export default function DonePanel({
-  open, onClose, title = 'Đã hoàn thành', maHeader = 'Mã', fetcher, columns, excelColumns, showChuyen = false,
+  open, onClose, title = 'Đã hoàn thành', maHeader = 'Mã', fetcher, columns, excelColumns, showChuyen = true,
   extraColumns, extraExcelColumns, showPhuongAnIn = false, showLoaiDotVai = false, showGioLenMes = false,
   chonNhieu = false, toiDaChon = 0, chonDuoc, footerChon, xuatExcel,
 }) {
@@ -269,15 +270,13 @@ export default function DonePanel({
         // Chỉ thêm vế phần in khi KHÁC số dòng (lệnh gom set) — panel theo phần in/tem thì 2 số bằng
         // nhau, hiện thêm chỉ tổ rối.
         + (soPhanIn && soPhanIn !== viewRows.length ? ` · ${soPhanIn} phần in` : '')}
-      width="max-w-3xl"
+      width="md:max-w-[75vw]"
       footer={chonNhieu && footerChon
         ? footerChon({ rows: dsChon, clear: () => setChon(new Set()) })
         : undefined}>
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <label className="text-sm font-medium text-ink">Ngày</label>
-        <input
-          type="date"
-          value={date}
+        <NgayInput value={date}
           onChange={(e) => setDate(e.target.value)}
           className="h-10 rounded-input border border-line px-3 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
         />

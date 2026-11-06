@@ -13,6 +13,7 @@ import usePermissions from '../../../hooks/usePermissions';
 import { syncPhieuNhanVai, syncHistory, syncRaw } from '../../../services/erpService';
 import { fmtNum, ngayLocalISO } from '../../../utils/format';
 import CapNhatCodePhanModal from '../components/CapNhatCodePhanModal';
+import NgayInput from '../../../components/common/NgayInput';
 
 const fmtDt = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '—');
 const TONE = { THANH_CONG: 'success', DANG_CHAY: 'warning', LOI: 'danger' };
@@ -126,7 +127,7 @@ export default function ErpSyncPage() {
       <Toolbar title="Đồng bộ ERP" subtitle="1 API /phieu-nhan-vai-60: đợt vải vào thẳng READY (KTCankiemtra=0 thì đi tiếp Release 1). Job tự chạy theo chu kỳ. Bấm 1 phiên để xem dữ liệu gốc.">
         <div className="flex items-center gap-1.5 text-xs text-ink-soft">
           <span>Ngày</span>
-          <input type="date" value={date} onChange={(e) => { setDate(e.target.value); setPage(1); }}
+          <NgayInput value={date} onChange={(e) => { setDate(e.target.value); setPage(1); }}
             className="h-9 rounded-input border border-line bg-surface px-2 text-sm outline-none focus:border-primary" />
           {date && <button type="button" onClick={() => { setDate(''); setPage(1); }}
             className="text-ink-soft hover:text-danger" aria-label="Xóa lọc ngày"><Icon name="x" size={14} /></button>}
@@ -144,7 +145,7 @@ export default function ErpSyncPage() {
         </>}>
         <div className="space-y-3">
           <label className="block text-sm font-medium text-ink" htmlFor="erp-ngay-bu">Lấy lại đợt vải ERP từ ngày</label>
-          <input id="erp-ngay-bu" type="date" value={ngayBu || ''} min={ngayXaNhat} max={homNay}
+          <NgayInput id="erp-ngay-bu" value={ngayBu || ''} min={ngayXaNhat} max={homNay}
             onChange={(e) => setNgayBu(e.target.value)}
             className="h-10 w-full rounded-input border border-line bg-surface px-3 text-base outline-none focus:border-primary md:text-sm" />
           <p className="text-xs text-ink-soft">

@@ -74,6 +74,10 @@ export const addVaiHuy = (phieuId, body) => client.post(`/production/phieu/${phi
 // Phân công sản xuất: { caTruongId, chuyenTruong, items: [{ dotVaiId, thoIn, soLuongHuy, soLuongThieu }] }
 export const savePhanCong = (phieuId, body) => client.post(`/production/phieu/${phieuId}/phan-cong`, body);
 export const resumeLine = (phieuId, gioKt) => client.post(`/production/phieu/${phieuId}/hoat-dong-lai`, { gioKt });
+// Hủy 1 lần ngừng chuyền (05/11/2026): sidebar Sản xuất dùng route `/lich-su`; trang Hủy lệnh xác nhận đòi thêm `HUY_XAC_NHAN`.
+export const listNgungChoHuy = (params) => client.get('/production/huy-ngung/candidates', { params });
+export const huyNgungChuyen = (ngungId, lyDo) => client.post(`/production/huy-ngung/${ngungId}`, { lyDo });
+export const huyNgungTaiLichSu = (ngungId, lyDo) => client.post(`/production/huy-ngung/${ngungId}/lich-su`, { lyDo });
 
 // Theo dõi chuyền
 export const getMonitor = () => client.get('/production/monitor');

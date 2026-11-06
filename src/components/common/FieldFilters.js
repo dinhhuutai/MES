@@ -3,7 +3,8 @@ import Icon from './Icon';
 import { khop, chuanTuKhoa } from '../../utils/timKiem';
 
 // Panel LỌC NHIỀU TRƯỜNG (kết hợp AND) + chip hiển thị lọc đang bật — dùng chung nhiều trang.
-// props: fields [{key,label}], values {key:val}, onField(key,val), onClear, open, labelMap? (nhãn chip).
+// props: fields [{key,label, placeholder?, kiem?}], values {key:val}, onField(key,val), onClear, open, labelMap? (nhãn chip).
+//   `kiem(v)` (06/11/2026, tùy chọn) trả câu báo khi ô gõ sai dạng (vd ô số lượng) — hiện chữ đỏ dưới ô + viền đỏ.
 export default function FieldFilters({ fields, values, onField, onClear, open, labelMap }) {
   const active = Object.entries(values || {}).filter(([, v]) => v);
   const nameOf = (k) => (labelMap && labelMap[k]) || (fields.find((f) => f.key === k) || {}).label || k;
@@ -16,14 +17,18 @@ export default function FieldFilters({ fields, values, onField, onClear, open, l
             <Button variant="ghost" chiXemOk className="px-2.5 py-1 text-xs" onClick={onClear} disabled={!active.length}>Xóa lọc</Button>
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            {fields.map((f) => (
-              <div key={f.key}>
-                <label className="mb-1 block text-xs font-medium text-ink-soft">{f.label}</label>
-                <input value={values[f.key] || ''} onChange={(e) => onField(f.key, e.target.value)}
-                  placeholder={`Lọc ${f.label.toLowerCase()}...`}
-                  className="h-10 w-full rounded-input border border-line bg-surface px-3 text-sm focus:border-primary focus:outline-none" />
-              </div>
-            ))}
+            {fields.map((f) => {
+              const loi = f.kiem ? f.kiem(values[f.key] || '') : '';
+              return (
+                <div key={f.key}>
+                  <label className="mb-1 block text-xs font-medium text-ink-soft">{f.label}</label>
+                  <input value={values[f.key] || ''} onChange={(e) => onField(f.key, e.target.value)}
+                    placeholder={f.placeholder || `Lọc ${f.label.toLowerCase()}...`}
+                    className={`h-10 w-full rounded-input border bg-surface px-3 text-sm focus:outline-none ${loi ? 'border-danger' : 'border-line focus:border-primary'}`} />
+                  {loi && <p className="mt-0.5 text-[11px] text-danger">{loi}</p>}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

@@ -11,6 +11,7 @@ import useHuyLichSu from '../../../hooks/useHuyLichSu';
 import { giaCongHistory, huyGiaCongTemLichSu } from '../../../services/planningService';
 import { fmtNum, ngayLocalISO } from '../../../utils/format';
 import { khopTungTu } from '../../../utils/timKiem';
+import NgayInput from '../../../components/common/NgayInput';
 
 // Bộ lọc (27/10/2026, người dùng yêu cầu) — lọc client trên 1 ngày đã tải, kết hợp AND.
 const TRUONG_LOC = [
@@ -140,11 +141,11 @@ export default function GiaCongHistoryPanel({ open, onClose, onPrint, onChanged 
       subtitle={moiNgay
         ? (qServer ? `${viewRows.length} lượt ở mọi ngày` : 'Mọi ngày — nhập code phần để tìm')
         : `${soLoc ? `${viewRows.length}/${rows.length}` : rows.length} lượt trong ngày · nhận hàng · OQC trả về · trả lại nhà gia công`}
-      width="max-w-5xl" side="left">
+      width="md:max-w-[75vw]" side="left">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <label className="text-sm font-medium text-ink">Ngày</label>
         <div className="relative">
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
+          <NgayInput value={date} onChange={(e) => setDate(e.target.value)}
             className="h-10 rounded-input border border-line px-3 pr-8 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10" />
           {date && (
             <button onClick={() => setDate('')} aria-label="Bỏ ngày — tìm mọi ngày" title="Bỏ ngày — tìm theo code phần ở mọi ngày"

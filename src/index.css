@@ -2,15 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  /* Bấm vào đâu trong ô chọn ngày cũng mở lịch (`utils/moLichKhiBam.js`) ⇒ con trỏ báo bấm được cả ô. */
-  input[type='date']:not(:disabled):not([readonly]),
-  input[type='datetime-local']:not(:disabled):not([readonly]),
-  input[type='month']:not(:disabled):not([readonly]),
-  input[type='week']:not(:disabled):not([readonly]) {
-    cursor: pointer;
-  }
+/* Lúc xuất PDF Sơ đồ phần in: bỏ cắt chữ "…" để đủ thông tin (`features/dashboard/utils/taiSoDoPdf.js`). */
+.so-do-xuat-pdf .truncate { overflow: visible; white-space: normal; text-overflow: clip; }
 
+@layer base {
   /* Token màu (RGB channels) — sáng mặc định, .dark đổi sang tối. */
   :root {
     --c-background: 248 249 251;

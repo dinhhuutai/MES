@@ -6,6 +6,7 @@ import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import { Field, Textarea } from '../../../components/common/controls';
 import { xemTruocCodePhan, capNhatCodePhan } from '../../../services/erpService';
 import { fmtNum, ngayLocalISO } from '../../../utils/format';
+import NgayInput from '../../../components/common/NgayInput';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CẬP NHẬT LẠI DỮ LIỆU THEO CODE PHẦN + NGÀY TỪ ERP (21/09/2026) — Hệ thống › Đồng bộ ERP.
@@ -95,7 +96,7 @@ export default function CapNhatCodePhanModal({ open, onClose, onDone, show }) {
                 placeholder="DK-2609-008-A01-F03-C01, DK-2609-011-A01-F03-C01" />
             </Field>
             <Field label="Lấy ERP từ ngày">
-              <input type="date" value={ngay} max={ngayLocalISO(new Date())} onChange={(e) => setNgay(e.target.value)}
+              <NgayInput value={ngay} max={ngayLocalISO(new Date())} onChange={(e) => setNgay(e.target.value)}
                 className="h-11 w-full rounded-input border border-line bg-surface px-3 text-base outline-none focus:border-primary md:text-sm" />
             </Field>
             <div className="pb-0.5">

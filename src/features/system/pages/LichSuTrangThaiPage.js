@@ -19,7 +19,7 @@ import { searchPhanInForCancel, huyPhanIn, listDeletedPhanIn, moPhanIn,
 import { listCancelableLenh, cancelLenh, listLanTestChoHuy, giaCongTemCancelable, huyGiaCongTem,
   listLanTestCancelable, huyLanTest, listKeHoachTamHuy, huyKeHoachTam } from '../../../services/planningService';
 import taiHetTrang, { LIMIT_TAI_LON } from '../../../utils/taiHetTrang';
-import { listCancelableTem, cancelPrintTem, listReopenableTem, moLaiTem, listCloseCandidates, closeProduction, listReopenCandidates, reopenProduction, listUndoStartCandidates, undoStartProduction } from '../../../services/productionService';
+import { listNgungChoHuy, huyNgungChuyen, listCancelableTem, cancelPrintTem, listReopenableTem, moLaiTem, listCloseCandidates, closeProduction, listReopenCandidates, reopenProduction, listUndoStartCandidates, undoStartProduction } from '../../../services/productionService';
 import { listCancelKcs, cancelKcs, listCancelSua, cancelSua, listCancelOqc, cancelOqc,
   listTemSuaCancelable, listTemSuaDeleted, huyTemSua, moTemSua } from '../../../services/qualityService';
 import { listPhieuGiaoCancelable, huyPhieuGiao, listTemChoTich, boTichTemGiao } from '../../../services/deliveryService';
@@ -27,6 +27,7 @@ import { fmtNum, fmtDateTime, ngayLocalISO } from '../../../utils/format';
 import Spinner from '../../../components/common/Spinner';
 import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import { khopNhieu, chuanTuKhoa } from '../../../utils/timKiem';
+import NgayInput from '../../../components/common/NgayInput';
 
 const todayStr = () => ngayLocalISO(new Date());
 const fmtTime = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '—');
@@ -116,7 +117,7 @@ function ReadyCancelSection({ show }) {
       <Toolbar title="Hủy xác nhận READY"
         subtitle="Các xác nhận READY (Khuôn/Film/Mực/HSKT/QC) đã thực hiện — bấm nhầm thì hủy để người phụ trách xác nhận lại"
         search={search} onSearch={setSearch} searchPlaceholder="Tìm code phần, mã hàng, màu/kích...">
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
+        <NgayInput value={date} onChange={(e) => setDate(e.target.value)}
           className="h-10 rounded-input border border-line px-3 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10" />
         <Badge tone="default">{rows.length} lượt</Badge>
       </Toolbar>
@@ -644,6 +645,100 @@ function TemCancelSection({ show }) {
         <Field label="Lý do (khuyến nghị)">
           <Textarea rows={2} value={lyDo} onChange={(e) => setLyDo(e.target.value)}
             placeholder="Vd: in nhầm số lượng, sai phần in..." />
+        </Field>
+      </Modal>
+    </div>
+  );
+}
+
+// ─── Hủy ngừng chuyền (05/11/2026) ──────────────────────────────────────────
+// Ghi nhầm lần ngừng chuyền / sai lý do ⇒ hủy (lý do bắt buộc): không còn tính vào phút ngừng + Báo cáo dừng chuyền; lần đang
+// ngừng bị hủy thì chuyền về đang chạy. Không gửi ERP. Cùng route gốc với nút "Hủy" ở sidebar Sản xuất.
+function NgungChuyenCancelSection({ show }) {
+  const [rows, setRows] = useState([]);
+  const [meta, setMeta] = useState({ page: 1, totalPages: 1, total: 0 });
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [target, setTargetRow] = useState(null);
+  const [lyDo, setLyDo] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listNgungChoHuy({ search, page, limit: 20 });
+      setRows(res.data.items);
+      setMeta(res.data.meta);
+    } catch (e) {
+      show(e.message || 'Lỗi tải', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [search, page, show]);
+
+  useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
+
+  const doCancel = async () => {
+    if (!lyDo.trim()) return;
+    setBusy(true);
+    try {
+      await huyNgungChuyen(target.id, lyDo.trim());
+      show(`Đã hủy lần ngừng chuyền của lệnh ${target.ma_lenh_san_xuat || ''}.`);
+      setTargetRow(null); setLyDo('');
+      load();
+    } catch (e) {
+      show(e.message || 'Hủy lần ngừng chuyền thất bại', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const columns = [
+    cotNgayXacNhan((r) => r.tg_bd_ngung, (r) => `Ngừng chuyền${r.nguoi ? ` · ${r.nguoi}` : ''}`),
+    { key: 'tg_kt_ngung', header: 'Hoạt động lại', className: 'whitespace-nowrap tabular-nums', render: (r) => (
+      r.trang_thai === 'DANG_NGUNG' ? <Badge tone="danger">Đang ngừng</Badge> : fmtTime(r.tg_kt_ngung)) },
+    { key: 'so_phut', header: 'Số phút', className: 'text-right tabular-nums', render: (r) => (r.so_phut != null ? fmtNum(r.so_phut) : '—') },
+    { key: 'ly_do', header: 'Lý do ngừng', render: (r) => r.ly_do || '—' },
+    { key: 'ten_chuyen', header: 'Chuyền', render: (r) => r.ten_chuyen || r.ma_chuyen || '—' },
+    { key: 'ma_lenh_san_xuat', header: 'Mã lệnh', render: (r) => r.ma_lenh_san_xuat || '—' },
+    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
+    { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
+    { key: 'ma_phan', header: 'Code phần', render: (r) => r.ma_phan || '—' },
+    { key: 'actions', header: '', className: 'text-right whitespace-nowrap', render: (r) =>
+      <Button variant="danger" className="px-2.5 py-1 text-xs" onClick={() => { setTargetRow(r); setLyDo(''); }}>Hủy ngừng chuyền</Button> },
+  ];
+
+  return (
+    <div>
+      <Toolbar title="Hủy ngừng chuyền"
+        search={search} onSearch={(v) => { setSearch(v); setPage(1); }}
+        searchPlaceholder="Tìm lý do, chuyền, mã lệnh, code phần...">
+        <Badge tone="info">{meta.total} lần ngừng</Badge>
+      </Toolbar>
+
+      <DataTable columns={columns} rows={rows} loading={loading} rowKey="id" sttStart={(meta.page - 1) * 20}
+        emptyText="Không có lần ngừng chuyền nào" />
+      <Pagination page={meta.page} totalPages={meta.totalPages} total={meta.total} onPage={setPage} />
+
+      <Modal
+        open={!!target}
+        onClose={() => setTargetRow(null)}
+        title="Hủy lần ngừng chuyền"
+        footer={
+          <>
+            <Button chiXemOk variant="ghost" onClick={() => setTargetRow(null)}>Đóng</Button>
+            <Button variant="danger" onClick={doCancel} loading={busy} disabled={!lyDo.trim()}>Xác nhận hủy</Button>
+          </>
+        }
+      >
+        <div className="mb-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          Lần ngừng trên <b>{target?.ten_chuyen || target?.ma_chuyen || '—'}</b> lúc <b>{fmtTime(target?.tg_bd_ngung)}</b> sẽ không
+          còn tính vào phút ngừng và Báo cáo dừng chuyền.{target?.trang_thai === 'DANG_NGUNG' ? ' Chuyền đang ngừng sẽ chuyển về đang chạy.' : ''}
+        </div>
+        <Field label="Lý do hủy" required>
+          <Textarea rows={2} value={lyDo} onChange={(e) => setLyDo(e.target.value)}
+            placeholder="Vd: bấm nhầm, ghi sai lý do..." />
         </Field>
       </Modal>
     </div>
@@ -1194,7 +1289,7 @@ function QcCancelSection({ show, kind }) {
     <div>
       <Toolbar title={cfg.title} subtitle={cfg.subtitle}
         search={search} onSearch={setSearch} searchPlaceholder="Tìm mã tem, mã hàng, màu/kích, khách...">
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
+        <NgayInput value={date} onChange={(e) => setDate(e.target.value)}
           className="h-10 rounded-input border border-line px-3 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10" />
         <Badge tone="info">{view.length} lượt</Badge>
       </Toolbar>
@@ -2423,7 +2518,7 @@ function KeHoachTamCancelSection({ show }) {
 const NHOM_TAB_HUY = [
   { ten: 'Kỹ thuật', keys: ['ready', 'moready', 'huyphanin', 'mophanin', 'huydotvai', 'modotvai'] },
   { ten: 'Kế hoạch', keys: ['lenh', 'huykht', 'huytest', 'huytemgiacong'] },
-  { ten: 'Sản xuất', keys: ['tem', 'motem', 'dong', 'huychay'] },
+  { ten: 'Sản xuất', keys: ['tem', 'motem', 'dong', 'huychay', 'huyngung'] },
   { ten: 'Chất lượng', keys: ['huykcs', 'huysua', 'huytemsua', 'motemsua', 'huyoqc'] },
   { ten: 'Giao hàng', keys: ['huyphieugiao', 'huytich'] },
 ];
@@ -2453,6 +2548,7 @@ export default function LichSuTrangThaiPage() {
     can('PROD_RUN') && { key: 'motem', label: 'Mở lại tem in' },
     can('PROD_RUN') && { key: 'dong', label: 'Đóng lệnh sản xuất' },
     can('PROD_RUN') && { key: 'huychay', label: 'Hủy lệnh đang chạy' },
+    can('PROD_RUN') && { key: 'huyngung', label: 'Hủy ngừng chuyền' },
     can('KCS') && { key: 'huykcs', label: 'Hủy xác nhận KCS' },
     can('SUA') && { key: 'huysua', label: 'Hủy xác nhận Sửa' },
     can('SUA') && { key: 'huytemsua', label: 'Hủy tem sửa' },
@@ -2517,6 +2613,7 @@ export default function LichSuTrangThaiPage() {
       {tab === 'motem' && <TemReopenSection show={show} />}
       {tab === 'dong' && <CloseProductionSection show={show} />}
       {tab === 'huychay' && <UndoStartSection show={show} />}
+      {tab === 'huyngung' && <NgungChuyenCancelSection show={show} />}
       {tab === 'huykcs' && <QcCancelSection show={show} kind="kcs" />}
       {tab === 'huysua' && <QcCancelSection show={show} kind="sua" />}
       {tab === 'huytemsua' && <TemSuaCancelSection show={show} />}

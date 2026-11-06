@@ -15,7 +15,7 @@ const WD = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
 //   dưới ⇒ mở lên trên), cuộn / đổi cỡ cửa sổ thì tính lại.
 const RONG_LICH = 280;
 const CAO_LICH = 340;
-const viTriLich = (el) => {
+export const viTriLich = (el) => {
   const r = el.getBoundingClientRect();
   const left = Math.max(8, Math.min(r.left, window.innerWidth - RONG_LICH - 8));
   const duoi = window.innerHeight - r.bottom;
@@ -96,7 +96,7 @@ export default function DateRangePicker({ value = {}, onChange, placeholder = 'C
           style={pos || undefined}>
           <div className="mb-2 flex items-center justify-between">
             <button type="button" onClick={() => shift(-1)} className="rounded p-1 hover:bg-surface-muted"><Icon name="chevron-left" size={16} /></button>
-            <span className="text-sm font-semibold text-ink">Th{view.getMonth() + 1}/{view.getFullYear()}</span>
+            <span className="text-sm font-semibold text-ink">Tháng {view.getMonth() + 1}/{view.getFullYear()}</span>
             <button type="button" onClick={() => shift(1)} className="rounded p-1 hover:bg-surface-muted"><Icon name="chevron-right" size={16} /></button>
           </div>
           <div className="grid grid-cols-7 gap-0.5 text-center text-[11px] text-ink-soft">

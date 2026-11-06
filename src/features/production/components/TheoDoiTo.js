@@ -6,6 +6,7 @@ import useSocketReload from '../../../hooks/useSocketReload';
 import { getTheoDoiTo } from '../../../services/productionService';
 import { ngayLocalISO } from '../../../utils/format';
 import { dungTheoDoiTo, phanTram, GIO_NGAY_SX } from '../utils/theoDoiTo';
+import NgayInput from '../../../components/common/NgayInput';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // THEO DÕI SẢN XUẤT THEO TỔ (21/10/2026, người dùng gửi ảnh) — 2 chế độ nằm cạnh "Chuyền đang chạy" trên đầu modal
@@ -201,7 +202,7 @@ export default function TheoDoiTo({ cheDo, onCheDo }) {
   const thanhNgay = (
     <div className="mb-3 flex flex-wrap items-center gap-2">
       <span className="text-xs text-ink-soft">Ngày SX</span>
-      <input type="date" value={ngay} onChange={(e) => { if (e.target.value) { setNgay(e.target.value); setChuyenId(null); } }}
+      <NgayInput value={ngay} onChange={(e) => { if (e.target.value) { setNgay(e.target.value); setChuyenId(null); } }}
         className="h-9 rounded-input border border-line bg-surface px-2 text-sm outline-none focus:border-primary" />
       {ngay !== ngayLocalISO(new Date()) && (
         <Button chiXemOk variant="ghost" className="px-2.5 py-1 text-xs" onClick={() => setNgay(ngayLocalISO(new Date()))}>Hôm nay</Button>

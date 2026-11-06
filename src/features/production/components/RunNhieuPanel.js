@@ -223,11 +223,11 @@ function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn 
                   <td className={TD}>
                     <label className="flex cursor-pointer items-center gap-1.5 text-xs">
                       <input type="checkbox" className={chk} checked={!!giaTri(d.key, 'btpTruoc', !!meta.btpTruoc)}
-                        onChange={(e) => datO(d.key, 'btpTruoc', e.target.checked)} /> Trước
+                        onChange={(e) => setSl((s) => ({ ...s, [d.key]: { ...(s[d.key] || {}), btpTruoc: e.target.checked, ...(e.target.checked ? { btpCuoi: false } : {}) } }))} /> Trước
                     </label>
                     <label className="mt-1 flex cursor-pointer items-center gap-1.5 text-xs">
                       <input type="checkbox" className={chk} checked={!!giaTri(d.key, 'btpCuoi', !!meta.btpCuoi)}
-                        onChange={(e) => datO(d.key, 'btpCuoi', e.target.checked)} /> Cuối
+                        onChange={(e) => setSl((s) => ({ ...s, [d.key]: { ...(s[d.key] || {}), btpCuoi: e.target.checked, ...(e.target.checked ? { btpTruoc: false } : {}) } }))} /> Cuối
                     </label>
                   </td>
                   <td className={TD}>

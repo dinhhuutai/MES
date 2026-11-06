@@ -25,6 +25,10 @@ const GOM_DONE_COLUMNS = [
   { key: 'hanh_dong', header: 'Thao tác', render: (r) => r.hanh_dong || '—' },
   { key: 'so_luong', header: 'Số đợt vải', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
   { key: 'mau_list', header: 'Màu', render: (r) => r.mau_list || '—' },
+  { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
+  { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
+  { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
+  { key: 'ten_chuyen', header: 'Chuyền', render: (r) => r.ten_chuyen || '—' },
   { key: 'tg', header: 'Giờ', className: 'whitespace-nowrap tabular-nums', render: (r) => fmtTimeVi(r.tg) },
   { key: 'nguoi', header: 'Người', render: (r) => r.nguoi || '—' },
 ];
@@ -349,6 +353,10 @@ export default function GomSetPage() {
           { header: 'Thao tác', value: (r) => r.hanh_dong || '' },
           { header: 'Số đợt vải', value: (r) => Number(r.so_luong) || 0, num: true },
           { header: 'Màu', value: (r) => r.mau_list || '' },
+          { header: 'Đơn hàng', value: (r) => r.ma_don_hang || '' },
+          { header: 'Kích vải', value: (r) => r.kich_vai || '' },
+          { header: 'Kích phim', value: (r) => r.kich_phim || '' },
+          { header: 'Chuyền', value: (r) => r.ten_chuyen || '' },
           // Panel Gom set KHÔNG có cột "Hạn giao" ⇒ Giờ HT đứng ngay trước "Người",
           // giữ đúng thứ tự tương đối như các panel khác (… → Giờ HT → Người).
           COT_EXCEL_GIO_HT,

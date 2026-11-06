@@ -1,3 +1,5 @@
+import NgayInput from './NgayInput';
+
 // Style + control nhập liệu dùng chung.
 // ⚠⚠ CỠ CHỮ `text-base md:text-sm` — KHÔNG đổi thành `text-sm` trơn: **iOS Safari TỰ PHÓNG TO cả trang
 // khi focus vào input/select/textarea có font-size < 16px**, và vì viewport (`public/index.html`) cố ý
@@ -24,6 +26,11 @@ export function Field({ label, required, error, hint, children }) {
 }
 
 export function Input(props) {
+  // Ô ngày đi qua lịch tiếng Việt (05/11/2026) — lịch gốc của trình duyệt theo ngôn ngữ máy, web không đổi được.
+  if (props.type === 'date') {
+    const { type, ...rest } = props;
+    return <NgayInput {...rest} className={`${inputClass} ${props.className || ''}`} />;
+  }
   return <input {...props} className={`${inputClass} ${props.className || ''}`} />;
 }
 

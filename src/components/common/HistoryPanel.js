@@ -8,6 +8,7 @@ import exportPanelExcel from './exportPanelExcel';
 import useToast from '../../hooks/useToast';
 import { ngayLocalISO } from '../../utils/format';
 import { khopTungTu } from '../../utils/timKiem';
+import NgayInput from './NgayInput';
 
 const todayStr = () => ngayLocalISO(new Date());
 const fmtTime = (t) => (t ? new Date(t).toLocaleTimeString('vi-VN') : '');
@@ -129,16 +130,14 @@ export default function HistoryPanel({ open, onClose, title = 'Lịch sử', fet
   };
 
   return (
-    <SidePanel open={open} onClose={onClose} title={title} width="max-w-2xl"
+    <SidePanel open={open} onClose={onClose} title={title} width="md:max-w-[75vw]"
       subtitle={moiNgay
         ? (qServer ? `${viewRows.length} lượt ở mọi ngày${rows.length >= TOI_DA_TIM ? ` (hiện ${TOI_DA_TIM} lượt mới nhất)` : ''}` : 'Mọi ngày — nhập code phần để tìm')
         : (soLoc ? `${viewRows.length}/${rows.length} lượt trong ngày (đang lọc)` : `${rows.length} lượt trong ngày`)}>
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <label className="text-sm font-medium text-ink">Ngày</label>
         <div className="relative">
-          <input
-            type="date"
-            value={date}
+          <NgayInput value={date}
             onChange={(e) => setDate(e.target.value)}
             className="h-10 rounded-input border border-line px-3 pr-8 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
           />

@@ -10,6 +10,7 @@ import Toast from '../../../components/common/Toast';
 import { Input, Select, Field, Textarea } from '../../../components/common/controls';
 import Modal from '../../../components/common/Modal';
 import TimeSelect from '../../../components/common/TimeSelect';
+import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import { listChuyen, getVaiTem, suaVaiTem, suaTem, reprintTem, getTemLabel, listToIn } from '../../../services/productionService';
 import { listUserOptions } from '../../../services/userService';
 import SearchableSelect from '../../../components/common/SearchableSelect';
@@ -17,6 +18,7 @@ import NhieuNguoiSelect from '../../../components/common/NhieuNguoiSelect';
 import FieldFilters, { FilterToggle } from '../../../components/common/FieldFilters';
 import DateRangePicker from '../../../components/common/DateRangePicker';
 import { CA_LOC } from '../../../utils/caLoc';
+import { GOI_Y_SO_LUONG, loiLocSoLuong, soLuongGui } from '../../../utils/locSoLuong';
 import { LOAI_TABS, locSiSoTheoChip } from '../../../utils/khuChuyen';
 import useToast from '../../../hooks/useToast';
 import useHuyLichSu from '../../../hooks/useHuyLichSu';
@@ -46,6 +48,9 @@ const LIMIT = 20;
 //   client-side: nó chỉ lọc được TRANG ĐANG XEM.
 const FIELDS_CHUNG = [
   { key: 'maTem', label: 'Mã tem' },
+  // SL IN (06/11/2026, người dùng yêu cầu) — `500` · `100-500` · `>500`… (`utils/locSoLuong.js`, gương backend); gõ sai
+  //   dạng ⇒ báo đỏ dưới ô và KHÔNG gửi lên (`thamSoLoc`).
+  { key: 'soLuong', label: 'SL in', placeholder: GOI_Y_SO_LUONG, kiem: loiLocSoLuong },
   { key: 'khach', label: 'Khách hàng' },
   { key: 'don', label: 'Đơn hàng' },
   { key: 'maHang', label: 'Mã hàng' },
@@ -69,8 +74,9 @@ const TEM_CHUA_KIEM = ['IN', 'DANG_PHOI', 'DA_KHO'];
 //   tem sản xuất). Gửi lên server như dải Theo dõi (`locSiSoTheoChip`: chip loại ⇒ `loaiChuyen`, chip khu ⇒ `maChuyen`).
 const KHU_LOC = LOAI_TABS.filter((t) => t.v && t.v !== 'GIA_CONG');
 const thamSoLoc = (filters) => {
-  const { khu, ...con } = filters;
-  return { ...con, ...locSiSoTheoChip(khu || '') };
+  const { khu, soLuong, ...con } = filters;
+  const sl = soLuongGui(soLuong);
+  return { ...con, ...(sl ? { soLuong: sl } : {}), ...locSiSoTheoChip(khu || '') };
 };
 const temHuyDuoc = (r) => TEM_CHUA_KIEM.includes(r.trang_thai) && !r.da_kiem;
 // HỦY NHIỀU TEM (21/10/2026, người dùng yêu cầu): tối đa mỗi lượt — mỗi tem 1 lần gọi route hủy (transaction riêng +
@@ -716,6 +722,9 @@ function SuaTemModal({ tem, onClose, onDaLuu, show }) {
   const [pc, setPc] = useState(PC_TRONG);
   const [users, setUsers] = useState([]);
   const [toIns, setToIns] = useState([]);
+  const [chuyenGoc, setChuyenGoc] = useState('');  // chuyền đang hiện của tem (riêng của tem nếu đã sửa, không thì của phiếu)
+  const [chuyenId, setChuyenId] = useState('');
+  const [dsChuyen, setDsChuyen] = useState([]);
   const temId = tem?.id;
   useEffect(() => {
     if (!tem) return;
@@ -725,15 +734,18 @@ function SuaTemModal({ tem, onClose, onDaLuu, show }) {
   useEffect(() => {
     if (!temId) return undefined;
     let song = true;
-    setPcGoc(null); setPc(PC_TRONG);
+    setPcGoc(null); setPc(PC_TRONG); setChuyenGoc(''); setChuyenId('');
     getTemLabel(temId).then((r) => {
       if (!song) return;
       const d = r.data || {};
+      setChuyenGoc(d.chuyen_id || ''); setChuyenId(d.chuyen_id || '');
       const g = { caTruongId: d.ca_truong_id || '', chuyenTruong: d.chuyen_truong || '', thoIn: d.tho_in || '', toInId: d.to_in_id || '', rieng: !!d.phan_cong_rieng };
       setPcGoc(g); setPc(g);
     }).catch(() => { if (song) setPcGoc(null); });
     listUserOptions({ limit: 500 }).then((r) => { if (song) setUsers(r.data || []); }).catch(() => {});
     listToIn().then((r) => { if (song) setToIns(r.data || []); }).catch(() => {});
+    // Không chuyển tem sản xuất sang chuyền gia công (backend chặn 422).
+    listChuyen().then((r) => { if (song) setDsChuyen((r.data || []).filter((c) => c.ma_loai_chuyen !== 'GIA_CONG')); }).catch(() => {});
     return () => { song = false; };
   }, [temId]);
   if (!tem) return null;
@@ -753,6 +765,7 @@ function SuaTemModal({ tem, onClose, onDaLuu, show }) {
   // Ngày chứng từ = ngày CT của phiếu in tem đã gửi ERP (27/10/2026) — tem chưa gửi ERP thì không sửa được.
   const coNgayCt = !!tem.ngay_ct;
   if (coNgayCt && ngayCt && ngayCt !== tem.ngay_ct) body.ngayCt = ngayCt;
+  if (chuyenId && chuyenId !== chuyenGoc) body.chuyenId = chuyenId;
   if (doiPc) {
     body.phanCong = {
       caTruongId: pc.caTruongId || null, chuyenTruong: pc.chuyenTruong || '', thoIn: pc.thoIn || '',
@@ -785,6 +798,9 @@ function SuaTemModal({ tem, onClose, onDaLuu, show }) {
         <div className="text-sm text-ink-soft">{tem.ma_lenh_san_xuat} · {tem.ma_phan} · {tem.ten_chuyen || tem.ma_chuyen || ''}</div>
         <Field label="Số lượng in (pcs)">
           <Input type="number" min="1" inputMode="numeric" value={sl} disabled={khoaSl} onChange={(e) => setSl(e.target.value)} />
+        </Field>
+        <Field label="Chuyền" hint="Chỉ đổi chuyền của RIÊNG tem này (nhãn, báo cáo, gửi ERP) — phiếu và các tem khác giữ nguyên.">
+          <ChuyenPicker chuyen={dsChuyen} value={chuyenId} onChange={setChuyenId} />
         </Field>
         {khoaSl && <p className="-mt-2 text-xs text-amber-700 dark:text-amber-400">Tem đã kiểm (KCS) — không sửa số lượng được.</p>}
         <div className="grid grid-cols-2 gap-3">

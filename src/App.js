@@ -37,6 +37,7 @@ const ThietKePhieuPage = taiLuoi(() => import('./features/system/pages/ThietKePh
 const QuanTriPhanInPage = taiLuoi(() => import('./features/system/pages/QuanTriPhanInPage'));
 const BtpKhacKeHoachPage = taiLuoi(() => import('./features/system/pages/BtpKhacKeHoachPage'));
 const HienThiPainPage = taiLuoi(() => import('./features/system/pages/HienThiPainPage'));
+const TinhChatInPage = taiLuoi(() => import('./features/system/pages/TinhChatInPage'));
 const CaiDatApiPage = taiLuoi(() => import('./features/system/pages/CaiDatApiPage'));
 const CaiDatTinhNangPage = taiLuoi(() => import('./features/system/pages/CaiDatTinhNangPage'));
 const DuyetPage = taiLuoi(() => import('./features/duyet/pages/DuyetPage'));
@@ -154,6 +155,7 @@ const PAGES = {
   '/he-thong/quan-tri-phan-in': <QuanTriPhanInPage />,
   '/he-thong/btp-khac-ke-hoach': <BtpKhacKeHoachPage />,
   '/he-thong/hien-thi-pain': <HienThiPainPage />,
+  '/he-thong/tinh-chat-in': <TinhChatInPage />,
   '/he-thong/cai-dat-api': <CaiDatApiPage />,
   '/he-thong/cai-dat-tinh-nang': <CaiDatTinhNangPage />,
   '/duyet': <DuyetPage />,

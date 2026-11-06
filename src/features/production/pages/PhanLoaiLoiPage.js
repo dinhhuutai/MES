@@ -24,6 +24,7 @@ import exportCheckpointExcel, { cotTemChung, moTaBoLoc } from '../../../utils/ex
 import taiHetTrang from '../../../utils/taiHetTrang';
 import ChipTabs from '../../../components/common/ChipTabs';
 import Badge from '../../../components/common/Badge';
+import NgayInput from '../../../components/common/NgayInput';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PHÂN LOẠI LỖI (mig 075) — module Sản xuất, dưới KCS.
@@ -338,7 +339,7 @@ export default function PhanLoaiLoiPage() {
           <Button icon="check-circle" onClick={() => setNhieuOpen(true)}>Phân loại ({tich.length})</Button>
         )}
         {tich.length > 0 && <Button chiXemOk variant="ghost" icon="x" onClick={() => setTich([])}>Bỏ tích</Button>}
-        <input type="date" value={ngay} onChange={(e) => { setNgay(e.target.value); setPage(1); }}
+        <NgayInput value={ngay} onChange={(e) => { setNgay(e.target.value); setPage(1); }}
           className="h-11 rounded-input border border-line bg-surface px-3 text-sm outline-none focus:border-primary" />
         {ngay && <Button variant="ghost" onClick={() => { setNgay(''); setPage(1); }}>Mọi ngày</Button>}
         <Button chiXemOk variant="secondary" icon="download" onClick={doExcel}

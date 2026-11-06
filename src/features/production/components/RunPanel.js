@@ -12,7 +12,7 @@ import { Field, Input, Textarea, Select } from '../../../components/common/contr
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import useHuyLichSu from '../../../hooks/useHuyLichSu';
-import { getRun, printTem, printTemBatch, reprintTem, getTemLabel, getTemLogs, finishRun, stopLine, resumeLine, addVaiHuy, savePhanCong, pauseLenhChay, listProductionCandidates, startProduction, vuotSanXuat, doiChuyen, traVeKyThuatSanXuat, listChuyen, listLyDoNgung, listToIn, luuLyDoBoSungDotVai, huyTemTaiLichSu, moLaiTemTaiLichSu, tachLenhNgc } from '../../../services/productionService';
+import { getRun, printTem, printTemBatch, reprintTem, getTemLabel, getTemLogs, finishRun, stopLine, resumeLine, addVaiHuy, savePhanCong, pauseLenhChay, listProductionCandidates, startProduction, vuotSanXuat, doiChuyen, traVeKyThuatSanXuat, listChuyen, listLyDoNgung, listToIn, luuLyDoBoSungDotVai, huyTemTaiLichSu, moLaiTemTaiLichSu, huyNgungTaiLichSu, tachLenhNgc } from '../../../services/productionService';
 import { khoaNgc } from '../../../utils/nhaGiaCong';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import TraVeKeHoachModal from './TraVeKeHoachModal';
@@ -211,11 +211,11 @@ export function TemMetaFields({ meta, setMeta, anGcMauVai = false, anBtp = false
         <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1.5">
           <label className="flex cursor-pointer items-center gap-2 text-sm text-ink">
             <input type="checkbox" className={chk} checked={!!meta.btpTruoc}
-              onChange={(e) => set('btpTruoc', e.target.checked)} /> BTP trước
+              onChange={(e) => setMeta((m) => ({ ...m, btpTruoc: e.target.checked, ...(e.target.checked ? { btpCuoi: false } : {}) }))} /> BTP trước
           </label>
           <label className="flex cursor-pointer items-center gap-2 text-sm text-ink">
             <input type="checkbox" className={chk} checked={!!meta.btpCuoi}
-              onChange={(e) => set('btpCuoi', e.target.checked)} /> BTP cuối
+              onChange={(e) => setMeta((m) => ({ ...m, btpCuoi: e.target.checked, ...(e.target.checked ? { btpTruoc: false } : {}) }))} /> BTP cuối
           </label>
         </div>
       )}
@@ -723,6 +723,19 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
     nhanNut: 'Hủy tem',
     baoXong: (t) => `Đã hủy tem ${t.ma_tem}`,
     sauKhiHuy: () => { load(); onChanged?.(); },
+  });
+  // NÚT "HỦY" Ở TỪNG LẦN NGỪNG CHUYỀN (05/11/2026): ghi nhầm / sai lý do ⇒ lần ngừng không còn tính vào phút ngừng + báo cáo.
+  const huyNgung = useHuyLichSu({
+    goiHuy: (n, ly) => huyNgungTaiLichSu(n.id, ly),
+    show,
+    coQuyen: canRun,
+    tieuDe: 'Hủy lần ngừng chuyền',
+    moTa: (n) => <>{fmtDt(n.tg_bd_ngung)}{n.tg_kt_ngung ? ` → ${fmtDt(n.tg_kt_ngung)}` : ' · đang ngừng'}{n.ly_do ? ` · ${n.ly_do}` : ''}</>,
+    hauQua: 'Lần ngừng này không còn tính vào phút ngừng và Báo cáo dừng chuyền. Nếu chuyền đang ngừng thì chuyển về đang chạy.',
+    nhanNut: 'Hủy lần ngừng',
+    baoXong: 'Đã hủy lần ngừng chuyền',
+    sauKhiHuy: () => { load(); onChanged?.(); },
+    modalProps: { ghiChuErp: 'Ngừng chuyền không gửi ERP nên không có gì phải báo hủy.', goiY: 'Vì sao hủy (vd: bấm nhầm, ghi sai lý do)...' },
   });
   // NÚT "MỞ LẠI" Ở TEM ĐÃ HỦY (14/10/2026): chỉ tem hủy bằng nút Hủy / "Hủy lệnh in tem" (`mo_lai_duoc` do backend tính —
   // cùng điều kiện với guard). Mở lại ⇒ tem về trạng thái trước khi hủy, SL tính lại vào đã in, ERP được gửi lại phiếu.
@@ -1573,6 +1586,12 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
                             : <Badge tone="default">{fmtNum(n.so_phut)} phút</Badge>}
                         </div>
                         {n.ly_do && <div className="mt-0.5 text-xs text-ink-soft">Lý do: {n.ly_do}{n.nguoi ? ` · ${n.nguoi}` : ''}</div>}
+                        {canRun && (
+                          <div className="mt-1 text-right">
+                            <button onClick={() => huyNgung.moHuy(n)} title="Hủy lần ngừng này (nhập lý do)"
+                              className="text-xs font-medium text-danger hover:underline">Hủy</button>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1781,6 +1800,7 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
       </Modal>
 
       {huyTem.modal}
+      {huyNgung.modal}
       {moLaiTem.modal}
       <Toast toast={toast} />
     </SidePanel>

@@ -6,7 +6,8 @@ import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import Icon from '../../../components/common/Icon';
 import Spinner from '../../../components/common/Spinner';
-import { inputClass } from '../../../components/common/controls';
+import { inputClass, Select } from '../../../components/common/controls';
+import { GOI_Y_SO_LUONG, loiLocSoLuong, soLuongGui } from '../../../utils/locSoLuong';
 import Toast from '../../../components/common/Toast';
 import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
@@ -14,6 +15,7 @@ import { lichSuApi, guiLaiApi } from '../../../services/caiDatApiService';
 import { ngayLocalISO } from '../../../utils/format';
 import SuaGuiLaiModal from './SuaGuiLaiModal';
 import FieldFilters, { FilterToggle } from '../../../components/common/FieldFilters';
+import NgayInput from '../../../components/common/NgayInput';
 
 // LỌC THEO TRƯỜNG (26/10/2026, người dùng yêu cầu) — lọc Ở SERVER (`caidatapi.repository dkTruongSql`): mỗi lượt quy về
 //   tem / lượt KCS·Sửa·OQC / phiếu giao / lệnh rồi tới phần in; khóa = tên query backend nhận.
@@ -26,6 +28,23 @@ const LOC_LICH_SU = [
   { key: 'maHang', label: 'Mã hàng' },
   { key: 'kich', label: 'Kích vải / phim' },
   { key: 'mau', label: 'Màu vải' },
+];
+
+// LỌC SỐ LƯỢNG + KẾT QUẢ (06/11/2026, người dùng: "lịch sử lọc theo số lượng in, lọc những IDMES gửi sang ERP bị lỗi") —
+//   lọc Ở SERVER trên LẦN GỬI MỚI NHẤT của lượt (`caidatapi.repository lichSu`). SL = `gui.Soluong`, chỉ 5 kênh 20 tham số
+//   có; nhãn theo nghĩa số đó ở từng kênh (khóa = mã API).
+const NHAN_SO_LUONG = {
+  ERP_GHI_IN_TEM: 'SL in',
+  ERP_GUI_TEM_GIA_CONG: 'SL đạt',
+  ERP_GUI_KIEM_PHAM: 'SL đạt',
+  ERP_GUI_SUA_DAT: 'SL sửa đạt',
+  ERP_GUI_OQC: 'SL qua giao',
+};
+const KET_QUA_LOC = [
+  { v: '', label: 'Mọi kết quả' },
+  { v: 'LOI', label: 'Đang lỗi' },
+  { v: 'TUNG_LOI', label: 'Từng lỗi, đã gửi được' },
+  { v: 'OK', label: 'Thành công' },
 ];
 
 // 5 API ĐẨY dữ liệu có nút "Gửi lại ERP" từng dòng (gương backend `caidatapi/guiLai.js` MA_GUI_LAI).
@@ -159,31 +178,47 @@ export default function LichSuApiPanel({ open, onClose, ma, ten, laGhiInTem }) {
   const [chon, setChon] = useState(null); // dòng đang mở chi tiết
   const [dangGui, setDangGui] = useState(null); // id dòng đang gửi lại
   const [dongSua, setDongSua] = useState(null); // dòng đang mở hộp "Sửa & gửi lại" (21/10/2026)
-  const [loc, setLoc] = useState({});           // lọc theo trường (26/10/2026) — `LOC_LICH_SU`
+  const [loc, setLoc] = useState({});           // lọc theo trường (26/10/2026) — `LOC_LICH_SU` (+ `soLuong` 06/11/2026)
   const [moLoc, setMoLoc] = useState(false);
+  const [ketQua, setKetQua] = useState('');     // 06/11/2026 — `KET_QUA_LOC`
   const { toast, show } = useToast();
   const { can } = usePermissions();
   const guiLaiDuoc = CO_GUI_LAI.has(ma) && can('WORKFLOW_MANAGE');
   const nhanMa = MA_LA_LENH.has(ma) ? 'Mã lệnh' : 'Mã tem';
+  const nhanSl = NHAN_SO_LUONG[ma] || '';
+  const truongLoc = nhanSl
+    ? [{ key: 'soLuong', label: nhanSl, placeholder: GOI_Y_SO_LUONG, kiem: loiLocSoLuong }, ...LOC_LICH_SU]
+    : LOC_LICH_SU;
   const soLoc = Object.values(loc).filter((v) => String(v || '').trim()).length;
 
   const load = useCallback(async () => {
     if (!open || !ma) return;
     setLoading(true);
     try {
-      const locGui = Object.fromEntries(Object.entries(loc).filter(([, v]) => String(v || '').trim()));
-      const res = await lichSuApi(ma, { date: date || undefined, search: search || undefined, ...locGui, page, limit: 20 });
+      const { soLuong, ...con } = loc;
+      const locGui = Object.fromEntries(Object.entries(con).filter(([, v]) => String(v || '').trim()));
+      // SL sai dạng ⇒ không gửi (ô đã báo đỏ); API không có số lượng ⇒ không bao giờ gửi.
+      const sl = NHAN_SO_LUONG[ma] ? soLuongGui(soLuong) : '';
+      const res = await lichSuApi(ma, {
+        date: date || undefined, search: search || undefined, ...locGui,
+        soLuong: sl || undefined, ketQua: ketQua || undefined, page, limit: 20,
+      });
       setRows(res.data.items || []);
       setMeta(res.data.meta || { page: 1, totalPages: 1, total: 0 });
     } catch {
       setRows([]);
     } finally { setLoading(false); }
-  }, [open, ma, date, search, loc, page]);
+  }, [open, ma, date, search, loc, ketQua, page]);
   // Gõ ô tìm / ô lọc ⇒ chờ 350 ms mới tải (lọc theo trường phải dò ngược về phần in — đừng bắn mỗi phím).
   useEffect(() => { const t = setTimeout(load, 350); return () => clearTimeout(t); }, [load]);
 
-  // Mở panel cho API khác / đóng rồi mở lại ⇒ về trang 1, bỏ chi tiết đang xem.
-  useEffect(() => { if (open) { setPage(1); setChon(null); setDate(ngayLocalISO(new Date())); } }, [open, ma]);
+  // Mở panel cho API khác / đóng rồi mở lại ⇒ về trang 1, bỏ chi tiết đang xem. API mới không có số lượng ⇒ bỏ ô SL đang
+  //   lọc (không thì chip "SL" treo mà không có ô để xóa).
+  useEffect(() => {
+    if (!open) return;
+    setPage(1); setChon(null); setDate(ngayLocalISO(new Date()));
+    if (!NHAN_SO_LUONG[ma]) setLoc((s) => (s.soLuong ? Object.fromEntries(Object.entries(s).filter(([k]) => k !== 'soLuong')) : s));
+  }, [open, ma]);
 
   const guiLai = async (r) => {
     setDangGui(r.id);
@@ -205,6 +240,11 @@ export default function LichSuApiPanel({ open, onClose, ma, ten, laGhiInTem }) {
     //   đều có — IDMES · ID phiếu giao · mã ERP cấp · ID lượt kéo).
     { key: 'id_mes', header: 'ID kết nối', render: (r) => <MaCopy v={r.id_mes} manh /> },
     { key: 'ma_tem', header: nhanMa, render: (r) => <MaCopy v={r.ma_tem} /> },
+    // SỐ LƯỢNG đã gửi (`gui.Soluong` của lần gửi mới nhất, 06/11/2026) — chỉ 5 kênh 20 tham số.
+    ...(nhanSl ? [{
+      key: 'so_luong', header: nhanSl, className: 'text-right tabular-nums', headerClassName: 'text-right',
+      render: (r) => (r.so_luong == null || r.so_luong === '' ? '—' : Number(r.so_luong).toLocaleString('vi-VN')),
+    }] : []),
     {
       key: 'thoi_gian_ms',
       header: 'Mất',
@@ -292,7 +332,7 @@ export default function LichSuApiPanel({ open, onClose, ma, ten, laGhiInTem }) {
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1.5 text-xs text-ink-soft">
             <span>Ngày</span>
-            <input type="date" value={date} onChange={(e) => { setDate(e.target.value); setPage(1); }}
+            <NgayInput value={date} onChange={(e) => { setDate(e.target.value); setPage(1); }}
               className="h-9 rounded-input border border-line bg-surface px-2 text-sm outline-none focus:border-primary" />
             {date && (
               <button type="button" onClick={() => { setDate(''); setPage(1); }}
@@ -303,20 +343,26 @@ export default function LichSuApiPanel({ open, onClose, ma, ten, laGhiInTem }) {
           </div>
           <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             placeholder={`Tìm theo ID kết nối hoặc ${nhanMa.toLowerCase()}…`} className={`${inputClass} max-w-xs`} />
+          {/* KẾT QUẢ (06/11/2026) — theo lần gửi MỚI NHẤT của lượt; "Đang lỗi" = IDMES chưa gửi lại được (đỏ + vàng). */}
+          <div className="w-48">
+            <Select value={ketQua} onChange={(e) => { setKetQua(e.target.value); setPage(1); }} aria-label="Lọc theo kết quả gửi ERP">
+              {KET_QUA_LOC.map((k) => <option key={k.v} value={k.v}>{k.label}</option>)}
+            </Select>
+          </div>
           <FilterToggle open={moLoc} count={soLoc} onClick={() => setMoLoc((v) => !v)} />
-          <Badge tone="info">{meta.total} lượt</Badge>
+          <Badge tone={ketQua === 'LOI' && meta.total ? 'danger' : 'info'}>{meta.total} lượt</Badge>
           <Button chiXemOk variant="secondary" icon="loader" loading={loading} onClick={load} className="ml-auto px-3 py-1.5">
             Tải lại
           </Button>
         </div>
-        <FieldFilters fields={LOC_LICH_SU} values={loc} open={moLoc}
+        <FieldFilters fields={truongLoc} values={loc} open={moLoc}
           onField={(k, v) => { setLoc((s) => ({ ...s, [k]: v })); setPage(1); }}
           onClear={() => { setLoc({}); setPage(1); }} />
 
         <DataTable columns={columns} rows={rows} loading={loading} rowKey="id"
           pageSize={0} onRowClick={setChon}
           sttStart={(meta.page - 1) * 20}
-          emptyText={date || search || soLoc
+          emptyText={date || search || soLoc || ketQua
             ? 'Không có lượt gọi nào khớp bộ lọc'
             : 'Chưa có lượt gọi nào được ghi lại'} />
         <Pagination page={meta.page} totalPages={meta.totalPages} total={meta.total} onPage={setPage} />

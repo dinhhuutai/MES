@@ -29,6 +29,8 @@ import {
   ChevronUp,
   ChevronDown,
   ChevronsUpDown,
+  ChevronsLeft,
+  ChevronsRight,
   Bell,
   Eye,
   EyeOff,
@@ -162,6 +164,8 @@ const MAP = {
   'chevron-up': ChevronUp,
   'chevron-down': ChevronDown,
   'chevrons-up-down': ChevronsUpDown,
+  'chevrons-left': ChevronsLeft,
+  'chevrons-right': ChevronsRight,
   // Thanh công cụ kiểu Excel của trình Thiết kế tem
   bold: Bold,
   italic: Italic,

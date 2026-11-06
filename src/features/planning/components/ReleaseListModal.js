@@ -20,6 +20,7 @@ import { khopNhieu } from '../../../utils/timKiem';
 import { LOAI_TABS, hopChipChuyen, nhanChip, demChip } from '../../../utils/khuChuyen';
 import { gopTheoLenh, demLenh, demGiaiDoan } from '../utils/gopDongRelease';
 import { CA_LOC } from '../../../utils/caLoc';
+import NgayInput from '../../../components/common/NgayInput';
 
 // Bộ lọc từng trường (client-side — modal tải trọn 1 ngày nên lọc tại chỗ là đủ).
 // `_chuyen_tim` = mã hiện ở cột "Chuyền in" + mã chuyền + tên chuyền (gắn lúc tải) ⇒ gõ "1A1B", "M1A-1B" hay
@@ -323,7 +324,7 @@ export default function ReleaseListModal({ open, onClose }) {
       <div className="mb-2 flex flex-wrap items-center gap-3">
         <label className="flex items-center gap-2 text-sm">
           <span className="text-ink-soft">{mode === 'RELEASE' ? 'Ngày release' : 'Ngày kế hoạch'}</span>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
+          <NgayInput value={date} onChange={(e) => setDate(e.target.value)}
             className="h-9 rounded-input border border-line px-3 text-sm focus:border-primary focus:outline-none" />
         </label>
         <label className="flex items-center gap-2 text-sm" title="Ca chứa giờ bắt đầu kế hoạch của lệnh (theo cài đặt ca của tuần)">

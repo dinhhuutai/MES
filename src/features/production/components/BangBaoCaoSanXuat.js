@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import Icon from '../../../components/common/Icon';
 import { ngayLocalISO } from '../../../utils/format';
+import NgayInput from '../../../components/common/NgayInput';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // THÀNH PHẦN BẢNG BÁO CÁO SẢN XUẤT — trang *Sản xuất › Báo cáo sản xuất* (tách file 09/10/2026; khối báo cáo trên
@@ -168,7 +169,7 @@ export function ChonNgay({ ngay, setNgay, homNay }) {
         className="flex h-full w-9 items-center justify-center text-ink-soft hover:text-ink">
         <Icon name="chevron-left" size={16} />
       </button>
-      <input type="date" value={ngay} max={homNay}
+      <NgayInput value={ngay} max={homNay}
         onChange={(e) => e.target.value && setNgay(e.target.value)}
         className="h-full border-x border-line bg-transparent px-2 text-sm text-ink outline-none" />
       <button type="button" title="Ngày sau" disabled={ngay >= homNay} onClick={() => setNgay((d) => doiNgay(d, 1))}

@@ -361,9 +361,12 @@ export default function ReadyPage() {
     <div>
       <Toolbar title="Chuẩn bị kỹ thuật — READY" subtitle="Xác nhận film / khuôn / mực trước khi Release"
         search={search} onSearch={setSearch}
-        searchPlaceholder="Tìm code phần, mã hàng, màu/kích vải, kích phim...">
+        searchPlaceholder="Tìm code phần, mã TDTHĐH, mã hàng, màu/kích vải, kích phim...">
+        {/* ⚠ Danh sách quét lấy từ `rows`, mà `rows` bị ô tìm lọc ở server ⇒ còn chữ trong ô tìm là quét phần in
+            khác ra "Không thấy". Mở modal thì bỏ ô tìm (tự tải lại); không có thì tải lại ngầm lấy đợt ERP vừa về. */}
         {permItems.length > 0 && (
-          <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét / tích mã</Button>
+          <Button variant="secondary" icon="scan-line"
+            onClick={() => { if (search) setSearch(''); else refresh(); setScanOpen(true); }}>Quét / tích mã</Button>
         )}
         {permItems.length > 0 && selected.size > 0 && (
           <Button onClick={openBulk}>Xác nhận hàng loạt ({selected.size})</Button>

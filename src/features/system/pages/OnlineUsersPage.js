@@ -10,6 +10,7 @@ import useNow from '../../../hooks/useNow';
 import useSocketReload from '../../../hooks/useSocketReload';
 import { getOnline, getHistory } from '../../../services/presenceService';
 import { ngayLocalISO } from '../../../utils/format';
+import NgayInput from '../../../components/common/NgayInput';
 
 const todayStr = () => ngayLocalISO(new Date());
 const fmtTime = (t) => (t ? new Date(t).toLocaleTimeString('vi-VN') : '—');
@@ -128,9 +129,7 @@ export default function OnlineUsersPage() {
       >
         <div className="mb-4 flex items-center gap-2">
           <label className="text-sm font-medium text-ink">Ngày</label>
-          <input
-            type="date"
-            value={date}
+          <NgayInput value={date}
             onChange={(e) => setDate(e.target.value)}
             className="h-10 rounded-input border border-line px-3 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
           />

@@ -9,6 +9,7 @@ import SearchableSelect from '../../../components/common/SearchableSelect';
 import useToast from '../../../hooks/useToast';
 import { getActivity } from '../../../services/presenceService';
 import { listUserOptions } from '../../../services/userService';
+import NgayInput from '../../../components/common/NgayInput';
 
 const todayStr = () => {
   const d = new Date();
@@ -100,7 +101,7 @@ export default function ActivityLogPage() {
           <div>
             <label className="mb-1 block text-xs font-medium text-ink-soft">Ngày</label>
             <div className="flex items-center gap-1.5">
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
+              <NgayInput value={date} onChange={(e) => setDate(e.target.value)}
                 className="h-10 w-full rounded-input border border-line bg-surface px-3 text-sm" />
               {date && <button type="button" onClick={() => setDate('')} className="text-ink-soft hover:text-danger" aria-label="Bỏ lọc ngày"><Icon name="x" size={14} /></button>}
             </div>

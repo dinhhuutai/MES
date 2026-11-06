@@ -9,6 +9,7 @@ import useToast from '../../../hooks/useToast';
 import useSocketReload from '../../../hooks/useSocketReload';
 import { fmtNum, fmtDateTime, baseMaTem } from '../../../utils/format';
 import { listTinhTrangPhanIn, getTinhTrangGraph } from '../../../services/dashboardService';
+import taiSoDoPdf from '../utils/taiSoDoPdf';
 
 const CL_LABEL = { KHUON: 'Khuôn', FILM: 'Film', MUC: 'Mực', QC_XAC_NHAN: 'QC' };
 const TEM_TONE = {
@@ -708,6 +709,8 @@ export default function TinhTrangTramPage() {
   const [search, setSearch] = useState('');
   const [graph, setGraph] = useState(null);
   const [scanOpen, setScanOpen] = useState(false);
+  const [dangTaiPdf, setDangTaiPdf] = useState(false);
+  const khoiSoDoRef = useRef(null);
   // Deep-link từ nút Quét (bottom nav): ?q=<code phần> → tự điền ô tìm kiếm → hiện sơ đồ.
   const [searchParams] = useSearchParams();
   useEffect(() => { const q = searchParams.get('q'); if (q) setSearch(q); }, [searchParams]);
@@ -795,6 +798,16 @@ export default function TinhTrangTramPage() {
     return () => { alive = false; };
   }, [current?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const taiPdf = async () => {
+    setDangTaiPdf(true);
+    try {
+      await taiSoDoPdf({ khoi: khoiSoDoRef.current, maPhan: graph?.phan_in?.ma_phan, veLaiMuiTen: recomputeArrows });
+      show('Đã tải sơ đồ PDF');
+    } catch (e) {
+      show(e.message || 'Không tạo được file PDF', 'error');
+    } finally { setDangTaiPdf(false); }
+  };
+
   const go = (delta) => setIdx((i) => (list.length ? (i + delta + list.length) % list.length : 0));
   // Quét QR code phần → điền ô tìm kiếm → ra phần in.
   const onScan = (code) => { setScanOpen(false); const c = baseMaTem((code || '').trim()); if (c) setSearch(c); };
@@ -875,6 +888,7 @@ export default function TinhTrangTramPage() {
             className="h-11 w-full rounded-input border border-line bg-surface pl-9 pr-3 text-sm" />
         </div>
         <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét QR code phần</Button>
+        <Button variant="secondary" icon="download" chiXemOk loading={dangTaiPdf} disabled={!graph} onClick={taiPdf}>Tải sơ đồ PDF</Button>
         {list.length > 1 && (
           <div className="flex items-center gap-1.5">
             <button onClick={() => go(-1)} className="rounded-control border border-line px-3 py-2 text-sm hover:bg-surface-muted"><Icon name="chevron-left" size={16} /></button>
@@ -891,7 +905,7 @@ export default function TinhTrangTramPage() {
       ) : !graph ? (
         <div className="card p-12 text-center text-ink-soft">Đang tải...</div>
       ) : (
-        <div className="card space-y-3 p-5">
+        <div ref={khoiSoDoRef} className="card space-y-3 p-5">
           <div className="flex flex-wrap items-center gap-3 rounded-card border border-primary/30 bg-primary-wash px-4 py-3">
             <Icon name="package" size={20} className="text-primary" />
             <div>
@@ -939,7 +953,7 @@ export default function TinhTrangTramPage() {
           {rootItems.length === 0 ? (
             <div className="py-4 text-center text-sm text-ink-soft">Phần in chưa có đợt sản xuất.</div>
           ) : (
-            <div className="overflow-x-auto pb-3">
+            <div data-so-do-cuon className="overflow-x-auto pb-3">
               <div ref={graphWrapRef} className="relative flex items-center" style={{ minWidth: 'min-content' }}>
                 {/* Lớp SVG vẽ mũi tên TRẢ VỀ → KCS tổng (nối 2 ô khác nhánh, theo vị trí DOM thật) */}
                 <svg className="pointer-events-none absolute left-0 top-0 overflow-visible" width={svg.w} height={svg.h} aria-hidden="true">

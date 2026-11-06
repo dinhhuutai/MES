@@ -16,6 +16,7 @@ import ReportDesignerModal from '../components/ReportDesignerModal';
 import exportReportExcel from '../utils/exportReportExcel';
 import { listMyReports, createReport, deleteReport, renderReport } from '../../../services/baoCaoService';
 import { fmtDate, fmtDateTime, ngayLocalISO } from '../../../utils/format';
+import NgayInput from '../../../components/common/NgayInput';
 
 // Giá trị ngày đang lưu trong báo cáo ('HOM_NAY' | 'YYYY-MM-DD') → ngày hiện trên ô chọn.
 const ngayMacDinh = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? v : ngayLocalISO(new Date()));
@@ -91,7 +92,7 @@ export default function MyReportsPage() {
     { key: 'updated_date', header: 'Cập nhật', render: (r) => fmtDate(r.updated_date || r.created_date) },
     // Chỉ báo cáo có khối danh sách THEO NGÀY mới có ô chọn — chọn ngày rồi bấm Xem trước / Excel ngay tại đây.
     { key: 'ngay_loc', header: 'Ngày', render: (r) => (r.co_loc_ngay ? (
-      <input type="date" value={ngayCua(r)} title="Ngày lấy số liệu cho khối danh sách theo ngày (không lưu vào báo cáo)"
+      <NgayInput value={ngayCua(r)} title="Ngày lấy số liệu cho khối danh sách theo ngày (không lưu vào báo cáo)"
         className="h-8 rounded-control border border-line bg-surface px-2 text-base md:text-sm text-ink"
         onClick={(e) => e.stopPropagation()}
         onChange={(e) => { const v = e.target.value; if (v) setNgayChon((m) => ({ ...m, [r.id]: v })); }} />

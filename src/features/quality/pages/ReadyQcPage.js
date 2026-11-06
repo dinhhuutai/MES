@@ -401,9 +401,10 @@ export default function ReadyQcPage() {
     <div>
       <Toolbar title="QC chuẩn bị kỹ thuật" subtitle="Đợt vải mà kỹ thuật đã xác nhận XONG — QC xác nhận THEO TỪNG ĐỢT (xác nhận Khuôn là Film tự đạt theo; hàng gia công II/AD chỉ cần Mực)."
         search={search} onSearch={setSearch}
-        searchPlaceholder="Tìm code phần, mã hàng, màu/kích vải, kích phim...">
-        {/* Làm tươi NGAY khi mở modal quét: phòng trường hợp tab để lâu / mất socket giữa chừng. */}
-        {canQC && <Button variant="secondary" icon="scan-line" onClick={() => { refresh(); setScanOpen(true); }}>Quét / tích mã</Button>}
+        searchPlaceholder="Tìm code phần, mã TDTHĐH, mã hàng, màu/kích vải, kích phim...">
+        {/* Làm tươi NGAY khi mở modal quét: phòng trường hợp tab để lâu / mất socket giữa chừng.
+            ⚠ Danh sách quét lấy từ `rows`, mà `rows` bị ô tìm lọc ở server ⇒ mở modal thì bỏ ô tìm (tự tải lại). */}
+        {canQC && <Button variant="secondary" icon="scan-line" onClick={() => { if (search) setSearch(''); else refresh(); setScanOpen(true); }}>Quét / tích mã</Button>}
         {canQC && selected.size > 0 && (
           <Button loading={batching} onClick={doBatch}>QC xác nhận ({selected.size})</Button>
         )}
