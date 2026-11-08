@@ -54,19 +54,31 @@ const nutChon = (bat) => `min-w-[5.5rem] flex-1 whitespace-nowrap rounded-contro
   bat ? 'border-primary bg-primary-wash text-primary' : 'border-line text-ink-soft hover:border-primary/40'
 }`;
 const toneCa = (ca) => (ca === 'DAI' ? 'warning' : ca === 'HANH_CHINH' ? 'success' : 'info');
+// CA ĐÊM "CA TRƯỚC / CA SAU" (08/11/2026, mig 125) — ca qua nửa đêm (Ca 3 Ngắn 22h–6h · Ca 2 Dài 18h–6h) thuộc ngày nào.
+//   Gương backend `utils/ca.js` (CA_DEM). Hành chính không có ca đêm ⇒ không áp.
+const CA_DEM_OPTIONS = [
+  { v: 'SAU', label: 'Ca sau', title: 'Ca đêm thuộc NGÀY BẮT ĐẦU — ngày 08/11: D1 6h–18h ngày 08 · D2 18h ngày 08 → 6h ngày 09' },
+  { v: 'TRUOC', label: 'Ca trước', title: 'Ca đêm thuộc NGÀY KẾT THÚC — ngày 08/11: D2 18h ngày 07 → 6h ngày 08 · D1 6h–18h ngày 08' },
+];
+const coCaDem = (ca) => ca === 'NGAN' || ca === 'DAI';
 
 // THỪA HƯỞNG TUẦN TRƯỚC (21/10/2026) — GƯƠNG backend `utils/ca.js loaiCaChiTiet` (sửa 1 bên phải sửa bên kia):
 //   tuần chưa cài cho nhóm ⇒ tuần GẦN NHẤT TRƯỚC ĐÓ có cài; chưa từng cài ⇒ mặc định (Ngắn · Khác = Hành chính).
 //   "Có cài cho nhóm": Máy/Bàn/Robot = riêng ⇒ chung · Khác = riêng Khác · '' (chung) = chung.
-// Trả { ca, nguon: 'TUAN' | 'THUA_HUONG' | 'MAC_DINH', nam, tuan }.
+// Trả { ca, dem: 'SAU' | 'TRUOC', nguon: 'TUAN' | 'THUA_HUONG' | 'MAC_DINH', nam, tuan } — `dem` lấy CÙNG dòng với `ca`.
 function caHieuLuc(tuanRows, nam, tuan, nhom = '') {
   const ord = nam * 100 + tuan;
-  const giaTri = (r) => (nhom === NHOM_KHAC ? r.rieng[NHOM_KHAC] : (nhom && r.rieng[nhom]) || r.chung);
+  const khoa = (r) => (nhom === NHOM_KHAC ? NHOM_KHAC : (nhom && r.rieng[nhom] ? nhom : ''));
+  const giaTri = (r) => { const k = khoa(r); return k ? r.rieng[k] : (nhom === NHOM_KHAC ? null : r.chung); };
   const ds = tuanRows.filter((r) => giaTri(r) && r.nam * 100 + r.tuan <= ord)
     .sort((a, b) => (b.nam * 100 + b.tuan) - (a.nam * 100 + a.tuan));
-  if (!ds.length) return { ca: nhom === NHOM_KHAC ? CA_KHAC_MAC_DINH : 'NGAN', nguon: 'MAC_DINH' };
+  if (!ds.length) return { ca: nhom === NHOM_KHAC ? CA_KHAC_MAC_DINH : 'NGAN', dem: 'SAU', nguon: 'MAC_DINH' };
   const r = ds[0];
-  return { ca: giaTri(r), nguon: r.nam === nam && r.tuan === tuan ? 'TUAN' : 'THUA_HUONG', nam: r.nam, tuan: r.tuan };
+  const k = khoa(r);
+  return {
+    ca: giaTri(r), dem: (k ? r.demRieng[k] : r.demChung) === 'TRUOC' ? 'TRUOC' : 'SAU',
+    nguon: r.nam === nam && r.tuan === tuan ? 'TUAN' : 'THUA_HUONG', nam: r.nam, tuan: r.tuan,
+  };
 }
 const nhanNguon = (h) => (h.nguon === 'TUAN' ? 'cài tuần này'
   : h.nguon === 'THUA_HUONG' ? `thừa hưởng tuần ${h.tuan}/${h.nam}` : 'mặc định (chưa từng cài)');
@@ -76,10 +88,10 @@ function gomTheoTuan(rows) {
   const m = new Map();
   rows.forEach((r) => {
     const k = `${r.nam}-${r.tuan}`;
-    if (!m.has(k)) m.set(k, { id: k, nam: r.nam, tuan: r.tuan, chung: null, rieng: {}, ghi_chu: null });
+    if (!m.has(k)) m.set(k, { id: k, nam: r.nam, tuan: r.tuan, chung: null, rieng: {}, demChung: 'SAU', demRieng: {}, ghi_chu: null });
     const g = m.get(k);
-    if (r.loai_chuyen) g.rieng[r.loai_chuyen] = r.loai_ca;
-    else { g.chung = r.loai_ca; g.ghi_chu = r.ghi_chu; }
+    if (r.loai_chuyen) { g.rieng[r.loai_chuyen] = r.loai_ca; g.demRieng[r.loai_chuyen] = r.ca_dem || 'SAU'; }
+    else { g.chung = r.loai_ca; g.demChung = r.ca_dem || 'SAU'; g.ghi_chu = r.ghi_chu; }
     if (!g.ghi_chu && r.ghi_chu) g.ghi_chu = r.ghi_chu;
   });
   return [...m.values()].sort((a, b) => b.nam - a.nam || b.tuan - a.tuan);
@@ -94,6 +106,7 @@ export default function CaiDatPage() {
   const [loading, setLoading] = useState(true);
   const [ngay, setNgay] = useState(todayStr());
   const [loaiCa, setLoaiCa] = useState('NGAN');
+  const [caDem, setCaDem] = useState('SAU');
   const [apCho, setApCho] = useState([]); // [] = tất cả chuyền (CHUNG) · ['MAY', 'BAN'…] = riêng loại chuyền
   const [ghiChu, setGhiChu] = useState('');
   const [saving, setSaving] = useState(false);
@@ -116,8 +129,8 @@ export default function CaiDatPage() {
   const submit = async () => {
     setSaving(true);
     try {
-      await saveCaTuan({ nam: wk.nam, tuan: wk.tuan, loaiCa, ghiChu, loaiChuyen: apCho });
-      show(`Đã lưu ca ${CA_LABEL[loaiCa]} cho ${tenApCho} — tuần ${wk.tuan}/${wk.nam}`);
+      await saveCaTuan({ nam: wk.nam, tuan: wk.tuan, loaiCa, ghiChu, loaiChuyen: apCho, ...(coCaDem(loaiCa) ? { caDem } : {}) });
+      show(`Đã lưu ca ${CA_LABEL[loaiCa]}${coCaDem(loaiCa) && caDem === 'TRUOC' ? ' · ca trước' : ''} cho ${tenApCho} — tuần ${wk.tuan}/${wk.nam}`);
       setGhiChu('');
       load();
     } catch (e) { show(e.message || 'Lưu thất bại', 'error'); } finally { setSaving(false); }
@@ -141,7 +154,10 @@ export default function CaiDatPage() {
   // nói nguồn. Nhóm "Chuyền khác" không theo chung.
   const oHieuLuc = (h, rieng) => (
     <div className="flex flex-col items-start gap-0.5">
-      <Badge tone={rieng ? toneCa(h.ca) : 'default'}>{CA_LABEL[h.ca] || h.ca}</Badge>
+      <span className="flex flex-wrap items-center gap-1">
+        <Badge tone={rieng ? toneCa(h.ca) : 'default'}>{CA_LABEL[h.ca] || h.ca}</Badge>
+        {coCaDem(h.ca) && h.dem === 'TRUOC' && <Badge tone={rieng ? 'danger' : 'default'}>Ca trước</Badge>}
+      </span>
       {!rieng && <span className="text-[11px] text-ink-soft">{h.nguon === 'TUAN' ? 'theo chung' : nhanNguon(h)}</span>}
     </div>
   );
@@ -179,7 +195,9 @@ export default function CaiDatPage() {
           <b> Ngắn</b>. Chuyền Máy / Bàn / Robot cài riêng thì theo cài riêng, không thì theo
           ca <b>chung</b> của tuần. <b>Chuyền khác</b> (Gia công, Máy tròn, Logo, Ép) mặc định <b>Hành chính</b>, không theo
           ca chung — đổi thì chọn "Khác". Lưu cho <b>tất cả chuyền</b> sẽ đưa các cài riêng Máy / Bàn / Robot của tuần
-          đó về cùng loại ca (không đụng "Khác").
+          đó về cùng loại ca (không đụng "Khác"). <b>Ca sau / Ca trước</b>: ca đêm (Ca 3 Ngắn · Ca 2 Dài) tính cho ngày nó
+          bắt đầu (ca sau — như trước giờ) hay ngày nó kết thúc (ca trước) — quyết định mã ngày ca đầu ca khi in tem
+          (vd 20h ngày 07/11: ca sau <b>261107D2</b>, ca trước <b>261108D2</b>) và ngày ca gửi ERP.
         </span>
       </div>
 
@@ -222,6 +240,21 @@ export default function CaiDatPage() {
               </div>
             </Field>
           </div>
+          {coCaDem(loaiCa) && (
+            <Field label={`Ca đêm (${loaiCa === 'DAI' ? 'Ca 2: 18h–6h' : 'Ca 3: 22h–6h'}) tính cho ngày`}>
+              <div className="flex flex-wrap items-center gap-2">
+                {CA_DEM_OPTIONS.map((o) => (
+                  <button key={o.v} type="button" onClick={() => setCaDem(o.v)} title={o.title}
+                    className={`${nutChon(caDem === o.v)} max-w-[10rem]`}>{o.label}</button>
+                ))}
+                <span className="text-xs text-ink-soft">
+                  {caDem === 'TRUOC'
+                    ? `Ngày 08/11: ${loaiCa === 'DAI' ? 'D2 18h ngày 07 → 6h ngày 08, D1 6h–18h ngày 08' : 'C3 22h ngày 07 → 6h ngày 08, C1 · C2 6h–22h ngày 08'}`
+                    : `Ngày 08/11: ${loaiCa === 'DAI' ? 'D1 6h–18h ngày 08, D2 18h ngày 08 → 6h ngày 09' : 'C1 · C2 6h–22h ngày 08, C3 22h ngày 08 → 6h ngày 09'}`}
+                </span>
+              </div>
+            </Field>
+          )}
           <div className="flex justify-end">
             <Button onClick={submit} loading={saving}>Lưu ca {tenApCho} · tuần {wk.tuan}/{wk.nam}</Button>
           </div>
@@ -237,7 +270,10 @@ export default function CaiDatPage() {
             return (
               <div key={l.v} className="rounded-control border border-line p-3">
                 <div className="mb-1 text-xs font-semibold text-ink-soft">{l.cot || l.label}</div>
-                <Badge tone={toneCa(h.ca)}>{CA_LABEL[h.ca] || h.ca}</Badge>
+                <span className="flex flex-wrap items-center gap-1">
+                  <Badge tone={toneCa(h.ca)}>{CA_LABEL[h.ca] || h.ca}</Badge>
+                  {coCaDem(h.ca) && <Badge tone={h.dem === 'TRUOC' ? 'danger' : 'default'}>{h.dem === 'TRUOC' ? 'Ca trước' : 'Ca sau'}</Badge>}
+                </span>
                 <div className={`mt-1 text-[11px] ${h.nguon === 'MAC_DINH' ? 'text-warning' : 'text-ink-soft'}`}>{nhanNguon(h)}</div>
               </div>
             );
@@ -247,7 +283,7 @@ export default function CaiDatPage() {
 
       <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-soft">Các tuần đã cài</div>
       <DataTable columns={columns} rows={tuanRows} loading={loading} rowKey="id"
-        onRowClick={(r) => { setLoaiCa(r.chung || 'NGAN'); setApCho([]); setGhiChu(r.ghi_chu || ''); setNgay(ngayTrongTuan(r.nam, r.tuan)); }}
+        onRowClick={(r) => { setLoaiCa(r.chung || 'NGAN'); setCaDem(r.demChung || 'SAU'); setApCho([]); setGhiChu(r.ghi_chu || ''); setNgay(ngayTrongTuan(r.nam, r.tuan)); }}
         emptyText="Chưa cài ca cho tuần nào (mặc định Ngắn)" />
 
       <Toast toast={toast} />

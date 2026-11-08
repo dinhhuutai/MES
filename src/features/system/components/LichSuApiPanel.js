@@ -79,7 +79,9 @@ function tomTatLuot(r) {
 }
 
 // Ô "Kết quả": kết quả của lần gửi MỚI NHẤT + dòng nhỏ "lần thứ mấy thành công / bao nhiêu lần lỗi".
-function KetQuaLuot({ r }) {
+// `hang` (06/11/2026) = hàng đợi tự gửi lại của kênh (backend `tu_gui_lai`: { co, toi_da, chay }) ⇒ dòng lỗi ghi thêm
+//   "chờ tự gửi lại (lần k/5)" / "đã gửi đủ 5 lần — gửi lại bằng tay" / lý do hàng đợi bỏ qua.
+function KetQuaLuot({ r, hang }) {
   const t = tomTatLuot(r);
   const nhieuGui = t.ds.length > 1;
   let ghi = '';
@@ -89,12 +91,20 @@ function KetQuaLuot({ r }) {
   } else {
     ghi = r.co_thanh_cong ? 'lần gửi lại mới nhất lỗi — trước đó đã thành công' : `${t.soLoi} lần lỗi${nhieuGui ? ` · ${t.ds.length} lần gửi` : ''}`;
   }
+  let hangDoi = '';
+  if (!r.thanh_cong && hang && hang.co && /^\d+$/.test(String(r.id_mes || ''))) {
+    const n = Number(r.so_lan_gui) || 1;
+    if (r.tu_gui_lai_bo_qua) hangDoi = `không tự gửi lại: ${r.tu_gui_lai_bo_qua}`;
+    else if (n >= hang.toi_da) hangDoi = `đã gửi đủ ${hang.toi_da} lần — gửi lại bằng tay`;
+    else if (hang.chay) hangDoi = `chờ tự gửi lại (lần ${n + 1}/${hang.toi_da})`;
+  }
   return (
     <div className="leading-tight">
       {r.thanh_cong
         ? <Badge tone="success">Thành công</Badge>
         : r.co_thanh_cong ? <Badge tone="warning">Lỗi</Badge> : <Badge tone="danger">Lỗi</Badge>}
       {ghi && <div className={`mt-0.5 whitespace-nowrap text-[11px] ${r.thanh_cong ? 'text-ink-soft' : 'text-danger'}`}>{ghi}</div>}
+      {hangDoi && <div className="mt-0.5 max-w-[220px] text-[11px] text-ink-soft" title={hangDoi}>{hangDoi}</div>}
     </div>
   );
 }
@@ -111,7 +121,10 @@ function CacLanGui({ r }) {
           <li key={g.id || i}>
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-semibold text-ink">Lần gửi {i + 1}</span>
-              <span className="text-ink-soft">{fmtDt(g.thoi_gian)}{g.nguoi ? ` · ${g.nguoi}` : ''}{g.sua_tay ? ' · sửa tay' : ''}</span>
+              <span className="text-ink-soft">
+                {fmtDt(g.thoi_gian)}{g.nguoi ? ` · ${g.nguoi}` : ''}{g.sua_tay ? ' · sửa tay' : ''}
+                {g.tu_gui_lai ? ' · hệ thống tự gửi lại' : ''}
+              </span>
               {g.thanh_cong
                 ? <Badge tone="success">Thành công{g.so_lan_thu ? ` ở lần thử ${g.so_lan_thu}` : ''}</Badge>
                 : <Badge tone="danger">Lỗi{g.so_lan_thu ? ` sau ${g.so_lan_thu} lần thử` : ''}</Badge>}
@@ -181,6 +194,7 @@ export default function LichSuApiPanel({ open, onClose, ma, ten, laGhiInTem }) {
   const [loc, setLoc] = useState({});           // lọc theo trường (26/10/2026) — `LOC_LICH_SU` (+ `soLuong` 06/11/2026)
   const [moLoc, setMoLoc] = useState(false);
   const [ketQua, setKetQua] = useState('');     // 06/11/2026 — `KET_QUA_LOC`
+  const [hang, setHang] = useState(null);       // hàng đợi tự gửi lại của kênh (06/11/2026)
   const { toast, show } = useToast();
   const { can } = usePermissions();
   const guiLaiDuoc = CO_GUI_LAI.has(ma) && can('WORKFLOW_MANAGE');
@@ -205,6 +219,7 @@ export default function LichSuApiPanel({ open, onClose, ma, ten, laGhiInTem }) {
       });
       setRows(res.data.items || []);
       setMeta(res.data.meta || { page: 1, totalPages: 1, total: 0 });
+      setHang(res.data.tu_gui_lai || null);
     } catch {
       setRows([]);
     } finally { setLoading(false); }
@@ -234,7 +249,7 @@ export default function LichSuApiPanel({ open, onClose, ma, ten, laGhiInTem }) {
     {
       key: 'thanh_cong',
       header: 'Kết quả',
-      render: (r) => <KetQuaLuot r={r} />,
+      render: (r) => <KetQuaLuot r={r} hang={hang} />,
     },
     // ID KẾT NỐI đứng ngay sau kết quả — thứ người dùng cần nhất khi đối soát 2 bên (27/09/2026: mọi API
     //   đều có — IDMES · ID phiếu giao · mã ERP cấp · ID lượt kéo).
@@ -372,7 +387,7 @@ export default function LichSuApiPanel({ open, onClose, ma, ten, laGhiInTem }) {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 <h4 className="text-sm font-semibold text-ink">Chi tiết lượt gọi</h4>
-                <KetQuaLuot r={chon} />
+                <KetQuaLuot r={chon} hang={hang} />
                 <span className="text-xs text-ink-soft">{fmtDt(chon.thoi_gian)}</span>
               </div>
               <button type="button" onClick={() => setChon(null)} className="text-ink-soft hover:text-danger">

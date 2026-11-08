@@ -17,6 +17,7 @@ import NgayInput from '../../../components/common/NgayInput';
 const TRUONG_LOC = [
   { key: 'ma_phan', label: 'Code phần' },
   { key: 'ten_khach_hang', label: 'Khách hàng' },
+  { key: 'ma_don_hang', label: 'Đơn hàng' },
   { key: 'ma_hang', label: 'Mã hàng' },
   { key: 'mau_vai', label: 'Màu vải' },
   { key: 'kich_vai', label: 'Kích vải' },
@@ -111,6 +112,7 @@ export default function GiaCongHistoryPanel({ open, onClose, onPrint, onChanged 
     { key: 'ma_lenh_san_xuat', header: 'Mã đợt SX', render: (r) => <Badge tone="info">{r.ma_lenh_san_xuat}</Badge> },
     { key: 'ma_phan', header: 'Code phần', className: 'font-medium text-ink', render: (r) => r.ma_phan || '—' },
     { key: 'ten_khach_hang', header: 'Khách hàng', render: (r) => r.ten_khach_hang || '—' },
+    { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
     { key: 'mau_kich', header: 'Màu · Kích', render: (r) => (
       <div className="leading-tight">

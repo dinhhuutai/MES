@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef, useLayoutEffect } from 'react';
+import { useEffect, useState, useCallback, useRef, useLayoutEffect, useMemo, createContext, useContext } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import Icon from '../../../components/common/Icon';
 import Badge from '../../../components/common/Badge';
@@ -7,7 +7,7 @@ import Toast from '../../../components/common/Toast';
 import QrScanner from '../../../components/common/QrScanner';
 import useToast from '../../../hooks/useToast';
 import useSocketReload from '../../../hooks/useSocketReload';
-import { fmtNum, fmtDateTime, baseMaTem } from '../../../utils/format';
+import { fmtNum, fmtDateTime, maTemUngVien } from '../../../utils/format';
 import { listTinhTrangPhanIn, getTinhTrangGraph } from '../../../services/dashboardService';
 import taiSoDoPdf from '../utils/taiSoDoPdf';
 
@@ -477,12 +477,25 @@ function VaoThangNode({ dots, sx }) {
   );
 }
 
+// MÃ TEM ĐANG TÌM (08/11/2026 — ô tìm nhận mã tem): danh sách `ma_tem` ứng viên của từ khóa (nhãn 15/16 ⇒ tem gốc, tem 17 /
+//   13 mã riêng — `maTemUngVien`). Tem khớp (hoặc tem 17 của nó khớp) được viền xanh + nhãn "Tem đang tìm" + tự cuộn tới.
+const TemTimContext = createContext([]);
+const khopTemTim = (tem, ds) => !!tem && ds.length > 0
+  && [tem.ma_tem, ...(tem.tem_con || []).map((c) => c.ma_tem)].some((m) => m && ds.includes(String(m).toUpperCase()));
+
 // Nút "Sản xuất · Chờ khô" (kèm thời gian phơi).
 function TemNode({ tem }) {
   const khoLabel = tem.trang_thai === 'DANG_PHOI' ? 'Đang phơi' : tem.trang_thai === 'IN' ? 'Mới in' : 'Đã khô';
   const dur = mins(tem.tg_bd_phoi, tem.tg_kt_phoi);
+  const khop = khopTemTim(tem, useContext(TemTimContext));
+  const oRef = useRef(null);
+  useEffect(() => {
+    if (khop && oRef.current) oRef.current.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
+  }, [khop]);
   return (
+    <div ref={oRef} className={khop ? 'rounded-xl ring-2 ring-primary ring-offset-2 ring-offset-surface' : undefined}>
     <Node title="Sản xuất · Chờ khô" tone="amber" w={168}>
+      {khop && <div className="mb-1"><Badge tone="info">Tem đang tìm</Badge></div>}
       <div className="mb-1 flex items-center gap-1.5">
         <span className="font-mono text-[11px] font-bold text-ink">{tem.ma_tem}</span>
         <Badge tone={TEM_TONE[tem.trang_thai] || 'default'}>{khoLabel}</Badge>
@@ -495,6 +508,7 @@ function TemNode({ tem }) {
         </div>
       )}
     </Node>
+    </div>
   );
 }
 // KCS node — kèm khối "trả về" (nếu OQC đã trả tem về kiểm lại) đặt ngay dưới, có mũi tên quay về + kết quả OQC.
@@ -809,8 +823,10 @@ export default function TinhTrangTramPage() {
   };
 
   const go = (delta) => setIdx((i) => (list.length ? (i + delta + list.length) % list.length : 0));
-  // Quét QR code phần → điền ô tìm kiếm → ra phần in.
-  const onScan = (code) => { setScanOpen(false); const c = baseMaTem((code || '').trim()); if (c) setSearch(c); };
+  // Quét QR code phần / mã vạch tem → điền ô tìm kiếm → ra phần in. Giữ NGUYÊN mã quét (backend tự suy nhãn 16 ⇒ tem
+  //   gốc 15); bản cũ đổi mọi mã ERP sang `15…` nên quét tem 17 / 13 (mã riêng) ra mã của tem khác.
+  const onScan = (code) => { setScanOpen(false); const c = String(code || '').trim(); if (c) setSearch(c); };
+  const temTim = useMemo(() => (search.trim() ? maTemUngVien(search).map((x) => x.toUpperCase()) : []), [search]);
 
   const vaoThang = graph ? graph.vao_thang : null;
   const traVe = graph ? graph.tra_ve || [] : [];
@@ -884,10 +900,10 @@ export default function TinhTrangTramPage() {
         <div className="relative flex-1 min-w-[220px]">
           <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" />
           <input value={search} onChange={(e) => setSearch(e.target.value)}
-            placeholder="Nhập code phần / đơn / màu / kích vải / kích phim..."
+            placeholder="Nhập code phần / mã tem / đơn / màu / kích vải / kích phim..."
             className="h-11 w-full rounded-input border border-line bg-surface pl-9 pr-3 text-sm" />
         </div>
-        <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét QR code phần</Button>
+        <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét code phần / tem</Button>
         <Button variant="secondary" icon="download" chiXemOk loading={dangTaiPdf} disabled={!graph} onClick={taiPdf}>Tải sơ đồ PDF</Button>
         {list.length > 1 && (
           <div className="flex items-center gap-1.5">
@@ -900,11 +916,12 @@ export default function TinhTrangTramPage() {
 
       {!current ? (
         <div className="card p-12 text-center text-ink-soft">
-          {search.trim() ? `Không tìm thấy phần in khớp "${search.trim()}".` : 'Nhập code phần hoặc quét QR để xem sơ đồ.'}
+          {search.trim() ? `Không tìm thấy phần in / tem khớp "${search.trim()}".` : 'Nhập code phần / mã tem hoặc quét để xem sơ đồ.'}
         </div>
       ) : !graph ? (
         <div className="card p-12 text-center text-ink-soft">Đang tải...</div>
       ) : (
+        <TemTimContext.Provider value={temTim}>
         <div ref={khoiSoDoRef} className="card space-y-3 p-5">
           <div className="flex flex-wrap items-center gap-3 rounded-card border border-primary/30 bg-primary-wash px-4 py-3">
             <Icon name="package" size={20} className="text-primary" />
@@ -982,9 +999,10 @@ export default function TinhTrangTramPage() {
             </div>
           )}
         </div>
+        </TemTimContext.Provider>
       )}
 
-      <QrScanner open={scanOpen} onClose={() => setScanOpen(false)} onResult={onScan} title="Quét QR code phần" />
+      <QrScanner open={scanOpen} onClose={() => setScanOpen(false)} onResult={onScan} title="Quét QR code phần / mã vạch tem" />
       <Toast toast={toast} />
     </div>
   );

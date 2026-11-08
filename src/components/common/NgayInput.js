@@ -133,7 +133,11 @@ export default function NgayInput({
   const lopO = className.split(/\s+/).filter((c) => c !== 'w-auto').join(' ');
 
   return (
-    <div ref={khung} className={`relative ${tran ? 'block w-full' : 'inline-block w-[9.5rem]'}`}>
+    // ⚠ Chặn click nổi lên (08/11/2026 — người dùng: "Báo cáo của tôi, bấm đổi ngày thì bị bấm vào báo cáo luôn"): ô ngày
+    //   + lịch nổi nằm TRONG dòng bảng (`DataTable onRowClick`) / thẻ có onClick ⇒ chọn ngày trên lịch là mở luôn dòng đó.
+    //   Lịch không portal (xem đầu file) nên phải chặn ở đây; prop `onClick` của trang (bản ô gốc) bị bỏ qua.
+    <div ref={khung} onClick={(e) => e.stopPropagation()}
+      className={`relative ${tran ? 'block w-full' : 'inline-block w-[9.5rem]'}`}>
       <Icon name="calendar-days" size={15} className="pointer-events-none absolute left-2.5 top-1/2 z-[1] -translate-y-1/2 text-ink-soft" />
       <input
         ref={oNhap} type="text" inputMode="numeric" autoComplete="off" value={chu} id={id} name={name} title={title}

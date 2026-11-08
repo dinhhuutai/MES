@@ -1,293 +1,172 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import Modal from '../../../components/common/Modal';
-import Badge from '../../../components/common/Badge';
-import Button from '../../../components/common/Button';
-import Icon from '../../../components/common/Icon';
+import { createPortal } from 'react-dom';
 import Toast from '../../../components/common/Toast';
-import { Textarea } from '../../../components/common/controls';
+import Spinner from '../../../components/common/Spinner';
 import useToast from '../../../hooks/useToast';
 import useNow from '../../../hooks/useNow';
-import usePermissions from '../../../hooks/usePermissions';
-import { getMonitor, stopLine, resumeLine } from '../../../services/productionService';
+import useSocketReload from '../../../hooks/useSocketReload';
+import { getMonitor } from '../../../services/productionService';
 import { LOAI_TABS, hopChipChuyen as hopChip, nhanChip, demChip } from '../../../utils/khuChuyen';
 import ChipTabs from '../../../components/common/ChipTabs';
+import { gomTheoChuyen } from '../utils/theoDoiChuyen';
 
-const ROTATE_MS = 30000;
-// Chip lọc theo LOẠI CHUYỀN + KHU chuyền Bàn — nguồn chung `utils/khuChuyen.js`
-// (dùng chung với "Test Run - QA" và "Xác nhận chạy"; sửa 1 chỗ, 3 màn cùng đổi).
+// ─────────────────────────────────────────────────────────────────────────────
+// THEO DÕI CHUYỀN ĐANG CHẠY — BẢNG THẺ (08/11/2026, thiết kế lại theo yêu cầu người dùng: "ít thông tin nhưng nhìn nhanh
+// vào là biết chuyền đang chạy phần in nào, đã sản xuất bao nhiêu, tiến độ ra sao, theo tiến độ thì khi nào xong, số
+// lượng kế hoạch và thực tế, kế hoạch tiếp theo là mã phần in nào"). Bản cũ: 1 chuyền / màn, tự xoay vòng 30 s + 4 thẻ
+// chỉ số + nút Dừng (ngừng chuyền vẫn làm ở sidebar Sản xuất). Nay MỌI chuyền đang chạy cùng lúc, 1 thẻ / chuyền.
+// Luật số: hàm thuần `utils/theoDoiChuyen.js gomTheoChuyen`. Tự tải lại 10 s + socket `production:updated` (tải ngầm).
+// `khe`: phần tử ở tiêu đề modal để đặt dải chip loại chuyền / khu (portal) — nội dung rộng ra.
+// ─────────────────────────────────────────────────────────────────────────────
+
 const nf = (n) => Number(n || 0).toLocaleString('vi-VN');
 const pad = (n) => String(n).padStart(2, '0');
-const hhmm = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-const oneDecimal = (n) => (Math.round(n * 10) / 10).toLocaleString('vi-VN');
-const dateLabel = (d) => `T${d.getDay() === 0 ? 'CN' : d.getDay() + 1}, ${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear()}`;
-const fmtDMY = (d) => (d ? `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}` : '—');
-const fmtDMHM = (d) => (d ? `${pad(d.getDate())}/${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}` : '—');
+const gio = (t) => { const d = new Date(t); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+// Giờ kèm ngày khi KHÁC hôm nay ("07:30 · 09/11").
+const gioNgay = (t, nowMs) => {
+  const d = new Date(t); const n = new Date(nowMs);
+  const cungNgay = d.toDateString() === n.toDateString();
+  return cungNgay ? gio(t) : `${gio(t)} · ${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
+};
+const khoangPhut = (p) => {
+  const a = Math.abs(p);
+  if (a < 60) return `${a}′`;
+  const h = Math.floor(a / 60); const m = a % 60;
+  return m ? `${h}h${pad(m)}` : `${h}h`;
+};
 
-// ⚠⚠ ĐẶT Ở MỨC MODULE, KHÔNG lồng trong thân trang: trang này dùng `useNow(1000)` nên re-render MỖI
-// GIÂY; component định nghĩa lồng sẽ là một TYPE MỚI mỗi lần render ⇒ React unmount + mount lại toàn
-// bộ thẻ mỗi giây (chớp nội dung, và nếu bên trong có ô nhập thì mất focus) — bẫy §9 CLAUDE.md.
-const Card = ({ label, children }) => (
-  <div className="rounded-card border border-line bg-surface-muted/50 p-5">
-    <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-soft">{label}</div>
-    {children}
-  </div>
-);
+// ⚠ Khai ở MỨC MODULE (trang re-render theo `useNow`) — bẫy component lồng §9 CLAUDE.md.
+function TheChuyen({ c, nowMs }) {
+  const tre = c.tre_phut != null && c.tre_phut > 0;
+  const du = c.con_lai <= 0;
+  const vien = c.dang_ngung ? 'border-danger ring-1 ring-danger/40' : tre ? 'border-warning' : 'border-line';
+  const thanh = c.dang_ngung ? 'bg-danger' : du ? 'bg-success' : tre ? 'bg-warning' : 'bg-primary';
+  const p0 = c.phan[0];
+  return (
+    <div className={`flex flex-col rounded-card border bg-surface p-4 shadow-sm ${vien}`}>
+      {/* Chuyền + trạng thái */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-baseline gap-2">
+          <span className="text-2xl font-extrabold text-ink">{c.ma_chuyen}</span>
+          {c.ten_loai_chuyen && <span className="truncate text-xs text-ink-soft">{c.ten_loai_chuyen}</span>}
+        </div>
+        <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+          c.dang_ngung ? 'bg-danger/10 text-danger' : 'bg-success/10 text-success'}`}>
+          <span className={`h-2 w-2 rounded-full ${c.dang_ngung ? 'bg-danger' : 'animate-pulse bg-success'}`} />
+          {c.dang_ngung ? 'Đang ngừng' : 'Đang chạy'}
+        </span>
+      </div>
 
-export default function TheoDoiChuyenPage() {
+      {/* Phần in đang chạy */}
+      <div className="mt-2 min-h-[2.75rem]">
+        <div className="truncate font-mono text-[15px] font-bold text-primary" title={c.phan.map((p) => p.ma_phan).join(', ')}>
+          {p0 ? p0.ma_phan : '—'}
+          {c.phan.length > 1 && <span className="ml-1.5 font-sans text-xs font-semibold text-ink-soft">+{c.phan.length - 1} phần</span>}
+        </div>
+        <div className="truncate text-xs text-ink-soft">
+          {p0 ? [p0.ten_khach_hang, p0.ma_hang, p0.mau_vai].filter(Boolean).join(' · ') : ''}
+        </div>
+      </div>
+
+      {/* Thực tế / Kế hoạch + thanh tiến độ */}
+      <div className="mt-2 flex items-end justify-between gap-2">
+        <div className="leading-none">
+          <span className="text-3xl font-extrabold tabular-nums text-ink">{nf(c.tt)}</span>
+          <span className="text-base font-semibold tabular-nums text-ink-soft"> / {nf(c.kh)}</span>
+        </div>
+        <div className={`text-xl font-bold tabular-nums ${du ? 'text-success' : 'text-ink'}`}>
+          {c.pt == null ? '—' : `${Math.round(c.pt)}%`}
+        </div>
+      </div>
+      <div className="mt-1 flex justify-between text-[11px] text-ink-soft">
+        <span>Thực tế / Kế hoạch (pcs)</span>
+        <span>{du ? 'Đủ số lượng' : `còn ${nf(c.con_lai)}`}</span>
+      </div>
+      <div className="mt-1.5 h-2.5 overflow-hidden rounded-full bg-surface-muted">
+        <div className={`h-full rounded-full transition-all ${thanh}`} style={{ width: `${Math.min(100, c.pt || 0)}%` }} />
+      </div>
+
+      {/* Dự kiến xong theo tốc độ */}
+      <div className="mt-3 flex items-center justify-between gap-2 rounded-control bg-surface-muted/60 px-3 py-2">
+        <div className="leading-tight">
+          <div className="text-[11px] text-ink-soft">Dự kiến xong</div>
+          <div className="text-lg font-bold tabular-nums text-ink">
+            {du ? 'Đã đủ SL' : c.xong_ms ? gioNgay(c.xong_ms, nowMs) : 'Chưa ước tính'}
+          </div>
+        </div>
+        <div className="text-right leading-tight">
+          {c.tre_phut != null && !du ? (
+            <div className={`text-sm font-semibold ${tre ? 'text-warning' : 'text-success'}`}>
+              {tre ? `Trễ ${khoangPhut(c.tre_phut)}` : 'Đúng tiến độ'}
+            </div>
+          ) : null}
+          <div className="text-[11px] text-ink-soft">
+            {c.kh_xong_ms ? `KH xong ${gioNgay(c.kh_xong_ms, nowMs)}` : 'Chưa có giờ KH'}
+            {c.toc_do > 0 ? ` · ${nf(c.toc_do)} pcs/giờ` : ''}
+          </div>
+        </div>
+      </div>
+
+      {/* Kế hoạch tiếp theo */}
+      <div className="mt-2 flex items-center gap-2 border-t border-line/70 pt-2 text-xs">
+        <span className="shrink-0 font-semibold uppercase tracking-wide text-ink-soft">Tiếp theo</span>
+        {c.tiep_theo ? (
+          <span className="min-w-0 truncate" title={c.tiep_theo.ma_lenh_san_xuat}>
+            <b className="font-mono text-[13px] text-ink">{c.tiep_theo.ma_phan || c.tiep_theo.ma_lenh_san_xuat}</b>
+            <span className="text-ink-soft"> · {nf(c.tiep_theo.target)} pcs{c.tiep_theo.tg_bd_kh ? ` · ${gioNgay(c.tiep_theo.tg_bd_kh, nowMs)}` : ''}</span>
+            {c.so_cho > 1 && <span className="text-ink-soft"> · còn {c.so_cho - 1} lệnh chờ</span>}
+          </span>
+        ) : <span className="text-ink-soft">Chưa có kế hoạch</span>}
+      </div>
+    </div>
+  );
+}
+
+export default function TheoDoiChuyenPage({ khe = null }) {
   const { toast, show } = useToast();
-  const { can } = usePermissions();
-  const canRun = can('PROD_RUN');
-  const nowMs = useNow(1000);
-  const now = new Date(nowMs);
-
-  const [data, setData] = useState({ running: [], queue: [] });
-  const [loading, setLoading] = useState(true);
-  const [idx, setIdx] = useState(0);
-  const [auto, setAuto] = useState(true);
-  const [stopFor, setStopFor] = useState(null);
-  const [stopReason, setStopReason] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [loai, setLoai] = useState(''); // loại chuyền đang lọc ('' = tất cả)
+  const nowMs = useNow(30000);
+  const [data, setData] = useState(null);
+  const [loai, setLoai] = useState(''); // chip loại chuyền / khu ('' = tất cả)
 
   const load = useCallback(async () => {
-    try {
-      const res = await getMonitor();
-      setData(res.data);
-    } catch (e) {
-      show(e.message || 'Lỗi tải', 'error');
-    } finally {
-      setLoading(false);
-    }
+    try { const res = await getMonitor(); setData(res.data); }
+    catch (e) { show(e.message || 'Lỗi tải', 'error'); }
   }, [show]);
+  useEffect(() => { load(); const t = setInterval(load, 10000); return () => clearInterval(t); }, [load]);
+  useSocketReload(['production:updated'], load, 1500);
 
-  useEffect(() => {
-    load();
-    const t = setInterval(load, 10000);
-    return () => clearInterval(t);
-  }, [load]);
+  const tatCa = useMemo(() => gomTheoChuyen(data?.running || [], data?.queue || [], nowMs), [data, nowMs]);
+  const dem = useMemo(() => demChip(tatCa), [tatCa]);
+  const ds = useMemo(() => (loai ? tatCa.filter((c) => hopChip(c, loai)) : tatCa), [tatCa, loai]);
+  const soNgung = ds.filter((c) => c.dang_ngung).length;
+  const soTre = ds.filter((c) => c.tre_phut != null && c.tre_phut > 0 && c.con_lai > 0).length;
 
-  const allRunning = useMemo(() => data.running || [], [data.running]);
-  // Đếm số chuyền đang chạy theo từng chip (kể cả chip khu) — cho badge trên toggle.
-  const countByLoai = useMemo(() => demChip(allRunning), [allRunning]);
-  const running = useMemo(
-    () => (loai ? allRunning.filter((x) => hopChip(x, loai)) : allRunning),
-    [allRunning, loai]
+  const dauTrang = (
+    <div className="flex min-w-0 max-w-full flex-wrap items-center gap-x-3 gap-y-1">
+      {/* Chip XUỐNG DÒNG trong tiêu đề (không cuộn ngang — bản cuộn hiện 2 thanh cuộn chồng nhau). */}
+      <div className="min-w-0 [&>div]:!mx-0 [&>div]:!mb-0 [&>div]:!flex-wrap [&>div]:!overflow-visible [&>div]:!px-0 [&>div]:!pb-0">
+        <ChipTabs gon tabs={LOAI_TABS} value={loai} counts={{ ...dem, '': tatCa.length }} onChange={setLoai} />
+      </div>
+      <span className="shrink-0 text-xs font-normal text-ink-soft">
+        {ds.length} chuyền{soNgung ? ` · ${soNgung} ngừng` : ''}{soTre ? ` · ${soTre} trễ tiến độ` : ''}
+      </span>
+    </div>
   );
-  const count = running.length;
-  const cur = count ? idx % count : 0;
-
-  useEffect(() => {
-    if (!auto || count <= 1) return undefined;
-    const t = setInterval(() => setIdx((i) => (i + 1) % count), ROTATE_MS);
-    return () => clearInterval(t);
-  }, [auto, count]);
-
-  const r = count ? running[cur] : null;
-  const nextList = r ? (data.queue || []).filter((q) => q.ma_chuyen === r.ma_chuyen) : [];
-  const next = nextList[0] || null;
-
-  const target = Number(r?.target) || 0;
-  const printed = Number(r?.printed) || 0;
-  const remaining = Math.max(0, target - printed);
-  const pct = target ? Math.min(100, (printed / target) * 100) : 0;
-  const ngungPhut = Number(r?.ngung_phut) || 0;
-  const elapsedMin = r?.tg_bd ? Math.max(0, (nowMs - new Date(r.tg_bd).getTime()) / 60000 - ngungPhut) : 0;
-  const speed = elapsedMin > 0 ? Math.round(printed / (elapsedMin / 60)) : 0;
-  const dinhMuc = r?.dinh_muc_gio ? Number(r.dinh_muc_gio) : null;
-  const oee = dinhMuc ? (speed / dinhMuc) * 100 : null;
-  const etc = (speed > 0 && remaining > 0) ? new Date(nowMs + (remaining / speed) * 3600 * 1000) : null;
-
-  // Dự phóng thời điểm GIAO XONG = xong SX (etc) + tổng SLA các trạm sau (chờ khô/KCS/OQC/hoàn tất).
-  // So với HẠN GIAO → cảnh báo: trễ hạn (đỏ) / đúng ngày sát nút (vàng).
-  const slaSauSx = Number(data.sla_sau_sx_phut) || 0;
-  const hanGiao = r?.han_giao_hang ? new Date(r.han_giao_hang) : null;
-  const prodFinish = r ? (remaining <= 0 ? now : etc) : null; // null nếu chưa ước tính được (tốc độ 0)
-  const projected = prodFinish ? new Date(prodFinish.getTime() + slaSauSx * 60000) : null;
-  const dayStart = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  const dayDiff = (projected && hanGiao) ? Math.round((dayStart(projected) - dayStart(hanGiao)) / 86400000) : null;
-  const risk = dayDiff == null ? null : dayDiff > 0 ? 'red' : dayDiff === 0 ? 'yellow' : null;
-
-  const go = (n) => setIdx((i) => ((i + n) % count + count) % count);
-
-  const doResume = async () => {
-    setBusy(true);
-    try { await resumeLine(r.phieu_id); show('Chuyền hoạt động lại'); await load(); }
-    catch (e) { show(e.message || 'Thất bại', 'error'); }
-    finally { setBusy(false); }
-  };
-  const doStop = async () => {
-    if (!stopReason.trim()) { show('Nhập lý do ngừng', 'error'); return; }
-    setBusy(true);
-    try { await stopLine(stopFor, stopReason.trim()); show('Đã ngừng chuyền'); setStopFor(null); setStopReason(''); await load(); }
-    catch (e) { show(e.message || 'Thất bại', 'error'); }
-    finally { setBusy(false); }
-  };
 
   return (
     <div>
-      {/* Toggle LOẠI CHUYỀN + KHU BÀN — lọc danh sách chuyền đang chạy */}
-      <ChipTabs tabs={LOAI_TABS} value={loai} counts={{ ...countByLoai, '': allRunning.length }}
-        onChange={(v) => { setLoai(v); setIdx(0); }} />
-
-      <div className={`card p-6 sm:p-7 ${risk === 'red' ? 'ring-2 ring-danger' : risk === 'yellow' ? 'ring-2 ring-warning' : ''}`}>
-        {/* Top bar */}
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            {count > 0 ? (
-              <select value={cur} onChange={(e) => setIdx(Number(e.target.value))}
-                className="h-10 rounded-input border border-line bg-surface px-3 text-sm font-semibold text-ink outline-none focus:border-primary focus:ring-4 focus:ring-primary/10">
-                {running.map((x, i) => <option key={x.phieu_id} value={i}>{x.ma_chuyen} · {x.ten_chuyen}</option>)}
-              </select>
-            ) : (
-              <span className="text-sm text-ink-soft">
-                Không có chuyền đang chạy{loai ? ` — loại "${nhanChip(loai)}"` : ''}
-              </span>
-            )}
-            {r && (r.dang_ngung ? <Badge tone="danger">● Đang ngừng</Badge> : <Badge tone="success">● Đang chạy</Badge>)}
-            {r?.ten_loai_chuyen && <Badge tone="default">{r.ten_loai_chuyen}</Badge>}
-          </div>
-          <div className="flex items-center gap-4">
-            {count > 1 && (
-              <div className="flex items-center gap-1">
-                {running.map((x, i) => <span key={x.phieu_id} className={`h-1.5 rounded-full transition-all ${i === cur ? 'w-6 bg-primary' : 'w-3 bg-line'}`} />)}
-              </div>
-            )}
-            <div className="text-right leading-tight">
-              <div className="font-mono text-2xl font-bold text-ink tabular-nums">{hhmm(now)}</div>
-              <div className="text-[11px] text-ink-soft">{dateLabel(now)}</div>
-            </div>
-          </div>
+      {khe ? createPortal(dauTrang, khe) : <div className="mb-3">{dauTrang}</div>}
+      {!data ? (
+        <div className="flex justify-center py-16"><Spinner size={28} /></div>
+      ) : !ds.length ? (
+        <div className="py-16 text-center text-ink-soft">
+          {loai ? `Không có chuyền "${nhanChip(loai)}" nào đang chạy` : 'Không có chuyền nào đang chạy'}
         </div>
-
-        {loading ? (
-          <div className="py-16 text-center text-ink-soft">Đang tải...</div>
-        ) : !r ? (
-          <div className="py-16 text-center text-ink-soft">
-            {loai
-              ? `Không có chuyền loại "${nhanChip(loai)}" nào đang chạy`
-              : 'Không có chuyền nào đang chạy'}
-          </div>
-        ) : (
-          <>
-            <div className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-ink-soft">Đang sản xuất</div>
-
-            {/* Cảnh báo tiến độ giao hàng */}
-            {risk && (
-              <div className={`mb-4 flex flex-wrap items-center gap-2 rounded-control border px-3 py-2 text-sm font-medium ${
-                risk === 'red'
-                  ? 'border-danger/40 bg-danger/10 text-danger'
-                  : 'border-warning/40 bg-warning/10 text-warning'
-              }`}>
-                <Icon name="alert-triangle" size={16} />
-                {risk === 'red'
-                  ? `Theo tiến độ này KHÔNG kịp giao hàng — dự kiến giao xong ${fmtDMHM(projected)}, trễ hạn ${fmtDMY(hanGiao)}${dayDiff > 0 ? ` (~${dayDiff} ngày)` : ''}`
-                  : `Sát hạn giao — dự kiến giao xong ${fmtDMHM(projected)}, đúng ngày hạn ${fmtDMY(hanGiao)}`}
-              </div>
-            )}
-
-            {/* Lệnh + tiến độ */}
-            <div className="mb-5">
-              <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-soft">Đợt sản xuất</div>
-              <div className="mt-1 text-2xl font-bold text-ink">
-                {r.ma_lenh_san_xuat} · {r.ma_hang || r.ma_phan || r.phan_list || '—'}
-              </div>
-              <div className="mt-1 text-sm text-ink-soft">
-                {[r.ma_phan, r.mau_vai, r.kich_vai && `Kích vải ${r.kich_vai}`, r.kich_phim && `Kích phim ${r.kich_phim}`].filter(Boolean).join(' · ') || '—'}
-              </div>
-              <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-surface-muted">
-                <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
-              </div>
-              <div className="mt-1.5 flex items-center justify-between text-sm">
-                <span className="font-semibold text-primary">{nf(printed)} / {nf(target)} · {oneDecimal(pct)}%</span>
-                <span className="text-ink-soft">còn {nf(remaining)} cái</span>
-              </div>
-              {(hanGiao || projected) && (
-                <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1 text-sm">
-                  <span className="text-ink-soft">Hạn giao: <b className={risk === 'red' ? 'text-danger' : risk === 'yellow' ? 'text-warning' : 'text-ink'}>{fmtDMY(hanGiao)}</b></span>
-                  <span className="text-ink-soft">Dự kiến giao xong: <b className={risk === 'red' ? 'text-danger' : risk === 'yellow' ? 'text-warning' : 'text-ink'}>{projected ? fmtDMHM(projected) : '—'}</b></span>
-                  <span className="text-[11px] text-ink-soft">(xong SX + {nf(slaSauSx)}′ trạm sau)</span>
-                </div>
-              )}
-            </div>
-
-            {/* 4 thẻ chỉ số */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <Card label="Tốc độ thực tế">
-                <div className="mt-1 text-3xl font-bold text-ink">{nf(speed)}</div>
-                <div className="mt-1 text-xs text-ink-soft">cái / giờ{dinhMuc ? ` · định mức ${nf(dinhMuc)}` : ''}</div>
-              </Card>
-              <Card label="Hiệu suất">
-                <div className={`mt-1 text-3xl font-bold ${oee != null && oee < 80 ? 'text-warning' : 'text-ink'}`}>{oee != null ? `${oneDecimal(oee)}%` : '—'}</div>
-                <div className="mt-1 text-xs text-ink-soft">{oee != null ? 'so với định mức (ca này)' : 'chưa có định mức'}</div>
-              </Card>
-              <Card label="Dự kiến hoàn thành">
-                <div className="mt-1 text-3xl font-bold text-ink">{etc ? hhmm(etc) : (remaining <= 0 ? 'Đủ SL' : '—')}</div>
-                <div className="mt-1 text-xs text-ink-soft">{r.ngay_ke_hoach ? `KH ${new Date(r.ngay_ke_hoach).toLocaleDateString('vi-VN')}` : 'theo tốc độ hiện tại'}</div>
-              </Card>
-              <Card label="Lệnh kế tiếp">
-                {next ? (
-                  <>
-                    <div className="mt-1 text-2xl font-bold text-primary">{next.ma_lenh_san_xuat}</div>
-                    <div className="mt-1 text-xs text-ink-soft">{[next.ma_phan, next.mau_vai].filter(Boolean).join(' · ') || '—'} · Sẵn sàng</div>
-                  </>
-                ) : <div className="mt-1 text-sm text-ink-soft">Chưa có</div>}
-              </Card>
-            </div>
-
-            {/* Nút Dừng / Hoạt động lại + điều hướng */}
-            <div className="mt-6 flex items-center justify-center gap-2">
-              {count > 1 && <Button variant="ghost" icon="chevron-left" className="px-3" onClick={() => go(-1)} />}
-              {canRun && (r.dang_ngung
-                ? <Button onClick={doResume} loading={busy}>Hoạt động lại</Button>
-                : <Button variant="danger" onClick={() => { setStopFor(r.phieu_id); setStopReason(''); }} disabled={busy}>Dừng</Button>)}
-              <span className="px-1 text-xs text-ink-soft">{cur + 1} / {count}</span>
-              <Button variant="ghost" icon={auto ? 'pause' : 'play'} className="px-3" onClick={() => setAuto((a) => !a)} />
-              {count > 1 && <Button variant="ghost" icon="chevron-right" className="px-3" onClick={() => go(1)} />}
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* Kế hoạch tiếp theo của chuyền */}
-      {r && (
-        <div className="mt-5">
-          <h3 className="mb-2 text-sm font-semibold text-ink">Kế hoạch tiếp theo của chuyền {r.ma_chuyen} ({nextList.length})</h3>
-          <div className="card divide-y divide-line">
-            {nextList.length === 0 ? (
-              <div className="px-5 py-6 text-center text-sm text-ink-soft">Không có lệnh chờ cho chuyền này</div>
-            ) : (
-              nextList.map((q, i) => (
-                <div key={q.ma_lenh_san_xuat} className="flex items-center justify-between px-5 py-3 text-sm">
-                  <div className="flex items-center gap-3">
-                    <span className="w-5 text-center text-xs font-semibold text-ink-soft">{i + 1}</span>
-                    <span className="font-semibold text-ink">{q.ma_lenh_san_xuat}</span>
-                    <span className="text-ink-soft">{[q.ma_phan, q.mau_vai, q.ma_hang].filter(Boolean).join(' · ')}</span>
-                  </div>
-                  <div className="flex items-center gap-4 text-ink-soft">
-                    <span>SL {nf(q.target)}</span>
-                    <span>KH {q.ngay_ke_hoach ? new Date(q.ngay_ke_hoach).toLocaleDateString('vi-VN') : '—'}</span>
-                    <span>Hạn giao <b className="text-ink">{q.han_giao_hang ? new Date(q.han_giao_hang).toLocaleDateString('vi-VN') : '—'}</b></span>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          {ds.map((c) => <TheChuyen key={c.key} c={c} nowMs={nowMs} />)}
         </div>
       )}
-
-      {/* Modal lý do ngừng */}
-      <Modal open={!!stopFor} onClose={() => setStopFor(null)} title="Ngừng chuyền"
-        footer={
-          <>
-            <Button chiXemOk variant="ghost" onClick={() => setStopFor(null)}>Hủy</Button>
-            <Button variant="danger" onClick={doStop} loading={busy} disabled={!stopReason.trim()}>Ngừng chuyền</Button>
-          </>
-        }
-      >
-        <Textarea rows={3} value={stopReason} onChange={(e) => setStopReason(e.target.value)}
-          placeholder="Lý do ngừng chuyền (vd: hết mực, kẹt vải, đổi khuôn...)" />
-      </Modal>
-
       <Toast toast={toast} />
     </div>
   );

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
 import Spinner from '../../../components/common/Spinner';
@@ -172,7 +173,10 @@ function SoDoGio({ l, i, daQua }) {
   );
 }
 
-export default function TheoDoiTo({ cheDo, onCheDo }) {
+// `khe` (08/11/2026, người dùng: "bộ lọc ngày với toggle theo tổ lên thẳng hàng với title header của modal để phần nội
+//   dung rộng ra"): phần tử ở tiêu đề modal *Theo dõi chuyền in* — ô Ngày SX + dải chip tổ đặt vào đó (portal). Không có
+//   ⇒ đặt đầu nội dung như cũ.
+export default function TheoDoiTo({ cheDo, onCheDo, khe = null }) {
   const [ngay, setNgay] = useState(() => ngayLocalISO(new Date()));
   const [data, setData] = useState(null);
   const [loi, setLoi] = useState('');
@@ -200,7 +204,7 @@ export default function TheoDoiTo({ cheDo, onCheDo }) {
   };
 
   const thanhNgay = (
-    <div className="mb-3 flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2 text-sm font-normal">
       <span className="text-xs text-ink-soft">Ngày SX</span>
       <NgayInput value={ngay} onChange={(e) => { if (e.target.value) { setNgay(e.target.value); setChuyenId(null); } }}
         className="h-9 rounded-input border border-line bg-surface px-2 text-sm outline-none focus:border-primary" />
@@ -213,10 +217,30 @@ export default function TheoDoiTo({ cheDo, onCheDo }) {
     </div>
   );
 
+  const chipTo = (
+    <div className="flex flex-wrap gap-1.5">
+      {cay.to.map((t) => (
+        <button key={t.id || 'chua'} type="button" onClick={() => { setToId(t.id); setChuyenId(null); }}
+          className={`rounded-full border px-3 py-1 text-sm font-medium ${toDangXem && toDangXem.id === t.id
+            ? 'border-primary bg-primary text-white' : 'border-line bg-surface text-ink hover:border-primary'}`}>
+          {t.ten}
+        </button>
+      ))}
+    </div>
+  );
+  const thanhDau = (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+      {thanhNgay}
+      {cheDo === 'to' && data && cay.to.length > 0 && chipTo}
+    </div>
+  );
+  // Đặt vào tiêu đề modal (portal) khi có khe, không thì đầu nội dung.
+  const dau = khe ? createPortal(thanhDau, khe) : <div className="mb-3">{thanhDau}</div>;
+
   if (!data) {
     return (
       <div>
-        {thanhNgay}
+        {dau}
         <div className="flex justify-center py-16">{loi ? <span className="text-danger">{loi}</span> : <Spinner size={28} />}</div>
       </div>
     );
@@ -225,7 +249,7 @@ export default function TheoDoiTo({ cheDo, onCheDo }) {
   if (cheDo === 'tong') {
     return (
       <div className="mx-auto max-w-4xl">
-        {thanhNgay}
+        {dau}
         <TieuDe ten="Tổng nhà máy" ngay={ngay} />
         <BangTong nhanCot="Bộ phận"
           tongDong={{ key: 'tong', ten: 'TỔNG', kh: cay.tong.kh, tt: cay.tong.tt, chon: false }}
@@ -237,16 +261,7 @@ export default function TheoDoiTo({ cheDo, onCheDo }) {
 
   return (
     <div className={chuyenDangXem ? '' : 'mx-auto max-w-4xl'}>
-      {thanhNgay}
-      <div className="mb-3 flex flex-wrap gap-2">
-        {cay.to.map((t) => (
-          <button key={t.id || 'chua'} type="button" onClick={() => { setToId(t.id); setChuyenId(null); }}
-            className={`rounded-full border px-3.5 py-1.5 text-sm font-medium ${toDangXem && toDangXem.id === t.id
-              ? 'border-primary bg-primary text-white' : 'border-line bg-surface text-ink hover:border-primary'}`}>
-            {t.ten}
-          </button>
-        ))}
-      </div>
+      {dau}
       {!toDangXem ? (
         <div className="py-16 text-center text-ink-soft">Chưa có chuyền nào được gán tổ</div>
       ) : chuyenDangXem ? (

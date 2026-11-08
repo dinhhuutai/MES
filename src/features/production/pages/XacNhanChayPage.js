@@ -89,6 +89,8 @@ export default function XacNhanChayPage() {
     return m === 'theo-doi-chuyen' || m === 'xe-phoi' ? m : null;
   });
   const [cheDoTheoDoi, setCheDoTheoDoi] = useState('chuyen');
+  // Khe ở tiêu đề modal Theo dõi chuyền in (08/11/2026): mỗi chế độ tự đặt bộ lọc của mình vào đây (portal).
+  const [kheTheoDoi, setKheTheoDoi] = useState(null);
   const dongTrang = () => {
     setMoTrang(null);
     if (params.get('mo')) setParams((p) => { const n = new URLSearchParams(p); n.delete('mo'); return n; }, { replace: true });
@@ -723,8 +725,8 @@ export default function XacNhanChayPage() {
           "Chuyền đang chạy". */}
       <Modal open={moTrang === 'theo-doi-chuyen'} onClose={dongTrang} size="full" canhTren={8}
         title={(
-          <span className="flex flex-wrap items-center gap-3">
-            <span>Theo dõi chuyền in</span>
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <span className="whitespace-nowrap">Theo dõi chuyền in</span>
             <span className="inline-flex rounded-full border border-line bg-surface-muted p-0.5 text-sm font-medium">
               {CHE_DO_THEO_DOI.map(([v, ten]) => (
                 <button key={v} type="button" onClick={() => setCheDoTheoDoi(v)}
@@ -733,11 +735,12 @@ export default function XacNhanChayPage() {
                 </button>
               ))}
             </span>
+            <span ref={setKheTheoDoi} className="flex min-w-0 flex-wrap items-center gap-2" />
           </span>
         )}>
         {moTrang === 'theo-doi-chuyen' && (cheDoTheoDoi === 'chuyen'
-          ? <TheoDoiChuyenPage />
-          : <TheoDoiTo cheDo={cheDoTheoDoi} onCheDo={setCheDoTheoDoi} />)}
+          ? <TheoDoiChuyenPage khe={kheTheoDoi} />
+          : <TheoDoiTo cheDo={cheDoTheoDoi} onCheDo={setCheDoTheoDoi} khe={kheTheoDoi} />)}
       </Modal>
       <Modal open={moTrang === 'xe-phoi'} onClose={dongTrang} size="full" canhTren={8} title="Tình trạng xe phơi">
         {moTrang === 'xe-phoi' && <XePhoiPage />}

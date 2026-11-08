@@ -45,6 +45,27 @@ const fmtDT = (s) => {
   return Number.isNaN(+x) ? '' : `${p(x.getDate())}/${p(x.getMonth() + 1)}/${x.getFullYear()} ${p(x.getHours())}:${p(x.getMinutes())}`;
 };
 
+// Tình trạng HÀNG ĐỢI TỰ GỬI LẠI (06/11/2026, backend `jobs/erpTuGuiLai.job.trangThai`) — lượt chạy gần nhất của job.
+function TrangThaiTuGuiLai({ t }) {
+  if (!t.chay_tren_may) {
+    return <p className="mt-1 text-xs text-warning">Job không chạy trên máy chủ này — {t.ly_do_may}</p>;
+  }
+  const c = t.lan_cuoi;
+  let noi = 'Chưa chạy lượt nào (lượt đầu 2 phút sau khi khởi động).';
+  if (c && c.tat) noi = `Lượt ${fmtDT(c.tg)}: công tắc đang tắt — bỏ qua.`;
+  else if (c && c.loi) noi = `Lượt ${fmtDT(c.tg)} lỗi: ${c.loi}`;
+  else if (c) {
+    noi = `Lượt ${fmtDT(c.tg)}: ${c.dang_loi} IDMES đang lỗi · gửi lại ${c.da_gui} (${c.thanh_cong} thành công, `
+      + `${c.con_loi} còn lỗi) · chờ giãn cách ${c.cho_gian_cach + c.con_trong_hang} · đã đủ ${t.toi_da} lần ${c.het_luot} · `
+      + `bỏ qua (đã hủy ở MES / dữ liệu) ${c.da_bo_qua + c.bo_qua_moi}${c.api_tat ? ` · API kênh đang tắt ${c.api_tat}` : ''}.`;
+  }
+  return (
+    <p className="mt-1 text-xs text-ink-soft">
+      {t.dang_chay && <b className="text-primary">Đang chạy… </b>}{noi}
+    </p>
+  );
+}
+
 export default function CaiDatApiPage() {
   const { can } = usePermissions();
   const { toast, show } = useToast();
@@ -137,7 +158,8 @@ export default function CaiDatApiPage() {
                       )}
                     </div>
                     <p className="mt-1 text-sm text-ink-soft">{r.mo_ta}</p>
-                    <p className="mt-1 break-all font-mono text-xs text-ink-soft">{r.url || '(chưa có URL)'}</p>
+                    {!r.khong_url && <p className="mt-1 break-all font-mono text-xs text-ink-soft">{r.url || '(chưa có URL)'}</p>}
+                    {r.trang_thai_job && <TrangThaiTuGuiLai t={r.trang_thai_job} />}
                     {r.nguoi_sua && (
                       <p className="mt-1 text-xs text-ink-soft">
                         Sửa gần nhất: <b>{r.nguoi_sua}</b> · {fmtDT(r.tg_sua)}
@@ -152,9 +174,11 @@ export default function CaiDatApiPage() {
                         Lịch sử
                       </Button>
                     )}
-                    <Button variant="secondary" icon="wifi" loading={t.dangThu} onClick={() => doThu(r.ma)}>
-                      Thử kết nối
-                    </Button>
+                    {!r.khong_url && (
+                      <Button variant="secondary" icon="wifi" loading={t.dangThu} onClick={() => doThu(r.ma)}>
+                        Thử kết nối
+                      </Button>
+                    )}
                     <Toggle on={r.bat} disabled={!canEdit} onChange={(v) => doiTrangThai(r, v)}
                       title={canEdit ? (r.bat ? 'Bấm để TẮT' : 'Bấm để BẬT') : 'Không có quyền sửa'} />
                   </div>

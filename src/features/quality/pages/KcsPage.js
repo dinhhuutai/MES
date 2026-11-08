@@ -192,7 +192,9 @@ export default function KcsPage() {
     try { w = moSanCuaSoIn(); } catch (e) { show(e.message, 'error'); return; }
     setInBusy(true);
     try {
-      await luuNguoiKiemKcs(dong.map((r) => ({ kcsId: r.kcs_id, nguoiKiem: r.nguoiKiem, nguoiKiemId: r.nguoiKiemId })));
+      // Lưu người kiểm — backend cũng báo ERP (SK6 sửa đạt) cho tem 17 in LẦN ĐẦU (08/11/2026); in lại ⇒ chỉ in.
+      const kqLuu = await luuNguoiKiemKcs(dong.map((r) => ({ kcsId: r.kcs_id, nguoiKiem: r.nguoiKiem, nguoiKiemId: r.nguoiKiemId })));
+      const guiErp17 = (kqLuu && kqLuu.data && kqLuu.data.gui_erp_tem_17) || [];
       setNguoiKiemDaLuu((m) => ({ ...m, ...Object.fromEntries(dong.map((r) => [r.kcs_id, r.nguoiKiem])) }));
       const labels = await Promise.all(dong.map(async (r) => {
         const res = await getTemLabel(r.tem_id);
@@ -203,7 +205,8 @@ export default function KcsPage() {
         return { ...res.data, ...tem17, nguoi_kiem_kcs: r.nguoiKiem, tg_kiem_kcs: r.tg || null };
       }));
       await printKcsGiaoTemNhieu(labels, w);
-      show(`Đã mở ${labels.length} tem để in`);
+      show(`Đã mở ${labels.length} tem để in${guiErp17.length
+        ? ` · đang báo ERP (SK6) ${guiErp17.length} tem 17 (${guiErp17.slice(0, 3).join(', ')}${guiErp17.length > 3 ? ' …' : ''})` : ''}`);
       setInRows(null);
       clearChonIn.current?.();
     } catch (e) {

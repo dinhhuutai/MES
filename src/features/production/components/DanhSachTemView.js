@@ -483,6 +483,16 @@ export default function DanhSachTemView({
         <Button chiXemOk variant="secondary" icon="download" onClick={doExcel}
           loading={dangXuat} disabled={!meta.total}>Excel ({fmtNum(meta.total)})</Button>
         <Badge tone="info">{fmtNum(meta.total)} tem</Badge>
+        {/* TỔNG SL IN theo bộ lọc (08/11/2026) — BE tính trên MỌI tem khớp lọc (không chỉ trang đang xem), bỏ tem HỦY. */}
+        {meta.tong && (
+          <span title={meta.tong.so_tem_huy
+            ? `Không tính ${fmtNum(meta.tong.so_tem_huy)} tem đã hủy (${fmtNum(meta.tong.sl_huy)} pcs)` : undefined}>
+            <Badge tone="success">
+              Tổng SL in {fmtNum(meta.tong.sl)} pcs
+              {meta.tong.so_tem_huy ? ` · ${fmtNum(meta.tong.so_tem)} tem còn hiệu lực` : ''}
+            </Badge>
+          </span>
+        )}
       </div>
 
       <FieldFilters fields={fields} values={textFilters} onField={setField}
@@ -779,7 +789,11 @@ function SuaTemModal({ tem, onClose, onDaLuu, show }) {
     setDangLuu(true); setLoi('');
     try {
       const res = await suaTem(tem.id, { ...body, lyDo: lyDo.trim() });
-      show(res.data?.gui_erp ? `Đã sửa tem ${tem.ma_tem} — đang gửi lại ERP (cùng IDMES)` : `Đã sửa tem ${tem.ma_tem}`);
+      const nSau = Number(res.data?.gui_lai_luot_sau) || 0;
+      show(res.data?.gui_erp || nSau
+        ? `Đã sửa tem ${tem.ma_tem} — đang gửi lại ERP (cùng IDMES)${res.data?.gui_erp ? ' phiếu in tem' : ''}`
+          + `${nSau ? `${res.data?.gui_erp ? ' +' : ''} ${nSau} phiếu KCS / sửa đạt / OQC` : ''}`
+        : `Đã sửa tem ${tem.ma_tem}`);
       onDaLuu?.();
       onClose();
     } catch (e) { setLoi(e.message || 'Sửa tem thất bại'); }

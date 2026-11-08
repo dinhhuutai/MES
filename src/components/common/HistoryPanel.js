@@ -26,6 +26,19 @@ const TRUONG_LOC = [
   { key: 'doi_tuong', label: 'Đối tượng' },
   { key: 'chi_tiet', label: 'Chi tiết' },
 ];
+// THÔNG TIN PHẦN IN của dòng (08/11/2026, người dùng: "trong các modal lịch sử cho thêm thông tin từ khách hàng đến
+//   kích film") — backend `utils/thongTinLichSu.js` gắn theo `ma_phan`. Fetcher nào trả ⇒ hiện cột (+ ô lọc + Excel)
+//   ngay sau Thời gian; fetcher không trả (Gom set · Gộp đợt vải · báo cáo) ⇒ bảng như cũ.
+const COT_PHAN_IN = [
+  { key: 'ten_khach_hang', label: 'Khách hàng' },
+  { key: 'ma_don_hang', label: 'Đơn hàng' },
+  { key: 'ma_hang', label: 'Mã hàng' },
+  { key: 'ma_phan', label: 'Code phần' },
+  { key: 'mau_vai', label: 'Màu vải' },
+  { key: 'kich_vai', label: 'Kích vải' },
+  { key: 'kich_phim', label: 'Kích phim' },
+];
+const coThongTinPin = (r) => COT_PHAN_IN.some((c) => c.key !== 'ma_phan' && r[c.key] != null && String(r[c.key]).trim() !== '');
 const chuoiDong = (r) => Object.entries(r)
   .filter(([k, v]) => !k.startsWith('_') && (typeof v === 'string' || typeof v === 'number'))
   .map(([, v]) => String(v)).join(' ');
@@ -59,13 +72,15 @@ export default function HistoryPanel({ open, onClose, title = 'Lịch sử', fet
   const choTuKhoa = moiNgay && !qServer;
 
   const dsHanhDong = useMemo(() => [...new Set(rows.map((r) => r.hanh_dong).filter(Boolean))].sort(), [rows]);
+  const coPin = useMemo(() => rows.some(coThongTinPin), [rows]);
+  const truongLoc = useMemo(() => (coPin ? [...COT_PHAN_IN, ...TRUONG_LOC] : TRUONG_LOC), [coPin]);
   const viewRows = useMemo(() => rows.filter((r) => {
     if (hanhDong && r.hanh_dong !== hanhDong) return false;
-    if (TRUONG_LOC.some((f) => (filters[f.key] || '').trim() && !khopTungTu(r[f.key], filters[f.key]))) return false;
+    if (truongLoc.some((f) => (filters[f.key] || '').trim() && !khopTungTu(r[f.key], filters[f.key]))) return false;
     // Mọi ngày: server đã lọc theo từ khóa (khớp code phần / mã của bản ghi kể cả khi dòng không ghi ra chữ đó).
     return moiNgay || !q.trim() || khopTungTu(chuoiDong(r), q);
-  }), [rows, q, hanhDong, filters, moiNgay]);
-  const soLoc = TRUONG_LOC.filter((f) => (filters[f.key] || '').trim()).length + (q.trim() ? 1 : 0) + (hanhDong ? 1 : 0);
+  }), [rows, q, hanhDong, filters, moiNgay, truongLoc]);
+  const soLoc = truongLoc.filter((f) => (filters[f.key] || '').trim()).length + (q.trim() ? 1 : 0) + (hanhDong ? 1 : 0);
   const xoaLoc = () => { setFilters({}); setQ(''); setHanhDong(''); };
 
   // Giữ fetcher trong ref: prop này thường là arrow-function nội tuyến (đổi identity mỗi lần
@@ -96,8 +111,23 @@ export default function HistoryPanel({ open, onClose, title = 'Lịch sử', fet
   const columns = [
     { key: 'tg', header: moiNgay ? 'Thời gian' : 'Giờ', className: 'whitespace-nowrap tabular-nums',
       render: (r) => (moiNgay ? fmtNgayGio(r.tg) : fmtTime(r.tg)) },
-    ...(rows.some((r) => r.ma_phan) && moiNgay
-      ? [{ key: 'ma_phan', header: 'Code phần', className: 'whitespace-nowrap', render: (r) => r.ma_phan || '—' }] : []),
+    // Bảng: Màu vải + Kích vải · Kích phim gộp 1 ô 2 dòng (như sidebar Gia công) để cột Hành động / Chi tiết không bị
+    //   đẩy khỏi màn; Excel + ô lọc vẫn tách từng trường.
+    ...(coPin
+      ? [
+        ...COT_PHAN_IN.filter((c) => !['mau_vai', 'kich_vai', 'kich_phim'].includes(c.key)).map((c) => ({
+          key: c.key, header: c.label,
+          className: c.key === 'ma_phan' ? 'whitespace-nowrap font-medium text-ink' : 'max-w-[12rem]',
+          render: (r) => r[c.key] || '—' })),
+        { key: 'mau_kich', header: 'Màu · Kích vải · Kích phim', className: 'max-w-[12rem]', render: (r) => (
+          <div className="leading-tight">
+            <div className="text-ink">{r.mau_vai || '—'}</div>
+            <div className="text-xs text-ink-soft">{[r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—'}</div>
+          </div>
+        ) },
+      ]
+      : rows.some((r) => r.ma_phan) && moiNgay
+        ? [{ key: 'ma_phan', header: 'Code phần', className: 'whitespace-nowrap', render: (r) => r.ma_phan || '—' }] : []),
     { key: 'nguoi', header: 'Người', className: 'font-medium text-ink' },
     { key: 'hanh_dong', header: 'Hành động' },
     { key: 'doi_tuong', header: 'Đối tượng' },
@@ -111,7 +141,9 @@ export default function HistoryPanel({ open, onClose, title = 'Lịch sử', fet
       await exportPanelExcel({
         cols: [
           { header: moiNgay ? 'Thời gian' : 'Giờ', value: (r) => (moiNgay ? fmtNgayGio(r.tg) : fmtTime(r.tg)) },
-          ...(moiNgay ? [{ header: 'Code phần', value: (r) => r.ma_phan || '' }] : []),
+          ...(coPin
+            ? COT_PHAN_IN.map((c) => ({ header: c.label, value: (r) => r[c.key] || '' }))
+            : moiNgay ? [{ header: 'Code phần', value: (r) => r.ma_phan || '' }] : []),
           { header: 'Người', value: (r) => r.nguoi || '' },
           { header: 'Hành động', value: (r) => r.hanh_dong || '' },
           { header: 'Đối tượng', value: (r) => r.doi_tuong || '' },
@@ -179,7 +211,7 @@ export default function HistoryPanel({ open, onClose, title = 'Lịch sử', fet
             <Button variant="ghost" chiXemOk className="px-2.5 py-1 text-xs" onClick={xoaLoc} disabled={!soLoc}>Xóa lọc</Button>
           </div>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-            {TRUONG_LOC.map((f) => (
+            {truongLoc.map((f) => (
               <div key={f.key}>
                 <label className="mb-1 block text-xs font-medium text-ink-soft">{f.label}</label>
                 <input value={filters[f.key] || ''} onChange={(e) => setFilters((s) => ({ ...s, [f.key]: e.target.value }))}
