@@ -5,7 +5,7 @@ import useSocketReload from '../../../hooks/useSocketReload';
 import { getBaoCaoSanXuat } from '../../../services/productionService';
 import { ngayLocalISO } from '../../../utils/format';
 import {
-  nhomCa, OSo, TieuDe, BangTong, ChonBang, ChonNgay, NhanLoaiCa, hienNgay,
+  nhomCa, OSo, TieuDe, BangTong, ChonBang, ChonNgay, NhanLoaiCa, hienNgay, doiNgay,
 } from '../components/BangBaoCaoSanXuat';
 import ChonChuyenNhieu from '../components/ChonChuyenNhieu';
 import DanhSachOBaoCaoModal from '../components/DanhSachOBaoCaoModal';
@@ -143,7 +143,8 @@ export default function BaoCaoSanXuatPage() {
   useEffect(() => { tai(ngay); }, [ngay, tai]);
   const laHomNay = ngay === homNay;
   // Tự tải lại khi máy khác in tem (socket). Xem HÔM QUA cũng tải: ngày SX là 06:00 → 06:00 hôm sau, tem ca đêm in lúc
-  //   0–6 giờ sáng thuộc ngày hôm trước (29/10/2026). Ngày cũ hơn thì số không đổi nữa — không tải.
+  //   0–6 giờ sáng thuộc ngày hôm trước (29/10/2026). Ngày cũ hơn thì số không đổi nữa — không tải. NGÀY MAI cũng tải
+  //   (09/11/2026: tuần "ca trước" thì ca đêm tối nay thuộc ngày mai — `ngay >= homQua` đã gồm).
   const homQua = ngayLocalISO(new Date(Date.now() - 86400000));
   const conCapNhat = ngay >= homQua;
   useSocketReload(['production:updated', 'dashboard:refresh'], () => { if (conCapNhat) tai(ngay, true); }, 1200);
@@ -192,7 +193,7 @@ export default function BaoCaoSanXuatPage() {
       <Toolbar title="Báo cáo sản xuất">
         <ChonBang ds={BANG} value={bang} onChange={chonBang} />
         <ChonChuyenNhieu ds={chuyens} value={chonHopLe} onChange={setChuyenChon} />
-        <ChonNgay ngay={ngay} setNgay={setNgay} homNay={homNay} />
+        <ChonNgay ngay={ngay} setNgay={setNgay} homNay={homNay} toiDa={doiNgay(homNay, 1)} />
         {!laHomNay && (
           <button type="button" onClick={() => setNgay(homNay)}
             className="h-10 rounded-control px-3 text-sm font-medium text-primary hover:bg-primary-wash">Hôm nay</button>

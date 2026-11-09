@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import Modal from '../../../components/common/Modal';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
+import SearchableSelect from '../../../components/common/SearchableSelect';
 import { recordKcs } from '../../../services/qualityService';
 import { fmtNum } from '../../../utils/format';
+import useDsNguoi, { tenNguoi, timNguoi, nhoTen, KHOA_NGUOI_KIEM } from '../../../hooks/useDsNguoi';
 
 // ─── XÁC NHẬN KCS NHIỀU TEM 1 LƯỢT (27/10/2026, người dùng: "quét tem, enter tự tích … bấm xác nhận thì hiện modal gần
 //   toàn màn hình chứa danh sách các tem đã tích và các ô nhập xác nhận KCS giống in nhiều tem 15,16 bên sản xuất") ───
@@ -13,6 +15,7 @@ import { fmtNum } from '../../../utils/format';
 //     phần còn lại tem ở lại màn KCS;
 //   · còn lại (có thiếu/dư, hoặc nhập ≥ cần kiểm): đạt + hư = cần kiểm + dư − thiếu (lệch là chặn).
 // Ô Đạt điền sẵn = còn cần kiểm (như panel 1 tem).
+// ⚠ 09/11/2026: cột NGƯỜI KIỂM ở cuối — BẮT BUỘC (BE 422 `NO_NGUOI_KIEM`, Sh6 gửi người này), điền sẵn tên vừa dùng trên máy.
 const n = (v) => Math.max(0, Math.trunc(Number(v) || 0));
 //   · MẪU tính vào tổng (29/10/2026, người dùng: "616 = đạt 615 + mẫu 1 là ok") — cùng vế với đạt + hư.
 export function danhGiaKcs(canKiem, f) {
@@ -39,7 +42,10 @@ export const O_SO = [
   ['soLuongDat', 'Đạt'], ['soLuongHu', 'Hư'], ['soLuongThieu', 'Thiếu'], ['soLuongDu', 'Dư'], ['soLuongMau', 'Mẫu'],
 ];
 
+const formMoiCoNguoi = (r) => ({ ...formMoi(r), nguoiKiem: nhoTen.lay(KHOA_NGUOI_KIEM) });
+
 export default function KcsNhieuModal({ open, rows, onClose, onXong, truocXacNhan, show }) {
+  const { dsTen, idTheoTen } = useDsNguoi(open);
   const [forms, setForms] = useState({});
   const [ketQua, setKetQua] = useState({}); // tem_id → { ok, chu }
   const [dangLuu, setDangLuu] = useState(false);
@@ -48,21 +54,26 @@ export default function KcsNhieuModal({ open, rows, onClose, onXong, truocXacNha
   // Mở modal ⇒ điền sẵn dòng mới; giữ số đã gõ của dòng còn ở lại (vd lần trước lỗi).
   useEffect(() => {
     if (!open) return;
-    setForms((cu) => Object.fromEntries((rows || []).map((r) => [r.tem_id, cu[r.tem_id] || formMoi(r)])));
+    setForms((cu) => Object.fromEntries((rows || []).map((r) => [r.tem_id, cu[r.tem_id] || formMoiCoNguoi(r)])));
     setKetQua((cu) => Object.fromEntries(Object.entries(cu).filter(([id, k]) => !k.ok && (rows || []).some((r) => r.tem_id === id))));
   }, [open, rows]);
 
   const set = (id, k, v) => setForms((f) => ({ ...f, [id]: { ...f[id], [k]: v } }));
   const danhGia = useMemo(() => Object.fromEntries((rows || []).map((r) => {
-    const f = forms[r.tem_id] || formMoi(r);
-    return [r.tem_id, danhGiaKcs(Number(r.con_kcs ?? r.so_luong ?? 0) || 0, f)];
+    const f = forms[r.tem_id] || formMoiCoNguoi(r);
+    const dg = danhGiaKcs(Number(r.con_kcs ?? r.so_luong ?? 0) || 0, f);
+    return [r.tem_id, dg.ok && !String(f.nguoiKiem || '').trim() ? { ok: false, chu: 'Nhập người kiểm' } : dg];
   })), [rows, forms]);
   const soSai = (rows || []).filter((r) => !danhGia[r.tem_id]?.ok).length;
   const tongDat = (rows || []).reduce((s, r) => s + n(forms[r.tem_id]?.soLuongDat), 0);
   const tongHu = (rows || []).reduce((s, r) => s + n(forms[r.tem_id]?.soLuongHu), 0);
 
-  const datHet = () => setForms((f) => Object.fromEntries((rows || []).map((r) => [r.tem_id, { ...(f[r.tem_id] || formMoi(r)),
+  const datHet = () => setForms((f) => Object.fromEntries((rows || []).map((r) => [r.tem_id, { ...(f[r.tem_id] || formMoiCoNguoi(r)),
     soLuongDat: String(r.con_kcs ?? ''), soLuongHu: '', soLuongThieu: '', soLuongDu: '' }])));
+  // Chép người kiểm của dòng ĐẦU cho mọi dòng.
+  const tenDau = rows && rows[0] ? String((forms[rows[0].tem_id] || {}).nguoiKiem || '').trim() : '';
+  const nguoiChoMoiDong = () => setForms((f) => Object.fromEntries((rows || []).map((r) => [r.tem_id,
+    { ...(f[r.tem_id] || formMoiCoNguoi(r)), nguoiKiem: tenDau }])));
 
   const luu = async () => {
     if (soSai) { show(`Còn ${soSai} dòng chưa cân đối — sửa trước khi lưu`, 'error'); return; }
@@ -75,7 +86,9 @@ export default function KcsNhieuModal({ open, rows, onClose, onXong, truocXacNha
       setTienDo(`Đang lưu ${i + 1}/${rows.length} · ${r.ma_tem}`);
       try {
         // eslint-disable-next-line no-await-in-loop
-        const res = await recordKcs(r.tem_id, { ...forms[r.tem_id] });
+        const f = forms[r.tem_id] || {};
+        const res = await recordKcs(r.tem_id, { ...f, nguoiKiemId: idTheoTen.get(String(f.nguoiKiem || '').trim()) || null });
+        nhoTen.dat(KHOA_NGUOI_KIEM, f.nguoiKiem);
         const con = Number(res.data?.con_kcs) || 0;
         kq[r.tem_id] = { ok: true, chu: con > 0 ? `Đã lưu · còn ${fmtNum(con)} chờ kiểm` : 'Đã lưu' };
         ok.push(r.tem_id);
@@ -105,6 +118,9 @@ export default function KcsNhieuModal({ open, rows, onClose, onXong, truocXacNha
       <div className="flex h-full min-h-0 flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <Button variant="secondary" icon="check" onClick={datHet} disabled={dangLuu}>Đạt hết (điền Đạt = còn kiểm)</Button>
+          <Button variant="secondary" icon="users" onClick={nguoiChoMoiDong} disabled={dangLuu || !tenDau || (rows || []).length < 2}>
+            Người kiểm dòng 1 cho mọi dòng
+          </Button>
           <span className="text-ink-soft">Tổng đạt <b className="text-ink">{fmtNum(tongDat)}</b> · hư <b className="text-ink">{fmtNum(tongHu)}</b></span>
           <span className="text-xs text-ink-soft">Nhập đạt + hư <b>nhỏ hơn</b> còn kiểm (không nhập thiếu/dư) = kiểm trước một phần — phần còn lại tem ở lại màn KCS. Có thiếu/dư thì phải cân đối. Toàn bộ hư vào chờ sửa.</span>
         </div>
@@ -119,11 +135,12 @@ export default function KcsNhieuModal({ open, rows, onClose, onXong, truocXacNha
                 <th className="px-2 py-2 text-right">Còn kiểm</th>
                 {O_SO.map(([, l]) => <th key={l} className="w-24 px-2 py-2">{l}</th>)}
                 <th className="px-2 py-2">Cân đối</th>
+                <th className="px-2 py-2" style={{ minWidth: 220 }}>Người kiểm <span className="text-danger">*</span></th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r, i) => {
-                const f = forms[r.tem_id] || formMoi(r);
+                const f = forms[r.tem_id] || formMoiCoNguoi(r);
                 const dg = danhGia[r.tem_id] || {};
                 const kq = ketQua[r.tem_id];
                 return (
@@ -152,6 +169,11 @@ export default function KcsNhieuModal({ open, rows, onClose, onXong, truocXacNha
                     <td className="px-2 py-1.5 text-xs">
                       {kq ? <span className={kq.ok ? 'text-success' : 'text-danger'}>{kq.ok ? '✓ ' : '✗ '}{kq.chu}</span>
                         : <span className={dg.ok ? (dg.motPhan ? 'text-amber-700 dark:text-amber-400' : 'text-success') : 'text-danger'}>{dg.chu}</span>}
+                    </td>
+                    <td className="px-1 py-1">
+                      <SearchableSelect chapNhanTuDo options={dsTen} value={f.nguoiKiem || ''}
+                        getValue={tenNguoi} getLabel={tenNguoi} getSearch={timNguoi}
+                        onChange={(v) => set(r.tem_id, 'nguoiKiem', v)} placeholder="Chọn / gõ tên…" />
                     </td>
                   </tr>
                 );

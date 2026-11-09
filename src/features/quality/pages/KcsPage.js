@@ -42,15 +42,22 @@ import KcsNhieuModal, { danhGiaKcs, formMoi as formKcsMoi, O_SO as O_SO_KCS } fr
 import TichTemNhapModal from '../../../components/common/TichTemNhapModal';
 import KiemTruocKhoModal from '../components/KiemTruocKhoModal';
 import { trangThaiSla } from '../../../utils/nghen';
+import SearchableSelect from '../../../components/common/SearchableSelect';
+import useDsNguoi, { tenNguoi, timNguoi, nhoTen, KHOA_NGUOI_KIEM } from '../../../hooks/useDsNguoi';
 
 // ⚠ ĐÃ BỎ 2 Ô `soLuongSua` (Quyết định sửa) + `soLuongHuy` (Số lượng hủy) — chốt 04/09/2026:
 //   KCS chỉ chốt ĐẠT/HƯ, việc chia HƯ thành sửa–hủy làm ở trang *Sản xuất › Phân loại lỗi* (mig 075,
 //   "con số ở đó là CHÍNH THỨC"). Backend vẫn nhận 2 khóa này để tương thích ngược — xem `recordKcs`.
-const empty = { soLuongDat: '', soLuongHu: '', soLuongThieu: '', soLuongDu: '', soLuongMau: '' };
+const empty = { soLuongDat: '', soLuongHu: '', soLuongThieu: '', soLuongDu: '', soLuongMau: '', nguoiKiem: '' };
 // Tối đa số tem tích để xác nhận 1 lượt (27/10/2026) — mỗi tem 1 lần gọi recordKcs tuần tự.
 const TOI_DA_TICH = 100;
-// Ô nhập của bảng "Tích tem" (29/10/2026) — cùng bộ ô với modal xác nhận nhiều tem.
-const TRUONG_KCS = O_SO_KCS.map(([k, label]) => ({ k, label }));
+// Ô nhập của bảng "Tích tem" (29/10/2026) — cùng bộ ô với modal xác nhận nhiều tem; + cột NGƯỜI KIỂM ở cuối (09/11/2026,
+//   dựng trong component vì cần danh sách người).
+const TRUONG_SO_KCS = O_SO_KCS.map(([k, label]) => ({ k, label }));
+// ⚠⚠ NGƯỜI KIỂM BẮT BUỘC ở mọi chỗ xác nhận KCS (09/11/2026, người dùng: "thêm cột người kiểm … ở các chỗ xác nhận của KCS
+//   nữa và gửi dữ liệu Sh6 phải là của tên người này") — BE `recordKcs` chặn 422 `NO_NGUOI_KIEM`, Sh6 gửi người này ở
+//   `dsthoin`. Điền sẵn tên vừa dùng trên máy này (`nhoTen`) để quét liên tục không phải gõ lại.
+const thieuNguoiKiem = (f) => !String((f && f.nguoiKiem) || '').trim();
 
 const FILTER_FIELDS = [
   { key: 'khach', label: 'Khách hàng' },
@@ -119,6 +126,13 @@ export default function KcsPage() {
   const [gopOpen, setGopOpen] = useState(false);
   const [targetId, setTargetId] = useState('');
   const [gopping, setGopping] = useState(false);
+  const { dsTen, idTheoTen } = useDsNguoi(canKcs);
+  const oNguoiKiem = useRef(null);
+  const idNguoi = (ten) => idTheoTen.get(String(ten || '').trim()) || null;
+  const truongTichTem = useMemo(() => [...TRUONG_SO_KCS, {
+    k: 'nguoiKiem', label: 'Người kiểm', kieu: 'nguoi', options: dsTen, keThua: true, minW: 220,
+    placeholder: 'Chọn / gõ tên người kiểm…', macDinh: () => nhoTen.lay(KHOA_NGUOI_KIEM),
+  }], [dsTen]);
 
   // Dòng đã tích lấy bản MỚI từ danh sách (số còn kiểm cập nhật theo socket), không còn thì giữ bản lúc tích.
   const rowById = useMemo(() => new Map(rows.map((r) => [r.tem_id, r])), [rows]);
@@ -294,7 +308,10 @@ export default function KcsPage() {
   }, [load]);
 
   // Prefill SL đạt = SL còn cần kiểm (con_kcs). Kiểm từng phần nhiều lần.
-  const open = (row) => { setEditing(row); setForm({ ...empty, soLuongDat: String(row.con_kcs ?? row.so_luong ?? '') }); };
+  const open = (row) => {
+    setEditing(row);
+    setForm({ ...empty, soLuongDat: String(row.con_kcs ?? row.so_luong ?? ''), nguoiKiem: nhoTen.lay(KHOA_NGUOI_KIEM) });
+  };
   // Hộp KCS vừa mở ⇒ đặt con trỏ vào ô "Số lượng đạt" + bôi đen (SidePanel Headless UI tự đặt focus lúc mở ⇒ đợi vài nhịp).
   const temDangMo = editing ? editing.tem_id : null;
   useEffect(() => {
@@ -417,10 +434,16 @@ export default function KcsPage() {
   const save = async () => {
     // Chốt chặn thật ở backend (422 LECH_CAN_DOI); đây chỉ để khỏi bắn request chắc chắn hỏng.
     if (!canDoi.can) { show(canDoi.motPhan ? canDoi.motPhan.chu : 'Chênh lệch phải bằng 0 mới lưu được', 'error'); return; }
+    if (thieuNguoiKiem(form)) {
+      show('Nhập người kiểm trước khi xác nhận KCS', 'error');
+      setTimeout(() => oNguoiKiem.current?.focus(), 0);
+      return;
+    }
     if (!(await hoiLyDoNghen([editing]))) return; // tem quá SLA ⇒ nhập lý do nghẽn (mig 106)
     setSaving(true);
     try {
-      const r = await recordKcs(editing.tem_id, form);
+      const r = await recordKcs(editing.tem_id, { ...form, nguoiKiemId: idNguoi(form.nguoiKiem) });
+      nhoTen.dat(KHOA_NGUOI_KIEM, form.nguoiKiem);
       const d = r.data;
       const conLai = Number(d.con_kcs) || 0;
       show(`KCS ${editing.ma_tem}: Đạt ${fmtNum(d.so_luong_dat)}→OQC${d.ma_tem_17 ? ` (tem 17 ${d.ma_tem_17})` : ''} · Hư ${fmtNum(d.so_luong_sua)}→chờ sửa`
@@ -600,6 +623,16 @@ export default function KcsPage() {
           {N({ f: 'soLuongDu', label: 'Số lượng dư' })}
           {N({ f: 'soLuongMau', label: 'Số lượng mẫu' })}
         </div>
+        {/* NGƯỜI KIỂM (09/11/2026) — bắt buộc, điền sẵn tên vừa dùng trên máy này; gửi ERP Sh6 theo người này. */}
+        <Field label="Người kiểm" required>
+          {/* Enter khi danh sách đang đóng = Xác nhận KCS (như các ô số); chọn tên / gõ tên mới + Enter do ô chọn xử lý. */}
+          <div onKeyDown={(e) => { if (e.key === 'Enter' && !e.defaultPrevented && !saving && form.nguoiKiem) { e.preventDefault(); save(); } }}>
+            <SearchableSelect chapNhanTuDo inputRef={oNguoiKiem} options={dsTen} value={form.nguoiKiem}
+              getValue={tenNguoi} getLabel={tenNguoi} getSearch={timNguoi}
+              onChange={(v) => setForm((prev) => ({ ...prev, nguoiKiem: v }))}
+              placeholder="Chọn hoặc gõ tên người kiểm…" />
+          </div>
+        </Field>
 
         {/* KHUNG CÂN ĐỐI — phải về 0 mới lưu được. Hiện đủ 2 vế để người nhập tự thấy sai ở đâu,
             thay vì bấm Lưu rồi mới ăn thông báo lỗi. */}
@@ -758,9 +791,16 @@ export default function KcsPage() {
       <TichTemNhapModal open={tichTemOpen} onClose={() => { setTichTemOpen(false); oTim.datConTro(); }}
         title="Tích tem — xác nhận KCS nhiều tem" nhanXacNhan="Xác nhận KCS" show={show}
         traMa={traTemKcs} khoaDong={(r) => r.tem_id} maHien={(r) => r.ma_tem}
-        soCan={(r) => r.con_kcs} nhanSoCan="Còn kiểm" truong={TRUONG_KCS} formMoi={formKcsMoi}
-        danhGia={(r, f) => danhGiaKcs(Number(r.con_kcs ?? r.so_luong ?? 0) || 0, f)}
-        luu={(r, f) => recordKcs(r.tem_id, { ...f })}
+        soCan={(r) => r.con_kcs} nhanSoCan="Còn kiểm" truong={truongTichTem} formMoi={formKcsMoi}
+        danhGia={(r, f) => {
+          const dg = danhGiaKcs(Number(r.con_kcs ?? r.so_luong ?? 0) || 0, f);
+          return dg.ok && thieuNguoiKiem(f) ? { ok: false, chu: 'Nhập người kiểm' } : dg;
+        }}
+        luu={async (r, f) => {
+          const res = await recordKcs(r.tem_id, { ...f, nguoiKiemId: idNguoi(f.nguoiKiem) });
+          nhoTen.dat(KHOA_NGUOI_KIEM, f.nguoiKiem);
+          return res;
+        }}
         truocXacNhan={(rs) => hoiLyDoNghen(rs)} onXong={sauTichTem}
         phuTro={({ apMoiDong, dangLuu, coDong }) => (
           <Button variant="secondary" icon="check" disabled={dangLuu || !coDong}

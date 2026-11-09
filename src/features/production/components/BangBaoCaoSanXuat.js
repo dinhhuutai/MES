@@ -21,6 +21,9 @@ export const nhomCa = (cas) => (cas && cas.length
 const COT_SO = ['SL kế hoạch', 'SL in thực tế', '%', 'Số giờ KH', 'Số giờ TT', 'C.lệch giờ'];
 export const TEN_CA = { NGAN: 'Ca ngắn · CA1–CA3', DAI: 'Ca dài · CA1–CA2', HANH_CHINH: 'Hành chính' };
 export const TEN_LOAI_CA_RIENG = { MAY: 'Chuyền Máy', BAN: 'Chuyền Bàn', ROBOT: 'Chuyền Robot', KHAC: 'Chuyền khác' };
+// Ca đêm "ca trước" (09/11/2026, mig 125): ngày SX bắt đầu từ ca đêm TỐI HÔM TRƯỚC — BE `utils/baoCaoSanXuat.js khungCa`.
+const CA_TRUOC = ' · ca trước';
+const TITLE_CA_TRUOC = 'Ca đêm thuộc ngày nó kết thúc: ngày này bắt đầu từ ca đêm tối hôm trước';
 
 const nf0 = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 });
 const nf2 = new Intl.NumberFormat('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -161,18 +164,20 @@ export function ChonBang({ ds, value, onChange }) {
   );
 }
 
-// Chọn ngày ‹ [date] › (không quá hôm nay).
-export function ChonNgay({ ngay, setNgay, homNay }) {
+// Chọn ngày ‹ [date] › (không quá hôm nay). `toiDa` (tùy chọn) = ngày xa nhất chọn được — Báo cáo sản xuất cho tới NGÀY MAI
+//   (09/11/2026: tuần đi "ca trước" thì ca đêm tối nay thuộc ngày mai).
+export function ChonNgay({ ngay, setNgay, homNay, toiDa }) {
+  const max = toiDa || homNay;
   return (
     <div className="flex h-10 items-center rounded-input border border-line bg-surface">
       <button type="button" title="Ngày trước" onClick={() => setNgay((d) => doiNgay(d, -1))}
         className="flex h-full w-9 items-center justify-center text-ink-soft hover:text-ink">
         <Icon name="chevron-left" size={16} />
       </button>
-      <NgayInput value={ngay} max={homNay}
+      <NgayInput value={ngay} max={max}
         onChange={(e) => e.target.value && setNgay(e.target.value)}
         className="h-full border-x border-line bg-transparent px-2 text-sm text-ink outline-none" />
-      <button type="button" title="Ngày sau" disabled={ngay >= homNay} onClick={() => setNgay((d) => doiNgay(d, 1))}
+      <button type="button" title="Ngày sau" disabled={ngay >= max} onClick={() => setNgay((d) => doiNgay(d, 1))}
         className="flex h-full w-9 items-center justify-center text-ink-soft hover:text-ink disabled:opacity-30">
         <Icon name="chevron-right" size={16} />
       </button>
@@ -186,11 +191,11 @@ export function NhanLoaiCa({ data }) {
   return (
     <>
       <span className="rounded-full bg-surface-muted px-2 py-0.5" title={data.loai_ca_da_cai ? 'Theo cài đặt ca của tuần' : 'Tuần chưa cài loại ca — suy theo mã ca trên tem'}>
-        {TEN_CA[data.loai_ca] || data.loai_ca}{data.loai_ca_da_cai ? '' : ' (theo tem)'}
+        {TEN_CA[data.loai_ca] || data.loai_ca}{data.ca_dem === 'TRUOC' && data.loai_ca !== 'HANH_CHINH' ? CA_TRUOC : ''}{data.loai_ca_da_cai ? '' : ' (theo tem)'}
       </span>
       {Object.entries(data.loai_ca_rieng || {}).map(([lc, ca]) => (
-        <span key={lc} className="rounded-full bg-surface-muted px-2 py-0.5">
-          {TEN_LOAI_CA_RIENG[lc] || lc}: {TEN_CA[ca] || ca}
+        <span key={lc} className="rounded-full bg-surface-muted px-2 py-0.5" title={(data.ca_dem_rieng || {})[lc] === 'TRUOC' && ca !== 'HANH_CHINH' ? TITLE_CA_TRUOC : undefined}>
+          {TEN_LOAI_CA_RIENG[lc] || lc}: {TEN_CA[ca] || ca}{(data.ca_dem_rieng || {})[lc] === 'TRUOC' && ca !== 'HANH_CHINH' ? CA_TRUOC : ''}
         </span>
       ))}
     </>

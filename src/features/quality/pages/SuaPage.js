@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
+import { useSelector } from 'react-redux';
 import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
 import TraVeListModal, { TraVeListButton, TRA_VE_THEO_MAN } from '../../../components/common/TraVeListModal';
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
@@ -39,12 +40,15 @@ import { fmtNum, timTheoMaTem, temCode } from '../../../utils/format';
 import VuaQuet from '../../../components/common/VuaQuet';
 import SuaNhieuModal, { danhGiaSua, formMoi as formSuaMoi, O_SO as O_SO_SUA } from '../components/SuaNhieuModal';
 import TichTemNhapModal from '../../../components/common/TichTemNhapModal';
+import useDsNguoi, { nhoTen, KHOA_NGUOI_SUA } from '../../../hooks/useDsNguoi';
 
 const empty = { soLuongHuyThang: '', soLuongSua: '', soLuongSuaDat: '', soLuongSuaHuy: '' };
 // Tối đa số tem tích để xác nhận sửa 1 lượt (27/10/2026, như KCS) — mỗi tem 1 lần gọi recordSua tuần tự.
 const TOI_DA_TICH = 100;
-// Ô nhập của bảng "Tích tem" (29/10/2026) — cùng bộ ô với modal xác nhận nhiều tem.
-const TRUONG_SUA = O_SO_SUA.map(([k, label]) => ({ k, label }));
+// Ô nhập của bảng "Tích tem" (29/10/2026) — cùng bộ ô với modal xác nhận nhiều tem; + cột NGƯỜI SỬA ở cuối (09/11/2026,
+//   dựng trong component vì cần danh sách người).
+const TRUONG_SO_SUA = O_SO_SUA.map(([k, label]) => ({ k, label }));
+const soNguyen = (v) => Math.max(0, Math.trunc(Number(v) || 0));
 
 const FILTER_FIELDS = [
   { key: 'khach', label: 'Khách hàng' },
@@ -94,6 +98,14 @@ export default function SuaPage() {
   const [nhieuOpen, setNhieuOpen] = useState(false);
   const [tichTemOpen, setTichTemOpen] = useState(false); // bảng "Tích tem" — quét + nhập nhiều tem theo dòng
   const [vuaQuet, setVuaQuet] = useState(null);
+  // Bảng "Tích tem" (09/11/2026, người dùng: "thêm cột người sửa ở cuối, thêm nút xác nhận và in tem — đổi nút xác nhận sửa
+  //   thành nút này luôn"): người sửa ghi luôn vào lượt sửa (BE `recordSua`), in tem 17 ngay sau khi lưu (1 cửa sổ, 2 tem/tờ).
+  const { dsTen: dsNguoiSua, idTheoTen: idNguoiSua } = useDsNguoi(canSua);
+  const hoTenToi = useSelector((st) => st.auth?.user?.hoTen || '');
+  const truongTichTem = useMemo(() => [...TRUONG_SO_SUA, {
+    k: 'nguoiSua', label: 'Người sửa', kieu: 'nguoi', options: dsNguoiSua, keThua: true, minW: 220,
+    placeholder: 'Chọn / gõ tên người sửa…', macDinh: () => nhoTen.lay(KHOA_NGUOI_SUA),
+  }], [dsNguoiSua]);
 
   const filtersKey = useMemo(() => JSON.stringify(filters), [filters]);
   const rangeKey = useMemo(() => `${range.from || ''}|${range.to || ''}`, [range]);
@@ -180,14 +192,48 @@ export default function SuaPage() {
     const row = timTheoMaTem(res.data || [], code);
     return row ? { row } : { loi: 'Không có tem chờ sửa khớp mã này' };
   };
-  const sauTichTem = (so, loi) => {
+  const sauTichTem = (so, loi, ketIn) => {
     load(true);
+    const chuIn = ketIn && ketIn.loi
+      ? ` — IN TEM 17 LỖI: ${ketIn.loi} (in lại ở "Đã hoàn thành")`
+      : (ketIn && ketIn.so ? ` · đã mở ${ketIn.so} tem 17 để in (${Math.ceil(ketIn.so / 2)} tờ)` : '');
     if (!loi.length) {
-      show(`Đã xác nhận sửa ${so} tem — in tem 17 ở "Đã hoàn thành"`);
+      show(`Đã xác nhận sửa ${so} tem${chuIn}`, ketIn && ketIn.loi ? 'error' : undefined);
       setTichTemOpen(false);
       oTim.datConTro();
     } else {
-      show(`Đã lưu ${so}/${so + loi.length} tem — lỗi: ${loi.join(', ')}`, 'error');
+      show(`Đã lưu ${so}/${so + loi.length} tem — lỗi: ${loi.join(', ')}${chuIn}`, 'error');
+    }
+  };
+  // Cửa sổ in mở NGAY trong lượt bấm (trước khi gọi API — mở sau là trình duyệt chặn popup); không dòng nào có sửa đạt ⇒ không mở.
+  const moInTichTem = (ds) => (ds.some((x) => soNguyen(x.f.soLuongSuaDat) > 0) ? moSanCuaSoIn() : null);
+  // In tem 17 của các dòng vừa lưu có sửa đạt — cùng bộ dữ liệu nhãn với nút In tem ở sidebar "Đã hoàn thành" (`doInTem`).
+  const inTichTem = async (w, daLuu) => {
+    const coTem = daLuu.filter((x) => x.data && x.data.ma_tem_17 && Number(x.data.so_luong_sua_dat) > 0);
+    if (!coTem.length) { dongCuaSoIn(w); return { so: 0 }; }
+    try {
+      const labels = await Promise.all(coTem.map(async ({ row, f, data }) => {
+        const res = await getTemLabel(row.tem_id);
+        const slSua = Number(data.so_luong_sua) || 0;
+        const slDat = Number(data.so_luong_sua_dat) || 0;
+        return {
+          ...res.data,
+          ma_tem: data.ma_tem_17,          // mã TEM CON của lượt (getTemLabel trả nhãn tem gốc)
+          so_luong: slDat,
+          nguoi_sua: data.nguoi_sua || f.nguoiSua || '',
+          sl_sua: slSua,
+          sl_sua_dat: slDat,
+          sl_sua_huy: Number(data.so_luong_sua_huy) || 0,
+          ty_le_sua_dat: slSua > 0 ? `${Math.round((slDat / slSua) * 100)}%` : '',
+          nguoi_xn_sua: hoTenToi,
+          tg_sua: new Date().toISOString(),
+        };
+      }));
+      await printSuaOqcTem(labels, w);
+      return { so: labels.length };
+    } catch (e) {
+      dongCuaSoIn(w);
+      throw e;
     }
   };
 
@@ -527,11 +573,22 @@ export default function SuaPage() {
       <SuaNhieuModal open={nhieuOpen} rows={chonRows} onClose={() => { setNhieuOpen(false); oTim.datConTro(); }}
         onXong={sauSuaNhieu} truocXacNhan={(rs) => hoiLyDoNghen(rs)} show={show} />
       <TichTemNhapModal open={tichTemOpen} onClose={() => { setTichTemOpen(false); oTim.datConTro(); }}
-        title="Tích tem — xác nhận sửa nhiều tem" nhanXacNhan="Xác nhận sửa" show={show}
+        title="Tích tem — xác nhận sửa nhiều tem" nhanXacNhan="Xác nhận và in tem" iconXacNhan="printer" show={show}
         traMa={traTemSua} khoaDong={(r) => r.tem_id} maHien={(r) => r.ma_tem}
-        soCan={(r) => r.con_sua} nhanSoCan="Cần sửa" truong={TRUONG_SUA} formMoi={formSuaMoi}
-        danhGia={(r, f) => danhGiaSua(Number(r.con_sua) || 0, f)}
-        luu={(r, f) => recordSua(r.tem_id, { ...f })}
+        soCan={(r) => r.con_sua} nhanSoCan="Cần sửa" truong={truongTichTem} formMoi={formSuaMoi}
+        danhGia={(r, f) => {
+          const dg = danhGiaSua(Number(r.con_sua) || 0, f);
+          // Có sửa đạt ⇒ in tem 17 ⇒ phải có người sửa (tem in tên người sửa — như modal In tem ở "Đã hoàn thành").
+          return dg.ok && soNguyen(f.soLuongSuaDat) > 0 && !String(f.nguoiSua || '').trim()
+            ? { ok: false, chu: 'Nhập người sửa (in lên tem 17)' } : dg;
+        }}
+        luu={async (r, f) => {
+          const ten = String(f.nguoiSua || '').trim();
+          const res = await recordSua(r.tem_id, { ...f, nguoiSua: ten, nguoiSuaId: idNguoiSua.get(ten) || null });
+          nhoTen.dat(KHOA_NGUOI_SUA, ten);
+          return res;
+        }}
+        moTruoc={moInTichTem} sauKhiLuu={inTichTem}
         truocXacNhan={(rs) => hoiLyDoNghen(rs)} onXong={sauTichTem}
         phuTro={({ apMoiDong, dangLuu, coDong }) => (
           <Button variant="secondary" icon="check" disabled={dangLuu || !coDong}

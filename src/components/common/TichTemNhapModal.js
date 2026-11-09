@@ -5,6 +5,7 @@ import ConfirmDialog from './ConfirmDialog';
 import SearchableSelect from './SearchableSelect';
 import Icon from './Icon';
 import { fmtNum } from '../../utils/format';
+import { tenNguoi, timNguoi } from '../../hooks/useDsNguoi';
 
 // ─── TÍCH TEM — QUÉT + NHẬP NHIỀU TEM THEO DÒNG (29/10/2026, người dùng: "có nút tích → modal gần full màn hình,
 //   dạng bảng, cột đầu ô tích, rồi khách · đơn · mã · màu · kích · kích film, rồi các ô nhập; mở lên con trỏ ở ô quét,
@@ -15,7 +16,13 @@ import { fmtNum } from '../../utils/format';
 //   dòng sau; dòng lưu được rời bảng, dòng lỗi ở lại kèm câu lỗi.
 // Phím: ô quét Enter = tra mã · ô nhập Enter = sang ô kế (ô cuối ⇒ dòng dưới, chưa có thì thêm) · ↓ / ↑ = dòng dưới / trên
 //   (dòng cuối bấm ↓ ⇒ thêm 1 dòng mới, con trỏ vào ô quét). Ô chọn (danh mục) giữ ↑↓ cho danh sách thả xuống.
-// `truong`: [{ k, label, kieu: 'so' | 'chon', options, getSearch, placeholder, minW }].
+// `truong`: [{ k, label, kieu: 'so' | 'chon' | 'nguoi', options, getSearch, placeholder, minW, keThua, macDinh }].
+//   · `kieu: 'nguoi'` (09/11/2026 — cột Người kiểm / Người sửa ở CUỐI bảng): ô chọn người lưu TÊN (gõ tên ngoài danh sách
+//     được), `options` = `useDsNguoi().dsTen`; ↑ ↓ đi dòng như modal In tem KCS — ↓ sang dòng dưới đang TRỐNG thì chép tên.
+//   · `keThua: true`: dòng vừa tra được lấy giá trị của dòng ĐÃ TRA GẦN NHẤT phía trên; chưa có ⇒ `macDinh()` (tên nhớ trên máy).
+// `moTruoc(ds)` / `sauKhiLuu(ctx, daLuu)` (tùy chọn — nút "Xác nhận và in tem" trang Sửa): `moTruoc` chạy ĐỒNG BỘ ngay sau
+//   `truocXacNhan` (vẫn trong lượt bấm ⇒ mở được cửa sổ in, trình duyệt không chặn), trả `ctx`; `sauKhiLuu` nhận các dòng
+//   đã lưu `[{ row, f, data }]` (`data` = `data` của API) để in. Lỗi ở `sauKhiLuu` chỉ báo, dữ liệu đã lưu giữ nguyên.
 const TOI_DA_DONG = 100;
 const n = (v) => Math.max(0, Math.trunc(Number(v) || 0));
 
@@ -28,7 +35,7 @@ const dongTrong = () => { demId += 1; return { id: `d${demId}`, ma: '', tt: 'TRO
 export default function TichTemNhapModal({
   open, onClose, title, nhanXacNhan, show,
   traMa, khoaDong, maHien, soCan, nhanSoCan, truong, formMoi, danhGia, luu,
-  truocXacNhan, onXong, phuTro,
+  truocXacNhan, onXong, phuTro, moTruoc, sauKhiLuu, iconXacNhan = 'check-circle',
 }) {
   const [dong, setDong] = useState(() => [dongTrong()]);
   const [dangLuu, setDangLuu] = useState(false);
@@ -50,7 +57,17 @@ export default function TichTemNhapModal({
   const dangTra = useRef({});
   const lucGoMa = useRef(0);
   const huyHenTra = (id) => { clearTimeout(henTra.current[id]); delete henTra.current[id]; };
-  useEffect(() => () => Object.values(henTra.current).forEach(clearTimeout), []);
+  // Hẹn "sang ô kế" sau khi chọn ở ô danh mục / ô người — GỘP theo dòng: gõ tên mới + Enter làm ô chọn báo `onChange` 2 lần
+  //   (Enter + lúc rời ô) ⇒ sang ô kế 2 lần ⇒ đẻ 2 dòng trống (lỗi thấy khi bấm thử 09/11/2026).
+  const henKe = useRef({});
+  const henSangKe = (id, k) => {
+    clearTimeout(henKe.current[id]);
+    henKe.current[id] = setTimeout(() => { delete henKe.current[id]; oKe(id, k); }, 80);
+  };
+  useEffect(() => () => {
+    Object.values(henTra.current).forEach(clearTimeout);
+    Object.values(henKe.current).forEach(clearTimeout);
+  }, []);
 
   // Mở modal ⇒ bảng mới 1 dòng trống, con trỏ ở ô quét (Headless UI tự đặt focus lúc mở ⇒ đợi vài nhịp như các panel khác).
   useEffect(() => {
@@ -62,12 +79,23 @@ export default function TichTemNhapModal({
   }, [open, datConTro]);
 
   // Mỗi yêu cầu đặt con trỏ chỉ thực hiện 1 lần (đánh dấu `daDat`) — không thì gõ ở ô khác (đổi `dong`) bị kéo con trỏ về.
+  // ⚠ Ô chọn người vừa đóng danh sách thì Headless UI còn khóa (`inert`) các ô khác vài nhịp ⇒ đặt con trỏ có THỬ LẠI.
   const daDat = useRef(0);
   useEffect(() => {
-    if (!muonFocus || daDat.current === muonFocus.n) return;
+    if (!muonFocus || daDat.current === muonFocus.n) return undefined;
     const el = refs.current[`${muonFocus.id}|${muonFocus.k}`];
     const o = el && (el.tagName === 'INPUT' ? el : el.querySelector('input'));
-    if (o) { daDat.current = muonFocus.n; o.focus(); if (muonFocus.chon && o.select) o.select(); }
+    if (!o) return undefined;
+    daDat.current = muonFocus.n;
+    let lan = 0;
+    let hen = null;
+    const dat = () => {
+      o.focus();
+      if (document.activeElement !== o && lan < 20) { lan += 1; hen = setTimeout(dat, 16); return; }
+      if (muonFocus.chon && o.select) o.select();
+    };
+    dat();
+    return () => clearTimeout(hen);
   }, [muonFocus, dong]);
 
   const sua = (id, patch) => setDong((ds) => ds.map((d) => (d.id === id ? { ...d, ...(typeof patch === 'function' ? patch(d) : patch) } : d)));
@@ -131,8 +159,29 @@ export default function TichTemNhapModal({
       datConTro(ds[trung].id, keys[0]);
       return;
     }
-    sua(id, { tt: 'OK', row: kq.row, f: formMoi(kq.row), tich: true, chu: '', kq: null });
+    sua(id, { tt: 'OK', row: kq.row, f: keThuaF(id, formMoi(kq.row)), tich: true, chu: '', kq: null });
     datConTro(id, keys[0]);
+  };
+
+  // Ô `keThua` còn trống ⇒ lấy giá trị dòng đã tra gần nhất phía trên (chưa có ⇒ `macDinh()`).
+  const keThuaF = (id, f) => {
+    const ds = dongRef.current;
+    const i = ds.findIndex((x) => x.id === id);
+    const out = { ...f };
+    truong.filter((t) => t.keThua && !String(out[t.k] || '').trim()).forEach((t) => {
+      const tren = ds.slice(0, Math.max(0, i)).reverse().find((x) => x.tt === 'OK' && String(x.f[t.k] || '').trim());
+      out[t.k] = tren ? tren.f[t.k] : (t.macDinh ? t.macDinh() : '');
+    });
+    return out;
+  };
+
+  // ↑ ↓ ở ô chọn người: ↓ sang dòng dưới (dòng dưới đang TRỐNG tên thì chép tên này sang); ↑ lên dòng.
+  const muiTenNguoi = (d, t, huong, ten) => {
+    const ds = dongRef.current;
+    const i = ds.findIndex((x) => x.id === d.id);
+    const ke = ds[i + 1];
+    if (huong === 'xuong' && ten && ke && ke.tt === 'OK' && !String(ke.f[t.k] || '').trim()) setF(ke.id, t.k, ten);
+    sang(d.id, t.k, huong === 'xuong' ? 1 : -1);
   };
 
   const boDong = (id) => setDong((ds) => {
@@ -171,7 +220,7 @@ export default function TichTemNhapModal({
   const dongOk = dong.filter((d) => d.tt === 'OK');
   const tichHet = dongOk.length > 0 && dongOk.every((d) => d.tich);
   const doiTichHet = () => setDong((ds) => ds.map((d) => (d.tt === 'OK' ? { ...d, tich: !tichHet } : d)));
-  const tongSo = truong.filter((t) => t.kieu !== 'chon').map((t) => [t.label, dongTich.reduce((s, d) => s + n(d.f[t.k]), 0)]);
+  const tongSo = truong.filter((t) => t.kieu !== 'chon' && t.kieu !== 'nguoi').map((t) => [t.label, dongTich.reduce((s, d) => s + n(d.f[t.k]), 0)]);
 
   // Áp 1 hàm cho mọi dòng đã tra được (nút phụ trợ của màn: "Đạt hết", "Mã lỗi chung"…).
   const apMoiDong = (fn) => setDong((ds) => ds.map((d) => (d.tt === 'OK' ? { ...d, f: fn(d.row, d.f), kq: null } : d)));
@@ -180,26 +229,36 @@ export default function TichTemNhapModal({
     if (!dongTich.length) { show?.('Chưa tích dòng nào', 'error'); return; }
     if (soSai) { show?.(`Còn ${soSai} dòng chưa hợp lệ — sửa hoặc bỏ tích trước khi xác nhận`, 'error'); return; }
     if (truocXacNhan && !(await truocXacNhan(dongTich.map((d) => d.row)))) return;
+    let ctx = null;
+    if (moTruoc) {
+      try { ctx = moTruoc(dongTich.map((d) => ({ row: d.row, f: d.f }))); } catch (e) { show?.(e.message || 'Không mở được cửa sổ in', 'error'); return; }
+    }
     setDangLuu(true);
-    const okIds = new Set(); const loi = []; const kq = {};
+    const okIds = new Set(); const loi = []; const kq = {}; const daLuu = [];
     for (let i = 0; i < dongTich.length; i += 1) {
       const d = dongTich[i];
       setTienDo(`Đang lưu ${i + 1}/${dongTich.length} · ${maHien(d.row)}`);
       try {
         // eslint-disable-next-line no-await-in-loop
-        await luu(d.row, d.f);
+        const res = await luu(d.row, d.f);
         okIds.add(d.id);
+        daLuu.push({ row: d.row, f: d.f, data: res && res.data !== undefined ? res.data : res });
       } catch (e) {
         kq[d.id] = e.message || 'Lưu lỗi';
         loi.push(maHien(d.row));
       }
+    }
+    let ketIn = null;
+    if (sauKhiLuu) {
+      setTienDo('Đang chuẩn bị tem để in…');
+      try { ketIn = await sauKhiLuu(ctx, daLuu); } catch (e) { ketIn = { loi: e.message || 'In tem lỗi' }; }
     }
     setTienDo('');
     setDangLuu(false);
     const con = dongRef.current.filter((d) => !okIds.has(d.id)).map((d) => (kq[d.id] ? { ...d, kq: kq[d.id] } : d));
     const conDong = con.length ? con : [dongTrong()];
     setDong(conDong);
-    onXong?.(okIds.size, loi);
+    onXong?.(okIds.size, loi, ketIn);
     if (loi.length) {
       const dauLoi = conDong.find((d) => d.kq);
       if (dauLoi) datConTro(dauLoi.id, keys[0]);
@@ -224,7 +283,7 @@ export default function TichTemNhapModal({
                 : <>Đã tích <b className="text-ink">{dongTich.length}</b> dòng{tongSo.map(([l, v]) => (v ? <span key={l}> · {l.toLowerCase()} <b className="text-ink">{fmtNum(v)}</b></span> : null))}</>)}
             </span>
             <Button chiXemOk variant="ghost" onClick={xinDong} disabled={dangLuu}>Đóng</Button>
-            <Button icon="check-circle" onClick={xacNhan} loading={dangLuu} disabled={!dongTich.length || soSai > 0}>
+            <Button icon={iconXacNhan} onClick={xacNhan} loading={dangLuu} disabled={!dongTich.length || soSai > 0}>
               {nhanXacNhan} ({dongTich.length})
             </Button>
           </>
@@ -303,10 +362,22 @@ export default function TichTemNhapModal({
                               onKeyDown={(e) => { if (e.key === 'Enter' && !e.defaultPrevented) { e.preventDefault(); oKe(d.id, t.k); } }}>
                               <SearchableSelect options={t.options} value={d.f[t.k] || ''} getSearch={t.getSearch}
                                 placeholder={t.placeholder}
-                                onChange={(v) => { setF(d.id, t.k, v); if (v) setTimeout(() => oKe(d.id, t.k), 80); }} />
+                                onChange={(v) => { setF(d.id, t.k, v); if (v) henSangKe(d.id, t.k); }} />
                             </div>
                           )}
-                          {ok && t.kieu !== 'chon' && (
+                          {ok && t.kieu === 'nguoi' && (
+                            // Enter khi danh sách đóng nổi lên đây ⇒ sang ô kế (cột cuối ⇒ dòng dưới); chọn từ danh sách /
+                            //   gõ tên mới + Enter ⇒ `onChange` tự sang ô kế. ↑ ↓ đi dòng (`onMuiTen`).
+                            <div ref={(el) => { refs.current[`${d.id}|${t.k}`] = el; }} style={{ minWidth: t.minW || 220 }}
+                              onKeyDown={(e) => { if (e.key === 'Enter' && !e.defaultPrevented) { e.preventDefault(); oKe(d.id, t.k); } }}>
+                              <SearchableSelect chapNhanTuDo options={t.options || []} value={d.f[t.k] || ''}
+                                getValue={tenNguoi} getLabel={tenNguoi} getSearch={timNguoi}
+                                placeholder={t.placeholder || 'Chọn / gõ tên…'}
+                                onMuiTen={(huong, ten) => muiTenNguoi(d, t, huong, ten)}
+                                onChange={(v) => { setF(d.id, t.k, v); if (v) henSangKe(d.id, t.k); }} />
+                            </div>
+                          )}
+                          {ok && t.kieu !== 'chon' && t.kieu !== 'nguoi' && (
                             <input ref={(el) => { refs.current[`${d.id}|${t.k}`] = el; }} type="number" min="0" inputMode="numeric"
                               className={O_SO} value={d.f[t.k] ?? ''} disabled={dangLuu}
                               onChange={(e) => setF(d.id, t.k, e.target.value)}
