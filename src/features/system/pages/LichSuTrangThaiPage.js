@@ -2451,7 +2451,10 @@ function KeHoachTamCancelSection({ show }) {
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
     { key: 'mau_vai', header: 'Màu · Kích', render: (r) => [r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—' },
-    { key: 'ma_dot_vai', header: 'Đợt vải', render: (r) => r.ma_dot_vai || '—' },
+    // Mig 128: dòng kế hoạch tạm PHẦN ÉP của phần in 2 công đoạn ghi rõ "· Ép ủi".
+    { key: 'ma_dot_vai', header: 'Đợt vải', render: (r) => (
+      <span>{r.ma_dot_vai || '—'}{r.giai_doan === 'EP_UI' && <span className="ml-1 font-semibold text-orange-700">· Ép ủi</span>}</span>
+    ) },
     { key: 'so_luong', header: 'SL', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
     { key: 'ten_chuyen', header: 'Chuyền (dự kiến)', render: (r) => r.ten_chuyen || '—' },
     { key: 'ngay_ke_hoach', header: 'Ngày KH', className: 'whitespace-nowrap', render: (r) => (r.ngay_ke_hoach ? new Date(r.ngay_ke_hoach).toLocaleDateString('vi-VN') : '—') },

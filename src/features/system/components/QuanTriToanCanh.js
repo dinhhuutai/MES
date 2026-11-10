@@ -208,7 +208,8 @@ function KhoiKeHoachTam({ ds, onSuaKeHoach }) {
         <tbody>
           {ds.map((k) => (
             <tr key={k.id} className="border-b border-line/50">
-              <td className={`${td} text-xs`}>{k.ma_dot_vai}<div className="text-ink-soft">vải {fmtNum(k.so_luong_vai_ve)}</div></td>
+              <td className={`${td} text-xs`}>{k.ma_dot_vai}{k.giai_doan === 'EP_UI' && <span className="ml-1 font-semibold text-orange-700">· Ép ủi</span>}
+                <div className="text-ink-soft">vải {fmtNum(k.so_luong_vai_ve)}</div></td>
               <td className={td}>{k.ma_chuyen || '—'}</td>
               <td className={td}>{k.ngay_ke_hoach ? fmtDate(k.ngay_ke_hoach) : '—'}</td>
               <td className={`${td} text-xs`}>{khoangGio(k.tg_bd_kh, k.tg_kt_kh) || '—'}</td>

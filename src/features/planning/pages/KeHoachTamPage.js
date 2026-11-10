@@ -26,6 +26,7 @@ import CanhBaoGiaCong from '../components/CanhBaoGiaCong';
 import { laChuyenGiaCong } from '../utils/chuyenGiaCong';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
+import CongDoanBadge from '../../../components/common/CongDoanBadge';
 import useToast from '../../../hooks/useToast';
 import useSocketReload from '../../../hooks/useSocketReload';
 import usePermissions from '../../../hooks/usePermissions';
@@ -208,7 +209,8 @@ export default function KeHoachTamPage() {
   //   phụ thuộc người dùng đang lọc gì. Đổi sang `filtered` sẽ làm nút biến mất chỉ vì thành viên
   //   còn lại của set bị bộ lọc ẩn đi.
   const setDaReady = !!edit?.ma_set && rows.some((r) => r.ma_set === edit.ma_set && r.qc_done);
-  const choPhepTraVe = canDo && !!edit && (edit.qc_done === true || setDaReady);
+  // Dòng kế hoạch tạm PHẦN ÉP (mig 128) không có nút trả về Kỹ thuật — như dòng ép ở Release 1.
+  const choPhepTraVe = canDo && !!edit && edit.giai_doan !== 'EP_UI' && (edit.qc_done === true || setDaReady);
 
   // Chỉ phần in ĐÃ Ready (qc_done) mới xác nhận Release 1 được → chỉ những dòng này chọn được.
   // Tính trên tập ĐANG HIỆN (đã lọc) để "chọn tất cả" không ôm luôn dòng ngoài bộ lọc.
@@ -283,7 +285,13 @@ export default function KeHoachTamPage() {
     { key: 'ma_set', header: 'Gom set', render: (r) => (r.ma_set
       ? <Badge tone="info" title="Release chung cả set khi mọi đợt trong set đã Ready">{r.ma_set}</Badge>
       : <span className="text-ink-soft">—</span>) },
-    { key: 'ma_phan', header: 'Code phần', className: 'font-medium text-ink', render: (r) => r.ma_phan || '—' },
+    // Phần in 2 công đoạn: mỗi đợt có thể có kế hoạch tạm cho phần in VÀ phần ép (mig 128) ⇒ badge công đoạn cạnh code phần.
+    { key: 'ma_phan', header: 'Code phần', className: 'font-medium text-ink', render: (r) => (
+      <div className="flex flex-wrap items-center gap-1">
+        <span>{r.ma_phan || '—'}</span>
+        <CongDoanBadge luong={r.luong_sx} gd={r.giai_doan} className="whitespace-nowrap" />
+      </div>
+    ) },
     { key: 'ten_khach_hang', header: 'Khách hàng', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
@@ -416,7 +424,7 @@ export default function KeHoachTamPage() {
       <SidePanel
         open={!!edit}
         onClose={() => setEdit(null)}
-        title={edit ? `Sửa kế hoạch tạm — ${edit.ma_phan || ''}` : 'Chỉnh sửa kế hoạch tạm'}
+        title={edit ? `Sửa kế hoạch tạm — ${edit.ma_phan || ''}${edit.giai_doan === 'EP_UI' ? ' · Ép ủi' : ''}` : 'Chỉnh sửa kế hoạch tạm'}
         subtitle={edit ? `${edit.ten_khach_hang || ''} · ${edit.mau_vai || ''}` : ''}
         footer={(
           <>

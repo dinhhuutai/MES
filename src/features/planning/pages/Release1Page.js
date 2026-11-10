@@ -53,10 +53,11 @@ import ChipTabs from '../../../components/common/ChipTabs';
 import { gomDotCungCodePhan, dotIdsCuaDong, slaCuaDong, rowKey } from '../utils/gomDotRelease1';
 // Luồng theo tính chất in (mig 126): phần in 2 công đoạn có dòng ÉP ỦI riêng nằm ngay dưới dòng in · Logo bỏ Test Run.
 import CongDoanBadge from '../../../components/common/CongDoanBadge';
-import { laEp, laLogo, nhanCongDoan } from '../../../utils/luongSanXuat';
+import { laEp, laLogo, nhanCongDoan, epChoLapSau } from '../../../utils/luongSanXuat';
 
-// Dòng ép ủi chưa Ready ⇒ chưa lập kế hoạch được (ép ủi không qua Kế hoạch tạm) — khóa ô tích.
-const khoaChon = (r) => laEp(r) && !r.qc_done;
+// Dòng ép ủi chưa Ready: có Kế hoạch tạm theo công đoạn (mig 128, BE gắn `ep_tam_duoc`) ⇒ lưu KH tạm như dòng in — lập
+//   phần nào trước cũng được; chưa chạy mig ⇒ khóa ô tích như cũ.
+const khoaChon = epChoLapSau;
 
 const dateOffsetStr = (n) => {
   const d = new Date();
@@ -141,7 +142,7 @@ function DataCells({ r, pa }) {
         <div className="mt-1 flex flex-wrap items-center gap-1">
           <CongDoanBadge luong={r.luong_sx} gd={r.giai_doan} hienLogo />
           {r.qc_done ? <Badge tone="success">Đã Ready</Badge>
-            : laEp(r) ? <span title="Phần ép ủi chỉ lập kế hoạch được khi đợt vải đã Ready (không lưu Kế hoạch tạm)"><Badge tone="warning">Chờ Ready — ép ủi lập sau</Badge></span>
+            : epChoLapSau(r) ? <span title="Phần ép ủi chỉ lập kế hoạch được khi đợt vải đã Ready (không lưu Kế hoạch tạm)"><Badge tone="warning">Chờ Ready — ép ủi lập sau</Badge></span>
               : <Badge tone="warning">Chờ Ready → KH tạm</Badge>}
           {r._dots && r._dots.length > 1 && (
             <Badge tone="info" title="Các đợt vải cùng code phần được gom — release ra 1 lệnh, SL = tổng">Gom {r._dots.length} đợt</Badge>
@@ -545,7 +546,7 @@ export default function Release1Page() {
       const mkTsR = (gio) => (relForm.ngayKeHoach && gio ? `${relForm.ngayKeHoach}T${gio}:00` : null);
       // Mig 126: dòng ép ủi ⇒ `dotVaiIdsEp` (BE chạy phần in trước, phần ép sau; ép lỗi không hỏng phần in).
       const ids = looseList.filter((r) => !laEp(r)).map((r) => r.dot_vai_id);
-      const idsEp = looseList.filter((r) => laEp(r) && r.qc_done).map((r) => r.dot_vai_id);
+      const idsEp = looseList.filter((r) => laEp(r) && !epChoLapSau(r)).map((r) => r.dot_vai_id);
       const res = await createRelease1({
         dotVaiIds: ids, dotVaiIdsEp: idsEp,
         chuyenId: relForm.chuyenId, soLuongRelease: null, ngayKeHoach: relForm.ngayKeHoach || null,
@@ -781,7 +782,7 @@ export default function Release1Page() {
               Trong đó có đợt thuộc gom set — mỗi phần in vẫn ra lệnh riêng, không gom chung với phần in khác.
             </div>
           )}
-          {looseList.some((r) => !r.qc_done && !laEp(r)) && (
+          {looseList.some((r) => !r.qc_done && !epChoLapSau(r)) && (
             <div className="mt-1 text-xs text-amber-600">
               Đợt chưa Ready sẽ được lưu <b>Kế hoạch tạm</b> thay vì tạo lệnh.
             </div>
@@ -866,7 +867,9 @@ export default function Release1Page() {
                   <b>{detail.luong_sx === 'IN_KIENG' ? 'Phần in kiếng' : 'Phần in + ép'} — 2 công đoạn, 2 lệnh</b></div>
                 {laEp(detail)
                   ? <>Đây là phần <b>ép ủi</b>: ra lệnh ép riêng (số lượng release riêng, tối đa = SL vải), lập trước hay sau phần in đều được.
-                    {!detail.qc_done && <> Đợt <b>chưa Ready</b> ⇒ chưa lập được (ép ủi không lưu Kế hoạch tạm).</>}</>
+                    {!detail.qc_done && (epChoLapSau(detail)
+                      ? <> Đợt <b>chưa Ready</b> ⇒ chưa lập được (ép ủi không lưu Kế hoạch tạm).</>
+                      : <> Đợt <b>chưa Ready</b> ⇒ lưu <b>Kế hoạch tạm</b> phần ép, xác nhận ở màn Kế hoạch tạm khi Ready xong.</>)}</>
                   : <>Đây là phần <b>{nhanCongDoan(detail.luong_sx, detail.giai_doan).toLowerCase()}</b>. Phần ép ủi nằm ở dòng ngay dưới — lập kế hoạch riêng.</>}
                 {detail.ep_truoc && <div className="mt-1 text-xs">Phần in này đánh dấu <b>ép trước, in sau</b>.</div>}
               </div>

@@ -17,6 +17,9 @@ export const laHaiCongDoan = (luong) => luong === 'IN_KIENG' || luong === 'IN_EP
 export const laLogo = (luong) => luong === 'LOGO';
 export const chuanGd = (gd) => (gd === GD_EP ? GD_EP : GD_IN);
 export const laEp = (r) => chuanGd(r && r.giai_doan) === GD_EP;
+// Dòng ép ủi của đợt CHƯA Ready mà chưa lưu được Kế hoạch tạm (BE chưa chạy mig 128 ⇒ không gắn `ep_tam_duoc`) — khóa
+//   ô chọn ở Release 1 / Gom đợt vải. Có mig 128 ⇒ dòng ép chưa Ready lưu Kế hoạch tạm như dòng in.
+export const epChoLapSau = (r) => laEp(r) && !r.qc_done && !r.ep_tam_duoc;
 
 // Nhãn công đoạn — null với phần in 1 công đoạn (không vẽ badge).
 export function nhanCongDoan(luong, gd) {

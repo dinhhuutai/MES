@@ -9,6 +9,8 @@ import DateRangePicker from '../../../components/common/DateRangePicker';
 import { filterRows } from '../../../components/common/FieldFilters';
 import { Field, Input } from '../../../components/common/controls';
 import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
+import CongDoanBadge from '../../../components/common/CongDoanBadge';
+import { nhanCongDoan } from '../../../utils/luongSanXuat';
 import exportPanelExcel from '../../../components/common/exportPanelExcel';
 import { fmtNum, fmtDate } from '../../../utils/format';
 import { khopNhieu } from '../../../utils/timKiem';
@@ -56,7 +58,10 @@ const COT = [
   { key: 'ten_khach_hang', ten: 'Khách hàng' },
   { key: 'ma_don_hang', ten: 'Đơn hàng' },
   { key: 'ma_hang', ten: 'Mã hàng' },
-  { key: 'ma_phan', ten: 'Code phần' },
+  // Mig 128: 1 đợt có thể có kế hoạch tạm cho phần in VÀ phần ép (mỗi phần 1 dòng) ⇒ badge công đoạn.
+  { key: 'ma_phan', ten: 'Code phần', render: (r) => (
+    <span className="inline-flex flex-wrap items-center gap-1">{r.ma_phan || '—'}<CongDoanBadge luong={r.luong_sx} gd={r.giai_doan} className="whitespace-nowrap" /></span>
+  ) },
   { key: 'mau_vai', ten: 'Màu vải' },
   { key: 'kich_vai', ten: 'Kích vải' },
   { key: 'kich_phim', ten: 'Kích phim' },
@@ -155,7 +160,8 @@ export default function KeHoachTamListModal({ open, onClose }) {
           width: c.ngay ? 14 : 18,
           value: (r) => (c.key === 'tinh_trang' ? (TT[r.tinh_trang] || {}).nhan || r.tinh_trang
             : c.key === 'phuong_an_in' ? r.phuong_an_in
-              : r[c.key]),
+              : c.key === 'ma_phan' ? `${r.ma_phan || ''}${nhanCongDoan(r.luong_sx, r.giai_doan) ? ` · ${nhanCongDoan(r.luong_sx, r.giai_doan)}` : ''}`
+                : r[c.key]),
           ok: c.key === 'tinh_trang' ? (r) => r.tinh_trang === 'DA_RELEASE' : undefined,
           red: c.key === 'tinh_trang' ? (r) => r.tinh_trang === 'CHO_READY' : undefined,
         })),
@@ -284,7 +290,7 @@ export default function KeHoachTamListModal({ open, onClose }) {
                 <tr><td colSpan={COT.length + 1} className="py-10 text-center text-sm text-ink-soft">Không có dữ liệu</td></tr>
               )}
               {!loading && viewRows.map((r, i) => (
-                <tr key={`${r.dot_vai_ve_id}-${r.ma_lenh_san_xuat || ''}`} className="border-t border-line/70 align-top hover:bg-surface-muted/40">
+                <tr key={`${r.dot_vai_ve_id}-${r.giai_doan || ''}-${r.ma_lenh_san_xuat || ''}`} className="border-t border-line/70 align-top hover:bg-surface-muted/40">
                   <td className="px-2 py-1.5 text-xs text-ink-soft">{i + 1}</td>
                   {COT.map((c) => (
                     <td key={c.key} className={`px-2 py-1.5 ${c.so ? 'whitespace-nowrap text-right' : ''}`}>

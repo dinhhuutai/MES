@@ -21,7 +21,7 @@ import { listRelease1Candidates, createDotSanXuat, listChuyen } from '../../../s
 import { listUserOptions } from '../../../services/userService';
 import { fmtNum, fmtDate } from '../../../utils/format';
 import CongDoanBadge from '../../../components/common/CongDoanBadge';
-import { GD_IN, GD_EP, chuanGd, laEp } from '../../../utils/luongSanXuat';
+import { GD_IN, GD_EP, chuanGd, laEp, epChoLapSau } from '../../../utils/luongSanXuat';
 
 // Ngày mai (giờ máy) dạng YYYY-MM-DD — mặc định cho ô "Ngày kế hoạch".
 const tomorrowStr = () => {
@@ -93,7 +93,7 @@ export default function TaoDotSanXuatPage() {
 
   const MIXED_MSG = 'Chỉ gộp các đợt vải CÙNG PHẦN IN (code phần). Muốn gom nhiều phần in cùng màu → dùng Gom set ở READY.';
   const addToBasket = (r) => {
-    if (gd === GD_EP && !r.qc_done) { show('Phần ép ủi chỉ lập kế hoạch được khi đợt vải đã Ready', 'error'); return; }
+    if (epChoLapSau(r)) { show('Phần ép ủi chỉ lập kế hoạch được khi đợt vải đã Ready', 'error'); return; }
     if (basketPin && r.phan_in_id !== basketPin) {
       show(MIXED_MSG, 'error');
       return;
@@ -131,7 +131,7 @@ export default function TaoDotSanXuatPage() {
       });
       const skip = res.data?.skipped_test;
       const chuaLuuTho = res.data?.tho_in_chua_luu ? ' · CHƯA lưu thợ in (hệ thống chưa cập nhật cơ sở dữ liệu)' : '';
-      if (res.data?.chi_tam) show(`Phần in chưa Ready → đã lưu Kế hoạch tạm (${res.data.ke_hoach_tam_count || 0} đợt). Xác nhận lại ở màn Kế hoạch tạm khi Ready xong.${chuaLuuTho}`, chuaLuuTho ? 'error' : 'success');
+      if (res.data?.chi_tam) show(`${gd === GD_EP ? 'Phần ép ủi' : 'Phần in'} chưa Ready → đã lưu Kế hoạch tạm (${res.data.ke_hoach_tam_count || 0} đợt). Xác nhận lại ở màn Kế hoạch tạm khi Ready xong.${chuaLuuTho}`, chuaLuuTho ? 'error' : 'success');
       else show(`${skip ? 'Đã gom đợt vải thành 1 đợt sản xuất — hàng Logo vào thẳng Chờ chạy (không qua Test Run)' : `Đã gom đợt vải thành 1 đợt sản xuất${gd === GD_EP ? ' ÉP ỦI' : ''} — chờ Test Run`}${chuaLuuTho}`, chuaLuuTho ? 'error' : 'success');
       setBasket([]); setChuyenId(''); setNgayKeHoach(tomorrowStr()); setGioBd(''); setGioKt(''); setThoIn('');
       load();
@@ -178,7 +178,7 @@ export default function TaoDotSanXuatPage() {
           ) : (
             <div className="max-h-[calc(100vh-15rem)] space-y-1.5 overflow-auto">
               {leftRows.map((r) => {
-                const disabled = (basketPin && r.phan_in_id !== basketPin) || (gd === GD_EP && !r.qc_done);
+                const disabled = (basketPin && r.phan_in_id !== basketPin) || epChoLapSau(r);
                 return (
                   <button key={r.dot_vai_id} type="button" disabled={disabled} onClick={() => addToBasket(r)}
                     className={`flex w-full items-start justify-between gap-2 rounded-control border px-3 py-2 text-left text-sm ${disabled ? 'cursor-not-allowed border-line opacity-40' : 'border-line hover:border-primary hover:bg-primary/5'}`}>
