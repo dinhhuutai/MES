@@ -134,7 +134,7 @@ export default function KcsPage() {
   const oNguoiKiem = useRef(null);
   const idNguoi = (ten) => idTheoTen.get(String(ten || '').trim()) || null;
   const truongTichTem = useMemo(() => [...TRUONG_SO_KCS, {
-    k: 'nguoiKiem', label: 'Người kiểm', kieu: 'nguoi', options: dsTen, keThua: true, minW: 220,
+    k: 'nguoiKiem', label: 'Người kiểm', kieu: 'nguoi', options: dsTen, keThua: true, minW: 170,
     placeholder: 'Chọn / gõ tên người kiểm…', macDinh: () => nhoTen.lay(KHOA_NGUOI_KIEM),
   }], [dsTen]);
 

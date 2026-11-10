@@ -9,7 +9,7 @@ const tuChecklist = (key) => (COT_CHECKLIST.find((c) => c.key === key) || { valu
 const so = (v) => (v == null || v === '' ? 0 : Number(v) || 0);
 
 // TỔNG = SL IN + vải hư + vải thiếu + DM+TEST · CL = Tổng − SL release (đúng công thức tờ mẫu: 481 + 10 + 10 + 3 = 504).
-// ⚠ 26/10/2026 danh sách theo NGÀY IN TEM ⇒ SL IN chỉ là tem in TRONG kỳ; lệnh đã in một phần TRƯỚC kỳ thì CL cộng thêm
+// ⚠ Danh sách theo NGÀY CA của tem (ca trước / ca sau) ⇒ SL IN chỉ là tem TRONG kỳ; lệnh đã in một phần TRƯỚC kỳ thì CL cộng thêm
 //   phần đó (`sl_in_truoc_lenh`, backend) ⇒ CL vẫn là "còn thiếu / dư của lệnh". Lệnh in trọn trong kỳ = công thức tờ mẫu.
 export const tongDong = (r) => so(r.sl_in) + so(r.vai_hu) + so(r.vai_thieu) + so(r.dm_test);
 export const clDong = (r) => tongDong(r) + so(r.sl_in_truoc_lenh) - slReleaseDong(r);

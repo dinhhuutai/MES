@@ -106,7 +106,7 @@ export default function SuaPage() {
   const { dsTen: dsNguoiSua, idTheoTen: idNguoiSua } = useDsNguoi(canSua);
   const hoTenToi = useSelector((st) => st.auth?.user?.hoTen || '');
   const truongTichTem = useMemo(() => [...TRUONG_SO_SUA, {
-    k: 'nguoiSua', label: 'Người sửa', kieu: 'nguoi', options: dsNguoiSua, keThua: true, minW: 220,
+    k: 'nguoiSua', label: 'Người sửa', kieu: 'nguoi', options: dsNguoiSua, keThua: true, minW: 170,
     placeholder: 'Chọn / gõ tên người sửa…', macDinh: () => nhoTen.lay(KHOA_NGUOI_SUA),
   }], [dsNguoiSua]);
 

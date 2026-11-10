@@ -220,8 +220,8 @@ export default function PhanLoaiLoiPage() {
     id: b.id, label: b.ten_bien_phap, search: `${b.ma_bien_phap} ${b.ten_bien_phap}`,
   })), [bienPhap]);
   const truongPll = useMemo(() => [
-    { k: 'loaiLoiId', label: 'Mã lỗi', kieu: 'chon', options: optLoi, getSearch: (o) => o.search, placeholder: 'Gõ mã lỗi…', minW: 220 },
-    { k: 'bienPhapId', label: 'Biện pháp', kieu: 'chon', options: optBP, getSearch: (o) => o.search, placeholder: 'Biện pháp…', minW: 170 },
+    { k: 'loaiLoiId', label: 'Mã lỗi', kieu: 'chon', options: optLoi, getSearch: (o) => o.search, placeholder: 'Gõ mã lỗi…', minW: 180 },
+    { k: 'bienPhapId', label: 'Biện pháp', kieu: 'chon', options: optBP, getSearch: (o) => o.search, placeholder: 'Biện pháp…', minW: 140 },
     { k: 'soLuongSua', label: 'SL sửa' },
     { k: 'soLuongHuy', label: 'SL hủy' },
   ], [optLoi, optBP]);
@@ -310,14 +310,14 @@ export default function PhanLoaiLoiPage() {
       render: (r) => (r.created_date ? fmtDateTime(r.created_date)
         : <Badge tone="warning">Chưa phân loại lỗi</Badge>) },
     {
-      header: 'Khách hàng · Đơn hàng',
+      key: '_kh_don', header: 'Khách hàng · Đơn hàng',
       render: (r) => (<><div className="text-ink">{r.ten_khach_hang || '—'}</div>
         <div className="text-xs text-ink-soft">{r.ma_don_hang || '—'}</div></>),
     },
     { header: 'Mã hàng', key: 'ma_hang' },
     { header: 'Code phần', key: 'ma_phan' },
     {
-      header: 'Màu · Kích',
+      key: '_mau_kich', header: 'Màu · Kích',
       render: (r) => (<><div className="text-ink">{r.mau_vai || '—'}</div>
         <div className="text-xs text-ink-soft">{r.kich_vai || '—'} / {r.kich_phim || '—'}</div></>),
     },
@@ -325,12 +325,12 @@ export default function PhanLoaiLoiPage() {
     // ⚠ Hiện mã tem với TIỀN TỐ 16 = nhãn HÀNG LỖI dán túi sửa — đúng cái nhãn người phân loại đang
     //   cầm trên tay. DB lưu mã gốc tiền tố 15 (KCS đạt); chỉ đổi phần HIỂN THỊ, `traTem` vẫn gửi
     //   `r.ma_tem` gốc (backend quy mọi công đoạn về mã gốc bằng `baseMaTem`).
-    { header: 'Mã tem', render: (r) => <span className="font-mono text-xs">{temCode(r.ma_tem, 16)}</span> },
-    { header: 'SL in', render: (r) => Number(r.so_luong || 0).toLocaleString('vi-VN'), center: true },
-    { header: 'Đạt', render: (r) => <span className="text-emerald-600">{Number(r.sl_kcs_dat || 0)}</span>, center: true },
-    { header: 'Sửa', render: (r) => <span className="text-amber-600">{Number(r.sl_kcs_sua || 0)}</span>, center: true },
-    { header: 'Hủy', render: (r) => <span className="text-danger">{Number(r.sl_kcs_huy || 0)}</span>, center: true },
-    { header: 'Lỗi đã phân loại', render: (r) => <span className="text-xs text-ink-soft">{r.cac_loi || '—'}</span> },
+    { key: '_ma_tem', header: 'Mã tem', render: (r) => <span className="font-mono text-xs">{temCode(r.ma_tem, 16)}</span> },
+    { key: '_sl_in', header: 'SL in', render: (r) => Number(r.so_luong || 0).toLocaleString('vi-VN'), center: true },
+    { key: '_dat', header: 'Đạt', render: (r) => <span className="text-emerald-600">{Number(r.sl_kcs_dat || 0)}</span>, center: true },
+    { key: '_sua', header: 'Sửa', render: (r) => <span className="text-amber-600">{Number(r.sl_kcs_sua || 0)}</span>, center: true },
+    { key: '_huy', header: 'Hủy', render: (r) => <span className="text-danger">{Number(r.sl_kcs_huy || 0)}</span>, center: true },
+    { key: '_cac_loi', header: 'Lỗi đã phân loại', render: (r) => <span className="text-xs text-ink-soft">{r.cac_loi || '—'}</span> },
     { header: 'Người nhập', key: 'nguoi' },
     // Tem đã xác nhận Sửa (còn hiệu lực) ⇒ không hủy phân loại — phải hủy xác nhận Sửa trước (BE 409 DA_XAC_NHAN_SUA).
     ...huyLs.taoCot((r) => !!r.da_phan_loai && !!r.tem_id && !(Number(r.sl_da_xac_nhan_sua) > 0)),

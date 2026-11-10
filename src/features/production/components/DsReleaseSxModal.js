@@ -27,8 +27,8 @@ import exportDsReleaseSx from '../utils/exportDsReleaseSx';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DANH SÁCH RELEASE CỦA SẢN XUẤT (26/10/2026, người dùng gửi mẫu "DANH SÁCH RELEASE BÀN 10/26/2026") — nút ở màn
-// *Xác nhận chạy*. ⚠ 26/10/2026 chiều (người dùng: "lấy theo ngày là ngày in tem"): theo khoảng NGÀY IN TEM — lệnh có
-//   tem gốc in trong khoảng (backend `dsReleaseSx`; SL IN = tem in trong kỳ, SL ĐÃ IN = in trước kỳ).
+// *Xác nhận chạy*. Theo khoảng NGÀY SẢN XUẤT của tem = ngày trong MÃ NGÀY CA (ca trước / ca sau — backend
+//   `utils/ngaySxTem.js`, cùng luật Báo cáo sản xuất): lệnh có tem gốc thuộc khoảng (SL IN = tem trong kỳ, SL ĐÃ IN = trước kỳ).
 //   · Nút chuyển **Danh sách release / Nhật ký in** — Nhật ký in = 1 dòng / tem in trong kỳ, cột theo mẫu ERP "DANH SÁCH
 //     NHẬT KÝ IN" (`COT_NHAT_KY_IN`). Chip khu, chuyền thêm, ô tìm, bộ lọc áp CHUNG cho cả hai.
 //   · Ô tìm (không dấu, khớp từng từ) + Bộ lọc trường (Code phần · Khách · Đơn/PO · Mã hàng · Màu · Chuyền · Thợ · Lệnh).
@@ -72,7 +72,7 @@ export default function DsReleaseSxModal({ open, onClose }) {
   const chiXem = useChiXem();
   const { can } = usePermissions();
   const ghiDuoc = !chiXem && can('PROD_RUN');
-  // Khoảng NGÀY IN TEM — mặc định hôm nay; chỉ chọn 1 ngày (chưa có "đến") ⇒ đúng ngày đó.
+  // Khoảng NGÀY SẢN XUẤT (ngày ca của tem) — mặc định hôm nay; chỉ chọn 1 ngày (chưa có "đến") ⇒ đúng ngày đó.
   const [khoang, setKhoang] = useState(() => { const h = ngayLocalISO(new Date()); return { from: h, to: h }; });
   const ngay = khoang.from || ngayLocalISO(new Date());
   const denNgay = khoang.to || ngay;
@@ -190,8 +190,8 @@ export default function DsReleaseSxModal({ open, onClose }) {
             ))}
           </div>
           <div className="flex items-center gap-2 text-sm">
-            <span className="text-ink-soft">Ngày in tem</span>
-            <DateRangePicker value={khoang} placeholder="Ngày in tem"
+            <span className="text-ink-soft">Ngày ca</span>
+            <DateRangePicker value={khoang} placeholder="Ngày ca"
               onChange={({ from, to }) => setKhoang({ from: from || ngayLocalISO(new Date()), to: to || '' })} />
           </div>
           <div className="w-64">
