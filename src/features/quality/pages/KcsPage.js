@@ -25,6 +25,7 @@ import Icon from '../../../components/common/Icon';
 import { Field, Input } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import useSocketReload from '../../../hooks/useSocketReload';
+import useHoanTai from '../../../hooks/useHoanTai';
 import usePermissions from '../../../hooks/usePermissions';
 import useHuyLichSu from '../../../hooks/useHuyLichSu';
 import useOTimKiem from '../../../hooks/useOTimKiem';
@@ -73,7 +74,9 @@ export default function KcsPage() {
   const { can } = usePermissions();
   const { toast, show } = useToast();
   const canKcs = can('KCS');
-  const now = useNow(1000);
+  // ⚠ 15 s, KHÔNG 1 s (09/11/2026): `now` chỉ để tô màu SLA + đếm nút Nghẽn (SLA tính theo PHÚT). Nhịp 1 s làm trang (hàng
+  //   nghìn tem) vẽ lại mỗi giây ⇒ modal Tích tem / hộp KCS mở trên trang bị khựng khi gõ, quét (người dùng báo "xoay và chậm").
+  const now = useNow(15000);
 
   const [rows, setRows] = useState([]);
   const [nghenOpen, setNghenOpen] = useState(false); // modal "Danh sách nghẽn"
@@ -286,7 +289,10 @@ export default function KcsPage() {
   // Tự tải lại khi trạm khác xác nhận (tránh màn để lâu → dữ liệu cũ).
   // ⚠ Tải NGẦM khi có sự kiện realtime: `load(true)` bỏ qua `setLoading(true)` (bảng không bị
   // thay bằng spinner) và KHÔNG xóa dòng đang tích. Nhiều sự kiện trong 400ms gộp thành 1 lần tải.
-  useSocketReload(['quality:updated', 'drying:updated'], () => load(true));
+  // ⚠ Đang mở bảng Tích tem / modal xác nhận nhiều tem ⇒ HOÃN (mỗi tem lưu xong lại bắn sự kiện — tải lại cả danh sách
+  //   hàng nghìn tem giữa lượt lưu làm modal khựng); đóng modal ⇒ tải 1 lần (`useHoanTai`, 09/11/2026).
+  const taiNgam = useHoanTai(tichTemOpen || nhieuOpen, () => load(true));
+  useSocketReload(['quality:updated', 'drying:updated'], taiNgam);
   // NÚT "HỦY" Ở TỪNG DÒNG LỊCH SỬ (14/10/2026): nhập lý do ⇒ backend đảo sổ cái lượt đó rồi báo ERP hủy chứng từ
   // theo IDMES. Chỉ cần quyền công đoạn của màn này (người dùng chốt).
   const huyLs = useHuyLichSu({
@@ -303,9 +309,9 @@ export default function KcsPage() {
 
   // Tự làm mới ngầm mỗi 30s: tem phơi xong (BE tự chuyển sang chờ KCS) sẽ hiện lên mà không cần bấm.
   useEffect(() => {
-    const id = setInterval(() => load(true), 30000);
+    const id = setInterval(taiNgam, 30000);
     return () => clearInterval(id);
-  }, [load]);
+  }, [taiNgam]);
 
   // Prefill SL đạt = SL còn cần kiểm (con_kcs). Kiểm từng phần nhiều lần.
   const open = (row) => {
@@ -389,7 +395,7 @@ export default function KcsPage() {
   // Modal nhiều tem lưu xong: bỏ tích dòng đã lưu; hết lỗi ⇒ đóng modal, con trỏ về ô tìm.
   const sauKcsNhieu = (okIds, loi) => {
     setChon((c) => c.filter((x) => !okIds.includes(x.tem_id)));
-    load(true);
+    taiNgam(); // modal còn mở (có lỗi) ⇒ hoãn tới lúc đóng; hết lỗi ⇒ đóng ngay dưới đây ⇒ tải 1 lần
     if (!loi.length) {
       show(`Đã xác nhận KCS ${okIds.length} tem`);
       setNhieuOpen(false);
@@ -406,7 +412,7 @@ export default function KcsPage() {
     return row ? { row } : { loi: 'Không có tem chờ KCS khớp mã này' };
   };
   const sauTichTem = (so, loi) => {
-    load(true);
+    taiNgam();
     if (!loi.length) {
       show(`Đã xác nhận KCS ${so} tem`);
       setTichTemOpen(false);

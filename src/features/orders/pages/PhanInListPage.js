@@ -144,6 +144,7 @@ const TEM_STATUS = {
   IN: { label: 'Đã in', tone: 'default' },
   DANG_PHOI: { label: 'Đang phơi', tone: 'info' },
   DA_KHO: { label: 'Đã khô', tone: 'info' },
+  CHO_CD_SAU: { label: 'Chờ công đoạn sau', tone: 'info' },
   CHO_SUA: { label: 'Chờ sửa', tone: 'warning' },
   CHO_OQC: { label: 'Chờ OQC', tone: 'info' },
   OQC_DAT: { label: 'OQC đạt', tone: 'success' },

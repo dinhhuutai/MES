@@ -50,6 +50,7 @@ import useOTimKiem from '../../../hooks/useOTimKiem';
 import TheoDoiChuyenPage from './TheoDoiChuyenPage';
 import TheoDoiTo from '../components/TheoDoiTo';
 import XePhoiPage from './XePhoiPage';
+import CongDoanBadge from '../../../components/common/CongDoanBadge';
 
 // Trần số lệnh mở chung 1 sidebar (mỗi lệnh 1 lượt `getRun`).
 const TOI_DA_MO_CHUNG = 30;
@@ -236,7 +237,7 @@ export default function XacNhanChayPage() {
   const cungMotPhan = (ds) => ds.length > 1
     && ds.every((l) => (Number(l.so_phan_in) || 1) === 1 && !(l.phan_in_list && l.phan_in_list.length > 1))
     && ds.every((l) => !khoaNgcLenh(l).includes('|'))
-    && new Set(ds.map((l) => `${l.phan_in_id || l.ma_phan || ''}|${l.chuyen_id || ''}|${khoaNgcLenh(l)}`)).size === 1
+    && new Set(ds.map((l) => `${l.phan_in_id || l.ma_phan || ''}|${l.chuyen_id || ''}|${khoaNgcLenh(l)}|${l.giai_doan === 'EP_UI' ? 'EP' : 'IN'}`)).size === 1
     && !!(ds[0].phan_in_id || ds[0].ma_phan);
   const moNhieu = async (ds) => {
     if (!cungMotPhan(ds)) { setSelNhieu(ds.map((l) => l.lenh_id)); return; }
@@ -500,7 +501,10 @@ export default function XacNhanChayPage() {
         {!r.__sub && Number(r.so_phan_in) > 1 && <GomBadge soDotVai={r.so_dot_vai} soPhanIn={r.so_phan_in} />}
       </div>
     ) },
-    { key: 'ma_phan', header: 'Code phần', render: (r) => r.ma_phan || '—' },
+    // Mig 126: nhãn công đoạn (In kiếng / In / Ép ủi) + Logo cạnh code phần.
+    { key: 'ma_phan', header: 'Code phần', render: (r) => (
+      <span className="inline-flex flex-wrap items-center gap-1">{r.ma_phan || '—'}<CongDoanBadge luong={r.luong_sx} gd={r.giai_doan} hienLogo /></span>
+    ) },
     { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
     { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },

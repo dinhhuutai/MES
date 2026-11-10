@@ -24,6 +24,7 @@ import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import { Field, Input } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import useSocketReload from '../../../hooks/useSocketReload';
+import useHoanTai from '../../../hooks/useHoanTai';
 import useNow from '../../../hooks/useNow';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 import useLyDoNghen from '../../../hooks/useLyDoNghen';
@@ -69,7 +70,9 @@ const ma17 = (r) => r.ma_tem_17 || temCode(r.ma, 17);
 export default function SuaPage() {
   const { can } = usePermissions();
   const { toast, show } = useToast();
-  const now = useNow(1000);
+  // ⚠ 15 s, KHÔNG 1 s (09/11/2026, như KCS): `now` chỉ để tô màu SLA + đếm nút Nghẽn — vẽ lại cả trang mỗi giây làm modal
+  //   Tích tem / hộp Sửa khựng khi gõ, quét.
+  const now = useNow(15000);
   const canSua = can('SUA');
 
   const [rows, setRows] = useState([]);
@@ -123,6 +126,9 @@ export default function SuaPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [search, filtersKey, rangeKey, show]);
+  // ⚠ Đang mở bảng Tích tem / modal xác nhận nhiều tem ⇒ HOÃN tải lại ngầm, đóng modal ⇒ tải 1 lần (`useHoanTai`, 09/11/2026
+  //   — như KCS: mỗi tem lưu xong bắn `quality:updated`, tải lại cả danh sách giữa lượt lưu làm modal khựng).
+  const taiNgam = useHoanTai(tichTemOpen || nhieuOpen, () => load(true));
 
   const setField = (key, value) => setFilters((f) => ({ ...f, [key]: value }));
   const clearFilters = () => setFilters({});
@@ -176,7 +182,7 @@ export default function SuaPage() {
   };
   const sauSuaNhieu = (okIds, loi) => {
     setChon((c) => c.filter((x) => !okIds.includes(x.tem_id)));
-    load(true);
+    taiNgam();
     if (!loi.length) {
       show(`Đã xác nhận sửa ${okIds.length} tem — in tem 17 ở "Đã hoàn thành"`);
       setNhieuOpen(false);
@@ -193,7 +199,7 @@ export default function SuaPage() {
     return row ? { row } : { loi: 'Không có tem chờ sửa khớp mã này' };
   };
   const sauTichTem = (so, loi, ketIn) => {
-    load(true);
+    taiNgam();
     const chuIn = ketIn && ketIn.loi
       ? ` — IN TEM 17 LỖI: ${ketIn.loi} (in lại ở "Đã hoàn thành")`
       : (ketIn && ketIn.so ? ` · đã mở ${ketIn.so} tem 17 để in (${Math.ceil(ketIn.so / 2)} tờ)` : '');
@@ -387,7 +393,7 @@ export default function SuaPage() {
   // Tự tải lại khi trạm khác xác nhận (tránh màn để lâu → dữ liệu cũ).
   // ⚠ Tải NGẦM khi có sự kiện realtime: `load(true)` bỏ qua `setLoading(true)` (bảng không bị
   // thay bằng spinner) và KHÔNG xóa dòng đang tích. Nhiều sự kiện trong 400ms gộp thành 1 lần tải.
-  useSocketReload(['quality:updated'], () => load(true));
+  useSocketReload(['quality:updated'], taiNgam);
   // NÚT "HỦY" Ở TỪNG DÒNG LỊCH SỬ (14/10/2026): nhập lý do ⇒ backend đảo sổ cái lượt đó rồi báo ERP hủy chứng từ
   // theo IDMES. Chỉ cần quyền công đoạn của màn này (người dùng chốt).
   const huyLs = useHuyLichSu({

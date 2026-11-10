@@ -2,6 +2,8 @@ import { khop, khopNhieu } from '../../../utils/timKiem';
 import { trongKhoangNgay } from '../../../utils/format';
 import { hopChipChuyen } from '../../../utils/khuChuyen';
 import { khoaNgcLenh } from '../../../utils/nhaGiaCong';
+// Mig 126: lệnh IN và lệnh ÉP ỦI của cùng phần in 2 công đoạn KHÔNG gom chung 1 dòng (khóa thêm công đoạn).
+import { khoaCongDoan } from '../../../utils/luongSanXuat';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // LỌC LỆNH màn Xác nhận chạy — DÙNG CHUNG bảng *Đang chạy* (trang) và modal *Chờ chạy* (01/10/2026),
@@ -95,7 +97,7 @@ export function gomTheoCodePhan(rows) {
   for (const r of rows || []) {
     const motPin = !(r.phan_in_list && r.phan_in_list.length > 1);
     const pin = r.phan_in_id || r.ma_phan || '';
-    const k = motPin && pin ? `${pin}|${r.chuyen_id || r.ma_chuyen || ''}|${khoaNgcLenh(r)}` : '';
+    const k = motPin && pin ? `${pin}|${r.chuyen_id || r.ma_chuyen || ''}|${khoaNgcLenh(r)}|${khoaCongDoan(r)}` : '';
     const g = k ? nhom.get(k) : null;
     if (g) { g._lenh.push(r); continue; }
     const moi = { ...r, _lenh: [r] };
@@ -137,7 +139,7 @@ export function gomDangChayTheoCodePhan(rows) {
   for (const r of rows || []) {
     const motPin = !(r.phan_in_list && r.phan_in_list.length > 1);
     const pin = r.phan_in_id || r.ma_phan || '';
-    const k = motPin && pin ? `${pin}|${r.chuyen_id || r.ma_chuyen || ''}|${khoaNgcLenh(r)}` : '';
+    const k = motPin && pin ? `${pin}|${r.chuyen_id || r.ma_chuyen || ''}|${khoaNgcLenh(r)}|${khoaCongDoan(r)}` : '';
     const g = k ? nhom.get(k) : null;
     if (g) { g._lenh.push(r); continue; }
     const moi = { ...r, _lenh: [r] };

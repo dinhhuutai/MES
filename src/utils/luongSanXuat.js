@@ -1,0 +1,31 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// LUỒNG SẢN XUẤT THEO TÍNH CHẤT IN (mig 126) — GƯƠNG của backend `utils/luongSanXuat.js` (sửa luật thì sửa cả hai).
+//   · `luong_sx` của phần in: THUONG · IN_KIENG · IN_EP · LOGO.
+//   · Phần in 2 công đoạn (IN_KIENG / IN_EP) ⇒ lệnh / dòng Kế hoạch có `giai_doan` 'IN' hoặc 'EP_UI' (ép ủi).
+// ─────────────────────────────────────────────────────────────────────────────
+export const GD_IN = 'IN';
+export const GD_EP = 'EP_UI';
+
+export const LUONG_SX = [
+  { ma: 'THUONG', ten: 'In thường' },
+  { ma: 'IN_KIENG', ten: 'In kiếng' },
+  { ma: 'IN_EP', ten: 'In + ép' },
+  { ma: 'LOGO', ten: 'Logo' },
+];
+
+export const laHaiCongDoan = (luong) => luong === 'IN_KIENG' || luong === 'IN_EP';
+export const laLogo = (luong) => luong === 'LOGO';
+export const chuanGd = (gd) => (gd === GD_EP ? GD_EP : GD_IN);
+export const laEp = (r) => chuanGd(r && r.giai_doan) === GD_EP;
+
+// Nhãn công đoạn — null với phần in 1 công đoạn (không vẽ badge).
+export function nhanCongDoan(luong, gd) {
+  if (!laHaiCongDoan(luong)) return null;
+  if (chuanGd(gd) === GD_EP) return 'Ép ủi';
+  return luong === 'IN_KIENG' ? 'In kiếng' : 'In';
+}
+
+export const tenLuong = (luong) => (LUONG_SX.find((l) => l.ma === luong) || LUONG_SX[0]).ten;
+
+// Khóa so sánh "cùng công đoạn" khi gom dòng / gộp lệnh — lệnh in và lệnh ép ủi KHÔNG BAO GIỜ gom chung.
+export const khoaCongDoan = (r) => chuanGd(r && r.giai_doan);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Modal from './Modal';
 import Button from './Button';
 import ConfirmDialog from './ConfirmDialog';
@@ -23,6 +23,13 @@ import { tenNguoi, timNguoi } from '../../hooks/useDsNguoi';
 // `moTruoc(ds)` / `sauKhiLuu(ctx, daLuu)` (tùy chọn — nút "Xác nhận và in tem" trang Sửa): `moTruoc` chạy ĐỒNG BỘ ngay sau
 //   `truocXacNhan` (vẫn trong lượt bấm ⇒ mở được cửa sổ in, trình duyệt không chặn), trả `ctx`; `sauKhiLuu` nhận các dòng
 //   đã lưu `[{ row, f, data }]` (`data` = `data` của API) để in. Lỗi ở `sauKhiLuu` chỉ báo, dữ liệu đã lưu giữ nguyên.
+// ─── 1 TEM NHIỀU DÒNG (`nhom`, 09/11/2026 — trang Phân loại lỗi: "1 tem có thể nhiều lỗi, kiểm tra tính trên các dòng
+//   cùng tem; lệch mà bấm ↓ thì cho phân loại tiếp tem đó; gom ô trùng thông tin cho dễ nhìn") ───
+//   `nhom = { danhGia(row, fs), conLai(row, fs), formTiep(row, con), luu(row, fs) }` — `fs` = form MỌI dòng của tem.
+//   · Quét lại tem đã có ⇒ thêm dòng cho tem đó (đặt ngay dưới các dòng của nó), không báo trùng.
+//   · ↓ / Enter ở ô cuối của dòng CUỐI một tem mà `conLai > 0` ⇒ chèn dòng mới cho tem đó, đổ sẵn `formTiep(row, conLai)`.
+//   · Các dòng cùng tem luôn LIỀN NHAU; ô tích · mã tem · khách → SL · Kiểm tra gộp ô (rowSpan); tích / lưu theo TEM
+//     (1 lần `nhom.luu` / tem). Không có `nhom` ⇒ như cũ: mỗi tem 1 dòng, quét trùng báo lỗi.
 const TOI_DA_DONG = 100;
 const n = (v) => Math.max(0, Math.trunc(Number(v) || 0));
 
@@ -32,10 +39,118 @@ const O_MA = 'h-9 w-full min-w-[150px] rounded-input border border-line bg-surfa
 let demId = 0;
 const dongTrong = () => { demId += 1; return { id: `d${demId}`, ma: '', tt: 'TRONG', row: null, f: {}, tich: false, chu: '' }; };
 
+// ─── 1 DÒNG CỦA BẢNG — `memo` (09/11/2026, người dùng báo "xoay và chậm, chỉ mới 10 tem") ───
+// Trước đây cả bảng vẽ lại mỗi phím gõ (mỗi dòng có 1 Combobox chọn người ~500 tên) và mỗi GIÂY (trang KCS / Sửa vẽ lại
+//   theo đồng hồ SLA ⇒ modal con vẽ lại theo). Đo 10 dòng: gõ 4 phím vào ô số mất ~350 ms (bản dev, CPU thường).
+//   Nay dòng chỉ vẽ lại khi CHÍNH dữ liệu dòng đổi (`d`), số thứ tự, cờ đang lưu hoặc nút bỏ dòng.
+// ⚠ Mọi hàm (xử lý phím, đặt ref, `danhGia` / `soCan` / `maHien` của trang…) đi qua `h` = REF ỔN ĐỊNH của modal — đừng
+//   truyền hàm nội tuyến làm prop (đổi mỗi lần vẽ ⇒ `memo` vô dụng). `danhGia` / `soCan` / `maHien` của 3 trang là hàm
+//   THUẦN theo dòng nên đọc bản mới nhất qua ref là đúng.
+// Chế độ `nhom`: `dau` = dòng đầu của tem (vẽ các ô gộp, `rowSpan = soDong`); dòng sau của cùng tem (`dau = false`) bỏ
+//   các ô đó. Kết quả kiểm tra (`dgOk` · `dgChu` · `dgVang`) do modal tính theo CẢ tem, truyền dạng giá trị đơn để `memo`
+//   không vẽ lại mọi dòng.
+const DongTichTem = memo(function DongTichTem({
+  d, i, truong, dangLuu, coNutBo, h, dau = true, soDong = 1, dgOk, dgChu, dgVang,
+}) {
+  const r = d.row || {};
+  const ok = d.tt === 'OK';
+  const H = h.current;
+  const gop = dau && soDong > 1 ? { rowSpan: soDong } : {};
+  const nen = dau && soDong > 1 ? 'align-top' : '';
+  return (
+    <tr className={`${dau ? 'border-t border-line/70' : 'border-t border-dashed border-line/50'} align-middle ${d.kq ? 'bg-danger/5' : ''} ${ok && !d.tich ? 'opacity-60' : ''}`}>
+      {dau && (
+        <td {...gop} className={`px-2 py-1 text-center ${nen}`}>
+          {ok && (
+            <input type="checkbox" aria-label="Tích tem" checked={d.tich} disabled={dangLuu}
+              className={soDong > 1 ? 'mt-2.5' : ''}
+              onChange={() => h.current.doiTich(d)} />
+          )}
+        </td>
+      )}
+      <td className="px-1 py-1 text-right tabular-nums text-ink-soft">{i + 1}</td>
+      {dau && (
+        <>
+          <td {...gop} className={`px-2 py-1 ${nen}`}>
+            {ok ? (
+              <div className={soDong > 1 ? 'pt-2' : ''}>
+                <span className="font-mono text-xs font-semibold text-primary">{H.maHien(r)}</span>
+                {soDong > 1 && <div className="text-[11px] text-ink-soft">{soDong} dòng lỗi</div>}
+              </div>
+            ) : (
+              <input ref={(el) => h.current.datRef(`${d.id}|ma`, el)} className={O_MA}
+                value={d.ma} placeholder="Quét / gõ mã tem…" disabled={dangLuu}
+                onChange={(e) => h.current.doiMa(d.id, e.target.value)}
+                onKeyDown={(e) => h.current.phim(e, d, 'ma')} />
+            )}
+          </td>
+          <td {...gop} className={`px-2 py-1 font-medium text-ink ${nen} ${soDong > 1 ? 'pt-3' : ''}`}>{r.ten_khach_hang || ''}</td>
+          <td {...gop} className={`px-2 py-1 ${nen} ${soDong > 1 ? 'pt-3' : ''}`}>{r.ma_don_hang || ''}</td>
+          <td {...gop} className={`px-2 py-1 leading-tight ${nen} ${soDong > 1 ? 'pt-3' : ''}`}>
+            <div>{r.ma_hang || ''}</div>
+            {r.ma_phan && <div className="text-[11px] text-ink-soft">{r.ma_phan}</div>}
+          </td>
+          <td {...gop} className={`px-2 py-1 ${nen} ${soDong > 1 ? 'pt-3' : ''}`}>{r.mau_vai || ''}</td>
+          <td {...gop} className={`px-2 py-1 ${nen} ${soDong > 1 ? 'pt-3' : ''}`}>{r.kich_vai || ''}</td>
+          <td {...gop} className={`px-2 py-1 ${nen} ${soDong > 1 ? 'pt-3' : ''}`}>{r.kich_phim || ''}</td>
+          <td {...gop} className={`px-2 py-1 text-right font-semibold tabular-nums text-primary ${nen} ${soDong > 1 ? 'pt-3' : ''}`}>{ok ? fmtNum(H.soCan(r)) : ''}</td>
+        </>
+      )}
+      {truong.map((t) => (
+        <td key={t.k} className="px-1 py-1">
+          {ok && t.kieu === 'chon' && (
+            // ⚠ Ô chọn: Enter khi danh sách đang mở do Combobox xử lý (chọn mục, chặn nổi bọt) ⇒ `onChange` tự sang ô kế;
+            //   danh sách đóng thì Enter nổi lên đây ⇒ sang ô kế. ↑↓ để Combobox dùng.
+            <div ref={(el) => h.current.datRef(`${d.id}|${t.k}`, el)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.defaultPrevented) { e.preventDefault(); h.current.oKe(d.id, t.k); } }}>
+              <SearchableSelect options={t.options} value={d.f[t.k] || ''} getSearch={t.getSearch}
+                placeholder={t.placeholder}
+                onChange={(v) => { h.current.setF(d.id, t.k, v); if (v) h.current.henSangKe(d.id, t.k); }} />
+            </div>
+          )}
+          {ok && t.kieu === 'nguoi' && (
+            // Enter khi danh sách đóng nổi lên đây ⇒ sang ô kế (cột cuối ⇒ dòng dưới); chọn từ danh sách /
+            //   gõ tên mới + Enter ⇒ `onChange` tự sang ô kế. ↑ ↓ đi dòng (`onMuiTen`).
+            <div ref={(el) => h.current.datRef(`${d.id}|${t.k}`, el)} style={{ minWidth: t.minW || 220 }}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.defaultPrevented) { e.preventDefault(); h.current.oKe(d.id, t.k); } }}>
+              <SearchableSelect chapNhanTuDo options={t.options || []} value={d.f[t.k] || ''}
+                getValue={tenNguoi} getLabel={tenNguoi} getSearch={timNguoi}
+                placeholder={t.placeholder || 'Chọn / gõ tên…'}
+                onMuiTen={(huong, ten) => h.current.muiTenNguoi(d, t, huong, ten)}
+                onChange={(v) => { h.current.setF(d.id, t.k, v); if (v) h.current.henSangKe(d.id, t.k); }} />
+            </div>
+          )}
+          {ok && t.kieu !== 'chon' && t.kieu !== 'nguoi' && (
+            <input ref={(el) => h.current.datRef(`${d.id}|${t.k}`, el)} type="number" min="0" inputMode="numeric"
+              className={O_SO} value={d.f[t.k] ?? ''} disabled={dangLuu}
+              onChange={(e) => h.current.setF(d.id, t.k, e.target.value)}
+              onKeyDown={(e) => h.current.phim(e, d, t.k)} />
+          )}
+        </td>
+      ))}
+      {dau && (
+        <td {...gop} className={`px-2 py-1 text-xs ${nen} ${soDong > 1 ? 'pt-3' : ''}`}>
+          {d.kq ? <span className="text-danger">✗ {d.kq}</span>
+            : d.tt === 'TRA' ? <span className="text-ink-soft">{d.chu}</span>
+              : d.tt === 'LOI' ? <span className="text-danger">{d.chu}</span>
+                : dgChu ? <span className={dgOk ? (dgVang ? 'text-amber-700 dark:text-amber-400' : 'text-success') : 'text-danger'}>{dgChu}</span>
+                  : null}
+        </td>
+      )}
+      <td className="px-1 py-1 text-center">
+        {coNutBo && (
+          <button type="button" title="Bỏ dòng" className="text-ink-soft hover:text-danger disabled:opacity-40"
+            disabled={dangLuu} onClick={() => h.current.boDong(d.id)}><Icon name="x" size={14} /></button>
+        )}
+      </td>
+    </tr>
+  );
+});
+
 export default function TichTemNhapModal({
   open, onClose, title, nhanXacNhan, show,
   traMa, khoaDong, maHien, soCan, nhanSoCan, truong, formMoi, danhGia, luu,
-  truocXacNhan, onXong, phuTro, moTruoc, sauKhiLuu, iconXacNhan = 'check-circle',
+  truocXacNhan, onXong, phuTro, moTruoc, sauKhiLuu, iconXacNhan = 'check-circle', nhom,
 }) {
   const [dong, setDong] = useState(() => [dongTrong()]);
   const [dangLuu, setDangLuu] = useState(false);
@@ -112,9 +227,35 @@ export default function TichTemNhapModal({
     datConTro(moi.id, 'ma');
   };
 
+  // Các dòng cùng tem với dòng `d` (chế độ `nhom`) — theo thứ tự bảng.
+  const cungTem = (ds, d) => {
+    const khoa = khoaDong(d.row);
+    return ds.filter((x) => x.tt === 'OK' && khoaDong(x.row) === khoa);
+  };
+
+  // ↓ ở dòng CUỐI của 1 tem còn thiếu (chế độ `nhom`) ⇒ chèn ngay dưới 1 dòng nữa cho tem đó, đổ sẵn phần còn lại.
+  //   Trả true khi đã chèn.
+  const themTiep = (ds, i) => {
+    const d = ds[i];
+    if (!nhom || !d || d.tt !== 'OK') return false;
+    const ke = ds[i + 1];
+    if (ke && ke.tt === 'OK' && khoaDong(ke.row) === khoaDong(d.row)) return false;
+    const con = nhom.conLai(d.row, cungTem(ds, d).map((x) => x.f));
+    if (!(con > 0)) return false;
+    if (ds.length >= TOI_DA_DONG) { show?.(`Tối đa ${TOI_DA_DONG} dòng một lượt`, 'error'); return true; }
+    const moi = { ...dongTrong(), tt: 'OK', row: d.row, f: nhom.formTiep(d.row, con), tich: d.tich };
+    setDong((cu) => {
+      const j = cu.findIndex((x) => x.id === d.id);
+      return j < 0 ? cu : [...cu.slice(0, j + 1), moi, ...cu.slice(j + 1)];
+    });
+    datConTro(moi.id, keys[0]);
+    return true;
+  };
+
   const sang = (id, k, buoc) => {
     const ds = dongRef.current;
     const i = ds.findIndex((d) => d.id === id);
+    if (buoc === 1 && themTiep(ds, i)) return;
     const j = i + buoc;
     if (j < 0) return;
     if (j >= ds.length) { themDong(); return; }
@@ -154,6 +295,22 @@ export default function TichTemNhapModal({
     const khoa = khoaDong(kq.row);
     const ds = dongRef.current;
     const trung = ds.findIndex((x) => x.id !== id && x.tt === 'OK' && khoaDong(x.row) === khoa);
+    if (trung >= 0 && nhom) {
+      // Quét lại tem đã có ⇒ thêm 1 dòng lỗi cho tem đó, chuyển dòng xuống ngay dưới các dòng của tem (gộp ô liền nhau).
+      setDong((cu) => {
+        const ban = cu.find((x) => x.id === id);
+        const con = cu.filter((x) => x.id !== id);
+        let cuoi = -1;
+        con.forEach((x, j) => { if (x.tt === 'OK' && khoaDong(x.row) === khoa) cuoi = j; });
+        if (!ban || cuoi < 0) return cu;
+        const goc = con[cuoi];
+        const fs = con.filter((x) => x.tt === 'OK' && khoaDong(x.row) === khoa).map((x) => x.f);
+        const moi = { ...ban, tt: 'OK', row: goc.row, f: nhom.formTiep(goc.row, nhom.conLai(goc.row, fs)), tich: goc.tich, chu: '', kq: null };
+        return [...con.slice(0, cuoi + 1), moi, ...con.slice(cuoi + 1)];
+      });
+      datConTro(id, keys[0]);
+      return;
+    }
     if (trung >= 0) {
       sua(id, { tt: 'LOI', ma: '', chu: `Tem ${maHien(kq.row)} đã có ở dòng ${trung + 1}` });
       datConTro(ds[trung].id, keys[0]);
@@ -214,37 +371,86 @@ export default function TichTemNhapModal({
     }
   };
 
-  const dgCua = (d) => (d.tt === 'OK' ? danhGia(d.row, d.f) : null);
+  // Tích / bỏ tích: chế độ `nhom` tích theo TEM (mọi dòng của tem cùng lúc), không thì theo dòng.
+  const doiTich = (d) => {
+    if (!nhom) { sua(d.id, { tich: !d.tich }); return; }
+    const khoa = khoaDong(d.row);
+    setDong((ds) => ds.map((x) => (x.tt === 'OK' && khoaDong(x.row) === khoa ? { ...x, tich: !d.tich } : x)));
+  };
+
+  // Hàm cho từng dòng (`DongTichTem`) — 1 ref ổn định, nội dung cập nhật mỗi lần vẽ (các hàm đọc `dongRef` nên không cũ).
+  const h = useRef({});
+  h.current = {
+    sua, setF, doiMa, phim, oKe, henSangKe, muiTenNguoi, boDong, doiTich, soCan, maHien,
+    datRef: (k, el) => { refs.current[k] = el; },
+  };
+
+  // NHÓM theo tem: mỗi đơn vị kiểm tra / tích / lưu. Không có `nhom` ⇒ mỗi dòng 1 nhóm (như cũ).
+  //   `cacNhom` = [{ khoa, ds: [dòng…] }] theo thứ tự xuất hiện; `viTri[id]` = { dau, so, dg } để vẽ dòng.
+  const { cacNhom, viTri } = useMemo(() => {
+    const ds = []; const theoKhoa = new Map(); const vt = {};
+    dong.forEach((d) => {
+      if (d.tt !== 'OK') return;
+      const khoa = nhom ? khoaDong(d.row) : d.id;
+      let g = theoKhoa.get(khoa);
+      if (!g) { g = { khoa, ds: [] }; theoKhoa.set(khoa, g); ds.push(g); }
+      g.ds.push(d);
+    });
+    ds.forEach((g) => {
+      const d0 = g.ds[0];
+      g.dg = nhom ? nhom.danhGia(d0.row, g.ds.map((x) => x.f)) : danhGia(d0.row, d0.f);
+      g.ds.forEach((x, k) => { vt[x.id] = { dau: k === 0, so: g.ds.length, dg: g.dg }; });
+    });
+    return { cacNhom: ds, viTri: vt };
+  }, [dong, nhom, khoaDong, danhGia]);
+
   const dongTich = dong.filter((d) => d.tt === 'OK' && d.tich);
-  const soSai = dongTich.filter((d) => !dgCua(d)?.ok).length;
+  const nhomTich = cacNhom.filter((g) => g.ds[0].tich);
+  const soSai = nhomTich.filter((g) => !g.dg?.ok).length;
+  const donVi = nhom ? 'tem' : 'dòng';
   const dongOk = dong.filter((d) => d.tt === 'OK');
   const tichHet = dongOk.length > 0 && dongOk.every((d) => d.tich);
   const doiTichHet = () => setDong((ds) => ds.map((d) => (d.tt === 'OK' ? { ...d, tich: !tichHet } : d)));
   const tongSo = truong.filter((t) => t.kieu !== 'chon' && t.kieu !== 'nguoi').map((t) => [t.label, dongTich.reduce((s, d) => s + n(d.f[t.k]), 0)]);
 
   // Áp 1 hàm cho mọi dòng đã tra được (nút phụ trợ của màn: "Đạt hết", "Mã lỗi chung"…).
-  const apMoiDong = (fn) => setDong((ds) => ds.map((d) => (d.tt === 'OK' ? { ...d, f: fn(d.row, d.f), kq: null } : d)));
+  //   `fn(row, f, { thu, so })` — `thu` = vị trí dòng trong tem, `so` = số dòng của tem (chế độ `nhom`; không có ⇒ 0 / 1).
+  const apMoiDong = (fn) => setDong((ds) => {
+    const tong = {}; const dem = {};
+    const khoaCua = (d) => (nhom ? khoaDong(d.row) : d.id);
+    ds.forEach((d) => { if (d.tt === 'OK') tong[khoaCua(d)] = (tong[khoaCua(d)] || 0) + 1; });
+    return ds.map((d) => {
+      if (d.tt !== 'OK') return d;
+      const k = khoaCua(d);
+      const thu = dem[k] || 0;
+      dem[k] = thu + 1;
+      return { ...d, f: fn(d.row, d.f, { thu, so: tong[k] }), kq: null };
+    });
+  });
 
   const xacNhan = async () => {
-    if (!dongTich.length) { show?.('Chưa tích dòng nào', 'error'); return; }
-    if (soSai) { show?.(`Còn ${soSai} dòng chưa hợp lệ — sửa hoặc bỏ tích trước khi xác nhận`, 'error'); return; }
-    if (truocXacNhan && !(await truocXacNhan(dongTich.map((d) => d.row)))) return;
+    if (!nhomTich.length) { show?.('Chưa tích dòng nào', 'error'); return; }
+    if (soSai) { show?.(`Còn ${soSai} ${donVi} chưa hợp lệ — sửa hoặc bỏ tích trước khi xác nhận`, 'error'); return; }
+    if (truocXacNhan && !(await truocXacNhan(nhomTich.map((g) => g.ds[0].row)))) return;
     let ctx = null;
     if (moTruoc) {
-      try { ctx = moTruoc(dongTich.map((d) => ({ row: d.row, f: d.f }))); } catch (e) { show?.(e.message || 'Không mở được cửa sổ in', 'error'); return; }
+      try { ctx = moTruoc(nhomTich.map((g) => ({ row: g.ds[0].row, f: g.ds[0].f, fs: g.ds.map((x) => x.f) }))); } catch (e) { show?.(e.message || 'Không mở được cửa sổ in', 'error'); return; }
     }
     setDangLuu(true);
     const okIds = new Set(); const loi = []; const kq = {}; const daLuu = [];
-    for (let i = 0; i < dongTich.length; i += 1) {
-      const d = dongTich[i];
-      setTienDo(`Đang lưu ${i + 1}/${dongTich.length} · ${maHien(d.row)}`);
+    let soOk = 0;
+    for (let i = 0; i < nhomTich.length; i += 1) {
+      const g = nhomTich[i];
+      const d = g.ds[0];
+      setTienDo(`Đang lưu ${i + 1}/${nhomTich.length} · ${maHien(d.row)}`);
       try {
         // eslint-disable-next-line no-await-in-loop
-        const res = await luu(d.row, d.f);
-        okIds.add(d.id);
-        daLuu.push({ row: d.row, f: d.f, data: res && res.data !== undefined ? res.data : res });
+        const res = nhom ? await nhom.luu(d.row, g.ds.map((x) => x.f)) : await luu(d.row, d.f);
+        g.ds.forEach((x) => okIds.add(x.id));
+        soOk += 1;
+        daLuu.push({ row: d.row, f: d.f, fs: g.ds.map((x) => x.f), data: res && res.data !== undefined ? res.data : res });
       } catch (e) {
-        kq[d.id] = e.message || 'Lưu lỗi';
+        g.ds.forEach((x) => { kq[x.id] = e.message || 'Lưu lỗi'; });
         loi.push(maHien(d.row));
       }
     }
@@ -258,7 +464,7 @@ export default function TichTemNhapModal({
     const con = dongRef.current.filter((d) => !okIds.has(d.id)).map((d) => (kq[d.id] ? { ...d, kq: kq[d.id] } : d));
     const conDong = con.length ? con : [dongTrong()];
     setDong(conDong);
-    onXong?.(okIds.size, loi, ketIn);
+    onXong?.(soOk, loi, ketIn);
     if (loi.length) {
       const dauLoi = conDong.find((d) => d.kq);
       if (dauLoi) datConTro(dauLoi.id, keys[0]);
@@ -279,12 +485,18 @@ export default function TichTemNhapModal({
           <>
             <span className="mr-auto text-sm text-ink-soft">
               {tienDo || (soSai > 0
-                ? <span className="text-danger">{soSai} dòng tích chưa hợp lệ</span>
-                : <>Đã tích <b className="text-ink">{dongTich.length}</b> dòng{tongSo.map(([l, v]) => (v ? <span key={l}> · {l.toLowerCase()} <b className="text-ink">{fmtNum(v)}</b></span> : null))}</>)}
+                ? <span className="text-danger">{soSai} {donVi} tích chưa hợp lệ</span>
+                : (
+                  <>
+                    Đã tích <b className="text-ink">{nhomTich.length}</b> {donVi}
+                    {nhom && dongTich.length > nhomTich.length && <> · {dongTich.length} dòng</>}
+                    {tongSo.map(([l, v]) => (v ? <span key={l}> · {l.toLowerCase()} <b className="text-ink">{fmtNum(v)}</b></span> : null))}
+                  </>
+                ))}
             </span>
             <Button chiXemOk variant="ghost" onClick={xinDong} disabled={dangLuu}>Đóng</Button>
-            <Button icon={iconXacNhan} onClick={xacNhan} loading={dangLuu} disabled={!dongTich.length || soSai > 0}>
-              {nhanXacNhan} ({dongTich.length})
+            <Button icon={iconXacNhan} onClick={xacNhan} loading={dangLuu} disabled={!nhomTich.length || soSai > 0}>
+              {nhanXacNhan} ({nhomTich.length})
             </Button>
           </>
         )}>
@@ -292,7 +504,10 @@ export default function TichTemNhapModal({
           <div className="flex flex-wrap items-end gap-2 text-sm">
             {phuTro && phuTro({ apMoiDong, dangLuu, coDong: dongOk.length > 0 })}
             <Button variant="secondary" icon="plus" onClick={themDong} disabled={dangLuu}>Thêm dòng (↓)</Button>
-            <span className="text-xs text-ink-soft">Quét mã tem + Enter ⇒ tự nhảy sang ô nhập · Enter sang ô kế · ↓ thêm dòng / xuống dòng · ↑ lên dòng.</span>
+            <span className="text-xs text-ink-soft">
+              Quét mã tem + Enter ⇒ tự nhảy sang ô nhập · Enter sang ô kế · ↓ thêm dòng / xuống dòng · ↑ lên dòng.
+              {nhom && ' 1 tem nhiều lỗi: còn thiếu số lượng thì ↓ (hoặc quét lại mã tem) để thêm dòng lỗi cho tem đó.'}
+            </span>
           </div>
           <div className="min-h-0 flex-1 overflow-auto rounded-card border border-line">
             <table className="w-full min-w-[1100px] text-sm">
@@ -321,84 +536,12 @@ export default function TichTemNhapModal({
               </thead>
               <tbody>
                 {dong.map((d, i) => {
-                  const r = d.row || {};
-                  const ok = d.tt === 'OK';
-                  const dg = dgCua(d);
+                  const vt = viTri[d.id];
                   return (
-                    <tr key={d.id} className={`border-t border-line/70 align-middle ${d.kq ? 'bg-danger/5' : ''} ${ok && !d.tich ? 'opacity-60' : ''}`}>
-                      <td className="px-2 py-1 text-center">
-                        {ok && (
-                          <input type="checkbox" aria-label="Tích dòng" checked={d.tich} disabled={dangLuu}
-                            onChange={() => sua(d.id, { tich: !d.tich })} />
-                        )}
-                      </td>
-                      <td className="px-1 py-1 text-right tabular-nums text-ink-soft">{i + 1}</td>
-                      <td className="px-2 py-1">
-                        {ok ? (
-                          <span className="font-mono text-xs font-semibold text-primary">{maHien(r)}</span>
-                        ) : (
-                          <input ref={(el) => { refs.current[`${d.id}|ma`] = el; }} className={O_MA}
-                            value={d.ma} placeholder="Quét / gõ mã tem…" disabled={dangLuu}
-                            onChange={(e) => doiMa(d.id, e.target.value)}
-                            onKeyDown={(e) => phim(e, d, 'ma')} />
-                        )}
-                      </td>
-                      <td className="px-2 py-1 font-medium text-ink">{r.ten_khach_hang || ''}</td>
-                      <td className="px-2 py-1">{r.ma_don_hang || ''}</td>
-                      <td className="px-2 py-1 leading-tight">
-                        <div>{r.ma_hang || ''}</div>
-                        {r.ma_phan && <div className="text-[11px] text-ink-soft">{r.ma_phan}</div>}
-                      </td>
-                      <td className="px-2 py-1">{r.mau_vai || ''}</td>
-                      <td className="px-2 py-1">{r.kich_vai || ''}</td>
-                      <td className="px-2 py-1">{r.kich_phim || ''}</td>
-                      <td className="px-2 py-1 text-right font-semibold tabular-nums text-primary">{ok ? fmtNum(soCan(r)) : ''}</td>
-                      {truong.map((t) => (
-                        <td key={t.k} className="px-1 py-1">
-                          {ok && t.kieu === 'chon' && (
-                            // ⚠ Ô chọn: Enter khi danh sách đang mở do Combobox xử lý (chọn mục, chặn nổi bọt) ⇒ `onChange` tự sang ô kế;
-                            //   danh sách đóng thì Enter nổi lên đây ⇒ sang ô kế. ↑↓ để Combobox dùng.
-                            <div ref={(el) => { refs.current[`${d.id}|${t.k}`] = el; }}
-                              onKeyDown={(e) => { if (e.key === 'Enter' && !e.defaultPrevented) { e.preventDefault(); oKe(d.id, t.k); } }}>
-                              <SearchableSelect options={t.options} value={d.f[t.k] || ''} getSearch={t.getSearch}
-                                placeholder={t.placeholder}
-                                onChange={(v) => { setF(d.id, t.k, v); if (v) henSangKe(d.id, t.k); }} />
-                            </div>
-                          )}
-                          {ok && t.kieu === 'nguoi' && (
-                            // Enter khi danh sách đóng nổi lên đây ⇒ sang ô kế (cột cuối ⇒ dòng dưới); chọn từ danh sách /
-                            //   gõ tên mới + Enter ⇒ `onChange` tự sang ô kế. ↑ ↓ đi dòng (`onMuiTen`).
-                            <div ref={(el) => { refs.current[`${d.id}|${t.k}`] = el; }} style={{ minWidth: t.minW || 220 }}
-                              onKeyDown={(e) => { if (e.key === 'Enter' && !e.defaultPrevented) { e.preventDefault(); oKe(d.id, t.k); } }}>
-                              <SearchableSelect chapNhanTuDo options={t.options || []} value={d.f[t.k] || ''}
-                                getValue={tenNguoi} getLabel={tenNguoi} getSearch={timNguoi}
-                                placeholder={t.placeholder || 'Chọn / gõ tên…'}
-                                onMuiTen={(huong, ten) => muiTenNguoi(d, t, huong, ten)}
-                                onChange={(v) => { setF(d.id, t.k, v); if (v) henSangKe(d.id, t.k); }} />
-                            </div>
-                          )}
-                          {ok && t.kieu !== 'chon' && t.kieu !== 'nguoi' && (
-                            <input ref={(el) => { refs.current[`${d.id}|${t.k}`] = el; }} type="number" min="0" inputMode="numeric"
-                              className={O_SO} value={d.f[t.k] ?? ''} disabled={dangLuu}
-                              onChange={(e) => setF(d.id, t.k, e.target.value)}
-                              onKeyDown={(e) => phim(e, d, t.k)} />
-                          )}
-                        </td>
-                      ))}
-                      <td className="px-2 py-1 text-xs">
-                        {d.kq ? <span className="text-danger">✗ {d.kq}</span>
-                          : d.tt === 'TRA' ? <span className="text-ink-soft">{d.chu}</span>
-                            : d.tt === 'LOI' ? <span className="text-danger">{d.chu}</span>
-                              : dg ? <span className={dg.ok ? (dg.motPhan ? 'text-amber-700 dark:text-amber-400' : 'text-success') : 'text-danger'}>{dg.chu}</span>
-                                : null}
-                      </td>
-                      <td className="px-1 py-1 text-center">
-                        {(ok || d.ma || dong.length > 1) && (
-                          <button type="button" title="Bỏ dòng" className="text-ink-soft hover:text-danger disabled:opacity-40"
-                            disabled={dangLuu} onClick={() => boDong(d.id)}><Icon name="x" size={14} /></button>
-                        )}
-                      </td>
-                    </tr>
+                    <DongTichTem key={d.id} d={d} i={i} truong={truong} dangLuu={dangLuu} h={h}
+                      coNutBo={!!(d.tt === 'OK' || d.ma || dong.length > 1)}
+                      dau={vt ? vt.dau : true} soDong={vt ? vt.so : 1}
+                      dgOk={!!vt?.dg?.ok} dgChu={vt?.dg?.chu || ''} dgVang={!!vt?.dg?.motPhan} />
                   );
                 })}
               </tbody>

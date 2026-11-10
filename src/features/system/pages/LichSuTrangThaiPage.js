@@ -547,6 +547,7 @@ const TEM_TT = {
   IN: { tone: 'info', label: 'Đã in (chờ phơi)' },
   DANG_PHOI: { tone: 'warning', label: 'Đang phơi' },
   DA_KHO: { tone: 'success', label: 'Đã khô (chờ kiểm)' },
+  CHO_CD_SAU: { tone: 'success', label: 'Đã khô (chờ công đoạn sau)' },
 };
 
 function TemCancelSection({ show }) {

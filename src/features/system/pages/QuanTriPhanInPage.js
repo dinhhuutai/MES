@@ -13,12 +13,13 @@ import useChiXem, { NHAC_CHI_XEM } from '../../../hooks/useChiXem';
 import { fmtNum, fmtDate } from '../../../utils/format';
 import {
   traCuuPhanIn, getQuanTriPhanIn, suaPhanIn, suaDotVai,
-  datGiaiDoan, huyDotVaiQt, moDotVaiQt, huyMucReady, datKhoaErp, huyPhanInQt, moPhanInQt,
+  datGiaiDoan, huyDotVaiQt, moDotVaiQt, huyMucReady, datKhoaErp, datLuongSx, huyPhanInQt, moPhanInQt,
 } from '../../../services/quanTriPhanInService';
 import { listUserOptions } from '../../../services/userService';
 import { listToIn } from '../../../services/productionService';
 import { ToanCanhLenh, LuiVeModal, HuyLeModal, PhanCongModal, KeHoachModal } from '../components/QuanTriToanCanh';
 import { listChuyen } from '../../../services/planningService';
+import KhoiLuongSanXuat from '../components/KhoiLuongSanXuat';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // QUẢN TRỊ PHẦN IN — một chỗ gỡ rối mọi thứ của 1 phần in (mig 078, quyền `PHAN_IN_ADMIN`).
@@ -142,6 +143,18 @@ export default function QuanTriPhanInPage() {
     setDangLuu(true);
     try { const r = await datKhoaErp(chon, khoa); show(r.message || 'Đã đổi'); await tai(chon, true); }
     catch (e) { show(e.message || 'Không đổi được khóa ERP', 'error'); } finally { setDangLuu(false); }
+  };
+  // Luồng sản xuất (mig 126) — trả true khi lưu xong (khối tự xóa ô lý do).
+  const luuLuong = async (body) => {
+    setDangLuu(true);
+    try {
+      const r = await datLuongSx(chon, body);
+      const d = r.data || {};
+      show(`Đã đổi luồng sản xuất${d.so_lenh_doi ? ` · đánh lại công đoạn đầu ${d.so_lenh_doi} lệnh` : ''}`
+        + `${(d.lenh_da_in_tem_giu || []).length ? ` · giữ nguyên lệnh đã in tem: ${d.lenh_da_in_tem_giu.join(', ')}` : ''}`);
+      await tai(chon, true);
+      return true;
+    } catch (e) { show(e.message || 'Không đổi được luồng', 'error'); return false; } finally { setDangLuu(false); }
   };
   const doHuyPin = async () => {
     if (!String(huyPinModal?.lyDo || '').trim()) { show('Nhập lý do', 'error'); return; }
@@ -297,6 +310,8 @@ export default function QuanTriPhanInPage() {
                 </div>
               </div>
 
+              <KhoiLuongSanXuat pin={pin} dangLuu={dangLuu} onLuu={luuLuong} />
+
               {/* 4 mục READY */}
               <div className="rounded-card border border-line bg-surface p-4">
                 <h3 className="mb-3 text-sm font-semibold text-ink">Xác nhận READY</h3>
@@ -332,7 +347,7 @@ export default function QuanTriPhanInPage() {
                   tinh_chat_in: pin.tinh_chat_in || '', barcode: pin.barcode || '',
                   so_luong_don_hang: pin.so_luong_don_hang ?? '',
                   thoi_gian_cho_kho_phut: pin.thoi_gian_cho_kho_phut ?? '',
-                  la_in_kieng: !!pin.la_in_kieng, ghi_chu: pin.ghi_chu || '',
+                  ghi_chu: pin.ghi_chu || '',
                 }}
                 truong={[
                   { key: 'mau_vai', label: 'Màu vải' },
@@ -342,7 +357,6 @@ export default function QuanTriPhanInPage() {
                   { key: 'barcode', label: 'Mã vạch TDTHĐH', hint: 'Mã vạch của CHÍNH phần in (ERP BarcodePTHDH). Nhiều mã thì ngăn bằng dấu phẩy — quét mã nào trong danh sách cũng ra phần in này.' },
                   { key: 'so_luong_don_hang', label: 'SL đơn hàng', type: 'number' },
                   { key: 'thoi_gian_cho_kho_phut', label: 'Thời gian chờ khô (phút)', type: 'number' },
-                  { key: 'la_in_kieng', label: 'In kiếng', type: 'bool' },
                   { key: 'ghi_chu', label: 'Ghi chú' },
                 ]}
               />

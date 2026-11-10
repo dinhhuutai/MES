@@ -49,10 +49,14 @@ export default function SearchableSelect({
     if (chapNhanTuDo && t && filtered.length === 0 && t !== value) onChange(t);
   };
 
+  // ⚠ Danh sách lựa chọn CHỈ DỰNG KHI ĐANG MỞ (render-prop `open`, 09/11/2026): ô chọn người có ~500 tên, bản cũ dựng
+  //   500 phần tử mỗi lần ô vẽ lại dù danh sách đang đóng — bảng nhập nhiều dòng (Tích tem KCS / Sửa, mỗi dòng 1 ô) chậm
+  //   hẳn khi gõ. Headless UI vốn không gắn các lựa chọn lúc đóng nên hành vi không đổi.
   return (
     <Combobox value={value || ''} onChange={(v) => onChange(v || '')}
       onClose={() => { chotTuDo(); setQuery(''); }}
       immediate={moNgay}>
+      {({ open }) => (
       <div className="relative">
         <ComboboxInput
           ref={inputRef}
@@ -104,7 +108,7 @@ export default function SearchableSelect({
               Enter sẽ chọn "— Không —" (kết quả khớp nằm ở dòng 2), người dùng phải bấm chuột mới
               chọn được — chậm hẳn thao tác nhập lỗi/biện pháp. Ẩn khi có từ khóa ⇒ Enter lấy đúng
               dòng khớp đầu tiên. Muốn bỏ chọn thì xóa hết chữ trong ô, dòng này hiện lại. */}
-          {!query.trim() && (
+          {open && !query.trim() && (
             <ComboboxOption
               value=""
               className="cursor-pointer px-3 py-2 text-sm text-ink-soft data-[focus]:bg-surface-muted"
@@ -112,7 +116,7 @@ export default function SearchableSelect({
               {emptyLabel}
             </ComboboxOption>
           )}
-          {filtered.map((o) => (
+          {open && filtered.map((o) => (
             <ComboboxOption
               key={getValue(o)}
               value={getValue(o)}
@@ -121,7 +125,7 @@ export default function SearchableSelect({
               {getLabel(o)}
             </ComboboxOption>
           ))}
-          {filtered.length === 0 && (
+          {open && filtered.length === 0 && (
             <div className="px-3 py-2 text-sm text-ink-soft">
               {chapNhanTuDo && query.trim()
                 ? 'Không có trong danh sách — bấm Enter để dùng tên này'
@@ -130,6 +134,7 @@ export default function SearchableSelect({
           )}
         </ComboboxOptions>
       </div>
+      )}
     </Combobox>
   );
 }

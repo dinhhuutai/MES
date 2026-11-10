@@ -40,6 +40,7 @@ import ChipTabs from '../../../components/common/ChipTabs';
 import exportCheckpointExcel, {
   COT_LENH, COT_PHUONG_AN_IN, chenCot, moTaBoLoc,
 } from '../../../utils/exportCheckpointExcel';
+import CongDoanBadge from '../../../components/common/CongDoanBadge';
 
 // Chip lọc theo LOẠI CHUYỀN + KHU của chuyền Bàn — nguồn chung `utils/khuChuyen.js`
 // (dùng chung với "Theo dõi chuyền" và "Xác nhận chạy"; sửa 1 chỗ, 3 màn cùng đổi).
@@ -291,7 +292,10 @@ export default function TestRunPage() {
     ) },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
     // Code phần là trường ĐANG ĐƯỢC LỌC/QUÉT, và là thứ duy nhất phân biệt các dòng con của gom set.
-    { key: 'ma_phan', header: 'Code phần', render: (r) => r.ma_phan || '—' },
+    // Mig 126: nhãn công đoạn (In kiếng / In / Ép ủi) + Logo cạnh code phần.
+    { key: 'ma_phan', header: 'Code phần', render: (r) => (
+      <span className="inline-flex flex-wrap items-center gap-1">{r.ma_phan || '—'}<CongDoanBadge luong={r.luong_sx} gd={r.giai_doan} hienLogo /></span>
+    ) },
     { key: 'mau_kich', header: 'Màu · Kích (vải/phim)', render: (r) => (
       <div className="leading-tight">
         <div className="text-ink">{r.mau_vai || '—'}</div>

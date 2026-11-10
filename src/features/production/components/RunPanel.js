@@ -29,8 +29,8 @@ export const soTemHopLe = (v) => {
   return Number.isFinite(n) && n >= 1 ? Math.min(n, TOI_DA_SO_TEM) : 1;
 };
 
-const TEM_TONE = { IN: 'warning', DANG_PHOI: 'info', DA_KHO: 'success', HUY: 'danger' };
-const TEM_LABEL = { IN: 'Chờ phơi', DANG_PHOI: 'Đang phơi', DA_KHO: 'Đã khô', HUY: 'Đã hủy' };
+const TEM_TONE = { IN: 'warning', DANG_PHOI: 'info', DA_KHO: 'success', CHO_CD_SAU: 'success', HUY: 'danger' };
+const TEM_LABEL = { IN: 'Chờ phơi', DANG_PHOI: 'Đang phơi', DA_KHO: 'Đã khô', CHO_CD_SAU: 'Đã khô · chờ công đoạn sau', HUY: 'Đã hủy' };
 const fmtDt = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '');
 
 // Ô nhập số trong bảng modal (gọn, canh phải). `text-base md:text-sm`: iOS phóng to trang khi focus
@@ -217,6 +217,66 @@ export function TemMetaFields({ meta, setMeta, anGcMauVai = false, anBtp = false
             <input type="checkbox" className={chk} checked={!!meta.btpCuoi}
               onChange={(e) => setMeta((m) => ({ ...m, btpCuoi: e.target.checked, ...(e.target.checked ? { btpTruoc: false } : {}) }))} /> BTP cuối
           </label>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── IN KIẾNG: LOẠI KIẾNG + HỆ SỐ KIẾNG (mig 126, 09/11/2026) ────────────────
+// Chỉ hiện khi lệnh là công đoạn IN của phần in kiếng (`run.kieng.can`). Hệ số = 1 tấm kiếng chia được bao nhiêu phần ⇒
+//   số tấm kiếng = SL in ÷ hệ số. BẮT BUỘC (BE 422 THIEU_LOAI_KIENG / HE_SO_KIENG_SAI); nhớ theo lệnh (BE trả `goi_y`).
+// Đặt ở MỨC MODULE (component lồng bị remount ⇒ ô mất focus khi gõ).
+export const soTamKieng = (soLuong, heSo) => {
+  const h = Number(String(heSo ?? '').replace(',', '.'));
+  const n = Number(soLuong) || 0;
+  return h > 0 && n > 0 ? Math.round((n / h) * 100) / 100 : null;
+};
+export const thieuKieng = (kieng, m) => {
+  if (!kieng || !kieng.can) return '';
+  const thieu = [!m?.loaiKiengId && 'Loại kiếng', !(Number(String(m?.heSoKieng ?? '').replace(',', '.')) > 0) && 'Hệ số kiếng'].filter(Boolean);
+  return thieu.length ? `Hàng in kiếng: chưa nhập ${thieu.join(' và ')} — nhập rồi mới in tem được` : '';
+};
+// Điền sẵn loại + hệ số của tem in kiếng gần nhất của lệnh — chỉ ô CHƯA gõ.
+export const apGoiYKieng = (m, kieng) => {
+  const g = kieng && kieng.can ? kieng.goi_y : null;
+  if (!g) return m;
+  return { ...m, loaiKiengId: m.loaiKiengId || g.loai_kieng_id || '', heSoKieng: m.heSoKieng || (g.he_so_kieng != null ? String(g.he_so_kieng) : '') };
+};
+export function KiengFields({ kieng, meta, setMeta, soLuong }) {
+  if (!kieng || !kieng.can) return null;
+  const ds = kieng.ds || [];
+  const k = ds.find((x) => x.id === meta.loaiKiengId);
+  const tam = soTamKieng(soLuong, meta.heSoKieng);
+  const heSoSai = !(Number(String(meta.heSoKieng ?? '').replace(',', '.')) > 0);
+  return (
+    <div className="mt-2 rounded-control border border-violet-200 bg-violet-50/60 p-2.5 dark:border-violet-900/60 dark:bg-violet-950/30">
+      <div className="mb-1.5 text-xs font-semibold text-violet-800 dark:text-violet-300">In kiếng — nhập loại kiếng và hệ số</div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        <label className="block sm:col-span-2">
+          <span className="mb-1 block text-xs font-medium text-ink-soft">Loại kiếng<span className="text-danger"> *</span></span>
+          <SearchableSelect
+            value={meta.loaiKiengId || ''}
+            onChange={(v) => setMeta((m) => ({ ...m, loaiKiengId: v || '' }))}
+            options={ds}
+            getValue={(x) => x.id}
+            getLabel={(x) => `${x.ten}${x.dvt ? ` (${x.dvt})` : ''}`}
+            getSearch={(x) => `${x.ma_hang_hoa} ${x.ten}`}
+            placeholder={ds.length ? 'Gõ tên hoặc mã kiếng...' : 'Chưa có danh mục kiếng (Hệ thống › Danh mục kiếng)'}
+          />
+          {k && <span className="mt-0.5 block text-[11px] text-ink-soft">Mã hàng hóa ERP {k.ma_hang_hoa}</span>}
+        </label>
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-ink-soft">Hệ số kiếng<span className="text-danger"> *</span></span>
+          <Input inputMode="decimal" value={meta.heSoKieng || ''} placeholder="vd: 12"
+            onChange={(e) => setMeta((m) => ({ ...m, heSoKieng: e.target.value.replace(/[^\d.,]/g, '') }))}
+            className={`tabular-nums ${heSoSai ? 'border-danger' : ''}`} />
+          <span className="mt-0.5 block text-[11px] text-ink-soft">1 tấm kiếng chia được bao nhiêu phần</span>
+        </label>
+      </div>
+      {tam != null && (
+        <div className="mt-1.5 text-xs text-violet-800 dark:text-violet-300">
+          ≈ <b className="tabular-nums">{fmtNum(tam)}</b> {k?.dvt || 'tấm'} kiếng cho {fmtNum(soLuong)} pcs
         </div>
       )}
     </div>
@@ -482,7 +542,7 @@ export function PhanCongInline({ pc, users, toIns = [], onSave, busy, canRun, th
 // PHẦN IN ĐẦU TIÊN, các tem sau vẫn tạo trong DB nhưng KHÔNG in ra. Nay mỗi dòng 1 nút "In tem":
 // mỗi lần bấm = 1 user-gesture = 1 cửa sổ in ⇒ không bị chặn, và in tới đâu biết tới đó.
 // Modal KHÔNG đóng sau khi in để bấm tiếp dòng khác; dòng đã in trong phiên này hiện dấu ✓.
-function PrintSetModal({ open, onClose, rows, onPrintRow, busy, meta, setMeta, goiY }) {
+function PrintSetModal({ open, onClose, rows, onPrintRow, busy, meta, setMeta, goiY, kieng }) {
   const [form, setForm] = useState({}); // dotVaiId → { sl, huy, thieu, gc }
   const [daIn, setDaIn] = useState(() => new Set()); // dotVaiId đã in trong phiên mở modal này
   useEffect(() => { if (open) { setForm({}); setDaIn(new Set()); } }, [open]);
@@ -525,7 +585,8 @@ function PrintSetModal({ open, onClose, rows, onPrintRow, busy, meta, setMeta, g
       footer={<Button chiXemOk variant="ghost" onClick={onClose}>Đóng</Button>}
     >
       {/* Ngày ca / giờ SX / BTP áp cho MỌI tem in ở modal này. GC màu vải nhập RIÊNG từng dòng ⇒ ẩn ô chung. */}
-      <div className="mb-3"><TemMetaFields meta={meta} setMeta={setMeta} goiY={goiY} anGcMauVai /></div>
+      <div className="mb-3"><TemMetaFields meta={meta} setMeta={setMeta} goiY={goiY} anGcMauVai />
+        <KiengFields kieng={kieng} meta={meta} setMeta={setMeta} /></div>
       {chiLuu && (
         <p className="mb-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
           Đang bật <b>BTP trước</b> — dữ liệu vẫn lưu vào hệ thống như bình thường (tạo tem, vào xe phơi),
@@ -610,7 +671,7 @@ function PrintSetModal({ open, onClose, rows, onPrintRow, busy, meta, setMeta, g
 // `truocXacNhan()` (26/09/2026) — Promise<bool>: trang hỏi LÝ DO NGHẼN khi "Chạy hoàn tất" một lệnh
 // đang quá SLA (mig 106). Không truyền ⇒ như cũ.
 // Tem còn HỦY được ở "Tem đã in": chưa qua kiểm (gương guard backend `production.service.cancelPrintTem`).
-const TEM_CHUA_KIEM = ['IN', 'DANG_PHOI', 'DA_KHO'];
+const TEM_CHUA_KIEM = ['IN', 'DANG_PHOI', 'DA_KHO', 'CHO_CD_SAU'];
 const temHuyDuoc = (t) => TEM_CHUA_KIEM.includes(t.trang_thai) && !t.da_kiem;
 
 export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
@@ -695,8 +756,8 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
       const res = await getRun(lenhId);
       setData(res.data);
       // Điền lại Ngày ca + Ngày chứng từ ĐÃ NHẬP ĐẦU CA (chưa ai nhập ⇒ để trống) + giờ SX (từ mốc kết thúc
-      // lượt in trước → bây giờ). ⚠ Chỉ điền ô nào người dùng CHƯA gõ (`apGoiYTem`).
-      setTemMeta((m) => apGoiYTem(m, res.data?.goi_y_tem));
+      // lượt in trước → bây giờ). ⚠ Chỉ điền ô nào người dùng CHƯA gõ (`apGoiYTem`). In kiếng: loại + hệ số (mig 126).
+      setTemMeta((m) => apGoiYKieng(apGoiYTem(m, res.data?.goi_y_tem), res.data?.kieng));
     } catch (e) {
       show(e.message || 'Lỗi tải', 'error');
     } finally {
@@ -708,7 +769,7 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
   useTaiNgamKhiLenhDoi([lenhId], async () => {
     const res = await getRun(lenhId);
     setData(res.data);
-    setTemMeta((m) => apGoiYTem(m, res.data?.goi_y_tem));
+    setTemMeta((m) => apGoiYKieng(apGoiYTem(m, res.data?.goi_y_tem), res.data?.kieng));
   });
 
   // NÚT "HỦY" Ở TỪNG TEM ĐÃ IN (14/10/2026): nhập lý do ⇒ backend hủy tem (gỡ khỏi xe phơi, trả SL cho lệnh)
@@ -814,7 +875,7 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
 
   // Thiếu Ngày ca / Ngày chứng từ ⇒ báo và KHÔNG in (kiểm trước khi mở cửa sổ in).
   const thieuDauCa = () => {
-    const loi = khoaInNgc ? KHOA_IN_NGC : chuaThoIn ? CHUA_THO_IN : thieuNgayCaCt(temMeta);
+    const loi = khoaInNgc ? KHOA_IN_NGC : chuaThoIn ? CHUA_THO_IN : (thieuNgayCaCt(temMeta) || thieuKieng(data?.kieng, temMeta));
     if (loi) show(loi, 'error');
     return !!loi;
   };
@@ -1185,7 +1246,7 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
     <SidePanel
       open={!!lenhId}
       onClose={onClose}
-      title={data?.lenh ? `Sản xuất — ${data.lenh.ma_lenh_san_xuat}` : 'Sản xuất'}
+      title={data?.lenh ? `Sản xuất — ${data.lenh.ma_lenh_san_xuat}${data.cong_doan ? ` · ${data.cong_doan}` : ''}` : 'Sản xuất'}
       subtitle={data?.lenh ? `Chuyền ${data.lenh.ma_chuyen || '—'}`
         + (data.lenh.chuyen_kh_id && data.lenh.chuyen_kh_id !== data.lenh.chuyen_id ? ` (kế hoạch ${data.lenh.ma_chuyen_kh || '—'})` : '')
         + ` · Phần ${data.lenh.phan_list || '—'}` : ''}
@@ -1265,7 +1326,12 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
                   {CHUA_THO_IN} (khối Phân công bên dưới).
                 </p>
               )}
-              {!coGomSet && <div className="mb-2"><TemMetaFields meta={temMeta} setMeta={setTemMeta} goiY={goiYTem} /></div>}
+              {!coGomSet && (
+                <div className="mb-2">
+                  <TemMetaFields meta={temMeta} setMeta={setTemMeta} goiY={goiYTem} />
+                  <KiengFields kieng={data?.kieng} meta={temMeta} setMeta={setTemMeta} soLuong={soLuong} />
+                </div>
+              )}
               {coGomSet ? (
                 <Button className="w-full" icon={chiLuu ? 'save' : 'printer'} onClick={() => setPrintSetOpen(true)} disabled={busy || remain === 0 || chuaThoIn || khoaInNgc}>
                   Nhập số lượng &amp; {chiLuu ? 'lưu' : 'in tem'}…
@@ -1628,7 +1694,7 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
       )}
       {/* GOM SET: nhập SL in từng phần in → in nhiều tem liên tiếp */}
       <PrintSetModal open={printSetOpen} onClose={() => setPrintSetOpen(false)} rows={dotVaiList}
-        onPrintRow={doPrintRow} busy={busy} meta={temMeta} setMeta={setTemMeta} goiY={goiYTem} />
+        onPrintRow={doPrintRow} busy={busy} meta={temMeta} setMeta={setTemMeta} goiY={goiYTem} kieng={data?.kieng} />
 
       <TraVeKeHoachModal open={traVeKhOpen} onClose={() => setTraVeKhOpen(false)} runs={data && running ? [data] : []}
         onXong={({ thongBao }) => { setTraVeKhOpen(false); show(thongBao); load(); onChanged?.(); }} />

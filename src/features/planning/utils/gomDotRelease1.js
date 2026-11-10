@@ -12,9 +12,15 @@
 // · Giữ vị trí của đợt xuất hiện ĐẦU (không sắp lại bảng).
 // Hàm thuần, không phụ thuộc React.
 // ─────────────────────────────────────────────────────────────────────────────
+// · ⚠ Mig 126 (09/11/2026): phần in 2 công đoạn (in kiếng / in + ép) có thêm dòng ÉP ỦI (`giai_doan` 'EP_UI') cho mỗi đợt —
+//   khóa gom thêm công đoạn (dòng in và dòng ép không bao giờ gom chung), khóa 1 dòng = `rowKey` (đợt + công đoạn).
 import { khoaNgc } from '../../../utils/nhaGiaCong';
+import { khoaCongDoan, GD_EP } from '../../../utils/luongSanXuat';
 
-const khoaNhom = (r) => `${r.phan_in_id}|${r.qc_done ? 'R' : 'C'}|${khoaNgc(r.nha_gia_cong)}`;
+// Khóa 1 dòng đợt vải ở Release 1: dòng in giữ ĐÚNG `dot_vai_id` như cũ (ô tích / quét / nghẽn không đổi); dòng ép thêm "|EP".
+export const rowKey = (r) => (khoaCongDoan(r) === GD_EP ? `${r.dot_vai_id}|EP` : r.dot_vai_id);
+
+const khoaNhom = (r) => `${r.phan_in_id}|${r.qc_done ? 'R' : 'C'}|${khoaNgc(r.nha_gia_cong)}|${khoaCongDoan(r)}`;
 const dsKhongTrung = (ds) => [...new Set(ds.filter((x) => x != null && String(x).trim() !== '').map(String))].join(', ');
 const nho = (a, b) => (!a ? b : !b ? a : (String(a) <= String(b) ? a : b));
 const cong = (ds, k) => ds.reduce((s, r) => s + (Number(r[k]) || 0), 0);
@@ -28,7 +34,7 @@ export function gomDotCungCodePhan(rows) {
   });
   return [...nhom.entries()].map(([k, ds]) => {
     const dau = ds[0];
-    if (ds.length === 1) return { ...dau, _key: dau.dot_vai_id, _dots: ds };
+    if (ds.length === 1) return { ...dau, _key: rowKey(dau), _dots: ds };
     return {
       ...dau,
       _key: `G:${k}`,

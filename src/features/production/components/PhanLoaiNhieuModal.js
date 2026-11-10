@@ -23,6 +23,33 @@ export function danhGia(r, f) {
   return { ok: true, chu: 'Khớp' };
 }
 
+// ─── 1 TEM NHIỀU MÃ LỖI — bảng "Tích tem" (09/11/2026) ───
+// Các dòng cùng tem kiểm tra CHUNG: Σ (sửa + hủy) mọi dòng = SL hư; lưu 1 lần / tem với đủ các dòng (gương BE
+//   `phanloailoi.service.luu`: bỏ dòng không mã lỗi hoặc SL 0, tổng phải đúng SL hư). Dòng trống hẳn (chưa mã lỗi, SL 0)
+//   bị bỏ qua — vd quét lại tem đã khớp đủ. Trùng mã lỗi trong 1 tem ⇒ chặn (gộp số vào 1 dòng).
+const coSo = (f) => so(f.soLuongSua) + so(f.soLuongHuy) > 0;
+const tongNhom = (fs) => fs.reduce((s, f) => s + so(f.soLuongSua) + so(f.soLuongHuy), 0);
+export const conLaiNhom = (r, fs) => slHuCua(r) - tongNhom(fs);
+export const formTiep = (r, con) => ({ loaiLoiId: '', bienPhapId: '', soLuongSua: con > 0 ? String(con) : '', soLuongHuy: '' });
+export const dongLuuNhom = (fs) => fs.filter((f) => f.loaiLoiId && coSo(f)).map((f) => ({
+  loaiLoiId: f.loaiLoiId, bienPhapId: f.bienPhapId || null,
+  soLuongSua: so(f.soLuongSua), soLuongHuy: so(f.soLuongHuy), ghiChu: '',
+}));
+
+export function danhGiaNhom(r, fs) {
+  const hu = slHuCua(r);
+  if (hu <= 0) return { ok: false, chu: 'KCS chưa ghi hư' };
+  if (fs.some((f) => !f.loaiLoiId && coSo(f))) return { ok: false, chu: 'Có dòng chưa chọn mã lỗi' };
+  if (fs.some((f) => f.loaiLoiId && !coSo(f))) return { ok: false, chu: 'Có dòng đã chọn mã lỗi mà chưa nhập SL' };
+  const dung = fs.filter((f) => f.loaiLoiId && coSo(f));
+  if (!dung.length) return { ok: false, chu: 'Chọn mã lỗi' };
+  if (new Set(dung.map((f) => f.loaiLoiId)).size < dung.length) return { ok: false, chu: 'Trùng mã lỗi — gộp số vào 1 dòng' };
+  const lech = tongNhom(fs) - hu;
+  if (lech < 0) return { ok: false, chu: `Còn ${fmtNum(-lech)} chưa phân loại (phải = ${fmtNum(hu)} hư) · ↓ thêm mã lỗi` };
+  if (lech > 0) return { ok: false, chu: `Thừa ${fmtNum(lech)} (phải = ${fmtNum(hu)} hư)` };
+  return { ok: true, chu: dung.length > 1 ? `Khớp · ${dung.length} mã lỗi` : 'Khớp' };
+}
+
 export default function PhanLoaiNhieuModal({ open, rows, loaiLoi, bienPhap, onClose, onXong, show }) {
   const [forms, setForms] = useState({});
   const [ketQua, setKetQua] = useState({}); // tem_id → { ok, chu }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import useLyDoNghen from '../../hooks/useLyDoNghen';
 import useChiXem from '../../hooks/useChiXem';
 import ChipTabs from './ChipTabs';
@@ -97,6 +97,15 @@ export default function NghenListModal({
 }) {
   const [chip, setChip] = useState(chipMacDinh);
   useEffect(() => { if (open) setChip(chipMacDinh); }, [open, chipMacDinh]);
+  // ⚠⚠ HIỆU NĂNG (09/11/2026 — người dùng báo modal Tích tem KCS "xoay và chậm"): modal này LUÔN gắn trên 12 màn, mà
+  //   các màn truyền `trangThai` / `khoa` / `thoiGian` / `hopChip` là HÀM NỘI TUYẾN tạo mới mỗi lần vẽ, và màn vẽ lại MỖI
+  //   GIÂY (đồng hồ SLA `useNow(1000)`). Bản cũ đưa `trangThai` vào deps ⇒ mỗi giây lọc + sắp + DỰNG CẢ BẢNG (mỗi dòng
+  //   ~15 ô + 2 lần `fmtDateTime`) cho mọi hàng nghẽn — KỂ CẢ KHI MODAL ĐANG ĐÓNG. Đo màn KCS 2.012 tem (prod 09/11:
+  //   1.981): trang đứng yên mà luồng chính bận ~65% thời gian ⇒ gõ / quét ở modal khác trên trang bị khựng.
+  //   Nay: đọc 4 hàm đó qua REF; ĐÓNG thì không tính gì (`dsNghen` rỗng, không dựng bảng — `Modal` không có hiệu ứng
+  //   đóng nên bỏ phần thân ngay là an toàn); MỞ thì chỉ tính lại theo `rows` / đồng hồ 30 s của chính modal / lý do.
+  const fnRef = useRef({});
+  fnRef.current = { trangThai, khoa, thoiGian, hopChip };
   const L = LOAI[loai] || LOAI.NGHEN;
   const laCanhBao = loai === 'SAP_NGHEN';
   const coLyDo = !!maTrang && !laCanhBao;
@@ -132,9 +141,12 @@ export default function NghenListModal({
     return () => { huy = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, laLichSu, maTrang, ngayLs.from, ngayLs.to]);
+  // Chuỗi ngày giờ dựng 1 lần lúc tính danh sách (`fmtDateTime` = `toLocaleString`, đắt khi nhân hàng nghìn dòng).
   const dsLichSu = useMemo(() => lichSu.map((r) => ({
     ...r, _batDau: r.tg_bat_dau_nghen, _qua: r.so_phut_nghen, _sla: r.sla_phut,
     _lyDo: { ly_do: r.ly_do, nguoi: r.nguoi, created_date: r.created_date },
+    _batDauChu: r.tg_bat_dau_nghen ? fmtDateTime(r.tg_bat_dau_nghen) : '—',
+    _xacNhanChu: r.created_date ? fmtDateTime(r.created_date) : '—',
   })), [lichSu]);
 
   const { hoiLyDoNghen, lyDoNghenModal } = useLyDoNghen({ maTrang, trangThai, khoa, thoiGian });
@@ -142,26 +154,32 @@ export default function NghenListModal({
     const ok = await hoiLyDoNghen([r], { batBuoc: true, hanhDong: 'GHI_TAY', lyDoMacDinh: r._lyDo?.ly_do || '' });
     if (ok) { show('Đã lưu lý do nghẽn'); taiLyDo(); }
   };
+  const ghiLyDoRef = useRef(ghiLyDo);
+  ghiLyDoRef.current = ghiLyDo;
 
   // Hàng NGHẼN + số phút đã ở / quá hạn (luật chung `utils/nghen.doNghen`): hàng mang `tg_vao` +
   // `sla_phut` tự tính; họ `useNghenMap` lấy qua `thoiGian(r)`. Không có dữ kiện ⇒ cột thời gian ẩn.
+  // ĐÓNG ⇒ rỗng (không tính gì). `trangThai` / `thoiGian` / `khoa` đọc qua ref (xem `fnRef`) — CỐ Ý không đưa vào deps:
+  //   bảng tính lại theo `open` + `rows` + `now` (30 s) + lý do, đủ tươi; đưa vào deps là tính lại mỗi lần trang vẽ (mỗi giây).
   const dsNghen = useMemo(() => {
-    const ds = (rows || []).filter((r) => trangThai && trangThai(r) === loai);
+    if (!open) return [];
+    const { trangThai: tt, thoiGian: tg, khoa: kh } = fnRef.current;
+    const ds = (rows || []).filter((r) => tt && tt(r) === loai);
     const tinh = ds.map((r) => {
-      const d = doNghen(r, thoiGian, now);
+      const d = doNghen(r, tg, now);
+      const lyDo = coLyDo ? timLyDo(lyDoMap, kh(r)) : null;
       return {
         ...r, _phut: d ? d.phut : null, _qua: d ? d.qua : null, _sla: d ? d.sla : null, _batDau: d ? d.batDau : null,
-        _lyDo: coLyDo ? timLyDo(lyDoMap, khoa(r)) : null,
+        _lyDo: lyDo,
+        _batDauChu: d && d.batDau ? fmtDateTime(d.batDau) : '—',
+        _lyDoChu: lyDo ? fmtDateTime(lyDo.created_date) : '',
       };
     });
     // Nghẽn: quá hạn NẶNG NHẤT lên đầu · Cảnh báo: SẮP tới hạn nhất (còn ít phút nhất) lên đầu.
     return laCanhBao
       ? tinh.sort((a, b) => (b._qua ?? -Infinity) - (a._qua ?? -Infinity))
       : tinh.sort((a, b) => (b._qua ?? -1) - (a._qua ?? -1));
-    // ⚠ `thoiGian`/`khoa` là hàm nội tuyến của trang (đổi mỗi render) — CỐ Ý không đưa vào deps; bảng
-    //   vẫn tính lại theo `now` (30s) + `rows`, đủ tươi. Đưa vào deps là tính lại mỗi lần cha render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, trangThai, now, loai, laCanhBao, lyDoMap, coLyDo]);
+  }, [open, rows, now, loai, laCanhBao, lyDoMap, coLyDo]);
 
   const coThoiGian = dsNghen.some((r) => r._phut != null);
 
@@ -169,14 +187,13 @@ export default function NghenListModal({
   const coChip = !!(chipTabs && hopChip);
   const demChipNghen = useMemo(() => {
     if (!coChip) return {};
+    const hc = fnRef.current.hopChip;
     const m = {};
-    chipTabs.forEach((t) => { m[t.v] = t.v ? dsNghen.filter((r) => hopChip(r, t.v)).length : dsNghen.length; });
+    chipTabs.forEach((t) => { m[t.v] = t.v ? dsNghen.filter((r) => hc(r, t.v)).length : dsNghen.length; });
     return m;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dsNghen, coChip, chipTabs]);
   const dsTheoChip = useMemo(
-    () => (coChip && chip ? dsNghen.filter((r) => hopChip(r, chip)) : dsNghen),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    () => (coChip && chip ? dsNghen.filter((r) => fnRef.current.hopChip(r, chip)) : dsNghen),
     [dsNghen, coChip, chip]
   );
 
@@ -188,6 +205,59 @@ export default function NghenListModal({
     return nguon.filter((r) => cotHien.some((c) => khop(oGiaTri(r, c), tim)) || khop(r._lyDo?.ly_do || '', tim));
   }, [nguon, tim, cotHien]);
   const coCotThoiGian = laLichSu || coThoiGian;
+
+  // Thân bảng dựng theo `ds` (không theo mỗi lần trang vẽ lại) — modal mở trên màn hàng nghìn dòng vẫn nhẹ.
+  const thanBang = useMemo(() => ds.map((r, i) => (
+    <tr key={r.id || r.tem_id || r.lenh_id || r.dot_vai_id || i}
+      className={`border-t border-line align-top ${L.nen}`}>
+      <td className="px-2 py-1.5 tabular-nums text-ink-soft">{i + 1}</td>
+      {cotHien.map((c) => (
+        <td key={c.key || c.header} className="px-2 py-1.5">
+          {oGiaTri(r, c) || <span className="text-ink-soft">—</span>}
+        </td>
+      ))}
+      {laLichSu && (
+        <>
+          <td className="whitespace-nowrap px-2 py-1.5 text-xs">{r._batDauChu}</td>
+          <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-ink-soft">{r._sla ? fmtDur(r._sla) : '—'}</td>
+          <td className="whitespace-nowrap px-2 py-1.5 text-right font-semibold tabular-nums text-danger">
+            {r._qua == null ? '—' : `+${fmtDur(r._qua)}`}
+          </td>
+          <td className="whitespace-nowrap px-2 py-1.5 text-xs">{r._xacNhanChu}</td>
+        </>
+      )}
+      {!laLichSu && coThoiGian && (
+        <>
+          <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums">{fmtDur(r._phut)}</td>
+          <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-ink-soft">
+            {r._sla ? fmtDur(r._sla) : '—'}
+          </td>
+          {!laCanhBao && (
+            <td className="whitespace-nowrap px-2 py-1.5 text-xs">{r._batDauChu}</td>
+          )}
+          <td className={`whitespace-nowrap px-2 py-1.5 text-right font-semibold tabular-nums ${laCanhBao ? 'text-warning' : 'text-danger'}`}>
+            {r._qua == null ? '—' : laCanhBao ? fmtDur(Math.max(0, -r._qua)) : `+${fmtDur(r._qua)}`}
+          </td>
+        </>
+      )}
+      {coLyDo && (
+        <td className="min-w-[14rem] px-2 py-1.5 text-xs">
+          {r._lyDo ? (
+            <div>
+              <div className="text-ink">{r._lyDo.ly_do}</div>
+              <div className="text-[11px] text-ink-soft">{r._lyDo.nguoi || '—'} · {r._lyDoChu || r._xacNhanChu}</div>
+            </div>
+          ) : <span className="text-ink-soft">Chưa có</span>}
+          {!laLichSu && (
+            <button type="button" className="mt-0.5 text-[11px] font-semibold text-primary hover:underline disabled:opacity-40"
+              disabled={chiXem} onClick={() => ghiLyDoRef.current(r)}>
+              {r._lyDo ? 'Sửa lý do' : '+ Ghi lý do'}
+            </button>
+          )}
+        </td>
+      )}
+    </tr>
+  )), [ds, cotHien, laLichSu, coThoiGian, laCanhBao, coLyDo, chiXem, L.nen]);
 
   const doXuat = async () => {
     setXuat(true);
@@ -247,6 +317,9 @@ export default function NghenListModal({
       show(e.message || 'Không xuất được Excel', 'error');
     } finally { setXuat(false); }
   };
+
+  // Đang đóng ⇒ không dựng modal (giữ hộp lý do + toast phòng khi vừa ghi lý do xong).
+  if (!open) return <>{lyDoNghenModal}<Toast toast={toast} /></>;
 
   return (
     <>
@@ -327,57 +400,7 @@ export default function NghenListModal({
                 </tr>
               </thead>
               <tbody>
-                {ds.map((r, i) => (
-                  <tr key={r.id || r.tem_id || r.lenh_id || r.dot_vai_id || i}
-                    className={`border-t border-line align-top ${L.nen}`}>
-                    <td className="px-2 py-1.5 tabular-nums text-ink-soft">{i + 1}</td>
-                    {cotHien.map((c) => (
-                      <td key={c.key || c.header} className="px-2 py-1.5">
-                        {oGiaTri(r, c) || <span className="text-ink-soft">—</span>}
-                      </td>
-                    ))}
-                    {laLichSu && (
-                      <>
-                        <td className="whitespace-nowrap px-2 py-1.5 text-xs">{r._batDau ? fmtDateTime(r._batDau) : '—'}</td>
-                        <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-ink-soft">{r._sla ? fmtDur(r._sla) : '—'}</td>
-                        <td className="whitespace-nowrap px-2 py-1.5 text-right font-semibold tabular-nums text-danger">
-                          {r._qua == null ? '—' : `+${fmtDur(r._qua)}`}
-                        </td>
-                        <td className="whitespace-nowrap px-2 py-1.5 text-xs">{r.created_date ? fmtDateTime(r.created_date) : '—'}</td>
-                      </>
-                    )}
-                    {!laLichSu && coThoiGian && (
-                      <>
-                        <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums">{fmtDur(r._phut)}</td>
-                        <td className="whitespace-nowrap px-2 py-1.5 text-right tabular-nums text-ink-soft">
-                          {r._sla ? fmtDur(r._sla) : '—'}
-                        </td>
-                        {!laCanhBao && (
-                          <td className="whitespace-nowrap px-2 py-1.5 text-xs">{r._batDau ? fmtDateTime(r._batDau) : '—'}</td>
-                        )}
-                        <td className={`whitespace-nowrap px-2 py-1.5 text-right font-semibold tabular-nums ${laCanhBao ? 'text-warning' : 'text-danger'}`}>
-                          {r._qua == null ? '—' : laCanhBao ? fmtDur(Math.max(0, -r._qua)) : `+${fmtDur(r._qua)}`}
-                        </td>
-                      </>
-                    )}
-                    {coLyDo && (
-                      <td className="min-w-[14rem] px-2 py-1.5 text-xs">
-                        {r._lyDo ? (
-                          <div>
-                            <div className="text-ink">{r._lyDo.ly_do}</div>
-                            <div className="text-[11px] text-ink-soft">{r._lyDo.nguoi || '—'} · {fmtDateTime(r._lyDo.created_date)}</div>
-                          </div>
-                        ) : <span className="text-ink-soft">Chưa có</span>}
-                        {!laLichSu && (
-                          <button type="button" className="mt-0.5 text-[11px] font-semibold text-primary hover:underline disabled:opacity-40"
-                            disabled={chiXem} onClick={() => ghiLyDo(r)}>
-                            {r._lyDo ? 'Sửa lý do' : '+ Ghi lý do'}
-                          </button>
-                        )}
-                      </td>
-                    )}
-                  </tr>
-                ))}
+                {thanBang}
                 {!ds.length && (
                   <tr>
                     <td colSpan={cotHien.length + 1 + (coCotThoiGian ? (laCanhBao ? 3 : 4) : 0) + (coLyDo ? 1 : 0)}

@@ -28,7 +28,7 @@ export const TEN_TT_LENH = {
   GIA_CONG: 'Gia công', CHO_IN_XONG: 'Chờ in xong (ép ủi)',
 };
 const TEN_TT_TEM = {
-  IN: 'Mới in', DANG_PHOI: 'Đang phơi', DA_KHO: 'Đã khô (chờ KCS)', CHO_SUA: 'Chờ sửa', CHO_OQC: 'Chờ OQC',
+  IN: 'Mới in', DANG_PHOI: 'Đang phơi', DA_KHO: 'Đã khô (chờ KCS)', CHO_CD_SAU: 'Đã khô (chờ công đoạn sau)', CHO_SUA: 'Chờ sửa', CHO_OQC: 'Chờ OQC',
   OQC_DAT: 'Qua OQC (chờ giao)', DA_GIAO: 'Đã giao', HUY: 'Đã hủy',
 };
 const TONE_TEM = { HUY: 'danger', DA_GIAO: 'success', OQC_DAT: 'success', CHO_SUA: 'warning', CHO_OQC: 'info' };

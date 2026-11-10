@@ -17,11 +17,15 @@ import {
 import { listUserOptions } from '../../../services/userService';
 import printTemLabel, { printTemLabelNhieu, moSanCuaSoIn, dongCuaSoIn } from '../utils/printTemLabel';
 import { fmtNum } from '../../../utils/format';
-import { TemMetaFields, PhanCongInline, META_MAC_DINH, metaGuiDi, lamMoiMeta, thieuNgayCaCt, CHUA_THO_IN, chuaPhanCongThoIn, useTaiNgamKhiLenhDoi } from './RunPanel';
+import { TemMetaFields, PhanCongInline, META_MAC_DINH, metaGuiDi, lamMoiMeta, thieuNgayCaCt, CHUA_THO_IN, chuaPhanCongThoIn, useTaiNgamKhiLenhDoi, KiengFields, thieuKieng, apGoiYKieng } from './RunPanel';
 import TraVeKeHoachModal from './TraVeKeHoachModal';
 import {
   gomPhan, thuTuIn, conDuocIn, conDuocInNhom, tongNhom, daIn, daInTheoTran, slRelease, duHoanTatNhom, toiThieuHoanTatNhom,
 } from '../utils/gomPhanSanXuat';
+
+// In kiếng (mig 126): 1 bộ Loại kiếng + Hệ số dùng chung cho mọi lệnh in kiếng trong lượt — lấy danh mục / gợi ý của lệnh in
+//   kiếng đầu tiên. Không lệnh nào cần ⇒ null (ẩn ô).
+const kiengChung = (runs) => (runs || []).map((r) => r && r.kieng).find((k) => k && k.can) || null;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SẢN XUẤT NHIỀU LỆNH CÙNG LÚC (08/10/2026, người dùng chốt) — mở từ nút "Mở (N)" của bảng Đang chạy khi đã
@@ -94,6 +98,7 @@ const dotBoSungCuaDong = (d) => (d.nhom || [d.run]).flatMap((r) => r.dot_vai || 
 const chuoiSo = (v) => (v == null ? '' : String(v));
 
 function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn }) {
+  const kieng = kiengChung(runs);
   // key dòng → { sl, huy, thieu, gc, btpTruoc, btpCuoi, bsCty, bsKhach } (chuỗi / bool)
   const [sl, setSl] = useState({});
   useEffect(() => { if (open) setSl({}); }, [open]);
@@ -162,7 +167,8 @@ function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn 
           {nhanNut}
         </Button>
       </>}>
-      <div className="mb-3"><TemMetaFields meta={meta} setMeta={setMeta} goiY={goiY} anGcMauVai anBtp /></div>
+      <div className="mb-3"><TemMetaFields meta={meta} setMeta={setMeta} goiY={goiY} anGcMauVai anBtp />
+        <KiengFields kieng={kieng} meta={meta} setMeta={setMeta} /></div>
       <div className="overflow-auto rounded-card border border-line">
         <table className="w-full border-collapse">
           <thead>
@@ -423,6 +429,8 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh, t
       if (g) {
         setTemMeta((m) => ({ ...m, ngayCa: m.ngayCa || chung('ngay_ca'), gioBd: m.gioBd || g.gio_bd || '', gioKt: m.gioKt || g.gio_kt || '' }));
       }
+      // In kiếng (mig 126): điền sẵn loại + hệ số của lệnh in kiếng đầu tiên (chỉ ô chưa gõ).
+      setTemMeta((m) => apGoiYKieng(m, kiengChung(ds)));
     } finally {
       setLoading(false);
     }
@@ -527,7 +535,7 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh, t
     let theoPhieu = gomTheoPhieu(dong);
     const inTem = theoPhieu.filter((g) => g.coTem);
     if (inTem.length) {
-      const thieu = thieuNgayCaCt(temMeta);
+      const thieu = thieuNgayCaCt(temMeta) || thieuKieng(kiengChung(inTem.map((g) => g.run)), temMeta);
       if (thieu) { show(thieu, 'error'); return; }
       // Lệnh chưa LƯU phân công có thợ in (hoặc ca này chuyền chưa phân công) ⇒ không in (gương BE `kiemThoInPhanCong`).
       const chuaTho = inTem.map((g) => g.run).filter((r) => chuaPhanCongThoIn(r?.phan_cong, toInDs.length > 0));

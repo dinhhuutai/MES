@@ -20,6 +20,8 @@ import usePermissions from '../../../hooks/usePermissions';
 import { listRelease1Candidates, createDotSanXuat, listChuyen } from '../../../services/planningService';
 import { listUserOptions } from '../../../services/userService';
 import { fmtNum, fmtDate } from '../../../utils/format';
+import CongDoanBadge from '../../../components/common/CongDoanBadge';
+import { GD_IN, GD_EP, chuanGd, laEp } from '../../../utils/luongSanXuat';
 
 // Ngày mai (giờ máy) dạng YYYY-MM-DD — mặc định cho ô "Ngày kế hoạch".
 const tomorrowStr = () => {
@@ -53,6 +55,9 @@ export default function TaoDotSanXuatPage() {
   const [busy, setBusy] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const [releaseOpen, setReleaseOpen] = useState(false);
+  // Công đoạn đang soạn (mig 126): 'IN' (mặc định) | 'EP_UI' — phần ép ủi của phần in 2 công đoạn (in kiếng / in + ép).
+  const [gd, setGdRaw] = useState(GD_IN);
+  const setGd = (v) => { setGdRaw(v); setBasket([]); };
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -77,14 +82,18 @@ export default function TaoDotSanXuatPage() {
   useEffect(() => { listChuyen().then((r) => setChuyen(r.data || [])).catch(() => {}); }, []);
   useEffect(() => { listUserOptions({ limit: 500 }).then((r) => setUsers(r.data || [])).catch(() => {}); }, []);
 
+  // Chỉ dòng của công đoạn đang soạn (dòng ép ủi có cùng `dot_vai_id` với dòng in).
+  const rowsGd = useMemo(() => rows.filter((r) => chuanGd(r.giai_doan) === gd), [rows, gd]);
+  const soDongEp = useMemo(() => rows.filter(laEp).length, [rows]);
   const basketIds = useMemo(() => new Set(basket.map((b) => b.dot_vai_id)), [basket]);
   const basketPin = basket.length ? basket[0].phan_in_id : null;
 
   // Đợt bên trái: chưa trong giỏ; nếu giỏ đã có phần in → CHỈ cho thêm đợt CÙNG PHẦN IN (code phần).
-  const leftRows = rows.filter((r) => !basketIds.has(r.dot_vai_id));
+  const leftRows = rowsGd.filter((r) => !basketIds.has(r.dot_vai_id));
 
   const MIXED_MSG = 'Chỉ gộp các đợt vải CÙNG PHẦN IN (code phần). Muốn gom nhiều phần in cùng màu → dùng Gom set ở READY.';
   const addToBasket = (r) => {
+    if (gd === GD_EP && !r.qc_done) { show('Phần ép ủi chỉ lập kế hoạch được khi đợt vải đã Ready', 'error'); return; }
     if (basketPin && r.phan_in_id !== basketPin) {
       show(MIXED_MSG, 'error');
       return;
@@ -118,12 +127,12 @@ export default function TaoDotSanXuatPage() {
       const res = await createDotSanXuat({
         items: basket.map((b) => ({ dotVaiId: b.dot_vai_id, soLuong: Number(b.soLuong) })),
         chuyenId, ngayKeHoach: ngayKeHoach || null,
-        tgBdKh: mkTs(gioBd), tgKtKh: mkTs(gioKt), thoIn: thoIn || null,
+        tgBdKh: mkTs(gioBd), tgKtKh: mkTs(gioKt), thoIn: thoIn || null, giaiDoan: gd,
       });
       const skip = res.data?.skipped_test;
       const chuaLuuTho = res.data?.tho_in_chua_luu ? ' · CHƯA lưu thợ in (hệ thống chưa cập nhật cơ sở dữ liệu)' : '';
       if (res.data?.chi_tam) show(`Phần in chưa Ready → đã lưu Kế hoạch tạm (${res.data.ke_hoach_tam_count || 0} đợt). Xác nhận lại ở màn Kế hoạch tạm khi Ready xong.${chuaLuuTho}`, chuaLuuTho ? 'error' : 'success');
-      else show(`${skip ? 'Đã gom đợt vải thành 1 đợt sản xuất — bỏ Test Run (vào thẳng Chờ sản xuất)' : 'Đã gom đợt vải thành 1 đợt sản xuất — chờ Test Run'}${chuaLuuTho}`, chuaLuuTho ? 'error' : 'success');
+      else show(`${skip ? 'Đã gom đợt vải thành 1 đợt sản xuất — hàng Logo vào thẳng Chờ chạy (không qua Test Run)' : `Đã gom đợt vải thành 1 đợt sản xuất${gd === GD_EP ? ' ÉP ỦI' : ''} — chờ Test Run`}${chuaLuuTho}`, chuaLuuTho ? 'error' : 'success');
       setBasket([]); setChuyenId(''); setNgayKeHoach(tomorrowStr()); setGioBd(''); setGioKt(''); setThoIn('');
       load();
     } catch (e) {
@@ -144,6 +153,15 @@ export default function TaoDotSanXuatPage() {
             className="h-10 w-full rounded-control border border-line pl-9 pr-3 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10" />
         </div>
         <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét / tích mã</Button>
+        {/* Mig 126: chỉ hiện khi có phần in 2 công đoạn — đổi công đoạn là làm trống giỏ. */}
+        {soDongEp > 0 && (
+          <span className="inline-flex rounded-full border border-line bg-surface p-0.5 text-xs font-semibold">
+            {[[GD_IN, 'Phần in'], [GD_EP, `Phần ép ủi (${soDongEp})`]].map(([v, t]) => (
+              <button key={v} type="button" onClick={() => setGd(v)}
+                className={`rounded-full px-3 py-1.5 ${gd === v ? (v === GD_EP ? 'bg-orange-500 text-white' : 'bg-primary text-white') : 'text-ink-soft'}`}>{t}</button>
+            ))}
+          </span>
+        )}
         <Badge tone="info">{leftRows.length} đợt vải</Badge>
       </Toolbar>
 
@@ -160,14 +178,14 @@ export default function TaoDotSanXuatPage() {
           ) : (
             <div className="max-h-[calc(100vh-15rem)] space-y-1.5 overflow-auto">
               {leftRows.map((r) => {
-                const disabled = basketPin && r.phan_in_id !== basketPin;
+                const disabled = (basketPin && r.phan_in_id !== basketPin) || (gd === GD_EP && !r.qc_done);
                 return (
                   <button key={r.dot_vai_id} type="button" disabled={disabled} onClick={() => addToBasket(r)}
                     className={`flex w-full items-start justify-between gap-2 rounded-control border px-3 py-2 text-left text-sm ${disabled ? 'cursor-not-allowed border-line opacity-40' : 'border-line hover:border-primary hover:bg-primary/5'}`}>
                     <div className="min-w-0 leading-tight">
                       {/* Hàng 1: code phần · khách hàng · đơn hàng */}
                       <div className="truncate font-medium text-ink">
-                        {r.ma_phan} · <span className="font-normal text-ink-soft">{r.ten_khach_hang}</span> · <span className="font-normal text-ink-soft">{r.ma_don_hang}</span>
+                        <CongDoanBadge luong={r.luong_sx} gd={r.giai_doan} hienLogo className="mr-1" />{r.ma_phan} · <span className="font-normal text-ink-soft">{r.ten_khach_hang}</span> · <span className="font-normal text-ink-soft">{r.ma_don_hang}</span>
                       </div>
                       {/* Hàng 2: mã hàng · tính chất in */}
                       <div className="truncate text-xs text-ink-soft">
@@ -198,7 +216,7 @@ export default function TaoDotSanXuatPage() {
 
         {/* PHẢI: giỏ soạn đợt sản xuất */}
         <div className="rounded-card border border-line bg-surface p-3">
-          <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-soft">Đợt sản xuất đang soạn ({basket.length})</h3>
+          <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-soft">Đợt sản xuất{gd === GD_EP ? ' ÉP ỦI' : ''} đang soạn ({basket.length})</h3>
           {basket.length === 0 ? (
             <div className="py-10 text-center text-ink-soft">Bấm đợt vải bên trái để thêm vào</div>
           ) : (
@@ -275,7 +293,7 @@ export default function TaoDotSanXuatPage() {
         onClose={() => setScanOpen(false)}
         title="Quét / tích mã — Gom đợt vải"
         help="Chọn QR (code phần) hoặc Mã vạch ở trên rồi đưa vào khung camera. 1 code phần → thêm HẾT đợt vải của phần in đó vào đợt đang soạn (chỉ CÙNG phần in)."
-        rows={rows}
+        rows={rowsGd}
         getId={(r) => r.dot_vai_id}
         getCodes={(r) => [r.ma_phan]}
         getBarcodes={(r) => [r.barcode]}

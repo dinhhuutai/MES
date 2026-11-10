@@ -16,6 +16,7 @@ import exportCheckpointExcel, {
   COT_LENH, moTaBoLoc, chenCot, cotKhoangGio, khoangGio,
 } from '../../../utils/exportCheckpointExcel';
 import { locLenhChay, coLoc, LOC_TRONG, timLenhTheoMa, chonLenhDeTich, khoaPinLenh, gomTheoCodePhan, lenhCuaDong } from '../utils/locLenhChay';
+import CongDoanBadge from '../../../components/common/CongDoanBadge';
 
 // Trần số lệnh 1 lần xác nhận chạy — gương BE `production.service TOI_DA_CHAY_MOT_LUOT`.
 export const TOI_DA_CHAY_MOT_LUOT = 100;
@@ -280,7 +281,10 @@ export default function ChoChayModal({
         )}
       </div>
     ) },
-    { key: 'ma_phan', header: 'Code phần', render: (r) => r.ma_phan || '—' },
+    // Mig 126: nhãn công đoạn (In kiếng / In / Ép ủi) + Logo cạnh code phần.
+    { key: 'ma_phan', header: 'Code phần', render: (r) => (
+      <span className="inline-flex flex-wrap items-center gap-1">{r.ma_phan || '—'}<CongDoanBadge luong={r.luong_sx} gd={r.giai_doan} hienLogo /></span>
+    ) },
     { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
     { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },

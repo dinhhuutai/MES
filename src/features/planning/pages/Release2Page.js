@@ -39,6 +39,7 @@ import exportCheckpointExcel, { COT_LENH, moTaBoLoc } from '../../../utils/expor
 //   `ma_chuyen` + `ma_loai_chuyen` — 2 cột mà chip khu và chip loại cần.
 import { LOAI_TABS, hopChipChuyen as hopChip, nhanChip, demChip, locSiSoTheoChip } from '../../../utils/khuChuyen';
 import ChipTabs from '../../../components/common/ChipTabs';
+import CongDoanBadge from '../../../components/common/CongDoanBadge';
 
 const FILTER_FIELDS = [
   { key: 'codePhan', label: 'Code phần', col: 'ma_phan' }, { key: 'khach', label: 'Khách hàng', col: 'ten_khach_hang' },
@@ -205,7 +206,10 @@ export default function Release2Page() {
     ) },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
     // Code phần là trường ĐANG ĐƯỢC LỌC/QUÉT, và là thứ duy nhất phân biệt các dòng con của gom set.
-    { key: 'ma_phan', header: 'Code phần', render: (r) => r.ma_phan || '—' },
+    // Mig 126: nhãn công đoạn (In kiếng / In / Ép ủi) + Logo cạnh code phần.
+    { key: 'ma_phan', header: 'Code phần', render: (r) => (
+      <span className="inline-flex flex-wrap items-center gap-1">{r.ma_phan || '—'}<CongDoanBadge luong={r.luong_sx} gd={r.giai_doan} hienLogo /></span>
+    ) },
     { key: 'mau_kich', header: 'Màu · Kích (vải/phim)', render: (r) => (
       <div className="leading-tight">
         <div className="text-ink">{r.mau_vai || '—'}</div>

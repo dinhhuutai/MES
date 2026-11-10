@@ -207,6 +207,8 @@ export const MODULES = [
       { ten: 'Hiển thị theo phương án in', route: '/he-thong/hien-thi-pain', perm: 'WORKFLOW_VIEW' },
       // Tính chất in (mig 123, 04/11/2026) — phân luồng + bỏ qua khi đồng bộ ERP.
       { ten: 'Tính chất in', route: '/he-thong/tinh-chat-in', perm: 'WORKFLOW_VIEW' },
+      // Mig 126: danh mục kiếng (chọn khi in tem in kiếng) — cùng quyền cấu hình như Tính chất in.
+      { ten: 'Danh mục kiếng', route: '/he-thong/danh-muc-kieng', perm: 'WORKFLOW_VIEW' },
       // Cài đặt API (mig 083) — bật/tắt 3 API ERP ngay trên giao diện, khỏi sửa .env + restart BE.
       { ten: 'Cài đặt API', route: '/he-thong/cai-dat-api', perm: 'WORKFLOW_VIEW' },
       // Cài đặt tính năng (mig 087) — bật/tắt LUẬT NGHIỆP VỤ (chặn Release 1 theo loại chuyền ·
@@ -255,7 +257,7 @@ export const NHOM_HE_THONG = [
     '/he-thong/online', '/he-thong/phien-dang-nhap', '/he-thong/nhat-ky'] },
   { ma: 'QUY_TRINH', ten: 'Quy trình & checkpoint', icon: 'git-branch', routes: [
     '/he-thong/workflow-version', '/he-thong/chuyen', '/he-thong/tram-checkpoint', '/he-thong/dieu-kien',
-    '/he-thong/owner', '/he-thong/trang-thai', '/he-thong/hien-thi-pain', '/he-thong/tinh-chat-in'] },
+    '/he-thong/owner', '/he-thong/trang-thai', '/he-thong/hien-thi-pain', '/he-thong/tinh-chat-in', '/he-thong/danh-muc-kieng'] },
   { ma: 'DU_LIEU', ten: 'Dữ liệu & ERP', icon: 'database', routes: [
     '/he-thong/erp-sync', '/he-thong/nhap-tay', '/he-thong/cap-nhat-vai', '/he-thong/quan-tri-phan-in', '/he-thong/btp-khac-ke-hoach',
     '/he-thong/khach-hang', '/he-thong/kpi-don-hang'] },

@@ -11,7 +11,9 @@ import useOTimKiem from '../../../hooks/useOTimKiem';
 import usePermissions from '../../../hooks/usePermissions';
 import useHuyLichSu from '../../../hooks/useHuyLichSu';
 import PhanLoaiLoiPanel from '../components/PhanLoaiLoiPanel';
-import PhanLoaiNhieuModal, { slHuCua, formMoi as formPllMoi, danhGia as danhGiaPll } from '../components/PhanLoaiNhieuModal';
+import PhanLoaiNhieuModal, {
+  slHuCua, formMoi as formPllMoi, danhGia as danhGiaPll, danhGiaNhom, conLaiNhom, formTiep, dongLuuNhom,
+} from '../components/PhanLoaiNhieuModal';
 import TichTemNhapModal from '../../../components/common/TichTemNhapModal';
 import SearchableSelect from '../../../components/common/SearchableSelect';
 import VuaQuet from '../../../components/common/VuaQuet';
@@ -52,6 +54,10 @@ const TOI_DA_TICH = 100;
 const tichDuoc = (r) => !r.da_phan_loai && !!r.tem_id && slHuCua(r) > 0;
 
 // Thanh phụ trợ của bảng "Tích tem": mã lỗi / biện pháp chung + Tất cả SỬA / HỦY (như modal phân loại nhiều tem).
+//   Tem có NHIỀU dòng lỗi (`so > 1`): mã lỗi chung chỉ điền dòng chưa có mã (không đẻ trùng mã trong 1 tem); Tất cả SỬA /
+//   HỦY dồn số của từng dòng sang cột đó (giữ cách chia giữa các mã lỗi) thay vì đặt mỗi dòng = cả SL hư.
+const nNum = (v) => Math.max(0, Math.trunc(Number(v) || 0));
+const tongDong = (f) => nNum(f.soLuongSua) + nNum(f.soLuongHuy);
 function ChungPll({ optLoi, optBP, apMoiDong, dangLuu, coDong }) {
   const [chung, setChung] = useState({ loaiLoiId: '', bienPhapId: '' });
   return (
@@ -67,15 +73,19 @@ function ChungPll({ optLoi, optBP, apMoiDong, dangLuu, coDong }) {
           onChange={(v) => setChung((c) => ({ ...c, bienPhapId: v }))} placeholder="Chọn biện pháp…" />
       </div>
       <Button variant="secondary" icon="check" disabled={dangLuu || !coDong || (!chung.loaiLoiId && !chung.bienPhapId)}
-        onClick={() => apMoiDong((r, f) => ({
+        onClick={() => apMoiDong((r, f, { so } = {}) => ({
           ...f,
-          ...(chung.loaiLoiId ? { loaiLoiId: chung.loaiLoiId } : {}),
+          ...(chung.loaiLoiId && (!(so > 1) || !f.loaiLoiId) ? { loaiLoiId: chung.loaiLoiId } : {}),
           ...(chung.bienPhapId ? { bienPhapId: chung.bienPhapId } : {}),
         }))}>Áp cho mọi dòng</Button>
       <Button variant="secondary" disabled={dangLuu || !coDong}
-        onClick={() => apMoiDong((r, f) => ({ ...f, soLuongSua: String(slHuCua(r)), soLuongHuy: '' }))}>Tất cả SỬA</Button>
+        onClick={() => apMoiDong((r, f, { so } = {}) => (so > 1
+          ? { ...f, soLuongSua: tongDong(f) ? String(tongDong(f)) : '', soLuongHuy: '' }
+          : { ...f, soLuongSua: String(slHuCua(r)), soLuongHuy: '' }))}>Tất cả SỬA</Button>
       <Button variant="secondary" disabled={dangLuu || !coDong}
-        onClick={() => apMoiDong((r, f) => ({ ...f, soLuongSua: '', soLuongHuy: String(slHuCua(r)) }))}>Tất cả HỦY</Button>
+        onClick={() => apMoiDong((r, f, { so } = {}) => (so > 1
+          ? { ...f, soLuongSua: '', soLuongHuy: tongDong(f) ? String(tongDong(f)) : '' }
+          : { ...f, soLuongSua: '', soLuongHuy: String(slHuCua(r)) }))}>Tất cả HỦY</Button>
     </>
   );
 }
@@ -200,8 +210,9 @@ export default function PhanLoaiLoiPage() {
     }
   };
 
-  // BẢNG "TÍCH TEM" (29/10/2026, như KCS): mỗi dòng quét 1 tem CHƯA phân loại, 1 mã lỗi. Tem đã phân loại / cần nhiều mã
-  //   lỗi thì mở panel từng tem như cũ. Lưu đi ĐÚNG `luuPhanLoaiLoi` (guard sửa + hủy = hư ở BE).
+  // BẢNG "TÍCH TEM" (29/10/2026, như KCS): quét tem CHƯA phân loại; tem đã phân loại thì mở panel từng tem như cũ.
+  //   09/11/2026: 1 tem nhiều mã lỗi ngay trong bảng (`nhom` — quét lại tem / ↓ khi còn thiếu ⇒ thêm dòng lỗi cho tem đó),
+  //   kiểm tra + lưu theo TEM: 1 lần `luuPhanLoaiLoi` / tem với đủ các dòng (guard sửa + hủy = hư ở BE).
   const optLoi = useMemo(() => loaiLoi.map((l) => ({
     id: l.id, label: `${l.ma_loi} — ${l.ten_loi}`, search: `${l.ma_loi} ${l.ten_loi} ${l.nhom_loi || ''}`,
   })), [loaiLoi]);
@@ -222,11 +233,10 @@ export default function PhanLoaiLoiPage() {
     if (slHuCua(tem) <= 0) return { loi: `Tem ${temCode(tem.ma_tem, 16)} KCS chưa ghi hư — không có gì để phân loại` };
     return { row: tem };
   };
-  const luuTichTem = (r, f) => luuPhanLoaiLoi(r.tem_id, {
-    dong: [{ loaiLoiId: f.loaiLoiId, bienPhapId: f.bienPhapId || null,
-      soLuongSua: Number(f.soLuongSua) || 0, soLuongHuy: Number(f.soLuongHuy) || 0, ghiChu: '' }],
-    ghiChu: '',
-  });
+  const nhomPll = useMemo(() => ({
+    danhGia: danhGiaNhom, conLai: conLaiNhom, formTiep,
+    luu: (r, fs) => luuPhanLoaiLoi(r.tem_id, { dong: dongLuuNhom(fs), ghiChu: '' }),
+  }), []);
   const sauTichTem = (so, loi) => {
     load();
     if (!loi.length) {
@@ -391,7 +401,7 @@ export default function PhanLoaiLoiPage() {
         title="Tích tem — phân loại lỗi nhiều tem" nhanXacNhan="Lưu phân loại" show={show}
         traMa={traTemPll} khoaDong={(r) => r.tem_id} maHien={(r) => temCode(r.ma_tem, 16)}
         soCan={slHuCua} nhanSoCan="SL hư" truong={truongPll} formMoi={formPllMoi} danhGia={danhGiaPll}
-        luu={luuTichTem} onXong={sauTichTem}
+        nhom={nhomPll} onXong={sauTichTem}
         phuTro={(p) => <ChungPll optLoi={optLoi} optBP={optBP} {...p} />} />
 
       {huyLs.modal}

@@ -69,7 +69,7 @@ const FIELD_MA_NGAY_CA = { key: 'maNgayCa', label: 'Mã ngày ca' };
 
 // Tem còn HỦY được: chưa qua kiểm (gương guard backend `production.service.cancelPrintTem` — cùng luật nút Hủy ở
 // "Tem đã in" của RunPanel). `da_kiem` + `mo_lai_duoc` do backend `listTemDaIn` tính.
-const TEM_CHUA_KIEM = ['IN', 'DANG_PHOI', 'DA_KHO'];
+const TEM_CHUA_KIEM = ['IN', 'DANG_PHOI', 'DA_KHO', 'CHO_CD_SAU'];
 // KHU CHUYỀN (26/10/2026) — cùng dải chip `LOAI_TABS` (Bàn · khu A/B · Mẫu · … · Máy · Ép · Logo), bỏ Gia công (trang
 //   tem sản xuất). Gửi lên server như dải Theo dõi (`locSiSoTheoChip`: chip loại ⇒ `loaiChuyen`, chip khu ⇒ `maChuyen`).
 const KHU_LOC = LOAI_TABS.filter((t) => t.v && t.v !== 'GIA_CONG');
@@ -90,6 +90,8 @@ export const TT = {
   IN: ['Đã in', 'default'],
   DANG_PHOI: ['Đang phơi', 'info'],
   DA_KHO: ['Đã khô', 'info'],
+  // Mig 126: tem công đoạn đầu (in kiếng / in trước khi ép) khô xong — không vào KCS, chờ công đoạn sau.
+  CHO_CD_SAU: ['Chờ công đoạn sau', 'info'],
   CHO_SUA: ['Chờ sửa', 'warning'],
   CHO_OQC: ['Chờ OQC', 'warning'],
   LOAI: ['Loại', 'danger'],

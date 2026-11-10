@@ -35,7 +35,8 @@ export function gomPhan(runs) {
   const out = [];
   (runs || []).forEach((run) => {
     const pin = !run?.co_gom_set && !run?.loi ? (run?.dot_vai || [])[0]?.phan_in_id : null;
-    const k = pin ? `${pin}|${run.lenh?.chuyen_id || ''}|${ngcRun(run)}` : `lenh|${run?.lenh?.id}`;
+    // Mig 126: + công đoạn (lệnh in và lệnh ép ủi của cùng phần in không gom).
+    const k = pin ? `${pin}|${run.lenh?.chuyen_id || ''}|${ngcRun(run)}|${run.lenh?.giai_doan === 'EP_UI' ? 'EP' : 'IN'}` : `lenh|${run?.lenh?.id}`;
     let g = m.get(k);
     if (!g) { g = { key: k, runs: [] }; m.set(k, g); out.push(g); }
     g.runs.push(run);
