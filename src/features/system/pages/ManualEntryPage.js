@@ -7,7 +7,7 @@ import Toast from '../../../components/common/Toast';
 import { Field, Input, Select, inputClass } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import { searchKhach, searchDon, searchMaHang, searchPhanIn, listLoaiDotVai, createManualChain } from '../../../services/manualEntryService';
-import { PHUONG_AN_IN } from '../../../components/common/PhuongAnInBadge';
+import { PHUONG_AN_IN, PAIN_HOP_LE } from '../../../components/common/PhuongAnInBadge';
 
 // Ô tìm-chọn "có sẵn" (server-search, debounce). onSelect(item|null). resetKey đổi → nạp lại.
 function AsyncPicker({ fetcher, resetKey, selected, onSelect, placeholder, renderLabel, disabled }) {
@@ -306,7 +306,7 @@ export default function ManualEntryPage() {
               <Field label="Phương án in" hint="Pain">
                 <Select value={hskt.phuong_an_in} onChange={(e) => setHskt((s) => ({ ...s, phuong_an_in: e.target.value }))}>
                   <option value="">— Chưa chọn —</option>
-                  {[1, 2, 3].map((v) => <option key={v} value={v}>{v} · {PHUONG_AN_IN[v]}</option>)}
+                  {PAIN_HOP_LE.map((v) => <option key={v} value={v}>{v} · {PHUONG_AN_IN[v]}</option>)}
                 </Select>
               </Field>
               <Field label="Mã đợt Ready" hint="ma_don_ready (tùy chọn)">

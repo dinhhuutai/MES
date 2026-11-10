@@ -29,13 +29,15 @@ import useChiXem, { NHAC_CHI_XEM } from '../../hooks/useChiXem';
 // Endpoint đó cũng lo luôn: tạo phiên bản HSKT mới, relink `hskt_phan_in`, ghi `lich_su_hskt`,
 // và ĐỔI SỐ CUỐI `barcode_hskt` theo phương án in.
 
-// Vòng xoay theo yêu cầu nghiệp vụ: Bàn(1) → Robot(3) → Máy(2) → Bàn…
-// ⚠ KHÔNG phải 1→2→3. Đổi thứ tự này là đổi thao tác tay của kỹ thuật, đừng "sửa cho gọn".
-const VONG_XOAY = [1, 3, 2];
+// Vòng xoay theo yêu cầu nghiệp vụ: Bàn(1) → Robot(3) → Máy(2) → Logo(4) → Ép(5) → Bàn…
+// ⚠ KHÔNG phải 1→2→3. Đổi thứ tự này là đổi thao tác tay của kỹ thuật, đừng "sửa cho gọn". Logo + Ép thêm 10/11/2026
+//   (nối SAU vòng cũ để 3 nhịp quen tay Bàn → Robot → Máy giữ nguyên).
+const VONG_XOAY = [1, 3, 2, 4, 5];
+const NHAN_VONG = VONG_XOAY.map((v) => PHUONG_AN_IN[v]).join(' → ');
 
 // Gương của `backend/src/utils/hskt.js` (BARCODE_RE + applyPainToBarcode): barcode HSKT 12 chữ số,
 // 11 số đầu là ĐỊNH DANH, số cuối = phương án in. Sai định dạng → GIỮ NGUYÊN mã, không bịa.
-const BARCODE_PA_RE = /^\d{11}[0-3]$/;
+const BARCODE_PA_RE = /^\d{11}[0-5]$/;
 export const maVachTheoPa = (barcode, pa) => (BARCODE_PA_RE.test(String(barcode || ''))
   ? String(barcode).slice(0, 11) + String(Number(pa))
   : null);
@@ -162,7 +164,7 @@ export default function PhuongAnInCell({ value, hsktId, barcode, disabled = fals
                 `Button` khóa hộ — phải tự khóa. Vẫn HIỆN (xám) để bố cục cột không đổi. */}
             <button
               type="button" disabled={saving || chiXem} onClick={() => setChon(keTiep(hienThi))} className={`${NUT} text-ink-soft hover:bg-surface-muted hover:text-primary`}
-              title={chiXem ? NHAC_CHI_XEM : `Đổi sang ${PHUONG_AN_IN[keTiep(hienThi)]} (Bàn → Robot → Máy)`} aria-label="Đổi phương án in"
+              title={chiXem ? NHAC_CHI_XEM : `Đổi sang ${PHUONG_AN_IN[keTiep(hienThi)]} (${NHAN_VONG})`} aria-label="Đổi phương án in"
             >
               <Icon name="rotate-cw" size={14} />
             </button>
@@ -206,7 +208,7 @@ export default function PhuongAnInCell({ value, hsktId, barcode, disabled = fals
             <div className="text-xs text-ink-soft">
               {confirm.maMoi
                 ? <>Số cuối mã vạch HSKT đổi theo: <b className="text-ink">{confirm.maCu}</b> → <b className="text-ink">{confirm.maMoi}</b> — phiếu giấy in mã cũ cần đối chiếu lại.</>
-                : <>Mã vạch HSKT giữ nguyên (không đúng định dạng 11 số + số cuối 0..3).</>}
+                : <>Mã vạch HSKT giữ nguyên (không đúng định dạng 11 số + số cuối 0..5).</>}
               <div className="mt-1">Sau khi đổi, đồng bộ ERP sẽ không ghi đè phương án in này nữa.</div>
             </div>
 

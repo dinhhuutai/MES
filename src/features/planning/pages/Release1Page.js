@@ -32,6 +32,8 @@ import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 import ReleaseListModal from '../components/ReleaseListModal';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
 import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
+import PhuongAnInCell from '../../../components/common/PhuongAnInCell';
+import usePermissions from '../../../hooks/usePermissions';
 import useToast from '../../../hooks/useToast';
 import useSocketReload from '../../../hooks/useSocketReload';
 import useNghenMap from '../../../hooks/useNghenMap';
@@ -124,7 +126,11 @@ const chuDauDangLap = (ds) => {
   return d ? `đầu ${dauBtp(d)}/${soDauBtp(d)}` : '';
 };
 
-function DataCells({ r }) {
+// Quyền đổi phương án in ở Release 1 (10/11/2026) — gương BE `utils/duyet.js LOAI_DUYET.DOI_PHUONG_AN_IN.quyenGui` + quyền duyệt.
+const QUYEN_DOI_PAIN = ['RELEASE1', 'READY_KHUON', 'READY_FILM', 'READY_MUC', 'READY_QC', 'PA_IN_APPROVE'];
+
+// `pa` = { coQuyen, show, onChanged } — ô ↻ đổi phương án in (Bàn → Robot → Máy → Logo → Ép), cùng `PhuongAnInCell` của READY.
+function DataCells({ r, pa }) {
   return (
     <>
       <td className={`${TD} font-medium text-ink`}>
@@ -159,7 +165,12 @@ function DataCells({ r }) {
         </div>
       </td>
       <td className={TD}><TinhChatInCell value={r.tinh_chat_in} /></td>
-      <td className={TD}><PhuongAnInBadge value={r.phuong_an_in} /></td>
+      <td className={TD}>
+        {pa ? (
+          <PhuongAnInCell value={r.phuong_an_in} hsktId={r.hskt_id} barcode={r.barcode_hskt}
+            disabled={!pa.coQuyen} show={pa.show} onChanged={pa.onChanged} />
+        ) : <PhuongAnInBadge value={r.phuong_an_in} />}
+      </td>
       <td className={TD}><LoaiDotVaiBadge value={r.loai_dot_vai} /></td>
       <td className={TD}>{r.nha_gia_cong || '—'}</td>
       <td className={`${TD} text-right tabular-nums whitespace-nowrap`}>
@@ -277,6 +288,9 @@ export default function Release1Page() {
       if (!silent) setLoading(false);
     }
   }, [search, show]);
+  // Ô ↻ phương án in: đổi xong tải lại NGẦM (đổi 1 HSKT là đổi mọi phần in dùng chung hồ sơ).
+  const { can } = usePermissions();
+  const paProps = { coQuyen: can(...QUYEN_DOI_PAIN), show, onChanged: () => load(true) };
 
   useEffect(() => { listChuyen().then((r) => setChuyen(r.data)).catch(() => {}); }, []);
   // `/users/options` chỉ cần đăng nhập (không đòi USER_VIEW). Lỗi ⇒ ô Thợ in vẫn gõ tay được.
@@ -716,7 +730,7 @@ export default function Release1Page() {
                           </span>
                         )}
                       </td>
-                      <DataCells r={r} />
+                      <DataCells r={r} pa={paProps} />
                     </tr>
                   );
                 })

@@ -102,3 +102,31 @@ export function viTriTheoTram(p) {
   if (t.da_giao_sl > 0) them('GIAO', { chu: `Đã giao ${so(t.da_giao_sl)} pcs`, xong: true });
   return m;
 }
+
+// ─── TÌM THEO MÃ TEM (10/11/2026) ──────────────────────────────────────────────────────────────────────────────
+// `tem_tim` của `GET /dashboard/so-do-dong-chay/tim` (BE `timTemSoDo`) = sổ cái của RIÊNG 1 tem tách theo trạm sau sản xuất
+//   (cùng tên trường khối `tem` gộp theo phần in) ⇒ { MA_TRAM: [{ chu, phu, xong }] } — chỉ vị trí của tem đó.
+export function viTriCuaTem(t) {
+  const m = {};
+  if (!t) return m;
+  const them = (ma, x) => { (m[ma] = m[ma] || []).push(x); };
+  const ma = t.ma_quet || t.ma_tem;
+  const phu = [t.ma_lenh, t.ma_chuyen && `chuyền ${t.ma_chuyen}`].filter(Boolean).join(' · ');
+  const o = (maTram, sl, viec) => { if (sl > 0) them(maTram, { chu: `Tem ${ma} · ${so(sl)} pcs — ${viec}`, phu }); };
+  o('CHO_KHO', t.cho_kho_sl, 'đang phơi');
+  o('KIEM', t.kcs_sl, 'chờ kiểm');
+  o('SUA', t.sua_sl, 'chờ sửa');
+  o('OQC', t.oqc_sl, 'chờ OQC');
+  o('GIAO', t.cho_giao_sl, 'chờ GN tích tem / in phiếu giao');
+  if (t.da_giao_sl > 0) them('GIAO', { chu: `Tem ${ma}: đã giao ${so(t.da_giao_sl)} pcs`, phu, xong: true });
+  return m;
+}
+// Câu tình trạng của tem khi KHÔNG còn nằm ở trạm nào (hủy · chờ công đoạn sau · giao hết · loại).
+export function tinhTrangTem(t, tramCoHang) {
+  if (!t) return '';
+  if (t.trang_thai === 'HUY') return 'Tem đã bị hủy — không nằm ở trạm nào.';
+  if (tramCoHang.length) return `Đang ở: ${tramCoHang.map((x) => x.ten).join(' · ')}`;
+  if (t.trang_thai === 'CHO_CD_SAU') return 'Tem công đoạn đầu (in kiếng / in trước khi ép) đã khô — chờ công đoạn sau, không vào KCS.';
+  if (t.da_giao_sl > 0) return 'Tem đã giao hết — không còn ở trạm nào.';
+  return 'Tem không còn hàng ở trạm nào (đã xử lý hết).';
+}

@@ -17,15 +17,15 @@ import {
 import { listUserOptions } from '../../../services/userService';
 import printTemLabel, { printTemLabelNhieu, moSanCuaSoIn, dongCuaSoIn } from '../utils/printTemLabel';
 import { fmtNum } from '../../../utils/format';
-import { TemMetaFields, PhanCongInline, META_MAC_DINH, metaGuiDi, lamMoiMeta, thieuNgayCaCt, CHUA_THO_IN, chuaPhanCongThoIn, useTaiNgamKhiLenhDoi, KiengFields, thieuKieng, apGoiYKieng } from './RunPanel';
+import { TemMetaFields, PhanCongInline, META_MAC_DINH, metaGuiDi, lamMoiMeta, thieuNgayCaCt, CHUA_THO_IN, chuaPhanCongThoIn, useTaiNgamKhiLenhDoi, KiengDong, thieuKieng } from './RunPanel';
 import TraVeKeHoachModal from './TraVeKeHoachModal';
 import {
   gomPhan, thuTuIn, conDuocIn, conDuocInNhom, tongNhom, daIn, daInTheoTran, slRelease, duHoanTatNhom, toiThieuHoanTatNhom,
 } from '../utils/gomPhanSanXuat';
 
-// In kiếng (mig 126): 1 bộ Loại kiếng + Hệ số dùng chung cho mọi lệnh in kiếng trong lượt — lấy danh mục / gợi ý của lệnh in
-//   kiếng đầu tiên. Không lệnh nào cần ⇒ null (ẩn ô).
-const kiengChung = (runs) => (runs || []).map((r) => r && r.kieng).find((k) => k && k.can) || null;
+// In kiếng (mig 126/127): MỖI DÒNG (= mỗi tem) 1 bộ Loại kiếng · SL kiếng · Hệ số (người in tự nhập) — `kieng` của chính lệnh của dòng
+//   (`run.kieng`: can / danh mục kiếng). Dòng không phải in kiếng ⇒ ô "—".
+const kiengDong = (d) => (d && d.run && d.run.kieng && d.run.kieng.can ? d.run.kieng : null);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SẢN XUẤT NHIỀU LỆNH CÙNG LÚC (08/10/2026, người dùng chốt) — mở từ nút "Mở (N)" của bảng Đang chạy khi đã
@@ -98,8 +98,7 @@ const dotBoSungCuaDong = (d) => (d.nhom || [d.run]).flatMap((r) => r.dot_vai || 
 const chuoiSo = (v) => (v == null ? '' : String(v));
 
 function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn }) {
-  const kieng = kiengChung(runs);
-  // key dòng → { sl, huy, thieu, gc, btpTruoc, btpCuoi, bsCty, bsKhach } (chuỗi / bool)
+  // key dòng → { sl, huy, thieu, gc, btpTruoc, btpCuoi, bsCty, bsKhach, loaiKiengId, heSoKieng, slKieng } (chuỗi / bool)
   const [sl, setSl] = useState({});
   useEffect(() => { if (open) setSl({}); }, [open]);
   const dong = dongInTem(runs);
@@ -107,6 +106,12 @@ function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn 
   const so = (k) => o(k, 'sl');
   const giaTri = (k, f, macDinh = '') => ((sl[k] || {})[f] === undefined ? macDinh : sl[k][f]);
   const datO = (k, f, v) => setSl((s) => ({ ...s, [k]: { ...(s[k] || {}), [f]: v } }));
+  // In kiếng: 3 ô của dòng — người in tự nhập, không điền sẵn / gợi ý gì (10/11/2026, người dùng chốt).
+  const coKieng = dong.some(kiengDong);
+  const kiengCuaDong = (d) => ({
+    loaiKiengId: giaTri(d.key, 'loaiKiengId'), slKieng: giaTri(d.key, 'slKieng'), heSoKieng: giaTri(d.key, 'heSoKieng'),
+  });
+  const thieuKiengDong = (d) => (kiengDong(d) && so(d.key) > 0 ? thieuKieng(kiengDong(d), kiengCuaDong(d)) : '');
   const coVai = (k) => o(k, 'huy') > 0 || o(k, 'thieu') > 0;
   // SL bổ sung (đợt BO_SUNG, 25/10/2026): ô đổ sẵn số đã lưu; khác số đã lưu ⇒ ghi khi bấm In.
   const bsDoi = (d) => {
@@ -144,6 +149,7 @@ function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn 
     gcMauVai: String(giaTri(d.key, 'gc', meta.gcMauVai || '')).trim(),
     btpTruoc: !!giaTri(d.key, 'btpTruoc', !!meta.btpTruoc), btpCuoi: !!giaTri(d.key, 'btpCuoi', !!meta.btpCuoi),
     boSung: bsDoi(d),
+    ...(kiengDong(d) ? kiengCuaDong(d) : {}),
   }];
   // Số vải hủy / thiếu CHỜ gắn tem của lệnh (lưu ở sidebar 1 lệnh — 21/10/2026): hiện ở DÒNG ĐẦU của lệnh. Lệnh nào
   //   nhập hủy/thiếu ở bảng này ⇒ BE ưu tiên số ở bảng, bỏ số chờ; không nhập ⇒ số chờ gắn vào tem đầu của lệnh.
@@ -151,6 +157,7 @@ function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn 
   const coSo = dong.filter((d) => so(d.key) > 0);
   const coNhap = dong.filter((d) => so(d.key) > 0 || coVai(d.key) || bsDoi(d));
   const coVuot = coSo.some(vuot);
+  const coThieuKieng = coSo.some((d) => !!thieuKiengDong(d));
   const chiLuu = coSo.length > 0 && coSo.every((d) => !!giaTri(d.key, 'btpTruoc', !!meta.btpTruoc));
   const chiVai = coNhap.length - coSo.length; // dòng chỉ ghi hủy/thiếu / bổ sung, không in tem
   const nhanNut = coSo.length
@@ -162,13 +169,14 @@ function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn 
     <Modal open={open} onClose={onClose} size="full" title={`In tem — ${fmtNum(dong.length)} phần in`}
       footer={<>
         <Button chiXemOk variant="ghost" onClick={onClose}>Đóng</Button>
-        <Button icon={coSo.length ? (chiLuu ? 'save' : 'printer') : 'save'} loading={busy} disabled={busy || !coNhap.length || coVuot}
+        <Button icon={coSo.length ? (chiLuu ? 'save' : 'printer') : 'save'} loading={busy}
+          disabled={busy || !coNhap.length || coVuot || coThieuKieng}
+          title={coThieuKieng ? 'Còn dòng in kiếng chưa nhập đủ loại kiếng · hệ số · SL kiếng' : undefined}
           onClick={() => onIn(coNhap.flatMap(bung))}>
           {nhanNut}
         </Button>
       </>}>
-      <div className="mb-3"><TemMetaFields meta={meta} setMeta={setMeta} goiY={goiY} anGcMauVai anBtp />
-        <KiengFields kieng={kieng} meta={meta} setMeta={setMeta} /></div>
+      <div className="mb-3"><TemMetaFields meta={meta} setMeta={setMeta} goiY={goiY} anGcMauVai anBtp /></div>
       <div className="overflow-auto rounded-card border border-line">
         <table className="w-full border-collapse">
           <thead>
@@ -176,6 +184,7 @@ function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn 
               {['STT', 'Đơn hàng', 'Mã hàng', 'Code phần', 'Màu vải', 'Kích vải', 'Kích phim'].map((h) => <th key={h} className={TH}>{h}</th>)}
               <th className={`${TH} text-right`}>Còn in được</th>
               <th className={`${TH} text-right`}>Số lượng</th>
+              {coKieng && <th className={TH}>Kiếng: loại · SL · hệ số</th>}
               <th className={`${TH} text-right`}>SL hư</th>
               <th className={`${TH} text-right`}>SL thiếu</th>
               <th className={TH}>GC màu vải</th>
@@ -211,6 +220,12 @@ function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn 
                       </div>
                     )}
                   </td>
+                  {coKieng && (
+                    <td className={TD}>
+                      <KiengDong kieng={kiengDong(d)} v={kiengCuaDong(d)} batBuoc={so(d.key) > 0}
+                        onDoi={(k, v) => datO(d.key, k, v)} />
+                    </td>
+                  )}
                   <td className={`${TD} text-right`}>
                     <input type="number" min="0" value={(sl[d.key] || {}).huy || ''} placeholder="0" aria-label="SL hư"
                       onChange={(e) => datO(d.key, 'huy', e.target.value)} className={numCls} />
@@ -429,8 +444,6 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh, t
       if (g) {
         setTemMeta((m) => ({ ...m, ngayCa: m.ngayCa || chung('ngay_ca'), gioBd: m.gioBd || g.gio_bd || '', gioKt: m.gioKt || g.gio_kt || '' }));
       }
-      // In kiếng (mig 126): điền sẵn loại + hệ số của lệnh in kiếng đầu tiên (chỉ ô chưa gõ).
-      setTemMeta((m) => apGoiYKieng(m, kiengChung(ds)));
     } finally {
       setLoading(false);
     }
@@ -527,6 +540,8 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh, t
         g.items.push({ ...(d.dotVaiId ? { dotVaiId: d.dotVaiId } : {}), soLuong: d.soLuong,
           soLuongHuy: d.soLuongHuy || 0, soLuongThieu: d.soLuongThieu || 0,
           gcMauVai: d.gcMauVai || null, btpTruoc: !!d.btpTruoc, btpCuoi: !!d.btpCuoi,
+          // In kiếng: bộ loại · hệ số · SL kiếng RIÊNG của dòng (BE `printTemBatch` nhận theo item).
+          ...(d.loaiKiengId !== undefined ? { loaiKiengId: d.loaiKiengId, heSoKieng: d.heSoKieng, slKieng: d.slKieng } : {}),
           dotVaiGhi: d.dotVaiId || d.info?.dot_vai_ve_id || null });
       });
       return out;
@@ -535,7 +550,9 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh, t
     let theoPhieu = gomTheoPhieu(dong);
     const inTem = theoPhieu.filter((g) => g.coTem);
     if (inTem.length) {
-      const thieu = thieuNgayCaCt(temMeta) || thieuKieng(kiengChung(inTem.map((g) => g.run)), temMeta);
+      // In kiếng: kiểm 3 ô kiếng TỪNG DÒNG có in tem (gương BE `kiemKiengIn` theo item).
+      const thieu = thieuNgayCaCt(temMeta) || dong.filter((d) => d.soLuong > 0)
+        .map((d) => thieuKieng(kiengDong(d), d, d.info?.ma_phan || tenLenh(d.run))).find(Boolean);
       if (thieu) { show(thieu, 'error'); return; }
       // Lệnh chưa LƯU phân công có thợ in (hoặc ca này chuyền chưa phân công) ⇒ không in (gương BE `kiemThoInPhanCong`).
       const chuaTho = inTem.map((g) => g.run).filter((r) => chuaPhanCongThoIn(r?.phan_cong, toInDs.length > 0));

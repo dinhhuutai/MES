@@ -5,7 +5,7 @@ import Icon from '../common/Icon';
 import { inputClass } from '../common/controls';
 import { getSoDoDongChay, timViTriSoDo } from '../../services/dashboardService';
 import {
-  TRAM_SO_DO, tramCuaTrang, ownerCuaTram, gomOwner, viTriTheoTram,
+  TRAM_SO_DO, tramCuaTrang, ownerCuaTram, gomOwner, viTriTheoTram, viTriCuaTem, tinhTrangTem,
 } from '../../constants/soDoDongChay';
 
 // NÚT "SƠ ĐỒ DÒNG CHẢY" giữa thanh đầu trang (21/10/2026): chỉ hiện ở trang xác nhận thuộc dòng chảy
@@ -13,6 +13,8 @@ import {
 // *Hệ thống › Owner checkpoint / checklist*) và đánh dấu trạm của trang đang mở.
 // ⚠ 26/10/2026: ô "Tìm code phần" — nhập code phần (hoặc quét mã TDTHĐH) ⇒ tô các trạm phần in đang nằm (từng đợt vải +
 //   tem sau sản xuất, `GET /dashboard/so-do-dong-chay/tim`) để người không thấy hàng ở trạm mình biết hỏi ai.
+// ⚠ 10/11/2026: ô nhận cả MÃ TEM (nhãn 15/16/17/13) — khớp chính xác 1 tem ⇒ BE trả `tem_tim` ⇒ chỉ tô trạm của CHÍNH tem đó
+//   (`viTriCuaTem`), khung dưới ô tìm ghi tem + phần in của tem.
 // Màu nhãn phòng — chỉ để phân nhóm bằng mắt.
 const MAU_PHONG = {
   'Phòng bán hàng': 'bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:ring-amber-900/60',
@@ -45,7 +47,7 @@ function DanhSachNguoi({ nhom }) {
   );
 }
 
-function DongTram({ t, so, cuoi, laDay, data, refDay, viTri, refTram }) {
+function DongTram({ t, so, cuoi, laDay, data, refDay, viTri, refTram, nhanCoHang = 'Code phần đang ở đây' }) {
   const nhom = ownerCuaTram(t, data);
   const con = (t.con || []).map(([ma, ten]) => ({ ten, nhom: gomOwner(data?.checkpoint?.[ma] || []) }))
     .filter((c) => c.nhom.length);
@@ -72,7 +74,7 @@ function DongTram({ t, so, cuoi, laDay, data, refDay, viTri, refTram }) {
           )}
           {coHang && (
             <span className="inline-flex items-center gap-1 rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-semibold text-white">
-              <Icon name="map-pin" size={12} /> Code phần đang ở đây
+              <Icon name="map-pin" size={12} /> {nhanCoHang}
             </span>
           )}
         </div>
@@ -115,7 +117,8 @@ export default function SoDoDongChayNut() {
   const refTram = useRef({});
   const datRefTram = (ma, el) => { refTram.current[ma] = el; };
   const pin = kq && kq.ds[chonPin] ? kq.ds[chonPin] : null;
-  const viTri = viTriTheoTram(pin);
+  const temTim = kq && kq.tem_tim ? kq.tem_tim : null;
+  const viTri = temTim ? viTriCuaTem(temTim) : viTriTheoTram(pin);
   const tramCoHang = TRAM_SO_DO.filter((t) => (viTri[t.ma] || []).some((x) => !x.xong));
   const timCode = async (e) => {
     if (e) e.preventDefault();
@@ -171,8 +174,8 @@ export default function SoDoDongChayNut() {
           <div className="flex items-center gap-2">
             <div className="relative flex-1">
               <Icon name="search" size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" />
-              <input value={tim} onChange={(e) => setTim(e.target.value)} placeholder="Tìm code phần (hoặc quét mã TDTHĐH) — xem đang ở trạm nào"
-                className={`${inputClass} pl-9 pr-8`} aria-label="Tìm code phần" />
+              <input value={tim} onChange={(e) => setTim(e.target.value)} placeholder="Tìm code phần · mã TDTHĐH · mã tem — xem đang ở trạm nào"
+                className={`${inputClass} pl-9 pr-8`} aria-label="Tìm code phần hoặc mã tem" />
               {tim && (
                 <button type="button" onClick={xoaTim} aria-label="Xóa tìm"
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-soft hover:text-danger"><Icon name="x" size={14} /></button>
@@ -186,8 +189,20 @@ export default function SoDoDongChayNut() {
           {kq && (
             <div className="mt-2 text-sm">
               {kq.loi && <p className="text-danger">{kq.loi}</p>}
-              {kq.ngan && <p className="text-ink-soft">Nhập ít nhất 3 ký tự của code phần.</p>}
-              {!kq.loi && !kq.ngan && !kq.ds.length && <p className="text-ink-soft">Không tìm thấy code phần nào khớp «{kq.q}».</p>}
+              {kq.ngan && <p className="text-ink-soft">Nhập ít nhất 3 ký tự của code phần hoặc mã tem.</p>}
+              {!kq.loi && !kq.ngan && !kq.ds.length && !temTim && <p className="text-ink-soft">Không tìm thấy code phần / mã tem nào khớp «{kq.q}».</p>}
+              {temTim && (
+                <div className="mb-1.5 rounded-control bg-amber-50 px-3 py-2 ring-1 ring-amber-200 dark:bg-amber-950/30 dark:ring-amber-900/60">
+                  <div className="font-semibold text-ink">
+                    Tem {temTim.ma_quet}
+                    {temTim.ma_tem !== temTim.ma_quet && <span className="font-normal text-ink-soft"> (tem {temTim.ma_tem})</span>}
+                  </div>
+                  <div className="text-xs text-ink-soft">
+                    {[temTim.ma_lenh, temTim.ma_chuyen && `chuyền ${temTim.ma_chuyen}`].filter(Boolean).join(' · ')}
+                  </div>
+                  <div className="mt-1 text-xs font-medium text-amber-800 dark:text-amber-300">{tinhTrangTem(temTim, tramCoHang)}</div>
+                </div>
+              )}
               {kq.ds.length > 1 && (
                 <div className="mb-1.5 flex flex-wrap gap-1.5">
                   {kq.ds.map((p, i) => (
@@ -205,13 +220,13 @@ export default function SoDoDongChayNut() {
                   <div className="text-xs text-ink-soft">
                     {[pin.khach, pin.don, pin.ma_hang, pin.mau_vai, [pin.kich_vai, pin.kich_phim].filter(Boolean).join(' / ')].filter(Boolean).join(' · ')}
                   </div>
-                  <div className="mt-1 text-xs font-medium text-amber-800 dark:text-amber-300">
+                  {!temTim && <div className="mt-1 text-xs font-medium text-amber-800 dark:text-amber-300">
                     {!pin.dang_hoat_dong
                       ? 'Phần in đã bị hủy / ẩn (hết đợt vải sống) — không nằm ở trạm nào. Mở lại ở Hệ thống › Hủy lệnh xác nhận.'
                       : tramCoHang.length
                         ? `Đang ở: ${tramCoHang.map((t) => t.ten).join(' · ')}`
                         : (viTri.GIAO || []).length ? 'Đã giao hết — không còn ở trạm nào.' : 'Chưa có đợt vải nào lên MES (chưa vào dòng chảy).'}
-                  </div>
+                  </div>}
                 </div>
               )}
             </div>
@@ -220,11 +235,12 @@ export default function SoDoDongChayNut() {
         <div>
           {TRAM_SO_DO.map((t, i) => (
             <DongTram key={t.ma} t={t} so={i + 1} cuoi={i === TRAM_SO_DO.length - 1}
-              laDay={t.ma === tram.ma} data={data} refDay={refDay} viTri={viTri[t.ma]} refTram={datRefTram} />
+              laDay={t.ma === tram.ma} data={data} refDay={refDay} viTri={viTri[t.ma]} refTram={datRefTram}
+              nhanCoHang={temTim ? 'Tem đang ở đây' : undefined} />
           ))}
         </div>
         <p className="mt-2 border-t border-line pt-2 text-xs text-ink-soft">
-          <b className="text-ink">Tên in đậm</b> = chịu trách nhiệm chính · tên thường = xử lý · <span className="font-semibold text-amber-700 dark:text-amber-300">trạm vàng</span> = code phần vừa tìm đang ở đó. Đổi người ở Hệ thống › Owner checkpoint / checklist.
+          <b className="text-ink">Tên in đậm</b> = chịu trách nhiệm chính · tên thường = xử lý · <span className="font-semibold text-amber-700 dark:text-amber-300">trạm vàng</span> = code phần / tem vừa tìm đang ở đó. Đổi người ở Hệ thống › Owner checkpoint / checklist.
         </p>
       </Modal>
     </>

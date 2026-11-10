@@ -29,12 +29,13 @@ import useHoanTai from '../../../hooks/useHoanTai';
 import usePermissions from '../../../hooks/usePermissions';
 import useHuyLichSu from '../../../hooks/useHuyLichSu';
 import useOTimKiem from '../../../hooks/useOTimKiem';
-import { listKcsCandidates, recordKcs, gopTem, kcsHistory, kcsDone, getTemHanhTrinh, huyKcsLichSu, luuNguoiKiemKcs } from '../../../services/qualityService';
+import { listKcsCandidates, recordKcs, gopTem, kcsHistory, kcsDone, getTemHanhTrinh, huyKcsLichSu, luuNguoiKiemKcs, kcsTonChuaKiem } from '../../../services/qualityService';
+import exportPhieuChuaKiem from '../utils/exportPhieuChuaKiem';
+import XuatTonKcsModal from '../components/XuatTonKcsModal';
 import { redryTem, getTemLabel } from '../../../services/productionService';
 import { printKcsGiaoTemNhieu, moSanCuaSoIn, dongCuaSoIn } from '../../production/utils/printTemLabel';
 import InTemKcsModal from '../components/InTemKcsModal';
 import { fmtNum, fmtDateTime, timTheoMaTem } from '../../../utils/format';
-import exportCheckpointExcel, { cotTemChung, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
 import useNow from '../../../hooks/useNow';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 import useLyDoNghen from '../../../hooks/useLyDoNghen';
@@ -232,29 +233,26 @@ export default function KcsPage() {
     } finally { setInBusy(false); }
   };
 
-  // Xuất Excel ĐÚNG danh sách đang hiện (sau ô tìm + panel lọc + ô tích "bị trả về" + khoảng ngày in
-  // tem). Màn này tải-hết rồi lọc ở client nên `viewRows` đã là "mọi trang, vẫn theo bộ lọc".
-  const doExcel = () => exportCheckpointExcel({
-    cols: [
-      ...cotTemChung(),
-      { header: 'Người XN trạm trước', width: 20, value: (r) => (r.nguoi_truoc == null ? '' : String(r.nguoi_truoc)) },
-      { header: 'Giờ in tem', width: 18, center: true,
-        value: (r) => (r.ngay_in_tem ? new Date(r.ngay_in_tem).toLocaleString('vi-VN') : '') },
-      { header: 'SL in', width: 12, num: true, value: (r) => (r.so_luong == null ? null : Number(r.so_luong)) },
-      { header: 'Còn cần kiểm', width: 13, num: true, value: (r) => (r.con_kcs == null ? null : Number(r.con_kcs)) },
-      { header: 'Bị OQC trả về', width: 14, value: (r) => ((r.tra_ve || r.tra_ve_ly_do) ? 'Có' : '') },
-    ],
-    rows: viewRows,
-    title: 'KCS — tem chờ kiểm',
-    fileName: 'kcs-cho-kiem',
-    moTaLoc: moTaBoLoc({
-      'tìm kiếm': search,
-      'ngày in tem': [range.from, range.to].filter(Boolean).join(' → '),
-      'chỉ tem bị trả về': onlyReturned ? 'có' : '',
-      'ngày trả về': onlyReturned ? [traVeRange.from, traVeRange.to].filter(Boolean).join(' → ') : '',
-      ...filters,
-    }),
-  });
+  // XUẤT EXCEL = khuôn ERP "DANH SÁCH PHIẾU NHẬT KÝ KIỂM PHẨM CHƯA KIỂM" (10/11/2026 — danh sách hàng tồn): hộp chọn Giờ dự
+  //   kiến + có gồm tem đang phơi ⇒ tải `GET /quality/kcs/ton-chua-kiem` theo CÙNG ô tìm + panel lọc + ngày in tem của màn,
+  //   rồi lọc "chỉ tem bị trả về" như màn (`locTraVe`). Dòng tem đã tích ghim đầu bảng không ảnh hưởng file.
+  const [xuatOpen, setXuatOpen] = useState(false);
+  const [xuatBusy, setXuatBusy] = useState(false);
+  const doExcel = () => setXuatOpen(true);
+  const doXuatTon = async ({ gioDuKien, gomDangPhoi }) => {
+    setXuatBusy(true);
+    try {
+      const res = await kcsTonChuaKiem({
+        search, ...filters, ngayTu: range.from || undefined, ngayDen: range.to || undefined, gomDangPhoi: gomDangPhoi ? 1 : 0,
+      });
+      const ds = onlyReturned ? locTraVe(res.data || [], traVeRange) : (res.data || []);
+      const n = await exportPhieuChuaKiem(ds, { tuNgay: range.from, denNgay: range.to, gioDuKien });
+      show(`Đã xuất ${fmtNum(n)} tem chưa kiểm`);
+      setXuatOpen(false);
+    } catch (e) {
+      show(e.message || 'Không xuất được Excel', 'error');
+    } finally { setXuatBusy(false); }
+  };
 
   const doneColumns = [
     { key: 'ma', header: 'Tem', className: 'whitespace-nowrap', render: (r) => (
@@ -546,8 +544,8 @@ export default function KcsPage() {
         {/* Laptop/PC (từ `md`) giữ NGUYÊN dãy nút cũ (29/10/2026, người dùng chốt); điện thoại gom vào menu "Thêm". */}
         <span className="hidden md:contents">
           <TraVeListButton onClick={() => setTraVeOpen(true)} />
-          <Button chiXemOk variant="secondary" icon="download" onClick={doExcel} disabled={!viewRows.length}>
-            Excel ({viewRows.length})
+          <Button chiXemOk variant="secondary" icon="download" onClick={doExcel}>
+            Excel
           </Button>
           <Button chiXemOk variant="ghost" icon="clock" onClick={() => setKiemTruocOpen(true)}>Kiểm trước giờ phơi</Button>
           <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
@@ -560,7 +558,7 @@ export default function KcsPage() {
             { ten: 'Đã hoàn thành', icon: 'check-circle', chiXemOk: true, onClick: () => setDoneOpen(true) },
             { ten: 'Lịch sử', icon: 'history', chiXemOk: true, onClick: () => setHistOpen(true) },
           ] },
-          { muc: [{ ten: 'Xuất Excel', icon: 'download', chiXemOk: true, ghi: viewRows.length, disabled: !viewRows.length, onClick: doExcel }] },
+          { muc: [{ ten: 'Xuất Excel (tồn chưa kiểm)', icon: 'download', chiXemOk: true, onClick: doExcel }] },
         ]} />
         <Badge tone="warning">{rows.length} tem chờ kiểm</Badge>
       </Toolbar>
@@ -822,6 +820,7 @@ export default function KcsPage() {
         tenMan="KCS" rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} tenFile="nghen-kcs"
         maTrang="SX_KCS" />
       {lyDoNghenModal}
+      <XuatTonKcsModal open={xuatOpen} onClose={() => setXuatOpen(false)} busy={xuatBusy} onXuat={doXuatTon} />
       <Toast toast={toast} />
     </div>
   );

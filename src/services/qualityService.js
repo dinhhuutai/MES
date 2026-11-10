@@ -1,6 +1,8 @@
 import client from './axiosClient';
 
 export const listKcsCandidates = (params) => client.get('/quality/kcs/candidates', { params });
+// Excel "phiếu nhật ký kiểm phẩm chưa kiểm" (tồn KCS, khuôn ERP) — cùng bộ lọc danh sách + `gomDangPhoi` (1/0).
+export const kcsTonChuaKiem = (params) => client.get('/quality/kcs/ton-chua-kiem', { params });
 export const recordKcs = (temId, body) => client.post(`/quality/kcs/${temId}`, body);
 export const gopTem = (body) => client.post('/quality/kcs/gop-tem', body);
 export const getTemHanhTrinh = (temId) => client.get(`/quality/tem/${temId}/hanh-trinh`);

@@ -1,8 +1,10 @@
 import Badge from './Badge';
 
-// Phương án in (HSKT / ERP Pain): 1 Bàn, 2 Máy, 3 Robot.
+// Phương án in (HSKT / ERP Pain): 1 Bàn · 2 Máy · 3 Robot · 4 Logo · 5 Ép (4 + 5 thêm 10/11/2026, người dùng chốt bộ số).
 // ⚠ ERP CÓ gửi Pain = 0 = chưa xác định (chưa gán) — khớp `backend/src/utils/hskt.js`, đổi cả 2 nơi.
-export const PHUONG_AN_IN = { 0: 'Chưa xác định', 1: 'Bàn', 2: 'Máy', 3: 'Robot' };
+export const PHUONG_AN_IN = { 0: 'Chưa xác định', 1: 'Bàn', 2: 'Máy', 3: 'Robot', 4: 'Logo', 5: 'Ép' };
+// Giá trị người dùng ĐẶT được (không có 0 — chỉ ERP ghi "chưa xác định"); gương BE `utils/hskt.js PAIN_HOP_LE`.
+export const PAIN_HOP_LE = [1, 2, 3, 4, 5];
 
 // Dải chip lọc theo PHƯƠNG ÁN IN (dùng ở màn Release 1) — dựng TỪ `PHUONG_AN_IN` để nhãn không bao
 // giờ lệch với badge. `v` là chuỗi vì `ChipTabs` so sánh bằng `===`.
@@ -10,9 +12,7 @@ export const PHUONG_AN_IN = { 0: 'Chưa xác định', 1: 'Bàn', 2: 'Máy', 3: 
 //   với người lập kế hoạch thì cả hai đều là "chưa biết in ở đâu", tách ra chỉ làm rối.
 export const PAIN_TABS = [
   { v: '', label: 'Tất cả' },
-  { v: '1', label: PHUONG_AN_IN[1] },
-  { v: '2', label: PHUONG_AN_IN[2] },
-  { v: '3', label: PHUONG_AN_IN[3] },
+  ...PAIN_HOP_LE.map((v) => ({ v: String(v), label: PHUONG_AN_IN[v] })),
   { v: '0', label: PHUONG_AN_IN[0] },
 ];
 

@@ -223,62 +223,90 @@ export function TemMetaFields({ meta, setMeta, anGcMauVai = false, anBtp = false
   );
 }
 
-// ─── IN KIẾNG: LOẠI KIẾNG + HỆ SỐ KIẾNG (mig 126, 09/11/2026) ────────────────
-// Chỉ hiện khi lệnh là công đoạn IN của phần in kiếng (`run.kieng.can`). Hệ số = 1 tấm kiếng chia được bao nhiêu phần ⇒
-//   số tấm kiếng = SL in ÷ hệ số. BẮT BUỘC (BE 422 THIEU_LOAI_KIENG / HE_SO_KIENG_SAI); nhớ theo lệnh (BE trả `goi_y`).
+// ─── IN KIẾNG: LOẠI KIẾNG · SỐ LƯỢNG KIẾNG · HỆ SỐ (mig 126 + 127) ────────────
+// Chỉ hiện khi lệnh là công đoạn IN của phần in kiếng (`run.kieng.can`). 3 ô = 3 tham số proc ERP SF0:
+//   Loại kiếng ⇒ `@pKieng` (mã hàng hóa ERP) · SL kiếng ⇒ `@pSoluongKieng` (số nguyên ≥ 0) · Hệ số ⇒ `@pHsKieng`
+//   (số nguyên ≥ 1). ⚠⚠ NGƯỜI IN TỰ NHẬP CẢ 3 Ô, KHÔNG GỢI Ý GÌ (10/11/2026, người dùng chốt): không điền sẵn loại / hệ số
+//   từ lần in trước, không nút gợi ý SL kiếng. Thứ tự ô: Loại · SL kiếng · Hệ số (người dùng chốt).
+// BẮT BUỘC ở MỌI đường in (BE 422 THIEU_LOAI_KIENG / HE_SO_KIENG_SAI / SL_KIENG_SAI): sidebar 1 lệnh (1 bộ cho lượt —
+//   "Số tem" N ⇒ mỗi tem cùng SL kiếng) · bảng gom set + bảng In tem nhiều phần in ⇒ MỖI DÒNG 1 BỘ (`KiengDong`).
 // Đặt ở MỨC MODULE (component lồng bị remount ⇒ ô mất focus khi gõ).
-export const soTamKieng = (soLuong, heSo) => {
-  const h = Number(String(heSo ?? '').replace(',', '.'));
-  const n = Number(soLuong) || 0;
-  return h > 0 && n > 0 ? Math.round((n / h) * 100) / 100 : null;
-};
-export const thieuKieng = (kieng, m) => {
+const SO_NGUYEN_RE = /^\d+$/;
+export const heSoKiengSai = (v) => !(SO_NGUYEN_RE.test(String(v ?? '').trim()) && Number(v) >= 1);
+export const slKiengSai = (v) => !SO_NGUYEN_RE.test(String(v ?? '').trim());
+// `nhan` = tên dòng (bảng nhiều dòng) gắn vào đầu câu báo. Trả câu báo hoặc ''.
+export const thieuKieng = (kieng, m, nhan = '') => {
   if (!kieng || !kieng.can) return '';
-  const thieu = [!m?.loaiKiengId && 'Loại kiếng', !(Number(String(m?.heSoKieng ?? '').replace(',', '.')) > 0) && 'Hệ số kiếng'].filter(Boolean);
-  return thieu.length ? `Hàng in kiếng: chưa nhập ${thieu.join(' và ')} — nhập rồi mới in tem được` : '';
+  const thieu = [!m?.loaiKiengId && 'Loại kiếng', slKiengSai(m?.slKieng) && 'SL kiếng',
+    heSoKiengSai(m?.heSoKieng) && 'Hệ số kiếng (số nguyên ≥ 1)'].filter(Boolean);
+  return thieu.length ? `${nhan ? `${nhan}: ` : ''}Hàng in kiếng chưa nhập ${thieu.join(', ')} — nhập rồi mới in tem được` : '';
 };
-// Điền sẵn loại + hệ số của tem in kiếng gần nhất của lệnh — chỉ ô CHƯA gõ.
-export const apGoiYKieng = (m, kieng) => {
-  const g = kieng && kieng.can ? kieng.goi_y : null;
-  if (!g) return m;
-  return { ...m, loaiKiengId: m.loaiKiengId || g.loai_kieng_id || '', heSoKieng: m.heSoKieng || (g.he_so_kieng != null ? String(g.he_so_kieng) : '') };
-};
-export function KiengFields({ kieng, meta, setMeta, soLuong }) {
+const chiSo = (v) => String(v ?? '').replace(/\D/g, '');
+const dvtKieng = (kieng, id) => ((kieng?.ds || []).find((x) => x.id === id)?.dvt) || 'tấm';
+// `vienDo` = viền đỏ khi thiếu (SearchableSelect không nhận className ⇒ bọc 1 lớp viền ngoài).
+function ChonLoaiKieng({ kieng, value, onChange, vienDo = false }) {
+  const ds = kieng?.ds || [];
+  return (
+    <div className={vienDo ? 'rounded-control ring-1 ring-danger' : ''}>
+      <SearchableSelect
+        value={value || ''}
+        onChange={(v) => onChange(v || '')}
+        options={ds}
+        getValue={(x) => x.id}
+        getLabel={(x) => `${x.ten}${x.dvt ? ` (${x.dvt})` : ''}`}
+        getSearch={(x) => `${x.ma_hang_hoa} ${x.ten}`}
+        placeholder={ds.length ? 'Gõ tên hoặc mã kiếng...' : 'Chưa có danh mục kiếng (Hệ thống › Danh mục kiếng)'}
+      />
+    </div>
+  );
+}
+// Khối 3 ô của SIDEBAR 1 lệnh (1 bộ cho lượt in). `soTem` > 1 ⇒ SL kiếng là của MỖI tem.
+export function KiengFields({ kieng, meta, setMeta, soTem = 1 }) {
   if (!kieng || !kieng.can) return null;
-  const ds = kieng.ds || [];
-  const k = ds.find((x) => x.id === meta.loaiKiengId);
-  const tam = soTamKieng(soLuong, meta.heSoKieng);
-  const heSoSai = !(Number(String(meta.heSoKieng ?? '').replace(',', '.')) > 0);
+  const k = (kieng.ds || []).find((x) => x.id === meta.loaiKiengId);
+  const dat = (key, v) => setMeta((m) => ({ ...m, [key]: v }));
   return (
     <div className="mt-2 rounded-control border border-violet-200 bg-violet-50/60 p-2.5 dark:border-violet-900/60 dark:bg-violet-950/30">
-      <div className="mb-1.5 text-xs font-semibold text-violet-800 dark:text-violet-300">In kiếng — nhập loại kiếng và hệ số</div>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <label className="block sm:col-span-2">
+      <div className="mb-1.5 text-xs font-semibold text-violet-800 dark:text-violet-300">In kiếng — loại kiếng · số lượng kiếng · hệ số</div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <label className="col-span-2 block">
           <span className="mb-1 block text-xs font-medium text-ink-soft">Loại kiếng<span className="text-danger"> *</span></span>
-          <SearchableSelect
-            value={meta.loaiKiengId || ''}
-            onChange={(v) => setMeta((m) => ({ ...m, loaiKiengId: v || '' }))}
-            options={ds}
-            getValue={(x) => x.id}
-            getLabel={(x) => `${x.ten}${x.dvt ? ` (${x.dvt})` : ''}`}
-            getSearch={(x) => `${x.ma_hang_hoa} ${x.ten}`}
-            placeholder={ds.length ? 'Gõ tên hoặc mã kiếng...' : 'Chưa có danh mục kiếng (Hệ thống › Danh mục kiếng)'}
-          />
+          <ChonLoaiKieng kieng={kieng} value={meta.loaiKiengId} onChange={(v) => dat('loaiKiengId', v)} vienDo={!meta.loaiKiengId} />
           {k && <span className="mt-0.5 block text-[11px] text-ink-soft">Mã hàng hóa ERP {k.ma_hang_hoa}</span>}
         </label>
         <label className="block">
+          <span className="mb-1 block text-xs font-medium text-ink-soft">
+            SL kiếng{soTem > 1 ? ' / tem' : ''} ({k?.dvt || 'tấm'})<span className="text-danger"> *</span>
+          </span>
+          <Input inputMode="numeric" value={meta.slKieng || ''}
+            onChange={(e) => dat('slKieng', chiSo(e.target.value))}
+            className={`tabular-nums ${slKiengSai(meta.slKieng) ? 'border-danger' : ''}`} />
+        </label>
+        <label className="block">
           <span className="mb-1 block text-xs font-medium text-ink-soft">Hệ số kiếng<span className="text-danger"> *</span></span>
-          <Input inputMode="decimal" value={meta.heSoKieng || ''} placeholder="vd: 12"
-            onChange={(e) => setMeta((m) => ({ ...m, heSoKieng: e.target.value.replace(/[^\d.,]/g, '') }))}
-            className={`tabular-nums ${heSoSai ? 'border-danger' : ''}`} />
-          <span className="mt-0.5 block text-[11px] text-ink-soft">1 tấm kiếng chia được bao nhiêu phần</span>
+          <Input inputMode="numeric" value={meta.heSoKieng || ''}
+            onChange={(e) => dat('heSoKieng', chiSo(e.target.value))}
+            className={`tabular-nums ${heSoKiengSai(meta.heSoKieng) ? 'border-danger' : ''}`} />
         </label>
       </div>
-      {tam != null && (
-        <div className="mt-1.5 text-xs text-violet-800 dark:text-violet-300">
-          ≈ <b className="tabular-nums">{fmtNum(tam)}</b> {k?.dvt || 'tấm'} kiếng cho {fmtNum(soLuong)} pcs
-        </div>
-      )}
+    </div>
+  );
+}
+// 3 ô kiếng gọn của 1 DÒNG bảng in nhiều tem (gom set · In tem nhiều phần in) — trong 1 ô <td>, thứ tự Loại · SL · Hệ số.
+//   `v` = { loaiKiengId, slKieng, heSoKieng } (giá trị dòng đã nhập), `onDoi(khoa, giaTri)`; `kieng` null / !can ⇒ "—".
+//   Placeholder chỉ là NHÃN của ô (bảng không có tiêu đề riêng từng ô), không phải gợi ý số.
+export function KiengDong({ kieng, v, onDoi, batBuoc = false }) {
+  if (!kieng || !kieng.can) return <span className="text-xs text-ink-soft">—</span>;
+  const vien = (sai) => (batBuoc && sai ? 'border-danger focus:border-danger' : '');
+  return (
+    <div className="flex items-start gap-1.5">
+      <div className="w-56"><ChonLoaiKieng kieng={kieng} value={v.loaiKiengId} onChange={(x) => onDoi('loaiKiengId', x)}
+        vienDo={batBuoc && !v.loaiKiengId} /></div>
+      <input inputMode="numeric" value={v.slKieng || ''} placeholder={`SL ${dvtKieng(kieng, v.loaiKiengId)}`} aria-label="Số lượng kiếng"
+        title="Số lượng kiếng của tem này" onChange={(e) => onDoi('slKieng', chiSo(e.target.value))}
+        className={`${numCls} !w-20 ${vien(slKiengSai(v.slKieng))}`} />
+      <input inputMode="numeric" value={v.heSoKieng || ''} placeholder="Hệ số" aria-label="Hệ số kiếng" title="Hệ số kiếng"
+        onChange={(e) => onDoi('heSoKieng', chiSo(e.target.value))} className={`${numCls} !w-16 ${vien(heSoKiengSai(v.heSoKieng))}`} />
     </div>
   );
 }
@@ -558,6 +586,14 @@ function PrintSetModal({ open, onClose, rows, onPrintRow, busy, meta, setMeta, g
     return cap > 0 && num(r.dot_vai_ve_id, 'sl') * soTemDong(r.dot_vai_ve_id) > cap;
   };
 
+  // In kiếng (mig 127): MỖI DÒNG 1 bộ loại · SL kiếng · hệ số — người in tự nhập, không điền sẵn gì.
+  const coKieng = !!(kieng && kieng.can);
+  const kiengCua = (id) => {
+    const f = form[id] || {};
+    return { loaiKiengId: f.lk || '', slKieng: f.slk || '', heSoKieng: f.hs || '' };
+  };
+  const KHOA_KIENG = { loaiKiengId: 'lk', heSoKieng: 'hs', slKieng: 'slk' };
+
   // In 1 dòng: `printTemBatch` (giữ guard 110% từng đợt + tổng lệnh) — N tem cùng SL ⇒ 1 cửa sổ in N tờ.
   const inDong = async (r) => {
     const id = r.dot_vai_ve_id;
@@ -568,11 +604,12 @@ function PrintSetModal({ open, onClose, rows, onPrintRow, busy, meta, setMeta, g
       soLuongHuy: num(id, 'huy'),
       soLuongThieu: num(id, 'thieu'),
       gcMauVai: (f.gc || '').trim() || null,
-    }, soTemDong(id));
+      ...(coKieng ? kiengCua(id) : {}),
+    }, soTemDong(id), r.ma_phan);
     if (ok) {
       setDaIn((s) => new Set(s).add(id));
-      // Xóa SL đã in để không bấm nhầm lần 2; giữ lại GC màu vải cho dễ đối chiếu.
-      setForm((s) => ({ ...s, [id]: { ...(s[id] || {}), sl: '', huy: '', thieu: '', so_tem: '' } }));
+      // Xóa SL đã in + SL kiếng để không bấm nhầm lần 2; giữ lại GC màu vải + loại / hệ số kiếng người vừa nhập ở dòng.
+      setForm((s) => ({ ...s, [id]: { ...(s[id] || {}), sl: '', huy: '', thieu: '', so_tem: '', slk: '' } }));
     }
   };
 
@@ -585,8 +622,7 @@ function PrintSetModal({ open, onClose, rows, onPrintRow, busy, meta, setMeta, g
       footer={<Button chiXemOk variant="ghost" onClick={onClose}>Đóng</Button>}
     >
       {/* Ngày ca / giờ SX / BTP áp cho MỌI tem in ở modal này. GC màu vải nhập RIÊNG từng dòng ⇒ ẩn ô chung. */}
-      <div className="mb-3"><TemMetaFields meta={meta} setMeta={setMeta} goiY={goiY} anGcMauVai />
-        <KiengFields kieng={kieng} meta={meta} setMeta={setMeta} /></div>
+      <div className="mb-3"><TemMetaFields meta={meta} setMeta={setMeta} goiY={goiY} anGcMauVai /></div>
       {chiLuu && (
         <p className="mb-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">
           Đang bật <b>BTP trước</b> — dữ liệu vẫn lưu vào hệ thống như bình thường (tạo tem, vào xe phơi),
@@ -609,6 +645,7 @@ function PrintSetModal({ open, onClose, rows, onPrintRow, busy, meta, setMeta, g
               <th className={TH}>GC màu vải</th>
               <th className={`${TH} text-right`}>Số lượng in</th>
               <th className={`${TH} text-right`}>Số tem</th>
+              {coKieng && <th className={TH}>Kiếng: loại · SL / tem · hệ số</th>}
               <th className={TH} />
             </tr>
           </thead>
@@ -617,6 +654,7 @@ function PrintSetModal({ open, onClose, rows, onPrintRow, busy, meta, setMeta, g
               const id = r.dot_vai_ve_id;
               const f = form[id] || {};
               const coGhiVai = num(id, 'huy') > 0 || num(id, 'thieu') > 0;
+              const thieuK = coKieng && num(id, 'sl') > 0 && !!thieuKieng(kieng, kiengCua(id));
               return (
                 <tr key={id} className={daIn.has(id) ? 'bg-emerald-50/60 dark:bg-emerald-950/20' : ''}>
                   <PhanInInfoCells r={r} stt={i + 1} />
@@ -645,10 +683,16 @@ function PrintSetModal({ open, onClose, rows, onPrintRow, busy, meta, setMeta, g
                     <input type="number" min="1" max={TOI_DA_SO_TEM} value={f.so_tem || ''} placeholder="1"
                       onChange={(e) => setCell(id, 'so_tem', e.target.value)} className={numCls} />
                   </td>
+                  {coKieng && (
+                    <td className={TD}>
+                      <KiengDong kieng={kieng} v={kiengCua(id)} batBuoc={num(id, 'sl') > 0}
+                        onDoi={(k, v) => setCell(id, KHOA_KIENG[k], v)} />
+                    </td>
+                  )}
                   <td className={`${TD} whitespace-nowrap`}>
                     <div className="flex items-center gap-2">
                       <Button className="px-2.5 py-1 text-xs" icon={chiLuu ? 'save' : 'printer'} loading={busy}
-                        disabled={busy || overRow(r) || (num(id, 'sl') <= 0 && !coGhiVai)}
+                        disabled={busy || overRow(r) || thieuK || (num(id, 'sl') <= 0 && !coGhiVai)}
                         onClick={() => inDong(r)}>
                         {num(id, 'sl') <= 0 && coGhiVai ? 'Ghi vải'
                           : (chiLuu ? 'Lưu' : (soTemDong(id) > 1 ? `In ${soTemDong(id)} tem` : 'In tem'))}
@@ -756,8 +800,8 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
       const res = await getRun(lenhId);
       setData(res.data);
       // Điền lại Ngày ca + Ngày chứng từ ĐÃ NHẬP ĐẦU CA (chưa ai nhập ⇒ để trống) + giờ SX (từ mốc kết thúc
-      // lượt in trước → bây giờ). ⚠ Chỉ điền ô nào người dùng CHƯA gõ (`apGoiYTem`). In kiếng: loại + hệ số (mig 126).
-      setTemMeta((m) => apGoiYKieng(apGoiYTem(m, res.data?.goi_y_tem), res.data?.kieng));
+      // lượt in trước → bây giờ). ⚠ Chỉ điền ô nào người dùng CHƯA gõ (`apGoiYTem`). 3 ô kiếng KHÔNG điền sẵn (người in tự nhập).
+      setTemMeta((m) => apGoiYTem(m, res.data?.goi_y_tem));
     } catch (e) {
       show(e.message || 'Lỗi tải', 'error');
     } finally {
@@ -769,7 +813,7 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
   useTaiNgamKhiLenhDoi([lenhId], async () => {
     const res = await getRun(lenhId);
     setData(res.data);
-    setTemMeta((m) => apGoiYKieng(apGoiYTem(m, res.data?.goi_y_tem), res.data?.kieng));
+    setTemMeta((m) => apGoiYTem(m, res.data?.goi_y_tem));
   });
 
   // NÚT "HỦY" Ở TỪNG TEM ĐÃ IN (14/10/2026): nhập lý do ⇒ backend hủy tem (gỡ khỏi xe phơi, trả SL cho lệnh)
@@ -874,8 +918,11 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
   };
 
   // Thiếu Ngày ca / Ngày chứng từ ⇒ báo và KHÔNG in (kiểm trước khi mở cửa sổ in).
-  const thieuDauCa = () => {
-    const loi = khoaInNgc ? KHOA_IN_NGC : chuaThoIn ? CHUA_THO_IN : (thieuNgayCaCt(temMeta) || thieuKieng(data?.kieng, temMeta));
+  // `kiengSrc` = nơi lấy 3 ô kiếng: sidebar ⇒ `temMeta`; 1 dòng bảng gom set ⇒ chính dòng đó; null ⇒ không kiểm (dòng chỉ
+  //   ghi vải, không tạo tem). `nhan` = tên dòng cho câu báo.
+  const thieuDauCa = (kiengSrc = temMeta, nhan = '') => {
+    const loi = khoaInNgc ? KHOA_IN_NGC : chuaThoIn ? CHUA_THO_IN
+      : (thieuNgayCaCt(temMeta) || (kiengSrc ? thieuKieng(data?.kieng, kiengSrc, nhan) : ''));
     if (loi) show(loi, 'error');
     return !!loi;
   };
@@ -930,16 +977,16 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
   // Trả true/false để modal biết có đánh dấu "đã in" cho dòng đó không. KHÔNG đóng modal, KHÔNG reset
   // `temMeta` (ngày ca/giờ áp chung cho cả lượt đứng máy — còn in tiếp các dòng khác).
   // ⚠ Vải hủy/thiếu chỉ gắn vào DÒNG ĐẦU — backend ghi sổ vải theo từng dòng, lặp N dòng là ghi N lần.
-  const doPrintRow = async (item, soTemDong = 1) => {
-    if (thieuDauCa()) return false;
+  const doPrintRow = async (item, soTemDong = 1, nhan = '') => {
+    if (thieuDauCa(item.soLuong > 0 ? item : null, nhan)) return false;
     const n = item.soLuong > 0 ? soTemHopLe(soTemDong) : 1;
     const w = item.soLuong > 0 ? moCuaSo() : null;
     if (w === undefined) return false;
     setBusy(true);
     try {
-      const items = [item, ...Array.from({ length: n - 1 }, () => ({
-        dotVaiId: item.dotVaiId, soLuong: item.soLuong, gcMauVai: item.gcMauVai,
-      }))];
+      // N tem cùng SL ⇒ mỗi tem mang ĐÚNG bộ kiếng của dòng (SL kiếng là của MỖI tem); hủy / thiếu chỉ ở tem đầu.
+      const { soLuongHuy, soLuongThieu, ...moiTem } = item;
+      const items = [item, ...Array.from({ length: n - 1 }, () => ({ ...moiTem }))];
       const res = await printTemBatch(phieu.id, items, metaGuiDi(temMeta));
       const tems = res.data?.tems_in || [];
       if (tems.length) {
@@ -1329,7 +1376,7 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
               {!coGomSet && (
                 <div className="mb-2">
                   <TemMetaFields meta={temMeta} setMeta={setTemMeta} goiY={goiYTem} />
-                  <KiengFields kieng={data?.kieng} meta={temMeta} setMeta={setTemMeta} soLuong={soLuong} />
+                  <KiengFields kieng={data?.kieng} meta={temMeta} setMeta={setTemMeta} soTem={soTemHopLe(soTem)} />
                 </div>
               )}
               {coGomSet ? (

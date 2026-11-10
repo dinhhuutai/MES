@@ -7,6 +7,7 @@ import { Field, Textarea } from '../../../components/common/controls';
 import { xemTruocCodePhan, capNhatCodePhan } from '../../../services/erpService';
 import { fmtNum, ngayLocalISO } from '../../../utils/format';
 import NgayInput from '../../../components/common/NgayInput';
+import { PHUONG_AN_IN } from '../../../components/common/PhuongAnInBadge';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CẬP NHẬT LẠI DỮ LIỆU THEO CODE PHẦN + NGÀY TỪ ERP (21/09/2026) — Hệ thống › Đồng bộ ERP.
@@ -30,7 +31,7 @@ const SO_SANH = [
   ['tinh_chat_in', 'tinh_chat_in', 'Tính chất in'],
   ['ddh_sub_id', 'ddh_sub_id', 'DDHSUBID'],
 ];
-const PA = { 0: 'Chưa xác định', 1: 'Bàn', 2: 'Máy', 3: 'Robot' };
+const PA = PHUONG_AN_IN; // nguồn nhãn PA duy nhất (gồm 4 Logo · 5 Ép)
 const s = (v) => (v == null || v === '' ? '' : String(v));
 const ngayVN = (d) => (d ? String(d).slice(0, 10).split('-').reverse().join('/') : '—');
 

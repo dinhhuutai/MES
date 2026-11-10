@@ -141,7 +141,7 @@ export default function HienThiPainPage() {
         <span className="text-sm text-ink-soft">
           {theoLoai
             ? <><b>Khác</b> = lệnh chưa gán chuyền / chuyền không có loại.</>
-            : <><b>Khác</b> = phần in chưa xác định phương án in (Pain 0) hoặc chưa có hồ sơ kỹ thuật.</>}
+            : <><b>Khác</b> = phần in phương án in Logo / Ép, chưa xác định phương án in (Pain 0) hoặc chưa có hồ sơ kỹ thuật.</>}
         </span>
       </div>
 

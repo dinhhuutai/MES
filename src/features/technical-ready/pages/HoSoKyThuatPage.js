@@ -19,7 +19,7 @@ import usePermissions from '../../../hooks/usePermissions';
 import { listHskt, getHskt, getHsktByBarcode, changePhuongAnIn } from '../../../services/hsktService';
 // Nguồn nhãn phương án in DUY NHẤT (có key 0 = "Chưa xác định"). Bản trùng ở `hsktService` đã bỏ:
 // nó thiếu key 0 nên Pain=0 bị in ra số `0` trần.
-import { PHUONG_AN_IN } from '../../../components/common/PhuongAnInBadge';
+import { PHUONG_AN_IN, PAIN_HOP_LE } from '../../../components/common/PhuongAnInBadge';
 import { fmtNum } from '../../../utils/format';
 
 const COLS = 14; // số cột bảng (cho colSpan hàng trống)
@@ -325,9 +325,7 @@ export default function HoSoKyThuatPage() {
                     onChange={(e) => onChangePa(e.target.value)} className="w-40">
                     <option value="" disabled>— Chọn —</option>
                     <option value={0} disabled>Chưa xác định</option>
-                    <option value={1}>Bàn</option>
-                    <option value={2}>Máy</option>
-                    <option value={3}>Robot</option>
+                    {PAIN_HOP_LE.map((v) => <option key={v} value={v}>{PHUONG_AN_IN[v]}</option>)}
                   </Select>
                   {savingPa && <span className="text-xs text-ink-soft">Đang lưu...</span>}
                   {detail.hskt.pa_in_sua_tay && <Badge tone="warning">Đã sửa tay</Badge>}
