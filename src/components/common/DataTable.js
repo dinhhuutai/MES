@@ -16,6 +16,9 @@ import { chepChu } from './NutSaoChep';
 // onCellCopy(ok, text, col, row): có thì DOUBLE-CLICK 1 ô = chép chữ của ô đó (27/10/2026, màn READY). Chữ = `col.copyText(row)`
 //   nếu cột khai, không thì chữ đang hiện trong ô; cột `copy: false` / ô chọn không chép. Bấm 1 lần mở panel bị HOÃN ~250 ms
 //   (chỉ ở trang bật tính năng) để double-click không mở panel trước.
+// onRowContextMenu(row, event): có thì CHUỘT PHẢI (Android: nhấn giữ) trên dòng gọi hàm này — hàm tự `preventDefault()` nếu
+//   muốn thay menu trình duyệt (11/11/2026, màn READY: "Đưa vào danh sách đã nhận file").
+// renderStt(row, stt): có thì vẽ ô STT theo dòng (vd khoanh tròn STT dòng đã nhận file); không có ⇒ số thường.
 // Responsive: md+ hiển thị dạng BẢNG; dưới md tự đổi sang dạng THẺ (card) cho mobile/tablet.
 
 // Kéo chuột BÔI ĐEN chữ trong dòng (để chép) thì nhả chuột KHÔNG mở panel của dòng (27/10/2026 — màn READY bấm vào là
@@ -31,7 +34,7 @@ function dangBoiDen(e) {
 // gon (29/10/2026, trang Xác nhận chạy — người dùng: "chữ trong bảng nhỏ lại để thấy được nhiều cột nhất mà không cần
 //   cuộn ngang"): chữ + đệm ô nhỏ hơn, lớn dần theo màn (11px laptop → 12px lg → 13px 2xl), vùng cuộn cao hơn. Không
 //   truyền ⇒ như cũ.
-export default function DataTable({ columns, rows, loading, rowKey = 'id', emptyText = 'Không có dữ liệu', onRowClick, sttStart, rowClassName, pageSize = 20, subRows, onCellCopy, gon = false }) {
+export default function DataTable({ columns, rows, loading, rowKey = 'id', emptyText = 'Không có dữ liệu', onRowClick, sttStart, rowClassName, pageSize = 20, subRows, onCellCopy, gon = false, onRowContextMenu, renderStt }) {
   const allRows = rows || [];
   const henMo = useRef(null);
   useEffect(() => () => clearTimeout(henMo.current), []);
@@ -128,10 +131,11 @@ export default function DataTable({ columns, rows, loading, rowKey = 'id', empty
       const span = n > 1 ? n : undefined;
       return (
         <tr key={`${row[rowKey]}-${j}`} onClick={onClick}
+          onContextMenu={onRowContextMenu ? (e) => onRowContextMenu(row, e) : undefined}
           className={`${cls} ${!dau ? 'border-t-0' : ''}`}>
           {dau && selCols.map((c) => renderCell(c, row, false, span))}
           {dau && showStt && (
-            <td rowSpan={span} className={`${PAD_C} text-right tabular-nums text-ink-soft`}>{stt}</td>
+            <td rowSpan={span} className={`${PAD_C} text-right tabular-nums text-ink-soft`}>{renderStt ? renderStt(row, stt) : stt}</td>
           )}
           {bodyCols.map((c) => ((c.merge && !dau) ? null : renderCell(c, r, false, c.merge ? span : undefined)))}
           {trailingActions.map((c) => ((c.merge && !dau) ? null : renderCell(c, r, true, c.merge ? span : undefined)))}
@@ -186,6 +190,7 @@ export default function DataTable({ columns, rows, loading, rowKey = 'id', empty
             const actionCols = restCols.filter((c) => !c.header);
             return (
               <div key={row[rowKey]} onClick={onRowClick ? (e) => { if (!dangBoiDen(e)) onRowClick(row); } : undefined}
+                onContextMenu={onRowContextMenu ? (e) => onRowContextMenu(row, e) : undefined}
                 className={`card p-3.5 ${onRowClick ? 'cursor-pointer active:bg-surface-muted/60' : ''} ${rowClassName ? rowClassName(row) : ''}`}>
                 {(selCols.length > 0 || showStt) && (
                   <div className="mb-2 flex items-center justify-between gap-2">
@@ -193,7 +198,8 @@ export default function DataTable({ columns, rows, loading, rowKey = 'id', empty
                     <div className="flex items-center gap-2" onClick={stopSel}>
                       {selCols.map((c) => <span key={c.key}>{cellValue(c, row)}</span>)}
                     </div>
-                    {showStt && <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs font-medium text-ink-soft">#{sttBase + i + 1}</span>}
+                    {showStt && (renderStt ? renderStt(row, sttBase + i + 1)
+                      : <span className="rounded-full bg-surface-muted px-2 py-0.5 text-xs font-medium text-ink-soft">#{sttBase + i + 1}</span>)}
                   </div>
                 )}
                 {(() => {

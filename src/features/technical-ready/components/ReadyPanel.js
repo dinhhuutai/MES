@@ -49,7 +49,9 @@ function ReturnNote({ info, nguon }) {
 // trạng thái + nút xác nhận đều theo NHÓM đó (không truyền = như cũ, mức phần in).
 // `truocXacNhan()` (26/09/2026) — trả Promise<bool>: trang hỏi LÝ DO NGHẼN nếu phần in đang quá SLA
 // (mig 106); false ⇒ người dùng bấm Hủy, KHÔNG xác nhận. Không truyền ⇒ như cũ.
-export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, onClose, onChanged, onToast, truocXacNhan, ungVienGn }) {
+// `nhanFile` (11/11/2026) = { daNhan, moTa, coQuyen, dangLuu } của ĐỢT trên dòng đang mở + `onNhanFile(nhan)` — khối "File BH"
+//   (cùng việc với menu chuột phải ở bảng; để máy không có chuột phải — iPhone — vẫn đánh dấu được). Không truyền ⇒ ẩn.
+export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, onClose, onChanged, onToast, truocXacNhan, ungVienGn, nhanFile, onNhanFile }) {
   const { can } = usePermissions();
   const { toast, show } = useToast();
   const now = useNow(1000);
@@ -239,6 +241,26 @@ export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, onClose, o
           )}
 
           {items.map((item) => renderItem(item))}
+
+          {/* Nhận file BH (hồ sơ cứng Bán hàng mang qua) — theo đợt vải của dòng. */}
+          {nhanFile && (
+            <div className={`flex items-center justify-between gap-2 rounded-control border px-3 py-2 ${nhanFile.daNhan
+              ? 'border-emerald-200 bg-emerald-50 dark:border-emerald-900/60 dark:bg-emerald-950/40' : 'border-line'}`}>
+              <div className="min-w-0 text-sm">
+                <span className="font-medium text-ink">File BH</span>
+                <span className={`ml-2 text-xs ${nhanFile.daNhan ? 'text-emerald-700 dark:text-emerald-300' : 'text-ink-soft'}`}>
+                  {nhanFile.daNhan ? `Đã nhận${nhanFile.moTa ? ` — ${nhanFile.moTa}` : ''}` : 'Chưa nhận'}
+                </span>
+              </div>
+              {nhanFile.coQuyen && (
+                <Button variant={nhanFile.daNhan ? 'ghost' : 'secondary'} loading={nhanFile.dangLuu}
+                  className={`shrink-0 px-2 py-1 text-xs ${nhanFile.daNhan ? 'text-danger hover:bg-danger/10' : ''}`}
+                  onClick={() => onNhanFile && onNhanFile(!nhanFile.daNhan)}>
+                  {nhanFile.daNhan ? 'Hủy khỏi danh sách' : 'Đã nhận file'}
+                </Button>
+              )}
+            </div>
+          )}
 
           <div className="space-y-2 border-t border-line pt-4">
             <h3 className="text-xs font-bold uppercase tracking-wide text-ink-soft">Tiến trình</h3>

@@ -1,4 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
+import useChiXem from '../../../hooks/useChiXem';
+import { NhanFileMenu, NhanFileModal, SttNhanFile, daNhanFile, coDotNhanFile } from '../components/NhanFileBh';
 import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
 import TraVeListModal, { TraVeListButton, TRA_VE_THEO_MAN } from '../../../components/common/TraVeListModal';
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
@@ -26,7 +28,7 @@ import TraVeFilter from '../../../components/common/TraVeFilter';
 import { locTraVe, demTraVe } from '../../../utils/traVeNgay';
 import {
   listReadyCandidates, confirmReadyBulk, readyHistory, readyDone, getReadyItemCounts,
-  confirmReadyItemsBatch, uncheckReadyItem, traCuuMaQuet,
+  confirmReadyItemsBatch, uncheckReadyItem, traCuuMaQuet, datNhanFileBh,
 } from '../../../services/readyService';
 import ReadyPanel from '../components/ReadyPanel';
 import BatThuongModal from '../components/BatThuongModal';
@@ -151,6 +153,17 @@ export default function ReadyPage() {
   // Đổi phương án in ngay tại cột — khớp đúng rbac của `PATCH /hskt/:id/phuong-an-in`
   // (`READY_KHUON | READY_FILM | READY_MUC`), tức bằng `permItems.length > 0`.
   const canDoiPain = permItems.length > 0;
+
+  // NHẬN FILE BH (11/11/2026): chuột phải dòng ⇒ menu nhỏ đưa vào / hủy khỏi danh sách đã nhận hồ sơ cứng của Bán hàng
+  //   (theo ĐỢT VẢI của dòng). Quyền = quyền xác nhận READY kỹ thuật (BE `POST /ready/nhan-file`). Không quyền / chỉ xem ⇒
+  //   để nguyên menu chuột phải của trình duyệt.
+  const chiXem = useChiXem();
+  const canNhanFile = permItems.length > 0 && !chiXem;
+  const [nfMenu, setNfMenu] = useState(null); // { x, y, dong: [row] }
+  const [nfOpen, setNfOpen] = useState(false);
+  const [nfSaving, setNfSaving] = useState(false);
+  const dongMenuNhanFile = useCallback(() => setNfMenu(null), []);
+  const soNhanFile = rows.filter(daNhanFile).length;
   // Mục sẽ xác nhận khi quét/tích (mặc định = tất cả mục mình có quyền). Người phụ trách 1 mục → tự khóa mục đó.
   const [scanSel, setScanSel] = useState(() => new Set());
   const scanItemsRef = useRef({}); // rowId -> mảng mục đã xác nhận (để Hủy đúng)
@@ -232,6 +245,30 @@ export default function ReadyPage() {
   });
   const allChecked = rows.length > 0 && rows.every((r) => selected.has(r._key));
   const toggleAll = () => setSelected(() => (allChecked ? new Set() : new Set(rows.map((r) => r._key))));
+
+  // Chuột phải: dòng nằm trong các dòng đang TÍCH (≥2) ⇒ áp cho mọi dòng đang tích; không thì chỉ dòng đó.
+  const moMenuNhanFile = (r, e) => {
+    if (!canNhanFile) return;
+    e.preventDefault();
+    const chon = selected.size > 1 && selected.has(r._key) ? rows.filter((x) => selected.has(x._key)) : [r];
+    const dong = chon.filter(coDotNhanFile);
+    if (!dong.length) { show('Dòng này không gắn đợt vải đang chờ — không đánh dấu nhận file được', 'error'); return; }
+    setNfMenu({ x: e.clientX, y: e.clientY, dong });
+  };
+  const datNhanFile = async (dong, nhan) => {
+    const ap = dong.filter((r) => coDotNhanFile(r) && daNhanFile(r) !== nhan);
+    const ids = [...new Set(ap.flatMap((r) => r.dot_vai_ids))];
+    if (!ids.length) { setNfMenu(null); return; }
+    setNfSaving(true);
+    try {
+      const res = await datNhanFileBh(ids, nhan);
+      show(`${res.message || (nhan ? 'Đã đưa vào danh sách đã nhận file' : 'Đã hủy khỏi danh sách đã nhận')}${ap.length > 1 ? ` (${ap.length} dòng)` : ''}`);
+      setNfMenu(null);
+      await refresh();
+    } catch (e) {
+      show(e.message || 'Không lưu được', 'error');
+    } finally { setNfSaving(false); }
+  };
 
   // Danh sách cho modal Quét/tích: 1 dòng / PHẦN IN (dòng đầu). Quét code phần mà đưa cả 2 dòng loại
   // đợt vải vào thì `khongGomSet` coi là "mã trỏ nhiều phần in" và từ chối — vòng thử từng nhóm nằm ở
@@ -388,10 +425,14 @@ export default function ReadyPage() {
           <Button chiXemOk variant={btMap.size ? 'secondary' : 'ghost'} icon="alert-triangle" onClick={() => setBtOpen(true)}>
             Bất thường{btMap.size ? ` (${btMap.size})` : ''}
           </Button>
+          <Button chiXemOk variant="ghost" icon="list" onClick={() => setNfOpen(true)}>
+            Đã nhận file{soNhanFile ? ` (${soNhanFile})` : ''}
+          </Button>
         </span>
         <MenuNut className="md:hidden" nhan={btMap.size ? `Thêm · ${btMap.size} bất thường` : 'Thêm'} nhom={[
           { muc: [
             { ten: 'Bất thường', icon: 'alert-triangle', chiXemOk: true, ghi: btMap.size || '', onClick: () => setBtOpen(true) },
+            { ten: 'Đã nhận file', icon: 'list', chiXemOk: true, ghi: soNhanFile || '', onClick: () => setNfOpen(true) },
             { ten: 'Danh sách trả về', icon: 'undo', chiXemOk: true, onClick: () => setTraVeOpen(true) },
             { ten: 'Đã hoàn thành', icon: 'check-circle', chiXemOk: true, onClick: () => setDoneOpen(true) },
             { ten: 'Lịch sử', icon: 'history', chiXemOk: true, onClick: () => setHistOpen(true) },
@@ -412,7 +453,11 @@ export default function ReadyPage() {
         onCellCopy={(ok, text, col) => show(ok
           ? `Đã chép${typeof col.header === 'string' ? ` ${col.header.replace(/\s*\(\d+\)$/, '')}` : ''}: ${text.length > 60 ? `${text.slice(0, 60)}…` : text}`
           : 'Trình duyệt không cho chép — bôi đen chữ rồi Ctrl+C', ok ? 'success' : 'error')}
+        // Nhận file BH: STT khoanh tròn khi đợt của dòng đã nhận; chuột phải ⇒ menu đưa vào / hủy (11/11/2026).
+        renderStt={(r, stt) => <SttNhanFile row={r} stt={stt} />}
+        onRowContextMenu={moMenuNhanFile}
         onRowClick={(r) => setSel({
+          key: r._key,
           id: r.id,
           // Luôn mở panel THEO ĐỢT khi dòng có đợt chờ (không chỉ khi tách dòng) — panel phải hiện
           // đúng trạng thái của đợt đó, nếu không nó nói "đã xác nhận" trong khi bảng nói chưa.
@@ -422,14 +467,29 @@ export default function ReadyPage() {
         rowClassName={(r) => slaRowClass(evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status)}
         emptyText="Tất cả phần in đã READY 🎉" />
 
-      {sel && (
-        <ReadyPanel phanInId={sel.id} dotVaiIds={sel.dotVaiIds} loaiDotVai={sel.loai}
-          truocXacNhan={() => hoiLyDoNghen(rows.filter((x) => x.id === sel.id))}
-          onClose={() => setSel(null)} onChanged={load} onToast={show}
-          ungVienGn={ungVienGn(viewRows, { pinId: (r) => r.id, dotIds: (r) => r.dot_vai_ids })} />
-      )}
+      {sel && (() => {
+        // Dòng đang mở (đọc lại từ `rows` ⇒ trạng thái nhận file luôn mới sau khi tải ngầm).
+        const dongSel = rows.find((x) => x._key === sel.key);
+        return (
+          <ReadyPanel phanInId={sel.id} dotVaiIds={sel.dotVaiIds} loaiDotVai={sel.loai}
+            truocXacNhan={() => hoiLyDoNghen(rows.filter((x) => x.id === sel.id))}
+            onClose={() => setSel(null)} onChanged={load} onToast={show}
+            ungVienGn={ungVienGn(viewRows, { pinId: (r) => r.id, dotIds: (r) => r.dot_vai_ids })}
+            // Máy không có chuột phải (iPhone) ⇒ đánh dấu nhận file ngay trong panel.
+            nhanFile={dongSel && coDotNhanFile(dongSel) ? {
+              daNhan: daNhanFile(dongSel),
+              moTa: daNhanFile(dongSel) ? [dongSel.nhan_file.nguoi, fmtDateTime(dongSel.nhan_file.tg)].filter(Boolean).join(' · ') : '',
+              coQuyen: canNhanFile, dangLuu: nfSaving,
+            } : null}
+            onNhanFile={(nhan) => dongSel && datNhanFile([dongSel], nhan)} />
+        );
+      })()}
 
       <BatThuongModal open={btOpen} onClose={() => setBtOpen(false)} rows={rows} onToast={show} onChanged={taiBatThuong} />
+      <NhanFileMenu menu={nfMenu} dangLuu={nfSaving} onClose={dongMenuNhanFile}
+        onPick={(nhan) => nfMenu && datNhanFile(nfMenu.dong, nhan)} />
+      <NhanFileModal open={nfOpen} onClose={() => setNfOpen(false)} rows={rows} coQuyen={canNhanFile} dangLuu={nfSaving}
+        onHuy={(r) => datNhanFile([r], false)} />
 
       <Modal
         open={!!bulk}

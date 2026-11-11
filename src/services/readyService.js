@@ -48,5 +48,7 @@ export const readyDone = (date, scope) => client.get('/ready/done', { params: { 
 export const getGhiChuPhanIn = (phanInId) => client.get(`/ready/${phanInId}/ghi-chu`);
 export const themGhiChuPhanIn = (phanInId, noiDung) => client.post(`/ready/${phanInId}/ghi-chu`, { noiDung });
 export const listBatThuong = (lichSu = false) => client.get('/ready/bat-thuong', { params: lichSu ? { lichSu: 1 } : {} });
+// Nhận file BH (11/11/2026): đưa đợt vải vào (`nhan: true`) / hủy khỏi (`false`) danh sách đã nhận hồ sơ cứng từ Bán hàng.
+export const datNhanFileBh = (dotVaiIds, nhan) => client.post('/ready/nhan-file', { dotVaiIds, nhan });
 export const danhDauBatThuong = (phanInIds, noiDung) => client.post('/ready/bat-thuong', { phanInIds, noiDung });
 export const goBatThuong = (phanInIds) => client.post('/ready/bat-thuong/go', { phanInIds });
