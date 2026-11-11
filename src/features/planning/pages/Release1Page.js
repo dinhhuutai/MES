@@ -166,8 +166,9 @@ function DataCells({ r, pa }) {
         </div>
       </td>
       <td className={TD}><TinhChatInCell value={r.tinh_chat_in} /></td>
+      {/* Dòng ÉP ỦI: phương án in luôn là Ép (BE `luongSanXuat.paCongDoanSql`) — không có ↻ (đổi PA hồ sơ ở dòng in). */}
       <td className={TD}>
-        {pa ? (
+        {pa && !laEp(r) ? (
           <PhuongAnInCell value={r.phuong_an_in} hsktId={r.hskt_id} barcode={r.barcode_hskt}
             disabled={!pa.coQuyen} show={pa.show} onChanged={pa.onChanged} />
         ) : <PhuongAnInBadge value={r.phuong_an_in} />}
