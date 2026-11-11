@@ -151,6 +151,7 @@ export default function QuanTriPhanInPage() {
       const r = await datLuongSx(chon, body);
       const d = r.data || {};
       show(`Đã đổi luồng sản xuất${d.so_lenh_doi ? ` · đánh lại công đoạn đầu ${d.so_lenh_doi} lệnh` : ''}`
+        + `${d.so_tem_nha_kcs ? ` · ${d.so_tem_nha_kcs} tem chờ công đoạn sau vào KCS` : ''}`
         + `${(d.lenh_da_in_tem_giu || []).length ? ` · giữ nguyên lệnh đã in tem: ${d.lenh_da_in_tem_giu.join(', ')}` : ''}`);
       await tai(chon, true);
       return true;
@@ -310,7 +311,7 @@ export default function QuanTriPhanInPage() {
                 </div>
               </div>
 
-              <KhoiLuongSanXuat pin={pin} dangLuu={dangLuu} onLuu={luuLuong} />
+              <KhoiLuongSanXuat pin={pin} dangLuu={dangLuu} onLuu={luuLuong} show={show} onXong={() => tai(chon, true)} />
 
               {/* 4 mục READY */}
               <div className="rounded-card border border-line bg-surface p-4">

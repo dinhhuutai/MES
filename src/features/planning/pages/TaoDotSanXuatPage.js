@@ -132,7 +132,13 @@ export default function TaoDotSanXuatPage() {
       const skip = res.data?.skipped_test;
       const chuaLuuTho = res.data?.tho_in_chua_luu ? ' · CHƯA lưu thợ in (hệ thống chưa cập nhật cơ sở dữ liệu)' : '';
       if (res.data?.chi_tam) show(`${gd === GD_EP ? 'Phần ép ủi' : 'Phần in'} chưa Ready → đã lưu Kế hoạch tạm (${res.data.ke_hoach_tam_count || 0} đợt). Xác nhận lại ở màn Kế hoạch tạm khi Ready xong.${chuaLuuTho}`, chuaLuuTho ? 'error' : 'success');
-      else show(`${skip ? 'Đã gom đợt vải thành 1 đợt sản xuất — hàng Logo vào thẳng Chờ chạy (không qua Test Run)' : `Đã gom đợt vải thành 1 đợt sản xuất${gd === GD_EP ? ' ÉP ỦI' : ''} — chờ Test Run`}${chuaLuuTho}`, chuaLuuTho ? 'error' : 'success');
+      else {
+        // Logo + phần ép ủi (11/11/2026) vào thẳng Chờ chạy — BE `luongSanXuat.boQuaTestRun`.
+        const nhanTao = `Đã gom đợt vải thành 1 đợt sản xuất${gd === GD_EP ? ' ÉP ỦI' : ''}`;
+        const sau = res.data?.gia_cong ? 'vào Kế hoạch › Gia công'
+          : skip ? `${gd === GD_EP ? '' : 'hàng Logo '}vào thẳng Chờ chạy (không qua Test Run)` : 'chờ Test Run';
+        show(`${nhanTao} — ${sau}${chuaLuuTho}`, chuaLuuTho ? 'error' : 'success');
+      }
       setBasket([]); setChuyenId(''); setNgayKeHoach(tomorrowStr()); setGioBd(''); setGioKt(''); setThoIn('');
       load();
     } catch (e) {

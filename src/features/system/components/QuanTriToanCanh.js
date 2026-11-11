@@ -80,6 +80,7 @@ function KhoiLenh({ tc, lenh, onLuiVe, onHuyLe, onPhanCong, onSuaKeHoach }) {
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-semibold text-ink">{lenh.ma_lenh_san_xuat}</span>
           <Badge tone="info">{TEN_TT_LENH[lenh.trang_thai] || lenh.trang_thai}</Badge>
+          {lenh.giai_doan === 'EP_UI' && <Badge tone="warning">Công đoạn ép ủi</Badge>}
           <span className="text-xs text-ink-soft">{lenh.ma_chuyen || 'chưa gán chuyền'} · SL release {fmtNum(lenh.so_luong_release)}</span>
           {lenh.test_dat && <Badge tone="success">Đã test đạt</Badge>}
           {lenh.so_phan_in > 1 && <Badge tone="warning">Lệnh gom {lenh.so_phan_in} phần in</Badge>}

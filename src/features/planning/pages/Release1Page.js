@@ -392,7 +392,7 @@ export default function Release1Page() {
   // "hết mọi trang"). Cột "Gom set" giữ lại để vẫn biết đợt nào vốn định in chung. Excel giữ 1 dòng / ĐỢT VẢI.
   const doExcel = () => exportCheckpointExcel({
     cols: [{ header: 'Gom set', width: 12, value: (r) => r.ma_set || '' },
-      { header: 'Công đoạn', width: 11, value: (r) => nhanCongDoan(r.luong_sx, r.giai_doan) || (laLogo(r.luong_sx) ? 'Logo' : '') },
+      { header: 'Công đoạn', width: 11, value: (r) => nhanCongDoan(r.luong_sx, r.giai_doan) || (laLogo(r.luong_sx) ? 'Logo' : r.luong_sx === 'KIENG_KHONG_EP' ? 'In kiếng' : '') },
       ...COT_DOT_VAI],
     rows: viewRowsGom.flatMap((g) => g._dots || [g]),
     title: 'Release 1 — chờ release',
@@ -493,9 +493,9 @@ export default function Release1Page() {
       if (res?.data?.chi_tam) show(`${tam} phần chưa Ready → đã lưu Kế hoạch tạm (xác nhận lại khi Ready xong)${canhBaoThoIn(res)}`, 'success');
       else {
         // 27/10/2026: mọi lệnh qua Test Run (BE không còn tự bỏ test) — chỉ chuyền gia công đi thẳng Gia công,
-        //   phần in Logo (mig 126) vào thẳng Chờ chạy.
+        //   phần in Logo (mig 126) + phần ép ủi (11/11/2026) vào thẳng Chờ chạy (BE `luongSanXuat.boQuaTestRun`).
         const chinh = res?.data?.gia_cong ? `Đã Release 1${ep ? ' phần ép ủi' : ''} — lệnh vào Kế hoạch › Gia công`
-          : ep ? 'Đã Release 1 phần ép ủi — lệnh ép vào Test Run'
+          : ep ? 'Đã Release 1 phần ép ủi — lệnh ép vào thẳng Chờ chạy (không qua Test Run)'
             : (res?.data?.skipped_test_count || 0) > 0 ? 'Đã Release 1 — hàng Logo vào thẳng Chờ chạy (không qua Test Run)'
               : 'Đã Release 1 — lệnh vào Test Run';
         show(chinh + tamMsg + canhBaoThoIn(res));
@@ -559,9 +559,10 @@ export default function Release1Page() {
       const daTao = res?.data?.created_count || 0;
       const soDot = res?.data?.so_dot_vai || daTao;
       const soEp = res?.data?.ep_count || 0;
+      const epChoChay = res?.data?.ep_cho_chay_count || 0;
       const logo = ids.length ? (res?.data?.skipped_test_count || 0) : 0;
       show(`Đã tạo ${daTao} lệnh${soDot > daTao ? ` (gom ${soDot} đợt vải cùng code phần)` : ''}`
-        + `${soEp > 0 ? ` · trong đó ${soEp} lệnh ép ủi` : ''}${logo > 0 ? ` · ${logo} lệnh Logo vào thẳng Chờ chạy` : ''}`
+        + `${soEp > 0 ? ` · trong đó ${soEp} lệnh ép ủi${epChoChay > 0 ? ' (vào thẳng Chờ chạy)' : ''}` : ''}${logo > 0 ? ` · ${logo} lệnh Logo vào thẳng Chờ chạy` : ''}`
         + `${tam > 0 ? ` · ${tam} đợt chưa Ready → lưu Kế hoạch tạm` : ''}${canhBaoThoIn(res)}`
         + `${res?.data?.ep_loi ? ` · PHẦN ÉP ỦI LỖI: ${res.data.ep_loi}` : ''}`, res?.data?.ep_loi ? 'error' : 'success');
       setSelected({}); setReleaseOpen(false);
@@ -790,7 +791,8 @@ export default function Release1Page() {
           )}
           {looseList.some((r) => laEp(r)) && (
             <div className="mt-1 text-xs text-orange-700 dark:text-orange-300">
-              Có <b>{looseList.filter((r) => laEp(r)).length}</b> dòng <b>ép ủi</b> — ra lệnh ép riêng (công đoạn ép), không gom với lệnh in.
+              Có <b>{looseList.filter((r) => laEp(r)).length}</b> dòng <b>ép ủi</b> — ra lệnh ép riêng (công đoạn ép), không gom với lệnh in,
+              vào thẳng <b>Chờ chạy</b> — không qua Test Run / Release 2.
             </div>
           )}
           {looseList.some((r) => laLogo(r.luong_sx) && !laEp(r)) && (
@@ -868,6 +870,7 @@ export default function Release1Page() {
                   <b>{detail.luong_sx === 'IN_KIENG' ? 'Phần in kiếng' : 'Phần in + ép'} — 2 công đoạn, 2 lệnh</b></div>
                 {laEp(detail)
                   ? <>Đây là phần <b>ép ủi</b>: ra lệnh ép riêng (số lượng release riêng, tối đa = SL vải), lập trước hay sau phần in đều được.
+                    Lệnh ép vào thẳng <b>Chờ chạy</b> — không qua Test Run / Release 2.
                     {!detail.qc_done && (epChoLapSau(detail)
                       ? <> Đợt <b>chưa Ready</b> ⇒ chưa lập được (ép ủi không lưu Kế hoạch tạm).</>
                       : <> Đợt <b>chưa Ready</b> ⇒ lưu <b>Kế hoạch tạm</b> phần ép, xác nhận ở màn Kế hoạch tạm khi Ready xong.</>)}</>

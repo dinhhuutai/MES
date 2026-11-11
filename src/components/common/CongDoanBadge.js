@@ -1,5 +1,6 @@
 // Badge CÔNG ĐOẠN của phần in 2 công đoạn (mig 126) — "In kiếng" / "In" (tím) · "Ép ủi" (cam). Phần in Logo ⇒ badge "Logo"
-// (`hienLogo`). Phần in thường ⇒ không vẽ gì. Nhãn dựng ở `utils/luongSanXuat.js` (gương BE).
+// (`hienLogo`); in kiếng đã bỏ ép (`KIENG_KHONG_EP`, 1 công đoạn) ⇒ badge "In kiếng" cùng cờ. Phần in thường ⇒ không vẽ gì.
+// Nhãn dựng ở `utils/luongSanXuat.js` (gương BE).
 import { nhanCongDoan, chuanGd, GD_EP, laLogo } from '../../utils/luongSanXuat';
 
 const TONE = {
@@ -14,6 +15,14 @@ export default function CongDoanBadge({ luong, gd, hienLogo = false, className =
       <span title={title || 'Luồng Logo — không qua Kỹ thuật / Test Run / Release 2'}
         className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${TONE.LOGO} ${className}`}>
         Logo
+      </span>
+    );
+  }
+  if (hienLogo && luong === 'KIENG_KHONG_EP') {
+    return (
+      <span title={title || 'In kiếng 1 công đoạn (đã bỏ ép ủi) — tem in nhập loại / SL / hệ số kiếng'}
+        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${TONE.IN} ${className}`}>
+        In kiếng
       </span>
     );
   }
