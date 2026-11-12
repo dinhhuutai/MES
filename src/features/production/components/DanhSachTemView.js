@@ -737,6 +737,9 @@ function SuaTemModal({ tem, onClose, onDaLuu, show }) {
   const [chuyenGoc, setChuyenGoc] = useState('');  // chuyền đang hiện của tem (riêng của tem nếu đã sửa, không thì của phiếu)
   const [chuyenId, setChuyenId] = useState('');
   const [dsChuyen, setDsChuyen] = useState([]);
+  // GC màu vải của tem (đổ sẵn từ nhãn tem; null = đang tải) — gửi ERP SF0 `GCMauvai` khi lưu.
+  const [gcGoc, setGcGoc] = useState(null);
+  const [gc, setGc] = useState('');
   const temId = tem?.id;
   useEffect(() => {
     if (!tem) return;
@@ -746,11 +749,12 @@ function SuaTemModal({ tem, onClose, onDaLuu, show }) {
   useEffect(() => {
     if (!temId) return undefined;
     let song = true;
-    setPcGoc(null); setPc(PC_TRONG); setChuyenGoc(''); setChuyenId('');
+    setPcGoc(null); setPc(PC_TRONG); setChuyenGoc(''); setChuyenId(''); setGcGoc(null); setGc('');
     getTemLabel(temId).then((r) => {
       if (!song) return;
       const d = r.data || {};
       setChuyenGoc(d.chuyen_id || ''); setChuyenId(d.chuyen_id || '');
+      setGcGoc(d.gc_mau_vai || ''); setGc(d.gc_mau_vai || '');
       const g = { caTruongId: d.ca_truong_id || '', chuyenTruong: d.chuyen_truong || '', thoIn: d.tho_in || '', toInId: d.to_in_id || '', rieng: !!d.phan_cong_rieng };
       setPcGoc(g); setPc(g);
     }).catch(() => { if (song) setPcGoc(null); });
@@ -778,6 +782,8 @@ function SuaTemModal({ tem, onClose, onDaLuu, show }) {
   const coNgayCt = !!tem.ngay_ct;
   if (coNgayCt && ngayCt && ngayCt !== tem.ngay_ct) body.ngayCt = ngayCt;
   if (chuyenId && chuyenId !== chuyenGoc) body.chuyenId = chuyenId;
+  // GC màu vải: chỉ gửi khi đổi (xóa trắng = gửi rỗng ⇒ BE xóa).
+  if (gcGoc !== null && gc.replace(/\s+/g, ' ').trim() !== gcGoc.trim()) body.gcMauVai = gc.replace(/\s+/g, ' ').trim();
   if (doiPc) {
     body.phanCong = {
       caTruongId: pc.caTruongId || null, chuyenTruong: pc.chuyenTruong || '', thoIn: pc.thoIn || '',
@@ -828,6 +834,10 @@ function SuaTemModal({ tem, onClose, onDaLuu, show }) {
             className={caSai ? 'border-danger' : ''} placeholder="YYMMDD + C1/C2/C3/D1/D2/HC" />
         </Field>
         {caSai && <p className="-mt-2 text-xs text-danger">Mã ngày ca phải đúng 8 ký tự: YYMMDD + C1·C2·C3·D1·D2·HC</p>}
+        <Field label="GC màu vải">
+          <Input value={gc} maxLength={200} disabled={gcGoc === null} placeholder={gcGoc === null ? 'Đang tải…' : 'Ghi chú màu vải (trống = không có)'}
+            onChange={(e) => setGc(e.target.value)} />
+        </Field>
         <Field label="Ngày chứng từ (gửi ERP)">
           <Input type="date" value={ngayCt} disabled={!coNgayCt} onChange={(e) => setNgayCt(e.target.value)} />
         </Field>
