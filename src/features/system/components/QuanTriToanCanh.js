@@ -11,6 +11,7 @@ import { Field, Input, Textarea } from '../../../components/common/controls';
 import { fmtNum, fmtDateTime, fmtDate } from '../../../utils/format';
 import { laChuyenGiaCong } from '../../planning/utils/chuyenGiaCong';
 import BtpKeHoachField, { btpBanDau, btpGuiDi } from '../../planning/components/BtpKeHoachField';
+import DinhMucField, { chuanDinhMuc } from '../../planning/components/DinhMucField';
 import {
   luiVeTram, huyLeQt, luuPhanCongQt, getKeHoachLenhQt, suaKeHoachLenhQt, suaKeHoachTamQt,
 } from '../../../services/quanTriPhanInService';
@@ -263,6 +264,7 @@ export function KeHoachModal({ phanInId, muc, chuyen, users, onClose, onDone, sh
     setF({
       chuyenId: goc.chuyen_id || '', ngayKeHoach: ngay, gioBd: gioStr(goc.tg_bd_kh), gioKt: gioStr(goc.tg_kt_kh),
       thoIn: goc.tho_in_kh || '', soLuong: laLenh ? '' : String(goc.so_luong ?? ''), slRelease: {}, lyDo: '',
+      dinhMuc: String(goc.dinh_muc_kh ?? ''), dinhMucGoc: String(goc.dinh_muc_kh ?? ''),
     });
     setDsDot([]);
     if (!laLenh) return undefined;
@@ -283,6 +285,8 @@ export function KeHoachModal({ phanInId, muc, chuyen, users, onClose, onDone, sh
             gioKt: gioStr(d0.tg_kt_kh), thoIn: d0.tho_in_kh || '',
           } : {}),
           slRelease: Object.fromEntries(ds.map((d) => [d.dot_vai_id, String(d.so_luong)])),
+          // Định mức kế hoạch (mig 129) — đọc lại từ chi tiết lệnh (dòng nguồn có thể không mang).
+          dinhMuc: String(d0.dinh_muc_kh ?? ''), dinhMucGoc: String(d0.dinh_muc_kh ?? ''),
           btp: btpBanDau(ds),
         } : x));
       })
@@ -310,6 +314,8 @@ export function KeHoachModal({ phanInId, muc, chuyen, users, onClose, onDone, sh
       const chung = {
         chuyenId: f.chuyenId || null, ngayKeHoach: f.ngayKeHoach, tgBdKh: mkTs(f.ngayKeHoach, f.gioBd), tgKtKh: mkTs(f.ngayKeHoach, f.gioKt),
         thoIn: f.thoIn, lyDo: f.lyDo.trim(),
+        // Định mức (mig 129): chỉ gửi khi đổi (trống ⇒ null = xóa).
+        ...(f.dinhMuc !== f.dinhMucGoc ? { dinhMuc: chuanDinhMuc(f.dinhMuc) } : {}),
       };
       const bodyLenh = {
         ...chung,
@@ -385,6 +391,7 @@ export function KeHoachModal({ phanInId, muc, chuyen, users, onClose, onDone, sh
         <Field label="Thợ in kế hoạch">
           <NhieuNguoiSelect value={f.thoIn} onChange={(v) => set('thoIn', v)} options={users} placeholder="Gõ tên hoặc MSNV để tìm rồi chọn / Enter..." />
         </Field>
+        <DinhMucField value={f.dinhMuc} onChange={(v) => set('dinhMuc', v)} />
         {laLenh && !dangTai && dsDot.length > 0 && (
           <BtpKeHoachField checked={f.btp} onChange={(v) => set('btp', v)} dsDot={dsDot} />
         )}

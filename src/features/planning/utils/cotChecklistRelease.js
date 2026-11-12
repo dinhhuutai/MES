@@ -101,6 +101,9 @@ export const COT_CHECKLIST = [
   { key: 'sl_giao', header: 'SL Giao', width: 8, num: true,
     value: (r) => { const v = r.sl_da_giao_pin ?? r.sl_da_giao; return v == null ? '' : Number(v); } },
   { key: 'sl_release', header: 'SL Release', width: 10, num: true, value: slReleaseDong },
+  // Định mức KẾ HOẠCH của lệnh (mig 129, SP / giờ) — người lập kế hoạch nhập ở Release 1 / KH tạm / Lập lại KH.
+  { key: 'dinh_muc', header: 'Định mức (SP/giờ)', width: 9, num: true, mucLenh: true,
+    value: (r) => (r.dinh_muc_kh == null ? '' : Number(r.dinh_muc_kh)) },
   // Doanh thu của DÒNG = đơn giá (mig 113, ERP `Dongia` = GiaIn + Giaep + giainkieng) × SL Release. Chưa có giá ⇒ trống.
   { key: 'doanh_thu', header: 'Doanh thu', width: 14, num: true, gia: true, value: doanhThu },
   { key: 'gio_bd', header: 'Giờ BĐ', nhom: 'Hạn hoàn thành', width: 8, mucLenh: true, value: (r) => gio24(r.tg_bd_kh) },

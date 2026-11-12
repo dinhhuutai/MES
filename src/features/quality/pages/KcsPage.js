@@ -239,14 +239,17 @@ export default function KcsPage() {
   const [xuatOpen, setXuatOpen] = useState(false);
   const [xuatBusy, setXuatBusy] = useState(false);
   const doExcel = () => setXuatOpen(true);
-  const doXuatTon = async ({ gioDuKien, gomDangPhoi }) => {
+  // Khoảng ngày của file = NGÀY CHỨNG TỪ chọn trong hộp (BE `ctTu`/`ctDen`) — THAY ô "Ngày in tem" của màn (2 khoảng chồng
+  //   nhau là bỏ sót tem in hôm trước mà ngày CT hôm nay). Ô tìm + panel lọc + "chỉ tem bị trả về" vẫn áp như màn.
+  const doXuatTon = async ({ gioDuKien, gomDangPhoi, ctTu, ctDen, gioTu, gioDen }) => {
     setXuatBusy(true);
     try {
       const res = await kcsTonChuaKiem({
-        search, ...filters, ngayTu: range.from || undefined, ngayDen: range.to || undefined, gomDangPhoi: gomDangPhoi ? 1 : 0,
+        search, ...filters, ctTu: ctTu || undefined, ctDen: ctDen || undefined,
+        gioTu: gioTu || undefined, gioDen: gioDen || undefined, gomDangPhoi: gomDangPhoi ? 1 : 0,
       });
       const ds = onlyReturned ? locTraVe(res.data || [], traVeRange) : (res.data || []);
-      const n = await exportPhieuChuaKiem(ds, { tuNgay: range.from, denNgay: range.to, gioDuKien });
+      const n = await exportPhieuChuaKiem(ds, { tuNgay: ctTu, denNgay: ctDen, tuGio: gioTu, denGio: gioDen, gioDuKien });
       show(`Đã xuất ${fmtNum(n)} tem chưa kiểm`);
       setXuatOpen(false);
     } catch (e) {
@@ -820,7 +823,8 @@ export default function KcsPage() {
         tenMan="KCS" rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} tenFile="nghen-kcs"
         maTrang="SX_KCS" />
       {lyDoNghenModal}
-      <XuatTonKcsModal open={xuatOpen} onClose={() => setXuatOpen(false)} busy={xuatBusy} onXuat={doXuatTon} />
+      <XuatTonKcsModal open={xuatOpen} onClose={() => setXuatOpen(false)} busy={xuatBusy} onXuat={doXuatTon}
+        tuNgayMacDinh={range.from} denNgayMacDinh={range.to} />
       <Toast toast={toast} />
     </div>
   );

@@ -9,7 +9,8 @@
 //     Phụ trách (= TÊN THỢ IN ĐẦU TIÊN — lệnh nhỏ đầu tiên có thợ in, phân công thật trước rồi thợ in kế
 //     hoạch; nhiều thợ chỉ lấy tên đầu; không có thì trống để ghi tay) · Số = `<ddmmyy>-<mã chuyền>`
 //     (1 chuyền × 1 ngày ⇒ duy nhất) · Tờ k/N.
-//   · bảng: Khách · PO · Mã hàng (dòng nhỏ: code phần · mã lệnh nhỏ) · Kích vải/phim · Màu · Định mức ·
+//   · bảng: Khách · PO · Mã hàng (dòng nhỏ: code phần · mã lệnh nhỏ) · Kích vải/phim · Màu · Định mức (SP / giờ —
+//     định mức KẾ HOẠCH người lập nhập cho lệnh, mig 129; chưa nhập ⇒ định mức của chuyền) ·
 //     SL cần in (SL release của phần in trong lệnh) · Kế hoạch từ/đến giờ (của CHÍNH lệnh nhỏ). Thực hiện ·
 //     Sản lượng · Ghi chú để ghi tay. Dòng xếp theo giờ BĐ kế hoạch.
 //   · chân tờ: 4 ô ký, ngày = NGÀY IN.
@@ -89,7 +90,7 @@ function dongBang(r, stt, g) {
         <td class="c"><div class="o">${esc(r.kich_vai)}</div></td>
         <td class="c"><div class="o">${esc(r.kich_phim)}</div></td>
         <td class="c"><div class="o nho">${esc(r.mau_vai)}</div></td>
-        <td class="r">${so(g.dinh_muc_gio)}</td>
+        <td class="r">${so(r.dinh_muc_kh ?? g.dinh_muc_gio)}</td>
         <td class="r b">${so(r.sl_release_phan ?? r.so_luong_release)}</td>
         <td class="c">${gio24(r.tg_bd_kh)}</td>
         <td class="c">${gio24(r.tg_kt_kh)}</td>

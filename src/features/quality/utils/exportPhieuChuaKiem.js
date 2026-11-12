@@ -95,16 +95,16 @@ const FMT = { so: '#,##0', so2: '#,##0.00', ngay: 'dd/mm/yyyy', gio: 'dd/mm/yyyy
 
 /**
  * @param {Array} rows  dòng từ `GET /quality/kcs/ton-chua-kiem` (đã lọc như màn KCS)
- * @param {{tuNgay?: string, denNgay?: string, gioDuKien: Date}} o  tuNgay/denNgay = ô "Ngày in tem" của màn (trống ⇒ lấy
- *   ngày in tem sớm / muộn nhất của danh sách).
+ * @param {{tuNgay?: string, denNgay?: string, gioDuKien: Date}} o  tuNgay/denNgay = khoảng NGÀY CHỨNG TỪ chọn ở hộp xuất (trống ⇒
+ *   lấy ngày CT sớm / muộn nhất của danh sách; tem chưa có ngày CT ⇒ ngày in tem).
  */
-export default async function exportPhieuChuaKiem(rows, { tuNgay, denNgay, gioDuKien }) {
+export default async function exportPhieuChuaKiem(rows, { tuNgay, denNgay, tuGio, denGio, gioDuKien }) {
   const ExcelJS = (await import('exceljs')).default || (await import('exceljs'));
   const gdk = gioDuKien instanceof Date && !Number.isNaN(gioDuKien.getTime()) ? gioDuKien : new Date();
   const ds = [...(rows || [])].sort((a, b) => (canThao(b, gdk) - canThao(a, gdk))
     || ((a.tg_kt_phoi ? new Date(a.tg_kt_phoi).getTime() : Infinity) - (b.tg_kt_phoi ? new Date(b.tg_kt_phoi).getTime() : Infinity))
     || String(a.ma_tem || '').localeCompare(String(b.ma_tem || '')));
-  const ngayIn = ds.map((r) => (r.ngay_in_tem ? ngayLocalISO(r.ngay_in_tem) : '')).filter(Boolean).sort();
+  const ngayIn = ds.map((r) => r.ngay_ct || (r.ngay_in_tem ? ngayLocalISO(r.ngay_in_tem) : '')).filter(Boolean).sort();
   const tu = tuNgay || ngayIn[0] || ngayLocalISO(new Date());
   const den = denNgay || ngayIn[ngayIn.length - 1] || tu;
 
@@ -126,7 +126,8 @@ export default async function exportPhieuChuaKiem(rows, { tuNgay, denNgay, gioDu
   ws.getCell(2, 1).alignment = giua;
   ws.getRow(2).height = 30;
   ws.mergeCells(3, 1, 3, N);
-  ws.getCell(3, 1).value = `Từ ngày ${dmy(tu)}  Đến ngày ${dmy(den)}`;
+  // Có chọn giờ (giờ in tem) ⇒ ghi kèm sau ngày.
+  ws.getCell(3, 1).value = `Từ ngày ${dmy(tu)}${tuNgay && tuGio ? ` ${tuGio}` : ''}  Đến ngày ${dmy(den)}${denNgay && denGio ? ` ${denGio}` : ''}`;
   ws.mergeCells(4, 1, 4, N);
   ws.getCell(4, 1).value = `Giờ dự kiến   ${dmyHm(gdk)}`;
   [3, 4].forEach((r) => { ws.getCell(r, 1).alignment = giua; ws.getCell(r, 1).font = { name: FONT, size: 11 }; });

@@ -20,6 +20,7 @@ import { listUserOptions } from '../../../services/userService';
 import printTemLabel, { printTemLabelNhieu, moSanCuaSoIn, dongCuaSoIn } from '../utils/printTemLabel';
 import { fmtNum, fmtDate } from '../../../utils/format';
 import { getSocket } from '../../../services/socket';
+import { GD_EP, chuanGd } from '../../../utils/luongSanXuat';
 
 // Ô "Số tem" (07/10/2026): in N tem cùng SL trong 1 lần bấm — mỗi tem 1 tờ (15 trái · 16 phải), mọi tờ trong
 // 1 cửa sổ in. Trần khớp backend `printTemBatch TOI_DA_TEM_MOT_LUOT`.
@@ -261,6 +262,47 @@ function ChonLoaiKieng({ kieng, value, onChange, vienDo = false }) {
   );
 }
 // Khối 3 ô của SIDEBAR 1 lệnh (1 bộ cho lượt in). `soTem` > 1 ⇒ SL kiếng là của MỖI tem.
+// ─── KHUNG CÔNG ĐOẠN (phần in 2 công đoạn: in kiếng / in + ép — mig 126) ─────────────────────────────────────────────
+// Người in hay bấm NHẦM lệnh ép ủi khi định in tem in kiếng (2 lệnh cùng code phần nằm cạnh nhau) ⇒ khung màu to ở đầu
+//   sidebar nói rõ đang là công đoạn nào, thứ tự 1/2 – 2/2, có nhập kiếng không, và lệnh của công đoạn còn lại đang ở đâu
+//   (BE `getRun().cong_doan_khac`). Phần in 1 công đoạn (`cong_doan` null) ⇒ không vẽ gì.
+const TEN_TRANG_THAI_LENH = { RELEASE_1: 'đang ở Test Run', RELEASE_2: 'chờ chạy', SAN_XUAT: 'sản xuất', GIA_CONG: 'gia công', HOAN_THANH: 'đã hoàn tất' };
+export const laLenhEp = (data) => chuanGd(data?.lenh?.giai_doan) === GD_EP;
+export function KhungCongDoan({ data }) {
+  if (!data?.cong_doan) return null;
+  const ep = laLenhEp(data);
+  const dau = !!data.lenh?.la_cong_doan_dau;
+  const kieng = !!data.kieng?.can;
+  const khac = data.cong_doan_khac || [];
+  const tenKhac = ep ? (data.lenh?.luong_sx === 'IN_KIENG' ? 'In kiếng' : 'In') : 'Ép ủi';
+  const mau = ep
+    ? 'border-orange-300 bg-orange-50 text-orange-900 dark:border-orange-800 dark:bg-orange-950/40 dark:text-orange-200'
+    : 'border-violet-300 bg-violet-50 text-violet-900 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-200';
+  return (
+    <section className={`rounded-card border-2 px-3 py-2.5 ${mau}`}>
+      <div className="flex flex-wrap items-baseline gap-x-2">
+        <span className="text-base font-extrabold uppercase tracking-wide">Công đoạn {data.cong_doan}</span>
+        <span className="text-xs font-semibold">({dau ? '1/2 — làm trước' : '2/2 — làm sau'})</span>
+      </div>
+      <p className="mt-0.5 text-xs">
+        Phần in 2 công đoạn — lệnh này là công đoạn <b>{data.cong_doan.toUpperCase()}</b>
+        {kieng ? ': tem in phải nhập loại · SL · hệ số kiếng.' : ': tem in KHÔNG nhập kiếng.'}
+        {dau ? ' Tem chưa vào KCS (chờ công đoạn sau).' : ''}
+      </p>
+      <p className="mt-1 text-xs">
+        Lệnh công đoạn {tenKhac}:{' '}
+        {khac.length ? khac.map((l, i) => (
+          <span key={l.id}>
+            {i > 0 ? ' · ' : ''}<b>{l.ma_lenh_san_xuat}</b>
+            {` (${l.dang_chay ? `đang chạy chuyền ${l.ma_chuyen || '—'}` : `${TEN_TRANG_THAI_LENH[l.trang_thai] || l.trang_thai}${l.ma_chuyen ? ` · chuyền ${l.ma_chuyen}` : ''}`})`}
+          </span>
+        )) : <span>chưa có lệnh</span>}
+        . Định in tem {tenKhac} thì đóng sidebar này và mở đúng lệnh đó.
+      </p>
+    </section>
+  );
+}
+
 export function KiengFields({ kieng, meta, setMeta, soTem = 1 }) {
   if (!kieng || !kieng.can) return null;
   const k = (kieng.ds || []).find((x) => x.id === meta.loaiKiengId);
@@ -1328,6 +1370,7 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
         <div className="py-10 text-center text-ink-soft">Đang tải...</div>
       ) : (
         <div className="space-y-5">
+          <KhungCongDoan data={data} />
           <section>
             <div className="mb-1 flex items-center justify-between text-sm">
               <span className="text-ink-soft">Đã in</span>
@@ -1351,6 +1394,13 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
             <section className="border-t border-line pt-4">
               <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-soft">
                 {chiLuu ? 'Lưu (BTP trước)' : 'In tem'}{coGomSet ? ` (gom set · ${data.so_phan_in} phần in)` : ''}
+                {data.cong_doan && (
+                  <span className={`ml-1.5 rounded-full px-2 py-0.5 text-[11px] font-extrabold normal-case ${laLenhEp(data)
+                    ? 'bg-orange-100 text-orange-800 dark:bg-orange-950/60 dark:text-orange-200'
+                    : 'bg-violet-100 text-violet-800 dark:bg-violet-950/60 dark:text-violet-200'}`}>
+                    công đoạn {data.cong_doan}
+                  </span>
+                )}
               </h3>
               {/* Ngày ca · giờ SX · BTP: nhập 1 lần, áp cho mọi tem in ở lượt này (mig 066).
                   Với gom set thì bảng in tem cũng hiện lại khối này để nhập ngay trước khi in. */}
@@ -1401,7 +1451,7 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
                     {/* BTP trước → chỉ LƯU (không mở cửa sổ in nhãn), nút đổi hẳn nhãn cho khỏi hiểu nhầm. */}
                     <Button onClick={doPrint} loading={busy} icon={chiLuu ? 'save' : undefined}
                       disabled={!soLuong || Number(soLuong) <= 0 || overMax || remain === 0 || chuaThoIn || khoaInNgc}>
-                      {chiLuu ? 'Lưu' : (nTem > 1 ? `In ${nTem} tem` : 'In tem')}
+                      {chiLuu ? 'Lưu' : (nTem > 1 ? `In ${nTem} tem` : 'In tem')}{data.cong_doan ? ` · ${data.cong_doan}` : ''}
                     </Button>
                   </div>
                   {nTem > 1 && Number(soLuong) > 0 && (

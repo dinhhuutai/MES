@@ -19,6 +19,7 @@ import Modal from '../../../components/common/Modal';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
 import TimeSelect from '../../../components/common/TimeSelect';
 import ThoInField from '../components/ThoInField';
+import DinhMucField, { chuanDinhMuc } from '../components/DinhMucField';
 import { listUserOptions } from '../../../services/userService';
 import { Field, Input, Textarea } from '../../../components/common/controls';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
@@ -99,7 +100,7 @@ export default function KeHoachTamPage() {
   const [saving, setSaving] = useState(false);
   const [chuyen, setChuyen] = useState([]);
   const [edit, setEdit] = useState(null); // dòng đang sửa
-  const [editForm, setEditForm] = useState({ chuyenId: '', soLuongRelease: '', ngayKeHoach: '', gioBd: '', gioKt: '', thoIn: '' });
+  const [editForm, setEditForm] = useState({ chuyenId: '', soLuongRelease: '', ngayKeHoach: '', gioBd: '', gioKt: '', thoIn: '', dinhMuc: '' });
   const [users, setUsers] = useState([]); // tài khoản cho ô "Thợ in" (mig 111)
   const [traVeOpen, setTraVeOpen] = useState(false); // modal "Trả về Kỹ thuật" (lý do bắt buộc)
   const [traVeReason, setTraVeReason] = useState('');
@@ -151,6 +152,7 @@ export default function KeHoachTamPage() {
       soLuongRelease: r.so_luong != null ? String(r.so_luong) : '',
       ngayKeHoach: toDateInput(r.ngay_ke_hoach),
       gioBd: hhmm(r.tg_bd_kh), gioKt: hhmm(r.tg_kt_kh), thoIn: r.tho_in_kh || '',
+      dinhMuc: r.dinh_muc_kh != null ? String(r.dinh_muc_kh) : '',
     });
   };
 
@@ -166,6 +168,7 @@ export default function KeHoachTamPage() {
         ngayKeHoach: editForm.ngayKeHoach || null,
         tgBdKh: mkTs(editForm.gioBd), tgKtKh: mkTs(editForm.gioKt),
         thoIn: editForm.thoIn || null,
+        dinhMuc: chuanDinhMuc(editForm.dinhMuc),
       });
       show(`Đã cập nhật kế hoạch tạm ${edit.ma_phan || ''}${res?.data?.tho_in_chua_luu
         ? ' · CHƯA lưu thợ in (hệ thống chưa cập nhật cơ sở dữ liệu)' : ''}`);
@@ -480,6 +483,7 @@ export default function KeHoachTamPage() {
               </div>
               <ThoInField value={editForm.thoIn} users={users}
                 onChange={(v) => setEditForm((f) => ({ ...f, thoIn: v }))} />
+              <DinhMucField value={editForm.dinhMuc} onChange={(v) => setEditForm((f) => ({ ...f, dinhMuc: v }))} />
             </div>
           </div>
         )}

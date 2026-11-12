@@ -12,6 +12,7 @@ import TimeSelect from '../../../components/common/TimeSelect';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
 import ThoInField from '../components/ThoInField';
+import DinhMucField, { chuanDinhMuc } from '../components/DinhMucField';
 import ReleaseListModal from '../components/ReleaseListModal';
 import useToast from '../../../hooks/useToast';
 import taiHetTrang, { LIMIT_TAI_LON } from '../../../utils/taiHetTrang';
@@ -50,6 +51,7 @@ export default function TaoDotSanXuatPage() {
   const [ngayKeHoach, setNgayKeHoach] = useState(tomorrowStr());
   const [gioBd, setGioBd] = useState('');
   const [gioKt, setGioKt] = useState('');
+  const [dinhMuc, setDinhMuc] = useState(''); // định mức kế hoạch SP / giờ (mig 129)
   const [thoIn, setThoIn] = useState('');      // thợ in kế hoạch — chuỗi tên ngăn dấu phẩy (mig 111)
   const [users, setUsers] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -127,7 +129,7 @@ export default function TaoDotSanXuatPage() {
       const res = await createDotSanXuat({
         items: basket.map((b) => ({ dotVaiId: b.dot_vai_id, soLuong: Number(b.soLuong) })),
         chuyenId, ngayKeHoach: ngayKeHoach || null,
-        tgBdKh: mkTs(gioBd), tgKtKh: mkTs(gioKt), thoIn: thoIn || null, giaiDoan: gd,
+        tgBdKh: mkTs(gioBd), tgKtKh: mkTs(gioKt), thoIn: thoIn || null, dinhMuc: chuanDinhMuc(dinhMuc), giaiDoan: gd,
       });
       const skip = res.data?.skipped_test;
       const chuaLuuTho = res.data?.tho_in_chua_luu ? ' · CHƯA lưu thợ in (hệ thống chưa cập nhật cơ sở dữ liệu)' : '';
@@ -139,7 +141,7 @@ export default function TaoDotSanXuatPage() {
           : skip ? `${gd === GD_EP ? '' : 'hàng Logo '}vào thẳng Chờ chạy (không qua Test Run)` : 'chờ Test Run';
         show(`${nhanTao} — ${sau}${chuaLuuTho}`, chuaLuuTho ? 'error' : 'success');
       }
-      setBasket([]); setChuyenId(''); setNgayKeHoach(tomorrowStr()); setGioBd(''); setGioKt(''); setThoIn('');
+      setBasket([]); setChuyenId(''); setNgayKeHoach(tomorrowStr()); setGioBd(''); setGioKt(''); setThoIn(''); setDinhMuc('');
       load();
     } catch (e) {
       show(e.message || 'Gom đợt vải thất bại', 'error');
@@ -286,6 +288,7 @@ export default function TaoDotSanXuatPage() {
               </Field>
             </div>
             <ThoInField value={thoIn} onChange={setThoIn} users={users} label="Thợ in (tùy chọn)" />
+            <DinhMucField value={dinhMuc} onChange={setDinhMuc} label="Định mức SP / giờ (tùy chọn)" />
             <Button className="w-full" onClick={submit} loading={busy}
               disabled={!canRelease || basket.length === 0 || !chuyenId || !!overRow}>
               Xác nhận &amp; đưa xuống sản xuất

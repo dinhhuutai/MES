@@ -19,6 +19,7 @@ import printTemLabel, { printTemLabelNhieu, moSanCuaSoIn, dongCuaSoIn } from '..
 import { fmtNum } from '../../../utils/format';
 import { TemMetaFields, PhanCongInline, META_MAC_DINH, metaGuiDi, lamMoiMeta, thieuNgayCaCt, CHUA_THO_IN, chuaPhanCongThoIn, useTaiNgamKhiLenhDoi, KiengDong, thieuKieng } from './RunPanel';
 import TraVeKeHoachModal from './TraVeKeHoachModal';
+import CongDoanBadge from '../../../components/common/CongDoanBadge';
 import {
   gomPhan, thuTuIn, conDuocIn, conDuocInNhom, tongNhom, daIn, daInTheoTran, slRelease, duHoanTatNhom, toiThieuHoanTatNhom,
 } from '../utils/gomPhanSanXuat';
@@ -55,6 +56,8 @@ const fmtDt = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '');
 
 const dangChay = (run) => run?.phieu?.trang_thai === 'DANG_CHAY';
 const tenLenh = (run) => run?.lenh?.phan_list || run?.lenh?.ma_lenh_san_xuat || '';
+// Badge CÔNG ĐOẠN cạnh tên phần (phần in 2 công đoạn — "In kiếng" / "Ép ủi") — chống bấm nhầm lệnh ép khi định in kiếng.
+const BadgeCd = ({ run }) => <CongDoanBadge luong={run?.lenh?.luong_sx} gd={run?.lenh?.giai_doan} className="ml-1 align-middle" />;
 const khoaPc = (pc) => [pc?.ca_truong_id || '', pc?.chuyen_truong || '', pc?.tho_in || '', pc?.to_in_id || ''].join('|');
 
 // Dòng in tem: lệnh thường ⇒ 1 dòng (không gửi đợt vải, như ô "Số lượng in" của RunPanel); lệnh gom set cũ ⇒
@@ -201,7 +204,7 @@ function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn 
                   <td className={`${TD} text-center text-ink-soft`}>{i + 1}</td>
                   <td className={TD}>{d.info.ma_don_hang || '—'}</td>
                   <td className={TD}>{d.info.ma_hang || '—'}</td>
-                  <td className={`${TD} font-medium`}>{d.info.ma_phan || tenLenh(d.run) || '—'}</td>
+                  <td className={`${TD} font-medium`}>{d.info.ma_phan || tenLenh(d.run) || '—'}<BadgeCd run={d.run} /></td>
                   <td className={TD}>{d.info.mau_vai || '—'}</td>
                   <td className={TD}>{d.info.kich_vai || '—'}</td>
                   <td className={TD}>{d.info.kich_phim || '—'}</td>
@@ -316,7 +319,7 @@ function HoanTatNhieuModal({ open, onClose, runs, busy, onXacNhan }) {
                       onChange={() => setChon((s) => { const x = new Set(s); if (x.has(g.key)) x.delete(g.key); else x.add(g.key); return x; })} />
                   </td>
                   <td className={TD}>
-                    <div className="font-medium">{tenLenh(r) || '—'}</div>
+                    <div className="font-medium">{tenLenh(r) || '—'}<BadgeCd run={r} /></div>
                     <div className="text-xs text-ink-soft">
                       {[g.runs.map((x) => x.lenh.ma_lenh_san_xuat).join(', '), r.lenh.ma_chuyen].filter(Boolean).join(' · ')}
                     </div>
@@ -386,7 +389,7 @@ function DoiChuyenNhieuModal({ open, onClose, runs, busy, onXacNhan }) {
               return (
                 <tr key={g.key}>
                   <td className={`${TD} !whitespace-normal`}>
-                    <div className="font-medium">{tenLenh(r) || '—'}</div>
+                    <div className="font-medium">{tenLenh(r) || '—'}<BadgeCd run={r} /></div>
                     <div className="text-xs text-ink-soft">{g.runs.map((x) => x.lenh.ma_lenh_san_xuat).join(', ')}</div>
                   </td>
                   <td className={TD}>{r.lenh.ma_chuyen || '—'}</td>
@@ -696,7 +699,7 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh, t
                           <td className="px-2.5 py-2 text-sm text-ink">
                             <button type="button" className="flex items-center gap-1 text-left font-medium" onClick={() => batMoRong(g.key)}
                               aria-expanded={mo} title={mo ? 'Thu gọn' : 'Xem từng lệnh'}>
-                              <span className="text-xs text-ink-soft">{mo ? '▾' : '▸'}</span>{tenLenh(r0) || '—'}
+                              <span className="text-xs text-ink-soft">{mo ? '▾' : '▸'}</span>{tenLenh(r0) || '—'}<BadgeCd run={r0} />
                             </button>
                             <div className="text-xs text-ink-soft">{r0.lenh.ma_chuyen || ''}</div>
                             {g.runs.some((x) => x.ngung_active) && <Badge tone="danger">Đang ngừng</Badge>}
@@ -724,7 +727,7 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh, t
                     return (
                       <tr key={r.lenh.id}>
                         <td className="px-2.5 py-2 text-sm text-ink">
-                          <div className="font-medium">{tenLenh(r) || '—'}</div>
+                          <div className="font-medium">{tenLenh(r) || '—'}<BadgeCd run={r} /></div>
                           <div className="text-xs text-ink-soft">
                             {[r.lenh.ma_lenh_san_xuat, r.phieu?.ma_phieu_san_xuat, r.lenh.ma_chuyen].filter(Boolean).join(' · ')}
                             {r.loi && <span className="text-danger"> · {r.loi}</span>}

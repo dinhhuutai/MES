@@ -26,6 +26,7 @@ import CanhBaoGiaCong from '../components/CanhBaoGiaCong';
 import { laChuyenGiaCong, tenChuyen } from '../utils/chuyenGiaCong';
 import TimeSelect from '../../../components/common/TimeSelect';
 import ThoInField from '../components/ThoInField';
+import DinhMucField, { chuanDinhMuc } from '../components/DinhMucField';
 import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import TraVeGnModal, { ungVienGn } from '../../../components/common/TraVeGnModal';
 import LoaiDotVaiBadge from '../components/LoaiDotVaiBadge';
@@ -259,9 +260,9 @@ export default function Release1Page() {
   const [cpage, setCpage] = useState(1);             // phân trang CLIENT (chọn-tất-cả vẫn spanning mọi trang)
 
   const [detail, setDetail] = useState(null);        // row lẻ đang xem
-  const [form, setForm] = useState({ chuyenId: '', soLuongRelease: '', ngayKeHoach: '', gioBd: '', gioKt: '', thoIn: '', btp: false });
+  const [form, setForm] = useState({ chuyenId: '', soLuongRelease: '', ngayKeHoach: '', gioBd: '', gioKt: '', thoIn: '', dinhMuc: '', btp: false });
   const [releaseOpen, setReleaseOpen] = useState(false); // modal release gộp
-  const [relForm, setRelForm] = useState({ chuyenId: '', ngayKeHoach: '', gioBd: '', gioKt: '', thoIn: '', btp: false });
+  const [relForm, setRelForm] = useState({ chuyenId: '', ngayKeHoach: '', gioBd: '', gioKt: '', thoIn: '', dinhMuc: '', btp: false });
   const [users, setUsers] = useState([]);            // tài khoản cho ô "Thợ in" (mig 111)
   const [saving, setSaving] = useState(false);
   const [traVeOpen, setTraVeOpen] = useState(false);     // modal "Trả về Kỹ thuật" (lý do bắt buộc)
@@ -453,7 +454,7 @@ export default function Release1Page() {
   const openDetail = (row) => {
     setDetail(row);
     // Mặc định release phần CÒN LẠI (SL vải về − đã release); release theo số lượng, giữ phần còn.
-    setForm({ chuyenId: chuyen[0]?.id || '', soLuongRelease: String(row.con_release ?? row.so_luong_vai_ve ?? ''), ngayKeHoach: dateOffsetStr(1), gioBd: '', gioKt: '', thoIn: '', btp: false });
+    setForm({ chuyenId: chuyen[0]?.id || '', soLuongRelease: String(row.con_release ?? row.so_luong_vai_ve ?? ''), ngayKeHoach: dateOffsetStr(1), gioBd: '', gioKt: '', thoIn: '', dinhMuc: '', btp: false });
   };
   // Backend chưa chạy mig 111 ⇒ release vẫn xong nhưng thợ in không được lưu — nói rõ thay vì im lặng.
   const canhBaoThoIn = (res) => (res?.data?.tho_in_chua_luu ? ' · CHƯA lưu thợ in (hệ thống chưa cập nhật cơ sở dữ liệu)' : '')
@@ -486,6 +487,7 @@ export default function Release1Page() {
         ngayKeHoach: form.ngayKeHoach || null,
         tgBdKh: mkTs(form.gioBd), tgKtKh: mkTs(form.gioKt),
         thoIn: form.thoIn || null,
+        dinhMuc: chuanDinhMuc(form.dinhMuc),
         btpKhacKh: !ep && !!form.btp,
       });
       const tam = res?.data?.ke_hoach_tam_count || 0;
@@ -527,7 +529,7 @@ export default function Release1Page() {
   };
 
   const openReleaseAll = () => {
-    setRelForm({ chuyenId: chuyen[0]?.id || '', ngayKeHoach: dateOffsetStr(1), gioBd: '', gioKt: '', thoIn: '', btp: false });
+    setRelForm({ chuyenId: chuyen[0]?.id || '', ngayKeHoach: dateOffsetStr(1), gioBd: '', gioKt: '', thoIn: '', dinhMuc: '', btp: false });
     setReleaseOpen(true);
   };
 
@@ -553,6 +555,7 @@ export default function Release1Page() {
         chuyenId: relForm.chuyenId, soLuongRelease: null, ngayKeHoach: relForm.ngayKeHoach || null,
         tgBdKh: mkTsR(relForm.gioBd), tgKtKh: mkTsR(relForm.gioKt),
         thoIn: relForm.thoIn || null,
+        dinhMuc: chuanDinhMuc(relForm.dinhMuc),
         btpKhacKh: !!relForm.btp,
       });
       const tam = res?.data?.ke_hoach_tam_count || 0;
@@ -831,6 +834,7 @@ export default function Release1Page() {
         </div>
         <ThoInField value={relForm.thoIn} users={users}
           onChange={(v) => setRelForm((f) => ({ ...f, thoIn: v }))} />
+        <DinhMucField value={relForm.dinhMuc} onChange={(v) => setRelForm((f) => ({ ...f, dinhMuc: v }))} />
         <BtpKhacKhField checked={relForm.btp} onChange={(v) => setRelForm((f) => ({ ...f, btp: v }))}
           dauDangLap={looseList.length === 1 ? chuDauDangLap(looseList[0]._dots || [looseList[0]]) : ''} />
       </Modal>
@@ -948,6 +952,7 @@ export default function Release1Page() {
               </div>
               <ThoInField value={form.thoIn} users={users}
                 onChange={(v) => setForm((f) => ({ ...f, thoIn: v }))} />
+              <DinhMucField value={form.dinhMuc} onChange={(v) => setForm((f) => ({ ...f, dinhMuc: v }))} />
               {!laEp(detail) && (
                 <BtpKhacKhField checked={form.btp} onChange={(v) => setForm((f) => ({ ...f, btp: v }))}
                   dauDangLap={chuDauDangLap(detail._dots || [detail])} />
