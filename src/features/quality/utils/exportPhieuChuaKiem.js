@@ -47,6 +47,16 @@ const soPhut = (r) => {
   const a = gioVnExcel(r.tu_gio); const b = gioVnExcel(r.den_gio);
   return a && b && b > a ? Math.round((b - a) / 60000) : null;
 };
+const fmtVn = (n) => Number(n || 0).toLocaleString('vi-VN');
+// Tổng tồn: số tem + Σ còn phải kiểm (`con_kcs`), tách tem đã khô (DA_KHO) / còn đang phơi.
+export const tongTon = (rows = []) => rows.reduce((t, r) => {
+  const con = Number(r.con_kcs) || 0;
+  const kho = r.trang_thai === 'DA_KHO';
+  t.soTem += 1; t.sl += con; t.slIn += Number(r.so_luong) || 0; t.daKiem += daKiem(r);
+  if (kho) { t.khoTem += 1; t.khoSl += con; } else { t.phoiTem += 1; t.phoiSl += con; }
+  return t;
+}, { soTem: 0, sl: 0, slIn: 0, daKiem: 0, khoTem: 0, khoSl: 0, phoiTem: 0, phoiSl: 0 });
+
 // 2 = đã khô / khô trước giờ dự kiến (tháo xuống kiểm được) · 1 = chưa.
 export const canThao = (r, gioDuKien) => {
   if (r.trang_thai === 'DA_KHO' || r.phoi_trang_thai === 'XONG') return 2;
@@ -132,6 +142,15 @@ export default async function exportPhieuChuaKiem(rows, { tuNgay, denNgay, tuGio
   ws.getCell(4, 1).value = `Giờ dự kiến   ${dmyHm(gdk)}`;
   [3, 4].forEach((r) => { ws.getCell(r, 1).alignment = giua; ws.getCell(r, 1).font = { name: FONT, size: 11 }; });
 
+  // THÔNG TIN TỔNG (14/11/2026): số tem chưa kiểm + tổng SL chưa kiểm (Σ `con_kcs`), tách đã khô / đang phơi — ghi ở
+  //   ô A1 phía phải (dòng tên công ty) để mở file là thấy, và lặp lại ở dòng TỔNG CỘNG cuối bảng.
+  const tg = tongTon(ds);
+  ws.mergeCells(1, 12, 1, N);
+  ws.getCell(1, 12).value = `Tổng: ${fmtVn(tg.soTem)} tem chưa kiểm · SL chưa kiểm ${fmtVn(tg.sl)}`
+    + (tg.phoiTem ? `  (đã khô ${fmtVn(tg.khoTem)} tem / ${fmtVn(tg.khoSl)} · đang phơi ${fmtVn(tg.phoiTem)} tem / ${fmtVn(tg.phoiSl)})` : '');
+  ws.getCell(1, 12).font = { name: FONT, bold: true, size: 11, color: { argb: 'FFC00000' } };
+  ws.getCell(1, 12).alignment = { horizontal: 'right', vertical: 'middle' };
+
   // Dòng 5–6: nhóm cột + tên cột. Cột không nhóm gộp dọc 5–6.
   let i = 0;
   while (i < N) {
@@ -182,6 +201,26 @@ export default async function exportPhieuChuaKiem(rows, { tuNgay, denNgay, tuGio
     });
   });
   if (!ds.length) ws.getCell(DONG_DAU, 1).value = 'Không có tem nào chưa kiểm theo bộ lọc đang chọn';
+  else {
+    // Dòng TỔNG CỘNG — cách bảng 1 dòng trống để nút lọc (dòng 7) không gộp dòng tổng vào vùng lọc.
+    const r = ws.rowCount + 2;
+    const cot = (khoa) => COT.findIndex((c) => c.t === khoa) + 1;
+    const cIn = cot('SL IN');
+    ws.mergeCells(r, 1, r, cIn - 1);
+    ws.getCell(r, 1).value = `TỔNG CỘNG: ${fmtVn(tg.soTem)} tem chưa kiểm`;
+    ws.getCell(r, cIn).value = tg.slIn;
+    ws.getCell(r, cot('SLDKiem')).value = tg.daKiem || null;
+    ws.getCell(r, cot('SlCLai')).value = tg.sl;
+    for (let c = 1; c <= N; c += 1) {
+      const cell = ws.getCell(r, c);
+      cell.font = { name: FONT, bold: true, size: 10 };
+      cell.border = border;
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF2CC' } };
+      if (c >= cIn) { cell.numFmt = FMT.so; cell.alignment = { horizontal: 'right', vertical: 'middle' }; }
+    }
+    ws.getCell(r, 1).alignment = { horizontal: 'right', vertical: 'middle' };
+    ws.getRow(r).height = 20;
+  }
 
   const buf = await wb.xlsx.writeBuffer();
   const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });

@@ -243,7 +243,6 @@ export const thieuKieng = (kieng, m, nhan = '') => {
   return thieu.length ? `${nhan ? `${nhan}: ` : ''}Hàng in kiếng chưa nhập ${thieu.join(', ')} — nhập rồi mới in tem được` : '';
 };
 const chiSo = (v) => String(v ?? '').replace(/\D/g, '');
-const dvtKieng = (kieng, id) => ((kieng?.ds || []).find((x) => x.id === id)?.dvt) || 'tấm';
 // `vienDo` = viền đỏ khi thiếu (SearchableSelect không nhận className ⇒ bọc 1 lớp viền ngoài).
 function ChonLoaiKieng({ kieng, value, onChange, vienDo = false }) {
   const ds = kieng?.ds || [];
@@ -318,7 +317,7 @@ export function KiengFields({ kieng, meta, setMeta, soTem = 1 }) {
         </label>
         <label className="block">
           <span className="mb-1 block text-xs font-medium text-ink-soft">
-            SL kiếng{soTem > 1 ? ' / tem' : ''} ({k?.dvt || 'tấm'})<span className="text-danger"> *</span>
+            SL{soTem > 1 ? ' / tem' : ''}<span className="text-danger"> *</span>
           </span>
           <Input inputMode="numeric" value={meta.slKieng || ''}
             onChange={(e) => dat('slKieng', chiSo(e.target.value))}
@@ -344,7 +343,7 @@ export function KiengDong({ kieng, v, onDoi, batBuoc = false }) {
     <div className="flex items-start gap-1.5">
       <div className="w-56"><ChonLoaiKieng kieng={kieng} value={v.loaiKiengId} onChange={(x) => onDoi('loaiKiengId', x)}
         vienDo={batBuoc && !v.loaiKiengId} /></div>
-      <input inputMode="numeric" value={v.slKieng || ''} placeholder={`SL ${dvtKieng(kieng, v.loaiKiengId)}`} aria-label="Số lượng kiếng"
+      <input inputMode="numeric" value={v.slKieng || ''} placeholder="SL" aria-label="Số lượng kiếng"
         title="Số lượng kiếng của tem này" onChange={(e) => onDoi('slKieng', chiSo(e.target.value))}
         className={`${numCls} !w-20 ${vien(slKiengSai(v.slKieng))}`} />
       <input inputMode="numeric" value={v.heSoKieng || ''} placeholder="Hệ số" aria-label="Hệ số kiếng" title="Hệ số kiếng"
@@ -1335,6 +1334,10 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
     <SidePanel
       open={!!lenhId}
       onClose={onClose}
+      // Rộng 3/4 màn hình, chia 2 cột tự cuộn riêng (≥ lg): cột 1 = đầu → Vải hủy/thiếu · cột 2 = Tem đã in → hết.
+      //   Màn hẹp hơn lg ⇒ 1 cột, cả thân cuộn như cũ.
+      width="max-w-lg lg:max-w-[75vw]"
+      bodyClassName="overflow-y-auto px-3 py-3 sm:px-6 sm:py-5 lg:overflow-hidden"
       title={data?.lenh ? `Sản xuất — ${data.lenh.ma_lenh_san_xuat}${data.cong_doan ? ` · ${data.cong_doan}` : ''}` : 'Sản xuất'}
       subtitle={data?.lenh ? `Chuyền ${data.lenh.ma_chuyen || '—'}`
         + (data.lenh.chuyen_kh_id && data.lenh.chuyen_kh_id !== data.lenh.chuyen_id ? ` (kế hoạch ${data.lenh.ma_chuyen_kh || '—'})` : '')
@@ -1369,7 +1372,8 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
       {loading || !data ? (
         <div className="py-10 text-center text-ink-soft">Đang tải...</div>
       ) : (
-        <div className="space-y-5">
+        <div className="lg:grid lg:h-full lg:grid-cols-2 lg:grid-rows-[minmax(0,1fr)] lg:gap-6">
+        <div className="space-y-5 lg:min-h-0 lg:overflow-y-auto lg:pr-2">
           <KhungCongDoan data={data} />
           <section>
             <div className="mb-1 flex items-center justify-between text-sm">
@@ -1618,8 +1622,10 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
               </div>
             )}
           </section>
+        </div>
 
-          <section className="border-t border-line pt-4">
+        <div className="mt-5 space-y-5 lg:mt-0 lg:min-h-0 lg:overflow-y-auto lg:pr-2">
+          <section className="border-t border-line pt-4 lg:border-t-0 lg:pt-0">
             <div className="mb-2 flex items-center justify-between">
               <h3 className="text-xs font-bold uppercase tracking-wide text-ink-soft">Tem đã in ({data.tems.length})</h3>
               {data.tems.length > 0 && (
@@ -1787,6 +1793,7 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
               </div>
             </section>
           )}
+        </div>
         </div>
       )}
       {/* GOM SET: nhập SL in từng phần in → in nhiều tem liên tiếp */}

@@ -30,7 +30,7 @@ import usePermissions from '../../../hooks/usePermissions';
 import useHuyLichSu from '../../../hooks/useHuyLichSu';
 import useOTimKiem from '../../../hooks/useOTimKiem';
 import { listKcsCandidates, recordKcs, gopTem, kcsHistory, kcsDone, getTemHanhTrinh, huyKcsLichSu, luuNguoiKiemKcs, kcsTonChuaKiem } from '../../../services/qualityService';
-import exportPhieuChuaKiem from '../utils/exportPhieuChuaKiem';
+import exportPhieuChuaKiem, { tongTon } from '../utils/exportPhieuChuaKiem';
 import XuatTonKcsModal from '../components/XuatTonKcsModal';
 import { redryTem, getTemLabel } from '../../../services/productionService';
 import { printKcsGiaoTemNhieu, moSanCuaSoIn, dongCuaSoIn } from '../../production/utils/printTemLabel';
@@ -250,7 +250,7 @@ export default function KcsPage() {
       });
       const ds = onlyReturned ? locTraVe(res.data || [], traVeRange) : (res.data || []);
       const n = await exportPhieuChuaKiem(ds, { tuNgay: ctTu, denNgay: ctDen, tuGio: gioTu, denGio: gioDen, gioDuKien });
-      show(`Đã xuất ${fmtNum(n)} tem chưa kiểm`);
+      show(`Đã xuất ${fmtNum(n)} tem chưa kiểm · SL chưa kiểm ${fmtNum(tongTon(ds).sl)}`);
       setXuatOpen(false);
     } catch (e) {
       show(e.message || 'Không xuất được Excel', 'error');
