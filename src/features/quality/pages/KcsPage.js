@@ -220,7 +220,8 @@ export default function KcsPage() {
         // Lượt kiểm MỘT PHẦN (mig 122): nhãn là TEM 17 của lượt — mã 17, SL = phần đạt của lượt (lô đi OQC / giao).
         //   `getTemLabel(r.tem_id)` trả nhãn tem gốc nên phải đè mã, như trang Sửa.
         const tem17 = r.ma_tem_17 ? { ma_tem: r.ma_tem_17, so_luong: r.so_luong } : { so_luong: r.so_luong_kiem };
-        return { ...res.data, ...tem17, nguoi_kiem_kcs: r.nguoiKiem, tg_kiem_kcs: r.tg || null };
+        return { ...res.data, ...tem17, nguoi_kiem_kcs: r.nguoiKiem, tg_kiem_kcs: r.tg || null,
+          sl_dat_kcs: r.so_luong != null ? Number(r.so_luong) : null }; // trường "SL ĐẠT của lượt KCS"
       }));
       await printKcsGiaoTemNhieu(labels, w);
       show(`Đã mở ${labels.length} tem để in${guiErp17.length
