@@ -61,10 +61,9 @@ const doiGoc = (r, g) => !!g && (r.luong !== g.luong || r.bo_qua !== g.bo_qua ||
 // READY của tính chất NHIỀU công đoạn (14/11/2026, mig 131 — BE `utils/readyCongDoan.js`): mặc định mỗi công đoạn Ready
 //   riêng (1 dòng / công đoạn từ READY). 2 công tắc loại trừ nhau: "Ready 1 lần" (MOT_LAN) · "Công đoạn sau không Ready"
 //   (SAU_THEO_DAU — công đoạn sau theo READY của công đoạn đầu).
-const CHE_DO_READY = [
-  { v: 'MOT_LAN', ten: 'Ready 1 lần', moTa: 'Nhiều công đoạn nhưng chỉ Ready 1 lần (1 dòng ở READY)' },
-  { v: 'SAU_THEO_DAU', ten: 'Công đoạn sau không Ready', moTa: 'Công đoạn sau theo READY của công đoạn đầu' },
-];
+// ⚠ 17/11/2026 (người dùng chốt READY "dùng chung như bình thường"): bỏ bộ checklist riêng của Ép/Logo — mỗi đợt vải chỉ
+//   1 công đoạn, READY 1 dòng / đợt ⇒ 2 công tắc này không còn tác dụng, ẩn khỏi bảng + Excel (cột `ready_che_do` giữ nguyên).
+const CHE_DO_READY = [];
 const gocTu = (items) => Object.fromEntries(items.map((r) => [r.ma_chuan, r]));
 
 // Tên luồng sản xuất tạm của tổ hợp chưa có luồng riêng (`luong[].sx` — `phan_in.luong_sx`).
@@ -74,6 +73,8 @@ const TEN_SX = { THUONG: 'In thường', KIENG_KHONG_EP: 'In kiếng', LOGO: '1 
 function hienTai(r, dsLuong) {
   if (r.bo_qua) return { ten: 'Không vào MES', tone: 'default' };
   const l = dsLuong.find((x) => x.ma === r.luong);
+  // 17/11/2026: không có công đoạn In rồi Ép/Logo (BE `utils/tinhChatIn.js khongInRoiEp`) — lưu sẽ bị chặn.
+  if (l && l.khong_dung) return { ten: 'Không có In rồi Ép/Logo — chọn lại: bật In HOẶC Logo/Ép', tone: 'danger' };
   if (l && l.tam) return { ten: `Vào MES · ${l.ten} chưa có luồng riêng — tạm chạy ${TEN_SX[l.sx] || 'In thường'}`, tone: 'warning' };
   if (l && l.da_lam) return { ten: 'Vào MES', tone: 'success' };
   return { ten: 'Vào MES · chưa bật công đoạn — tạm đi in thường', tone: 'warning' };

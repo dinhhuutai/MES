@@ -26,11 +26,9 @@ export function ghepDong(dsIn, dsEp) {
 }
 
 // `fetcher(params)` = listReadyCandidates / listReadyQcCandidates.
+// ⚠ 17/11/2026 (người dùng chốt "dùng chung như bình thường"): BỎ bộ checklist riêng của Ép/Logo — chỉ còn 1 danh sách (bộ
+//   gốc). Dòng đợt Ép của kiếng ủi vẫn mang `giai_doan` 'EP_UI' (BE gắn) để vẽ badge "Ép"; gửi kèm thao tác thì BE bỏ qua.
 export default async function taiReadyCongDoan(fetcher, search) {
-  const [a, b] = await Promise.all([
-    taiHetTrang((p) => fetcher({ search, ...p }), { limit: LIMIT_TAI_LON }),
-    taiHetTrang((p) => fetcher({ search, giaiDoan: GD_EP, ...p }), { limit: LIMIT_TAI_LON })
-      .catch(() => ({ items: [], total: 0, thieu: false })),
-  ]);
-  return { items: ghepDong(a.items || [], b.items || []), total: (a.total || 0) + (b.total || 0), thieu: !!(a.thieu || b.thieu) };
+  const a = await taiHetTrang((p) => fetcher({ search, ...p }), { limit: LIMIT_TAI_LON });
+  return { items: a.items || [], total: a.total || 0, thieu: !!a.thieu };
 }
