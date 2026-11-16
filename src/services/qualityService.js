@@ -11,6 +11,11 @@ export const kcsDone = (date) => client.get('/quality/kcs/done', { params: { dat
 
 export const listSuaCandidates = (params) => client.get('/quality/sua/candidates', { params });
 export const recordSua = (temId, body) => client.post(`/quality/sua/${temId}`, body);
+// NHẬN SỬA (mig 132): chờ nhận (Hệ thống › Chờ nhận sửa + hộp Nhận sửa) · nhận · lịch sử · hủy lượt nhận.
+export const listChoNhanSua = (params) => client.get('/quality/sua/cho-nhan', { params });
+export const nhanSua = (items, ghiChu) => client.post('/quality/sua/nhan', { items, ghiChu });
+export const lichSuNhanSua = (params) => client.get('/quality/sua/nhan-lich-su', { params });
+export const huyNhanSua = (id, lyDo) => client.post(`/quality/sua/nhan/${id}/huy`, { lyDo });
 export const suaHistory = (date, q) => client.get('/quality/sua/history', { params: { date, q } });
 export const suaDone = (date) => client.get('/quality/sua/done', { params: { date } });
 // Ghi NGƯỜI SỬA cho các lượt sửa được chọn, nhập ở modal In tem (mig 080).

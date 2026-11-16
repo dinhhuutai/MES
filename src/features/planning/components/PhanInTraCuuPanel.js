@@ -15,6 +15,7 @@ import usePermissions from '../../../hooks/usePermissions';
 import { KeHoachModal } from '../../system/components/QuanTriToanCanh';
 import { fmtNum, fmtDate, fmtDateTime } from '../../../utils/format';
 import { hienDsMa } from '../../../utils/maPhanIn';
+import { nhanChayChung } from '../utils/gopDongRelease';
 
 // Hàm MỨC MODULE (ổn định) cho `KeHoachModal` — nằm trong deps effect của modal.
 const xemKeHoachDs = (lenhId) => getReplanDetail(lenhId);
@@ -88,7 +89,11 @@ export default function PhanInTraCuuPanel({ open, onClose, row, show, onDaSuaKeH
   // SỬA KẾ HOẠCH LỆNH (28/10/2026, người dùng: "bấm vào 1 phần in hiện sidebar thì cho sửa thông tin kế hoạch luôn, có gửi
   //   ERP — hủy cái cũ rồi gửi cái mới") — dùng lại modal của Quản trị phần in; BE gọi CHÍNH Lập lại kế hoạch.
   const { can } = usePermissions();
-  const coSuaKh = !!show && can('RELEASE1', 'RELEASE2') && !!row?.lenh_id && row?.lenh_trang_thai !== 'HUY';
+  // Dòng KẾ HOẠCH GỐC của lệnh đã bị Sản xuất gộp (`ma_lenh_chay`) — lệnh đó đã HỦY, kế hoạch nằm trong lệnh đang chạy
+  //   ⇒ không sửa ở dòng này (sửa ở dòng của lệnh đang chạy, SL trong ô là TỔNG cả phần chạy chung).
+  const laKhGop = !!row?.ma_lenh_chay;
+  const coSuaKh = !!show && can('RELEASE1', 'RELEASE2') && !!row?.lenh_id && row?.lenh_trang_thai !== 'HUY' && !laKhGop;
+  const chayChung = row ? nhanChayChung(row) : '';
   const [keHoachMuc, setKeHoachMuc] = useState(null);
   const [dsChuyen, setDsChuyen] = useState([]);
   const [users, setUsers] = useState([]);
@@ -135,7 +140,7 @@ export default function PhanInTraCuuPanel({ open, onClose, row, show, onDaSuaKeH
           </div>
 
           <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
-            <Dong label="Đợt sản xuất">{row.ma_lenh_san_xuat}</Dong>
+            <Dong label="Đợt sản xuất">{row.ma_lenh_chay ? `${row.ma_lenh_san_xuat} → chạy trong ${row.ma_lenh_chay}` : row.ma_lenh_san_xuat}</Dong>
             <Dong label="Chuyền">{row.ten_chuyen}</Dong>
             <Dong label="Ngày kế hoạch">{fmtDate(row.ngay_ke_hoach)}</Dong>
             <Dong label="Code phần">{row.ma_phan}</Dong>
@@ -151,6 +156,20 @@ export default function PhanInTraCuuPanel({ open, onClose, row, show, onDaSuaKeH
               ? `${row.tg_bd_kh ? new Date(row.tg_bd_kh).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '—'} → ${row.tg_kt_kh ? new Date(row.tg_kt_kh).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '—'}`
               : '—'}</Dong>
           </div>
+          {row.phan_in_id && (
+            <a href={`/don-hang/lich-su-phan-in?id=${row.phan_in_id}`} target="_blank" rel="noreferrer"
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline">
+              <Icon name="history" size={14} /> Xem toàn bộ lịch sử thao tác của phần in
+            </a>
+          )}
+          {chayChung && (
+            <p className="rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
+              {chayChung}.
+              {laKhGop
+                ? ` Đây là kế hoạch gốc của ${row.ma_lenh_san_xuat} — muốn sửa thì mở dòng của lệnh ${row.ma_lenh_chay}.`
+                : ' Sửa kế hoạch ở đây là sửa CẢ lệnh (SL release trong ô = tổng các phần chạy chung).'}
+            </p>
+          )}
           {coSuaKh && (
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-control border border-line px-3 py-2">
               <span className="text-xs text-ink-soft">
@@ -191,7 +210,7 @@ export default function PhanInTraCuuPanel({ open, onClose, row, show, onDaSuaKeH
                       <Badge tone="info">Đợt SX {ji + 1}/{journeys.length}</Badge>
                       <span className="text-sm font-medium text-ink">{j.ma_lenh_san_xuat}</span>
                       {/* Đánh dấu đúng đợt SX của DÒNG đang bấm — phần in có thể có nhiều đợt SX. */}
-                      {j.lenh_id === row.lenh_id && <Badge tone="success">dòng đang xem</Badge>}
+                      {j.lenh_id === (row.lenh_chay_id || row.lenh_id) && <Badge tone="success">dòng đang xem</Badge>}
                       {j.gia_cong && <Badge tone="warning">Gia công</Badge>}
                       {(j.dot_vai || []).map((d) => (
                         <span key={d.ma_dot_vai} className="text-xs text-ink-soft">

@@ -18,7 +18,7 @@ import PhanInTraCuuPanel from './PhanInTraCuuPanel';
 import FieldFilters, { filterRows, FilterToggle } from '../../../components/common/FieldFilters';
 import { khopNhieu } from '../../../utils/timKiem';
 import { LOAI_TABS, hopChipChuyen, nhanChip, demChip } from '../../../utils/khuChuyen';
-import { gopTheoLenh, demLenh, demGiaiDoan } from '../utils/gopDongRelease';
+import { gopTheoLenh, demLenh, demGiaiDoan, nhanChayChung } from '../utils/gopDongRelease';
 import { CA_LOC } from '../../../utils/caLoc';
 import NgayInput from '../../../components/common/NgayInput';
 
@@ -39,7 +39,7 @@ const FILTER_FIELDS = [
 // Các trường mà ô tìm 1-ô quét qua (bất kỳ trường nào khớp là được) — tìm KHÔNG DẤU.
 const oTimCols = (r) => [
   r._chuyen_tim, r.ten_khach_hang, r.ma_don_hang, r.ma_hang, r.ten_ma_hang,
-  r.ma_phan, r.mau_vai, r.kich_vai, r.kich_phim, r.ma_lenh_san_xuat,
+  r.ma_phan, r.mau_vai, r.kich_vai, r.kich_phim, r.ma_lenh_san_xuat, r.ma_lenh_chay,
 ];
 
 const tomorrowStr = () => {
@@ -56,10 +56,12 @@ const fmtDMY = (s) => { if (!s) return ''; const [y, m, d] = s.split('-'); retur
 // ⚠ `white-space` được KẾ THỪA, nên `whitespace-normal` ở div CON đè được `whitespace-nowrap` của
 //   `<td>` cha ⇒ các cột số/giờ vẫn giữ 1 dòng như cũ, không phải sửa gì.
 const coChuTheoDoDai = (s) => (s.length > 30 ? 'text-[11px] leading-tight' : s.length > 20 ? 'text-xs leading-tight' : '');
-function OChu({ v, rong = '12rem', className = '' }) {
+// `toiThieu` (17/11/2026, người dùng: "cột Tên hàng rộng ra cho đỡ xuống dòng, PO rộng chút") = bề rộng TỐI THIỂU của ô —
+//   bảng nhiều cột nên trình duyệt ép cột chữ về bề rộng nhỏ nhất (mỗi từ 1 dòng) nếu không đặt.
+function OChu({ v, rong = '12rem', toiThieu, className = '' }) {
   const s = v == null || v === '' ? '—' : String(v);
   return (
-    <div className={`whitespace-normal break-words ${coChuTheoDoDai(s)} ${className}`} style={{ maxWidth: rong }}>{s}</div>
+    <div className={`whitespace-normal break-words ${coChuTheoDoDai(s)} ${className}`} style={{ maxWidth: rong, minWidth: toiThieu }}>{s}</div>
   );
 }
 
@@ -278,15 +280,22 @@ export default function ReleaseListModal({ open, onClose }) {
               <span className="rounded-full bg-primary-wash px-1.5 py-0.5 text-[10px] font-medium text-primary">gom set {r._span} phần in</span>
             </div>
           )}
+          {nhanChayChung(r) && (
+            <div className="mt-0.5" title={nhanChayChung(r)}>
+              <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">
+                {r.ma_lenh_chay ? `chạy chung ${r.ma_lenh_chay}` : `chạy chung ${(r.chay_chung || []).length} KH`}
+              </span>
+            </div>
+          )}
         </>
       );
-      case 'khach': return <OChu v={v} rong="8rem" />;
-      case 'po': return <OChu v={v} rong="10rem" />;
+      case 'khach': return <OChu v={v} rong="4.5rem" />;
+      case 'po': return <OChu v={v} rong="10rem" toiThieu="7.5rem" />;
       // Code phần không có trên mẫu giấy nhưng là định danh để tra — để dòng nhỏ dưới Tên hàng (không thêm cột).
       case 'ten_hang': return (
         <>
-          <OChu v={v} rong="14rem" />
-          {r.ma_phan && <div className="mt-0.5 whitespace-normal break-words text-[11px] text-ink-soft" style={{ maxWidth: '14rem' }}>{r.ma_phan}</div>}
+          <OChu v={v} rong="18rem" toiThieu="12rem" />
+          {r.ma_phan && <div className="mt-0.5 whitespace-normal break-words text-[11px] text-ink-soft" style={{ maxWidth: '18rem' }}>{r.ma_phan}</div>}
         </>
       );
       case 'mau_vai': return <OChu v={v} rong="10rem" />;
@@ -431,7 +440,7 @@ export default function ReleaseListModal({ open, onClose }) {
                   dong={bangGiaiDoan.dong} tong={bangGiaiDoan.tong} chon={locDangO} onChon={setLocDangO} />
               ) : (
                 <th key={h.cot ? h.cot.key : `nhom-${h.tuCot}`} rowSpan={h.rowSpan} colSpan={h.colSpan}
-                  className={`${th} text-center ${h.cot && h.cot.num ? 'text-right' : ''}`}>
+                  className={`${th} text-center ${h.cot && h.cot.num ? 'text-right' : ''} ${h.cot && h.cot.key === 'khach' ? '!whitespace-normal w-16' : ''}`}>
                   {h.nhan}
                 </th>
               )))}

@@ -27,6 +27,7 @@ import DateRangePicker from '../../../components/common/DateRangePicker';
 import { listGiaCong, giaCongNhanTheoPhan, giaCongTraLai } from '../../../services/planningService';
 import { printGiaCongVeTem, moSanCuaSoIn, dongCuaSoIn } from '../../production/utils/printTemLabel';
 import { fmtNum, fmtDate } from '../../../utils/format';
+import CodePhanCongDoan from '../../../components/common/CodePhanCongDoan';
 
 // ⚠⚠ LỌC + PHÂN TRANG Ở SERVER (01/10/2026 — cùng cách màn Lập kế hoạch lại): prod ~1.300 lệnh gia công,
 //   bản tải-hết ~1,9 MB / 2–4 s. Mỗi lần lấy 1 trang `PAGE` LỆNH (mỗi lệnh tách 1 dòng / code phần như cũ);
@@ -397,7 +398,7 @@ export default function GiaCongPage() {
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
     // Hiện Code phần vì đây là trường được lọc — lọc theo giá trị không nhìn thấy thì không đối chiếu được.
-    { key: 'ma_phan', header: 'Code phần', render: (r) => r.ma_phan || '—' },
+    { key: 'ma_phan', header: 'Code phần', render: (r) => <CodePhanCongDoan ma={r.ma_phan} luong={r.luong_sx} gd={r.giai_doan} hienLogo /> },
     { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
     { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },

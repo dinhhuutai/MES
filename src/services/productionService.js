@@ -17,6 +17,8 @@ export const printTemBatch = (phieuId, items, meta) =>
 export const reprintTem = (temId, lyDo) => client.post(`/production/tem/${temId}/in-lai`, { lyDo });
 // Sửa SL in / giờ SX / mã ngày ca của tem (Danh sách tem in, 25/10/2026) — BE gửi lại ERP cùng IDMES.
 export const suaTem = (temId, body) => client.put(`/production/tem/${temId}/sua`, body);
+// Đợt vải BỔ SUNG của lệnh chứa tem + SL bổ sung do Công ty / Khách (hộp Sửa tem, 16/11/2026).
+export const getTemBoSung = (temId) => client.get(`/production/tem/${temId}/bo-sung`);
 // Gộp các lệnh cùng code phần + cùng chuyền thành 1 lệnh (25/10/2026) — trả { lenh_id, ma_lenh, gop[] }.
 export const gopLenh = (lenhIds, lyDo = '') => client.post('/production/gop-lenh', { lenhIds, lyDo });
 // Tách lệnh gom đợt khác nhà gia công — mỗi NGC 1 lệnh (27/10/2026). Trả { ma_lenh, nha_gia_cong, so_luong_release, tach[] }.

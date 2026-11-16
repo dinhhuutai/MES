@@ -28,6 +28,21 @@ export function gopTheoLenh(items) {
   });
 }
 
+// KẾ HOẠCH GỐC KHI SẢN XUẤT GỘP LỆNH (BE `planning/keHoachGoc.js`): Sản xuất chạy chung nhiều lệnh cùng code phần + chuyền
+//   thành 1 lệnh, nhưng danh sách vẫn hiện từng phần kế hoạch ở đúng ngày của nó. Dòng của lệnh đã gộp vào lệnh khác mang
+//   `ma_lenh_chay` / `lenh_chay_id` (lệnh đang chạy — tiến độ, tem đọc theo lệnh này); dòng có phần chạy chung mang
+//   `chay_chung` [{ ma_lenh, sl, ngay_ke_hoach }] = các phần kế hoạch khác đang nằm trong cùng lệnh chạy.
+const ngayNgan = (s) => {
+  if (!s) return '';
+  const x = new Date(s);
+  return Number.isNaN(+x) ? '' : `${String(x.getDate()).padStart(2, '0')}/${String(x.getMonth() + 1).padStart(2, '0')}`;
+};
+export const nhanChayChung = (r) => {
+  const ds = ((r && r.chay_chung) || []).map((x) => `${x.ma_lenh} (${Number(x.sl || 0).toLocaleString('vi-VN')}${x.ngay_ke_hoach ? ` · KH ${ngayNgan(x.ngay_ke_hoach)}` : ''})`);
+  if (r && r.ma_lenh_chay) return `Sản xuất chạy chung trong lệnh ${r.ma_lenh_chay}${ds.length ? ` cùng ${ds.join(', ')}` : ''}`;
+  return ds.length ? `Sản xuất chạy chung với ${ds.join(', ')}` : '';
+};
+
 // Số ĐỢT SX trong tập đang hiển thị.
 export const demLenh = (items) => new Set((items || []).map((r) => r.lenh_id)).size;
 

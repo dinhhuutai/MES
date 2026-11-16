@@ -47,10 +47,12 @@ const NotificationsPage = taiLuoi(() => import('./features/notifications/pages/N
 const ToInPage = taiLuoi(() => import('./features/system/pages/ToInPage'));
 const KhachHangPage = taiLuoi(() => import('./features/system/pages/KhachHangPage'));
 const TichGiaoPage = taiLuoi(() => import('./features/system/pages/TichGiaoPage'));
+const ChoNhanSuaPage = taiLuoi(() => import('./features/system/pages/ChoNhanSuaPage'));
 const ManualEntryPage = taiLuoi(() => import('./features/system/pages/ManualEntryPage'));
 const VaiVeUpdatePage = taiLuoi(() => import('./features/system/pages/VaiVeUpdatePage'));
 const PhanInListPage = taiLuoi(() => import('./features/orders/pages/PhanInListPage'));
 const SuaThongTinPage = taiLuoi(() => import('./features/orders/pages/SuaThongTinPage'));
+const LichSuPhanInPage = taiLuoi(() => import('./features/orders/pages/LichSuPhanInPage'));
 const ReadyPage = taiLuoi(() => import('./features/technical-ready/pages/ReadyPage'));
 const HoSoKyThuatPage = taiLuoi(() => import('./features/technical-ready/pages/HoSoKyThuatPage'));
 const GomSetPage = taiLuoi(() => import('./features/technical-ready/pages/GomSetPage'));
@@ -94,6 +96,7 @@ const ReportByDeptPage = taiLuoi(() => import('./features/reports/pages/ReportBy
 const PAGES = {
   '/don-hang/phan-in': <PhanInListPage />,
   '/don-hang/cho-sua-thong-tin': <SuaThongTinPage />,
+  '/don-hang/lich-su-phan-in': <LichSuPhanInPage />,
   '/ky-thuat/ready': <ReadyPage />,
   '/ky-thuat/ho-so-ky-thuat': <HoSoKyThuatPage />,
   '/ky-thuat/gom-set': <GomSetPage />,
@@ -165,6 +168,7 @@ const PAGES = {
   '/he-thong/to-in': <ToInPage />,
   '/he-thong/khach-hang': <KhachHangPage />,
   '/he-thong/tich-giao': <TichGiaoPage />,
+  '/he-thong/cho-nhan-sua': <ChoNhanSuaPage />,
 };
 
 // Route CŨ của module Sản xuất đã gộp trang (24/09/2026) — chuyển hướng để link/bookmark cũ vẫn vào được.

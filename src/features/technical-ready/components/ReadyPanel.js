@@ -12,6 +12,8 @@ import { evalSla, SLA_BADGE, fmtDur } from '../../../utils/sla';
 import { getReadyDetail, confirmReadyItem, confirmReadyItemsBatch } from '../../../services/readyService';
 import GhiChuPhanIn from './GhiChuPhanIn';
 import TraVeGnModal from '../../../components/common/TraVeGnModal';
+import CongDoanBadge from '../../../components/common/CongDoanBadge';
+import { NHAN_KT_YC } from '../constants';
 
 // 3 mục kỹ thuật + quyền tương ứng. Thứ tự hiển thị: FILM → KHUÔN → MỰC (HSKT đã bỏ).
 // KHÔNG còn chọn giá trị (mới/cũ/gia công) — chỉ cần XÁC NHẬN là xong (đã bỏ ràng buộc Film-trước-Khuôn).
@@ -19,6 +21,8 @@ const ITEMS = [
   { ma: 'FILM', label: 'Film', perm: 'READY_FILM' },
   { ma: 'KHUON', label: 'Khuôn', perm: 'READY_KHUON' },
   { ma: 'MUC', label: 'Mực', perm: 'READY_MUC' },
+  // mig 134: chỉ công đoạn Ép/Logo mà tính chất in bật "Xác nhận HSKT" (BE `state.hskt_required`).
+  { ma: 'HSKT', label: 'HSKT', perm: 'READY_HSKT' },
 ];
 
 const fmt = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '');
@@ -51,7 +55,9 @@ function ReturnNote({ info, nguon }) {
 // (mig 106); false ⇒ người dùng bấm Hủy, KHÔNG xác nhận. Không truyền ⇒ như cũ.
 // `nhanFile` (11/11/2026) = { daNhan, moTa, coQuyen, dangLuu } của ĐỢT trên dòng đang mở + `onNhanFile(nhan)` — khối "File BH"
 //   (cùng việc với menu chuột phải ở bảng; để máy không có chuột phải — iPhone — vẫn đánh dấu được). Không truyền ⇒ ẩn.
-export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, onClose, onChanged, onToast, truocXacNhan, ungVienGn, nhanFile, onNhanFile }) {
+// `giaiDoan` / `luongSx` (14/11/2026 — READY theo công đoạn): panel của DÒNG công đoạn Ép/Logo ('EP_UI') ⇒ mọi lời gọi dùng bộ
+//   checklist của công đoạn đó. Không truyền = bộ gốc như cũ.
+export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, giaiDoan, luongSx, onClose, onChanged, onToast, truocXacNhan, ungVienGn, nhanFile, onNhanFile }) {
   const { can } = usePermissions();
   const { toast, show } = useToast();
   const now = useNow(1000);
@@ -61,15 +67,19 @@ export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, onClose, o
   const [busy, setBusy] = useState(null); // ma đang submit
   const [gnOpen, setGnOpen] = useState(false); // modal "Trả về Giao nhận" (25/09/2026)
   // Ai xác nhận được ÍT NHẤT 1 mục kỹ thuật thì được trả phần in về GN (thông tin sai thì không làm được).
-  const coQuyenTraGn = ITEMS.some((it) => can(it.perm));
+  //   (READY_HSKT không có trong quyền trả GN ở BE `suathongtin.routes BEN_TRA`.)
+  const coQuyenTraGn = ITEMS.some((it) => it.ma !== 'HSKT' && can(it.perm));
 
   const byMa = (detail?.checkpoints || []).reduce((acc, c) => ({ ...acc, [c.ma_checkpoint]: c }), {});
   const state = detail?.state || {};
   // HÀNG GIA CÔNG (II/AD): ẩn CẢ Khuôn LẪN Film (backend trả `khuon_required=false`/`film_hien=false`)
   // → chỉ còn Mực. Khách thường: hiện đủ 3 mục, nhưng Film TỰ ĐẠT khi xác nhận Khuôn.
+  // 16/11/2026: công đoạn Ép/Logo — Khuôn / Mực theo tính chất in (`muc_required`), không có Film (`film_hien=false`).
   const items = ITEMS.filter((it) => (
     (it.ma !== 'KHUON' || state.khuon_required !== false)
     && (it.ma !== 'FILM' || state.film_hien !== false)
+    && (it.ma !== 'MUC' || state.muc_required !== false)
+    && (it.ma !== 'HSKT' || state.hskt_required === true)
   ));
   // ⚠ Số mục PHẢI BẤM ≠ số mục HIỆN: Film hiện nhưng không phải bấm (Khuôn kéo theo) ⇒ đếm Film
   //   vào thì nhãn "x/N" không bao giờ chạm N và banner "đã đủ mục" không khớp `state.tech_done`.
@@ -83,14 +93,14 @@ export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, onClose, o
     if (!phanInId) return;
     setLoading(true);
     try {
-      const res = await getReadyDetail(phanInId, dotVaiIds);
+      const res = await getReadyDetail(phanInId, dotVaiIds, giaiDoan);
       setDetail(res.data);
     } catch (e) {
       show(e.message || 'Lỗi tải', 'error');
     } finally {
       setLoading(false);
     }
-  }, [phanInId, dotKey, show]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [phanInId, dotKey, giaiDoan, show]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load(); }, [load]);
 
@@ -98,7 +108,7 @@ export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, onClose, o
     if (truocXacNhan && !(await truocXacNhan())) return;
     setBusy(item.ma);
     try {
-      await confirmReadyItem(phanInId, item.ma, undefined, dotVaiIds);
+      await confirmReadyItem(phanInId, item.ma, undefined, dotVaiIds, giaiDoan);
       show(`Đã xác nhận ${item.label}`);
       await load();
       onChanged?.();
@@ -116,7 +126,7 @@ export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, onClose, o
     if (truocXacNhan && !(await truocXacNhan())) return;
     setBusy('__ALL__');
     try {
-      await confirmReadyItemsBatch(phanInId, eligible.map((it) => ({ ma: it.ma })), dotVaiIds);
+      await confirmReadyItemsBatch(phanInId, eligible.map((it) => ({ ma: it.ma })), dotVaiIds, giaiDoan);
       show(`Đã xác nhận ${eligible.length} mục`);
       await load();
       onChanged?.();
@@ -180,7 +190,7 @@ export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, onClose, o
     <SidePanel
       open={!!phanInId}
       onClose={onClose}
-      title={detail?.phan_in ? `READY — ${detail.phan_in.ma_phan}${detail.nhom_loai ? ` · ${detail.nhom_loai.ten}` : ''}` : 'Chuẩn bị kỹ thuật'}
+      title={detail?.phan_in ? `READY — ${detail.phan_in.ma_phan}${giaiDoan === 'EP_UI' ? ' · Ép/Logo' : ''}${detail.nhom_loai ? ` · ${detail.nhom_loai.ten}` : ''}` : 'Chuẩn bị kỹ thuật'}
       subtitle={detail?.phan_in ? `${detail.phan_in.ten_khach_hang} · ${detail.phan_in.mau_vai}` : ''}
       footer={detail?.phan_in && coQuyenTraGn ? (
         <>
@@ -195,6 +205,13 @@ export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, onClose, o
         <div className="py-10 text-center text-ink-soft">Đang tải...</div>
       ) : (
         <div className="space-y-4">
+          {/* Phần in 2 công đoạn: panel này là READY của 1 công đoạn — công đoạn kia nằm ở dòng riêng. */}
+          {(giaiDoan === 'EP_UI' || ['IN_KIENG', 'IN_EP'].includes(luongSx)) && (
+            <div className="flex items-center gap-2 rounded-control border border-line bg-surface-muted px-3 py-2 text-xs text-ink-soft">
+              <CongDoanBadge luong={luongSx || 'IN_EP'} gd={giaiDoan} />
+              <span>READY riêng của công đoạn này — công đoạn kia xác nhận ở dòng riêng.</span>
+            </div>
+          )}
           {/* ⚠ Chỉ nhắc khi phần in đang chờ ≥2 ĐỢT VẢI — 1 đợt thì panel vẫn chạy theo đợt nhưng
               người dùng không cần biết, hiện banner chỉ tổ gây phân tâm. */}
           {detail.nhom_loai && detail.nhom_loai.so_nhom > 1 && (
@@ -223,14 +240,18 @@ export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, onClose, o
             </div>
           ) : state.tech_done ? (
             <div className="rounded-control border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-700">
-              Đã đủ {reqCount} mục kỹ thuật — chờ QC xác nhận (Module Chất lượng).
+              {reqCount === 0
+                ? 'Ép/Logo — tính chất in này không qua Kỹ thuật — chờ QC xác nhận (Module Chất lượng).'
+                : `Đã đủ ${reqCount} mục kỹ thuật — chờ QC xác nhận (Module Chất lượng).`}
             </div>
           ) : (
             <div className="rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
               Mỗi bộ phận xác nhận mục của mình. Đủ {reqCount} mục sẽ chuyển sang chờ QC.
-              {state.khuon_required === false
-                ? ' (Hàng gia công — không cần xác nhận Khuôn và Film.)'
-                : ' (Xác nhận Khuôn thì Film tự đạt theo.)'}
+              {state.kt_ep
+                ? ` (Ép/Logo — theo tính chất in: ${NHAN_KT_YC[state.kt_yc] || 'Khuôn + Mực'}${state.hskt_required ? ' + HSKT' : ''}, không có Film.)`
+                : state.khuon_required === false
+                  ? ' (Hàng gia công — không cần xác nhận Khuôn và Film.)'
+                  : ' (Xác nhận Khuôn thì Film tự đạt theo.)'}
             </div>
           )}
 

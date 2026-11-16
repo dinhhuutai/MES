@@ -9,7 +9,7 @@ import DateRangePicker from '../../../components/common/DateRangePicker';
 import { filterRows } from '../../../components/common/FieldFilters';
 import { Field, Input } from '../../../components/common/controls';
 import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
-import CongDoanBadge from '../../../components/common/CongDoanBadge';
+import CodePhanCongDoan from '../../../components/common/CodePhanCongDoan';
 import { nhanCongDoan } from '../../../utils/luongSanXuat';
 import exportPanelExcel from '../../../components/common/exportPanelExcel';
 import { fmtNum, fmtDate } from '../../../utils/format';
@@ -60,7 +60,7 @@ const COT = [
   { key: 'ma_hang', ten: 'Mã hàng' },
   // Mig 128: 1 đợt có thể có kế hoạch tạm cho phần in VÀ phần ép (mỗi phần 1 dòng) ⇒ badge công đoạn.
   { key: 'ma_phan', ten: 'Code phần', render: (r) => (
-    <span className="inline-flex flex-wrap items-center gap-1">{r.ma_phan || '—'}<CongDoanBadge luong={r.luong_sx} gd={r.giai_doan} className="whitespace-nowrap" /></span>
+    <CodePhanCongDoan ma={r.ma_phan} luong={r.luong_sx} gd={r.giai_doan} />
   ) },
   { key: 'mau_vai', ten: 'Màu vải' },
   { key: 'kich_vai', ten: 'Kích vải' },

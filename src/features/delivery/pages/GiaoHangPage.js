@@ -37,6 +37,7 @@ import { printPhieuGiao, laHangRcs, klgSo } from '../utils/printPhieuGiao';
 import TemJourneyPanel from '../../../components/common/TemJourneyPanel';
 import Icon from '../../../components/common/Icon';
 import { getTemHanhTrinh } from '../../../services/qualityService';
+import CodePhanCongDoan from '../../../components/common/CodePhanCongDoan';
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 // DANH SÁCH TEM GIAO (module Giao hàng) — luồng chốt 08/09/2026:
@@ -455,7 +456,8 @@ export default function GiaoHangPage() {
       </div>
     ) },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
-    { key: 'phan_list', header: 'Code phần', render: (r) => r.phan_list || '—' },
+    // Badge công đoạn (phần in 2 công đoạn) DƯỚI code phần — 14/11/2026.
+    { key: 'phan_list', header: 'Code phần', render: (r) => <CodePhanCongDoan ma={r.phan_list} luong={r.luong_sx} gd={r.giai_doan} muiTen={false} /> },
     { key: 'mau_kich', header: 'Màu · Kích (vải/phim)', render: (r) => (
       <div className="leading-tight">
         <div className="text-ink">{r.mau_vai || '—'}</div>

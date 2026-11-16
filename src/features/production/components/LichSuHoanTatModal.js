@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Modal from '../../../components/common/Modal';
 import Button from '../../../components/common/Button';
 import Badge from '../../../components/common/Badge';
@@ -16,7 +16,7 @@ import { hienDsMa } from '../../../utils/maPhanIn';
 // LỊCH SỬ CHẠY HOÀN TẤT (28/10/2026, người dùng: "cho thêm lịch sử phần in bấm đã hoàn tất, bấm để mở lại, có bộ lọc,
 // lọc theo barcode đầy đủ") — nút ở màn Xác nhận chạy. 1 dòng / PHIẾU đã hoàn tất (BE `production.repository
 // listLichSuHoanTat`, lọc + phân trang server, 20 dòng/trang).
-//   · Ô "Barcode" = khớp CHÍNH XÁC (quét được, Enter): mã tem (nhãn 15/16/17 cùng tem) · code phần · mã TDTHĐH ·
+//   · Ô "Barcode" = khớp CHÍNH XÁC (quét được; ngừng nhập 0,5 s tự tìm, Enter tìm ngay): mã tem (nhãn 15/16/17 cùng tem) · code phần · mã TDTHĐH ·
 //     mã HSKT · mã đợt READY · mã lệnh · mã phiếu. Có barcode ⇒ BỎ lọc ngày (tìm mọi ngày).
 //   · Ô tìm = gần đúng (code phần, mã hàng, màu, kích, khách, đơn/PO, mã lệnh, chuyền) + chọn chuyền + khoảng ngày hoàn tất.
 //   · "Mở lại" (quyền PROD_RUN, lý do bắt buộc, không hạn ngày) ⇒ phiếu về Đang chạy, lệnh về Sản xuất. Chỉ phiếu mới nhất
@@ -55,6 +55,17 @@ export default function LichSuHoanTatModal({ open, onClose, show, onDaMoLai }) {
     const h = setTimeout(() => { setTimLoc(tim.trim()); setPage(1); }, 350);
     return () => clearTimeout(h);
   }, [tim]);
+
+  // Ô Barcode: ngừng nhập 0,5 s thì tự tìm (Enter vẫn tìm ngay). Chỉ đặt lại trang khi mã thật sự đổi.
+  const barcodeLocRef = useRef('');
+  barcodeLocRef.current = barcodeLoc;
+  useEffect(() => {
+    const h = setTimeout(() => {
+      const ma = barcode.trim();
+      if (ma !== barcodeLocRef.current) { setBarcodeLoc(ma); setPage(1); }
+    }, 500);
+    return () => clearTimeout(h);
+  }, [barcode]);
 
   const tu = khoang.from || homNay;
   const den = khoang.to || khoang.from || homNay;
@@ -119,7 +130,7 @@ export default function LichSuHoanTatModal({ open, onClose, show, onDaMoLai }) {
       <div className="flex h-full min-h-0 flex-col gap-3">
         <div className="flex flex-wrap items-end gap-2">
           <div className="w-60">
-            <Input value={barcode} placeholder="Barcode đầy đủ — quét rồi Enter"
+            <Input value={barcode} placeholder="Barcode đầy đủ — quét / gõ là tìm"
               onChange={(e) => { setBarcode(e.target.value); if (!e.target.value.trim() && barcodeLoc) { setBarcodeLoc(''); setPage(1); } }}
               onKeyDown={(e) => { if (e.key === 'Enter') chotBarcode(); }} />
           </div>

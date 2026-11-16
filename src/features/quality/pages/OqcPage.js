@@ -33,6 +33,9 @@ import { listOqcCandidates, recordOqc, oqcHistory, oqcDone, returnOqcToKcs, huyO
 import { listUserOptions } from '../../../services/userService';
 import Modal from '../../../components/common/Modal';
 import { fmtNum, timTheoMaTem, maTemNhan, trongKhoangNgay } from '../../../utils/format';
+// Badge công đoạn của tem (phần in 2 công đoạn) dưới mã tem — 14/11/2026.
+import CongDoanBadge from '../../../components/common/CongDoanBadge';
+import { laHaiCongDoan } from '../../../utils/luongSanXuat';
 
 const FORM_MOI = () => ({ soLuongKiem: '', soLuongDat: '', ketQua: 'DAT', ownerChoGiaoId: '', lyDoChoGiao: '' });
 // "Ngày kiểm" theo NGUỒN của dòng (18/10/2026, BE `tgKiemByTems`): nguồn Sửa (dữ liệu cũ) = lượt sửa gần nhất; còn lại
@@ -313,7 +316,7 @@ export default function OqcPage() {
   };
   const columns = [
     ...(canOqc ? [colChon] : []),
-    { key: 'ma_tem', header: 'Tem', render: (r) => (
+    { key: 'ma_tem', header: 'Tem', render: (r) => (<>
       <div className="flex items-center gap-1.5">
         {/* ⚠ `la_sua` = tem 17 THẬT (tem con, mig 091) HOẶC dòng nguồn SỬA của dữ liệu cũ. Tem con
             mang số lượng ở `sl_kcs_dat` nên `nguon` gửi lên backend vẫn là 'KCS' (đúng sổ cái) —
@@ -321,7 +324,8 @@ export default function OqcPage() {
         <Badge tone={r.la_gia_cong ? 'success' : r.la_sua ? 'warning' : 'info'}>{r.ma_tem_display || r.ma_tem}</Badge>
         <span className="text-[11px] text-ink-soft">{r.la_gia_cong ? 'gia công' : r.la_sua ? 'đã sửa' : 'từ KCS'}</span>
       </div>
-    ) },
+      {laHaiCongDoan(r.luong_sx) && <div className="mt-1"><CongDoanBadge luong={r.luong_sx} gd={r.giai_doan} /></div>}
+    </>) },
     { key: 'khach_don', header: 'Khách hàng · Đơn hàng', render: (r) => (
       <div className="leading-tight">
         <div className="font-medium text-ink">{r.ten_khach_hang || '—'}</div>

@@ -122,7 +122,7 @@ export default function KcsNhieuModal({ open, rows, onClose, onXong, truocXacNha
             Người kiểm dòng 1 cho mọi dòng
           </Button>
           <span className="text-ink-soft">Tổng đạt <b className="text-ink">{fmtNum(tongDat)}</b> · hư <b className="text-ink">{fmtNum(tongHu)}</b></span>
-          <span className="text-xs text-ink-soft">Nhập đạt + hư <b>nhỏ hơn</b> còn kiểm (không nhập thiếu/dư) = kiểm trước một phần — phần còn lại tem ở lại màn KCS. Có thiếu/dư thì phải cân đối. Toàn bộ hư vào chờ sửa.</span>
+          <span className="text-xs text-ink-soft">Nhập đạt + hư <b>nhỏ hơn</b> còn kiểm (không nhập thiếu/dư) = kiểm trước một phần — phần còn lại tem ở lại màn KCS. Có thiếu/dư thì phải cân đối. Hàng hư phải qua Phân loại lỗi rồi mới vào Sửa.</span>
         </div>
         <div className="min-h-0 flex-1 overflow-auto rounded-card border border-line">
           <table className="w-full text-sm">

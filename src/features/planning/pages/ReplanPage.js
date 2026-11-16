@@ -33,6 +33,7 @@ import DateRangePicker from '../../../components/common/DateRangePicker';
 import { laGomSet } from '../utils/phanInLenh';
 import { listReplanCandidates, listReplanIds, listReplanMaQuet, replan, getReplanDetail, replanBatch, listChuyen, planHistory, replanDone } from '../../../services/planningService';
 import { fmtNum, fmtDate, ngayLocalISO } from '../../../utils/format';
+import CodePhanCongDoan from '../../../components/common/CodePhanCongDoan';
 
 // ⚠⚠ LỌC + PHÂN TRANG Ở SERVER (30/09/2026): prod có ~6.000 lệnh ở màn này (xưởng chưa bấm Xác nhận chạy
 //   nên lệnh RELEASE_2 dồn lại) — bản cũ tải HẾT về trình duyệt (3 lượt × ~2 MB) nên xoay rất lâu.
@@ -341,7 +342,7 @@ export default function ReplanPage() {
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
-    { key: 'ma_phan', header: 'Code phần', render: (r) => r.ma_phan || '—' },
+    { key: 'ma_phan', header: 'Code phần', render: (r) => <CodePhanCongDoan ma={r.ma_phan} luong={r.luong_sx} gd={r.giai_doan} hienLogo /> },
     { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
     { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },

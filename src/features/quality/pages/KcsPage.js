@@ -46,6 +46,9 @@ import KiemTruocKhoModal from '../components/KiemTruocKhoModal';
 import { trangThaiSla } from '../../../utils/nghen';
 import SearchableSelect from '../../../components/common/SearchableSelect';
 import useDsNguoi, { tenNguoi, timNguoi, nhoTen, KHOA_NGUOI_KIEM } from '../../../hooks/useDsNguoi';
+// Badge công đoạn của tem (phần in 2 công đoạn) dưới mã tem — 14/11/2026.
+import CongDoanBadge from '../../../components/common/CongDoanBadge';
+import { laHaiCongDoan } from '../../../utils/luongSanXuat';
 
 // ⚠ ĐÃ BỎ 2 Ô `soLuongSua` (Quyết định sửa) + `soLuongHuy` (Số lượng hủy) — chốt 04/09/2026:
 //   KCS chỉ chốt ĐẠT/HƯ, việc chia HƯ thành sửa–hủy làm ở trang *Sản xuất › Phân loại lỗi* (mig 075,
@@ -221,7 +224,8 @@ export default function KcsPage() {
         //   `getTemLabel(r.tem_id)` trả nhãn tem gốc nên phải đè mã, như trang Sửa.
         const tem17 = r.ma_tem_17 ? { ma_tem: r.ma_tem_17, so_luong: r.so_luong } : { so_luong: r.so_luong_kiem };
         return { ...res.data, ...tem17, nguoi_kiem_kcs: r.nguoiKiem, tg_kiem_kcs: r.tg || null,
-          sl_dat_kcs: r.so_luong != null ? Number(r.so_luong) : null }; // trường "SL ĐẠT của lượt KCS"
+          sl_dat_kcs: r.so_luong != null ? Number(r.so_luong) : null, // trường "SL ĐẠT của lượt KCS"
+          sl_loi_kcs: r.so_luong_loi != null ? Number(r.so_luong_loi) : null }; // trường "SL LỖI của lượt KCS"
       }));
       await printKcsGiaoTemNhieu(labels, w);
       show(`Đã mở ${labels.length} tem để in${guiErp17.length
@@ -242,12 +246,14 @@ export default function KcsPage() {
   const doExcel = () => setXuatOpen(true);
   // Khoảng ngày của file = NGÀY CHỨNG TỪ chọn trong hộp (BE `ctTu`/`ctDen`) — THAY ô "Ngày in tem" của màn (2 khoảng chồng
   //   nhau là bỏ sót tem in hôm trước mà ngày CT hôm nay). Ô tìm + panel lọc + "chỉ tem bị trả về" vẫn áp như màn.
-  const doXuatTon = async ({ gioDuKien, gomDangPhoi, ctTu, ctDen, gioTu, gioDen }) => {
+  const doXuatTon = async ({ gioDuKien, phoi, ctTu, ctDen, gioTu, gioDen }) => {
     setXuatBusy(true);
     try {
       const res = await kcsTonChuaKiem({
         search, ...filters, ctTu: ctTu || undefined, ctDen: ctDen || undefined,
-        gioTu: gioTu || undefined, gioDen: gioDen || undefined, gomDangPhoi: gomDangPhoi ? 1 : 0,
+        gioTu: gioTu || undefined, gioDen: gioDen || undefined,
+        // `phoi` = TAT_CA | DA_KHO | CHUA_KHO; `gomDangPhoi` gửi kèm cho BE cũ chưa hiểu `phoi`.
+        phoi, gomDangPhoi: phoi === 'DA_KHO' ? 0 : 1,
       });
       const ds = onlyReturned ? locTraVe(res.data || [], traVeRange) : (res.data || []);
       const n = await exportPhieuChuaKiem(ds, { tuNgay: ctTu, denNgay: ctDen, tuGio: gioTu, denGio: gioDen, gioDuKien });
@@ -274,7 +280,11 @@ export default function KcsPage() {
     { key: 'tinh_chat_in', header: 'Tính chất in', render: (r) => <TinhChatInCell value={r.tinh_chat_in} /> },
     { key: 'ten_chuyen', header: 'Chuyền', render: (r) => r.ten_chuyen || r.ma_chuyen || '—' },
     { key: 'so_luong_kiem', header: 'SL kiểm', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong_kiem) },
-    { key: 'so_luong', header: 'SL đạt', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
+    { key: 'so_luong', header: 'SL đạt', className: 'text-right tabular-nums font-medium text-success', render: (r) => fmtNum(r.so_luong) },
+    // SL lỗi của lượt = hư (vào sửa / phân loại lỗi) + hủy ghi thẳng tại KCS (dữ liệu cũ) — 16/11/2026.
+    { key: 'so_luong_loi', header: 'SL lỗi', className: 'text-right tabular-nums', render: (r) => (
+      Number(r.so_luong_loi) > 0 ? <span className="font-medium text-danger">{fmtNum(r.so_luong_loi)}</span> : '0'
+    ) },
     { key: 'han_giao_hang', header: 'Hạn giao', render: (r) => <HanGiaoCell value={r.han_giao_hang} /> },
     { key: 'tg', header: 'Giờ', className: 'whitespace-nowrap tabular-nums', render: (r) => (r.tg ? new Date(r.tg).toLocaleTimeString('vi-VN') : '') },
     { key: 'nguoi_kiem', header: 'Người kiểm', render: (r) => tenNguoiKiem(r) || '—' },
@@ -478,6 +488,7 @@ export default function KcsPage() {
     { key: 'ma_tem', header: 'Tem', render: (r) => (
       <div>
         <Badge tone="info">{r.ma_tem}</Badge>
+        {laHaiCongDoan(r.luong_sx) && <div className="mt-1"><CongDoanBadge luong={r.luong_sx} gd={r.giai_doan} /></div>}
         {(r.tra_ve || r.tra_ve_ly_do) && <div className="mt-1"><TraVeBadge data={r.tra_ve || r.tra_ve_ly_do} label="Bị OQC trả về" nguon="OQC" /></div>}
       </div>
     ) },
@@ -771,6 +782,7 @@ export default function KcsPage() {
           { header: 'Chuyền', value: (r) => r.ten_chuyen || r.ma_chuyen || '' },
           { header: 'SL kiểm', value: (r) => Number(r.so_luong_kiem) || 0, num: true },
           { header: 'SL đạt', value: (r) => Number(r.so_luong) || 0, num: true },
+          { header: 'SL lỗi', value: (r) => Number(r.so_luong_loi) || 0, num: true },
           { header: 'Hạn giao', value: (r) => r.han_giao_hang || '', type: 'date' },
           COT_EXCEL_GIO_HT,
           { header: 'Người', value: (r) => r.nguoi || '' },

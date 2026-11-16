@@ -8,9 +8,14 @@ import { ngayLocalISO } from '../../../utils/format';
 // Hộp xuất Excel "Danh sách phiếu nhật ký kiểm phẩm chưa kiểm" của màn KCS (10/11/2026): chọn tồn TỪ NGÀY + GIỜ → ĐẾN NGÀY +
 //   GIỜ — ngày = NGÀY CHỨNG TỪ của tem, giờ = GIỜ IN TEM (ngày CT không có giờ; mốc tem = ngày CT + giờ in, BE
 //   `tonChuaKiemKcs`); trống ngày = mọi ngày, trống giờ = 00:00 / 23:59; mặc định ngày = khoảng ngày đang lọc ở màn.
-//   + GIỜ DỰ KIẾN (mặc định bây giờ — tem khô trước giờ này ghi "Cần tháo" = 2) + có gồm tem đang phơi (chưa tới KCS) không.
-//   Mức module (luật §9).
+//   + MỐC THÁO DỰ KIẾN (mặc định bây giờ — tem phơi xong trước mốc này ghi cột "Cần tháo" = 2, còn lại 1) + loại tem tồn
+//   (15/11/2026): tất cả · chỉ đã phơi xong (đang chờ kiểm) · chỉ CHƯA phơi xong (đang phơi / mới in). Mức module (luật §9).
 const gioBayGio = () => { const d = new Date(); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; };
+const LOAI_PHOI = [
+  ['TAT_CA', 'Tất cả tem tồn', 'Đã phơi xong + chưa phơi xong'],
+  ['DA_KHO', 'Chỉ tem đã phơi xong', 'Đang nằm chờ kiểm ở KCS'],
+  ['CHUA_KHO', 'Chỉ tem chưa phơi xong', 'Đang phơi trên xe / mới in chưa lên xe phơi'],
+];
 
 export default function XuatTonKcsModal({ open, onClose, busy, onXuat, tuNgayMacDinh = '', denNgayMacDinh = '' }) {
   const [ctTu, setCtTu] = useState('');
@@ -19,7 +24,7 @@ export default function XuatTonKcsModal({ open, onClose, busy, onXuat, tuNgayMac
   const [gioDen, setGioDen] = useState('');
   const [ngay, setNgay] = useState(() => ngayLocalISO(new Date()));
   const [gio, setGio] = useState(gioBayGio);
-  const [gomDangPhoi, setGomDangPhoi] = useState(true);
+  const [phoi, setPhoi] = useState('TAT_CA');
   useEffect(() => {
     if (open) {
       setNgay(ngayLocalISO(new Date())); setGio(gioBayGio());
@@ -42,14 +47,14 @@ export default function XuatTonKcsModal({ open, onClose, busy, onXuat, tuNgayMac
         <Button chiXemOk icon="download" loading={busy}
           disabled={busy || !ngay || saiKhoang || gioTuThieuNgay || gioDenThieuNgay}
           onClick={() => onXuat({
-            gioDuKien: gioDuKien(), gomDangPhoi, ctTu: ctTu || null, ctDen: ctDen || null,
+            gioDuKien: gioDuKien(), phoi, ctTu: ctTu || null, ctDen: ctDen || null,
             gioTu: ctTu && gioTu ? gioTu : null, gioDen: ctDen && gioDen ? gioDen : null,
           })}>
           Xuất Excel
         </Button>
       </>}>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Tồn từ ngày CT" hint="Ngày chứng từ của tem · trống = mọi ngày">
+        <Field label="Tồn từ ngày CT" hint="Ngày chứng từ nhập lúc in tem · trống = mọi ngày">
           <Input type="date" value={ctTu} max={ctDen || undefined} onChange={(e) => setCtTu(e.target.value)} />
         </Field>
         <Field label="Từ giờ" hint="Giờ in tem · trống = 0:00" error={gioTuThieuNgay ? 'Chọn Từ ngày trước' : undefined}>
@@ -62,19 +67,30 @@ export default function XuatTonKcsModal({ open, onClose, busy, onXuat, tuNgayMac
           <TimeSelect value={gioDen} onChange={setGioDen} minuteStep={1} />
         </Field>
       </div>
-      <div className="mt-3 grid grid-cols-2 gap-3">
-        <Field label="Ngày dự kiến">
+      <div className="mt-4">
+        <div className="mb-1.5 text-sm font-medium text-ink">Loại tem tồn</div>
+        <div className="space-y-1.5">
+          {LOAI_PHOI.map(([k, nhan, moTa]) => (
+            <label key={k} className="flex cursor-pointer items-start gap-2 text-sm text-ink">
+              <input type="radio" name="loai-phoi" className="mt-0.5 h-4 w-4 border-line text-primary focus:ring-primary/30"
+                checked={phoi === k} onChange={() => setPhoi(k)} />
+              <span>{nhan} <span className="text-xs text-ink-soft">— {moTa}</span></span>
+            </label>
+          ))}
+        </div>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-3">
+        <Field label="Ngày tháo dự kiến">
           <Input type="date" value={ngay} onChange={(e) => setNgay(e.target.value)} />
         </Field>
-        <Field label="Giờ dự kiến">
+        <Field label="Giờ tháo dự kiến">
           <TimeSelect value={gio} onChange={setGio} minuteStep={1} />
         </Field>
       </div>
-      <label className="mt-3 flex cursor-pointer items-center gap-2 text-sm text-ink">
-        <input type="checkbox" className="h-4 w-4 rounded border-line text-primary focus:ring-primary/30"
-          checked={gomDangPhoi} onChange={(e) => setGomDangPhoi(e.target.checked)} />
-        Gồm tem đang phơi (chưa tới KCS)
-      </label>
+      <p className="mt-1 text-xs text-ink-soft">
+        Chỉ dùng cho cột <b>"Cần tháo"</b> trong file: tem đã phơi xong, hoặc sẽ phơi xong trước mốc này ⇒ <b>2</b> (tháo xuống
+        kiểm được, xếp lên đầu); còn lại ⇒ <b>1</b>. Không lọc bớt tem nào. Mặc định = bây giờ.
+      </p>
     </Modal>
   );
 }

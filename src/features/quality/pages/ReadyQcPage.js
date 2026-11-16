@@ -18,7 +18,8 @@ import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import useNow from '../../../hooks/useNow';
 import useSocketReload from '../../../hooks/useSocketReload';
-import taiHetTrang, { LIMIT_TAI_LON } from '../../../utils/taiHetTrang';
+// READY theo công đoạn (14/11/2026): QC xác nhận riêng dòng công đoạn Ép/Logo (bộ QC_XAC_NHAN_EP).
+import taiReadyCongDoan, { laDongEp, gdCuaDong } from '../../technical-ready/utils/taiReadyCongDoan';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 import useLyDoNghen from '../../../hooks/useLyDoNghen';
 import { trangThaiSla } from '../../../utils/nghen';
@@ -32,7 +33,8 @@ import ScanCollectModal from '../../../components/common/ScanCollectModal';
 import PhuongAnInCell from '../../../components/common/PhuongAnInCell';
 import exportReadyQcExcel from '../utils/exportReadyQcExcel';
 import slDongReady from '../../technical-ready/utils/slDongReady';
-import { khuonRequired } from '../../technical-ready/constants';
+import { khuonRequired, mucRequired, hsktRequired } from '../../technical-ready/constants';
+import CodePhanCongDoan from '../../../components/common/CodePhanCongDoan';
 
 // Thứ tự hiển thị: FILM → KHUÔN → MỰC (HSKT đã bỏ khỏi checklist READY).
 // Khóa lý do nghẽn (mig 106): mỗi dòng = 1 đợt vải của phần in (`r.id` = phan_in_id).
@@ -42,6 +44,7 @@ const TECH_ITEMS = [
   { ma: 'FILM', label: 'Film' },
   { ma: 'KHUON', label: 'Khuôn' },
   { ma: 'MUC', label: 'Mực' },
+  { ma: 'HSKT', label: 'HSKT' }, // mig 134 — chỉ công đoạn Ép/Logo cần (`state.hskt_required`)
 ];
 
 const fmt = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '');
@@ -143,7 +146,7 @@ export default function ReadyQcPage() {
       // ⚠⚠ `limit: 500` cũ bị `getPaging` cắt còn 200 mà KHÔNG báo gì. Màn này mới 166 dòng nên chưa
       //   lộ, nhưng vượt 200 là QC quét mã không ra hàng và bộ lọc chỉ soi 200 dòng đầu — đúng sự cố
       //   Test Run - QA 19/08/2026 (658 lệnh, màn chỉ thấy 200).
-      const { items, total, thieu } = await taiHetTrang((p) => listReadyQcCandidates({ search, ...p }), { limit: LIMIT_TAI_LON });
+      const { items, total, thieu } = await taiReadyCongDoan(listReadyQcCandidates, search);
       setRows(items);
       setMeta({ total });
       if (thieu) show(`Chỉ tải được ${items.length}/${total} phần in — hãy thu hẹp bằng ô tìm kiếm`, 'error');
@@ -166,7 +169,7 @@ export default function ReadyQcPage() {
   // 16:24, quét lúc 16:27 vẫn báo thiếu). KHÔNG dùng `load` vì nó xóa các dòng đang tick.
   const refresh = useCallback(async () => {
     try {
-      const { items, total } = await taiHetTrang((p) => listReadyQcCandidates({ search, ...p }), { limit: LIMIT_TAI_LON });
+      const { items, total } = await taiReadyCongDoan(listReadyQcCandidates, search);
       setRows(items);
       setMeta({ total });
       // ⚠ Lượt tải NGẦM: cờ `thieu` CỐ Ý không báo — người dùng không hề bấm gì, bắn toast đỏ ở đây
@@ -194,7 +197,7 @@ export default function ReadyQcPage() {
     try {
       // Panel mở từ 1 DÒNG ĐỢT VẢI ⇒ hiện trạng thái Khuôn/Film/Mực CỦA ĐỢT ĐÓ (không phải dòng tổng),
       // nếu không panel nói "đã xác nhận" trong khi dòng trên bảng đang báo chưa.
-      const res = await getReadyDetail(row.id, row.dot_vai_ids);
+      const res = await getReadyDetail(row.id, row.dot_vai_ids, gdCuaDong(row));
       setDetail(res.data);
     } catch (e) {
       show(e.message || 'Lỗi tải chi tiết', 'error');
@@ -214,7 +217,7 @@ export default function ReadyQcPage() {
     if (!returnReason.trim()) { show('Nhập lý do trả về', 'error'); return; }
     setSaving(true);
     try {
-      await returnReadyToTech(editing.id, { checklists: [...returnChecklists], lyDo: returnReason.trim() });
+      await returnReadyToTech(editing.id, { checklists: [...returnChecklists], lyDo: returnReason.trim(), giaiDoan: gdCuaDong(editing) });
       show(`Đã trả ${editing.ma_phan} về kỹ thuật`);
       setEditing(null);
       load();
@@ -229,7 +232,7 @@ export default function ReadyQcPage() {
     if (!(await hoiLyDoNghen([editing]))) return; // quá SLA ⇒ nhập lý do nghẽn (mig 106)
     setSaving(true);
     try {
-      await confirmReadyQC(editing.id, editing.dot_vai_ids);
+      await confirmReadyQC(editing.id, editing.dot_vai_ids, gdCuaDong(editing));
       show(`QC xác nhận ${editing.ma_phan}${editing.tach_theo_loai ? ` · đợt ${editing.thu_tu_dot}` : ''} — READY hoàn thành 🎉`);
       setEditing(null);
       load();
@@ -286,7 +289,7 @@ export default function ReadyQcPage() {
     setBatching(true);
     try {
       const items = rows.filter((r) => selected.has(r._key))
-        .map((r) => ({ id: r.id, dot_vai_ids: r.dot_vai_ids || [] }));
+        .map((r) => ({ id: r.id, dot_vai_ids: r.dot_vai_ids || [], ...(laDongEp(r) ? { giai_doan: r.giai_doan } : {}) }));
       const res = await confirmReadyQcBatch(items);
       const { okCount, failedCount } = res.data;
       show(failedCount ? `QC xác nhận ${okCount} phần in, ${failedCount} lỗi` : `Đã QC xác nhận ${okCount} phần in 🎉`,
@@ -335,7 +338,7 @@ export default function ReadyQcPage() {
     } },
     { key: 'ma_phan', header: 'Code phần', className: 'font-medium text-ink', render: (r) => (
       <div>
-        <div>{r.ma_phan || '—'}</div>
+        <CodePhanCongDoan ma={r.ma_phan} luong={r.luong_sx} gd={r.giai_doan} hienLogo />
         {r.tra_ve_kh && <div className="mt-1"><TraVeBadge data={r.tra_ve_kh} label="Kế hoạch trả về" nguon="Kế hoạch (Release 1)" /></div>}
         {/* Test Run không đạt → QA trả về; modal hiện MỤC RỚT (Khuôn/Film/Mực) + lý do. */}
         {r.tra_ve_test && <div className="mt-1"><TraVeBadge data={r.tra_ve_test} label="Test Run trả về" nguon="Test Run (QA)" /></div>}
@@ -386,13 +389,15 @@ export default function ReadyQcPage() {
     // ca lẻ chỉ mới có Film thì hiện VÀNG để không giấu mất. Hàng gia công (II/AD) ẩn hẳn nhãn này.
     { key: 'tech', header: 'Kỹ thuật', render: (r) => (
       <div className="flex flex-wrap items-center gap-1">
-        {khuonRequired(r.ten_khach_hang) && (
+        {khuonRequired(r) && (
           r.khuon_done
-            ? <Badge tone="success">Film-Khuôn</Badge>
+            ? <Badge tone="success">{r.kt_ep ? 'Khuôn' : 'Film-Khuôn'}</Badge>
             : <Badge tone={r.film_done ? 'warning' : 'default'}
-                title={r.film_done ? 'Đã xác nhận Film, còn chờ Khuôn' : undefined}>Film-Khuôn</Badge>
+                title={r.film_done ? 'Đã xác nhận Film, còn chờ Khuôn' : undefined}>{r.kt_ep ? 'Khuôn' : 'Film-Khuôn'}</Badge>
         )}
-        <Badge tone={r.muc_done ? 'success' : 'default'}>Mực</Badge>
+        {mucRequired(r) && <Badge tone={r.muc_done ? 'success' : 'default'}>Mực</Badge>}
+        {hsktRequired(r) && <Badge tone={r.hskt_done ? 'success' : 'default'}>HSKT</Badge>}
+        {r.kt_yc === 'KHONG' && !hsktRequired(r) && <Badge tone="info">Không qua KT</Badge>}
       </div>
     ) },
   ];
@@ -439,7 +444,7 @@ export default function ReadyQcPage() {
       {/* ⚠⚠ `rowKey="_key"` BẮT BUỘC sau khi tách dòng theo đợt: 2 dòng của cùng phần in chung `id`,
           để mặc định là React trùng key và bảng vẽ sai/nhảy dòng. */}
       <DataTable columns={columns} rows={viewRows} rowKey="_key" loading={loading} onRowClick={(r) => open(r)} sttStart={0}
-        rowClassName={(r) => `${slaRowClass(evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status)} ${r._set ? 'border-l-[3px] border-l-primary/60' : ''}`}
+        rowClassName={(r) => `${slaRowClass(evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status)} ${r._set ? 'border-l-[3px] border-l-primary/60' : laDongEp(r) ? 'border-l-[3px] border-l-orange-300' : ''}`}
         emptyText="Không có phần in nào ở READY" />
 
       <SidePanel
@@ -488,7 +493,10 @@ export default function ReadyQcPage() {
                 Tick các mục <b>không đạt</b> để trả về cho bộ phận kỹ thuật làm lại (kèm lý do bắt buộc).
               </p>
             )}
-            {TECH_ITEMS.filter((it) => it.ma !== 'KHUON' || detail?.state?.khuon_required !== false).map((it) => {
+            {TECH_ITEMS.filter((it) => (it.ma !== 'KHUON' || detail?.state?.khuon_required !== false)
+              && (it.ma !== 'FILM' || detail?.state?.film_hien !== false)
+              && (it.ma !== 'MUC' || detail?.state?.muc_required !== false)
+              && (it.ma !== 'HSKT' || detail?.state?.hskt_required === true)).map((it) => {
               const cp = byMa[it.ma];
               const done = cp?.trang_thai === 'DAT';
               return (

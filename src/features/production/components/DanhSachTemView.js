@@ -28,6 +28,7 @@ import taiHetTrang, { LIMIT_TAI_LON } from '../../../utils/taiHetTrang';
 import HuyLyDoModal from '../../../components/common/HuyLyDoModal';
 import TemInPreview from './TemInPreview';
 import printTemLabel, { toTemSanXuat, toTemGiaCongVe, moSanCuaSoIn, dongCuaSoIn } from '../utils/printTemLabel';
+import CodePhanCongDoan from '../../../components/common/CodePhanCongDoan';
 
 // ══════════════════════════════════════════════════════════════════════════════════════════════
 // DANH SÁCH TEM ĐÃ IN — view DÙNG CHUNG cho 2 trang (nhiệm vụ #8, phiên 04-05/09/2026):
@@ -396,7 +397,8 @@ export default function DanhSachTemView({
     { key: 'ma_lenh_san_xuat', header: 'Mã đợt SX', render: (r) => chu(r.ma_lenh_san_xuat) },
     { key: 'ten_khach_hang', header: 'Khách · Đơn', render: (r) => <HaiDong tren={r.ten_khach_hang} duoi={r.ma_don_hang} /> },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => chu(r.ma_hang) },
-    { key: 'ma_phan', header: 'Code phần', render: (r) => chu(r.ma_phan) },
+    // Badge công đoạn (phần in 2 công đoạn) DƯỚI code phần — 14/11/2026.
+    { key: 'ma_phan', header: 'Code phần', render: (r) => <CodePhanCongDoan ma={chu(r.ma_phan)} luong={r.luong_sx} gd={r.giai_doan} muiTen={false} /> },
     { key: 'mau_vai', header: 'Màu · Kích (vải/phim)', render: (r) => <HaiDong tren={r.mau_vai} duoi={`${chu(r.kich_vai)} / ${chu(r.kich_phim)}`} /> },
     // Cột thao tác (header rỗng ⇒ DataTable ghim phải). `stopPropagation` để bấm nút không mở SidePanel của dòng.
     ...(coNutHuy ? [{
@@ -669,6 +671,21 @@ function TemPanel({ tem, onClose, laGiaCong, layNhan, coSuaVai = false, show, on
           </div>
         )}
 
+        {/* SL BỔ SUNG CỦA TEM (16/11/2026, mig 135 — theo từng tem): hiện khi lệnh có đợt vải bổ sung hoặc tem đã có số. */}
+        {!laGiaCong && (t.co_dot_bo_sung || t.sl_bo_sung_cty != null || t.sl_bo_sung_khach != null) && (
+          <div>
+            <h4 className="mb-2 text-sm font-semibold text-ink">Bổ sung</h4>
+            <div className="grid grid-cols-3 gap-3 rounded-control border border-amber-300/60 bg-amber-50/40 p-3 dark:bg-amber-950/10">
+              <O nhan="Do công ty">{t.sl_bo_sung_cty == null ? '—' : fmtNum(t.sl_bo_sung_cty)}</O>
+              <O nhan="Do khách hàng">{t.sl_bo_sung_khach == null ? '—' : fmtNum(t.sl_bo_sung_khach)}</O>
+              <O nhan="Tổng bổ sung">{fmtNum((Number(t.sl_bo_sung_cty) || 0) + (Number(t.sl_bo_sung_khach) || 0))}</O>
+            </div>
+            {!t.co_bs_tem && (
+              <p className="mt-1 text-xs text-ink-soft">Chưa chạy migration 135 — số bổ sung chưa lưu theo tem.</p>
+            )}
+          </div>
+        )}
+
         {!laGiaCong && layNhan && (
           <KhoiVaiTem key={t.id} tem={t} choSua={coSuaVai && t.trang_thai !== 'HUY'} show={show} onDaLuu={onDaLuuVai} />
         )}
@@ -740,11 +757,16 @@ function SuaTemModal({ tem, onClose, onDaLuu, show }) {
   // GC màu vải của tem (đổ sẵn từ nhãn tem; null = đang tải) — gửi ERP SF0 `GCMauvai` khi lưu.
   const [gcGoc, setGcGoc] = useState(null);
   const [gc, setGc] = useState('');
+  // SL BỔ SUNG do Công ty / Khách CỦA TEM (16/11/2026, mig 135 — theo từng tem). Chuỗi số; trống = không có.
+  const [bsCty, setBsCty] = useState('');
+  const [bsKhach, setBsKhach] = useState('');
   const temId = tem?.id;
   useEffect(() => {
     if (!tem) return;
     setSl(String(tem.so_luong ?? '')); setGioBd(tem.gio_sx_bd || ''); setGioKt(tem.gio_sx_kt || '');
     setMaCa(tem.ma_ngay_ca || ''); setNgayCt(tem.ngay_ct || ''); setLyDo(''); setLoi('');
+    setBsCty(tem.sl_bo_sung_cty == null ? '' : String(tem.sl_bo_sung_cty));
+    setBsKhach(tem.sl_bo_sung_khach == null ? '' : String(tem.sl_bo_sung_khach));
   }, [tem]);
   useEffect(() => {
     if (!temId) return undefined;
@@ -784,6 +806,16 @@ function SuaTemModal({ tem, onClose, onDaLuu, show }) {
   if (chuyenId && chuyenId !== chuyenGoc) body.chuyenId = chuyenId;
   // GC màu vải: chỉ gửi khi đổi (xóa trắng = gửi rỗng ⇒ BE xóa).
   if (gcGoc !== null && gc.replace(/\s+/g, ' ').trim() !== gcGoc.trim()) body.gcMauVai = gc.replace(/\s+/g, ' ').trim();
+  // SL bổ sung CỦA TEM: chỉ gửi khi đổi; ô trống = xóa số. Σ ≤ SL in (mới) của tem ⇒ không thì khóa nút Lưu (BE kiểm lại).
+  const coBs = !!(tem.co_bs_tem && (tem.co_dot_bo_sung || tem.sl_bo_sung_cty != null || tem.sl_bo_sung_khach != null));
+  const cuBs = (v) => (v == null ? '' : String(v));
+  const doiBs = coBs && (bsCty.trim() !== cuBs(tem.sl_bo_sung_cty) || bsKhach.trim() !== cuBs(tem.sl_bo_sung_khach));
+  const slSoSanh = !khoaSl && /^\d+$/.test(String(sl).trim()) ? Number(sl) : Number(tem.so_luong);
+  const bsVuot = coBs && (Number(bsCty) || 0) + (Number(bsKhach) || 0) > slSoSanh;
+  if (doiBs) {
+    body.slBsCty = bsCty.trim() === '' ? null : Number(bsCty);
+    body.slBsKhach = bsKhach.trim() === '' ? null : Number(bsKhach);
+  }
   if (doiPc) {
     body.phanCong = {
       caTruongId: pc.caTruongId || null, chuyenTruong: pc.chuyenTruong || '', thoIn: pc.thoIn || '',
@@ -813,7 +845,7 @@ function SuaTemModal({ tem, onClose, onDaLuu, show }) {
       footer={(
         <>
           <Button chiXemOk variant="ghost" onClick={onClose} disabled={dangLuu}>Hủy</Button>
-          <Button onClick={luu} loading={dangLuu} disabled={!coDoi || slSai || caSai || pcThieuTho || !lyDo.trim()}>Lưu &amp; gửi ERP</Button>
+          <Button onClick={luu} loading={dangLuu} disabled={!coDoi || slSai || caSai || pcThieuTho || bsVuot || !lyDo.trim()}>Lưu &amp; gửi ERP</Button>
         </>
       )}>
       <div className="space-y-3">
@@ -877,6 +909,23 @@ function SuaTemModal({ tem, onClose, onDaLuu, show }) {
             </>
           )}
         </div>
+        {coBs && (
+          <div className="space-y-2 rounded-control border border-line p-3">
+            <h4 className="text-sm font-semibold text-ink">SL bổ sung của tem này (do đâu)</h4>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Do Công ty">
+                <Input inputMode="numeric" value={bsCty} placeholder="0" className={bsVuot ? 'border-danger' : ''}
+                  onChange={(e) => setBsCty(e.target.value.replace(/[^\d]/g, ''))} />
+              </Field>
+              <Field label="Do Khách hàng">
+                <Input inputMode="numeric" value={bsKhach} placeholder="0" className={bsVuot ? 'border-danger' : ''}
+                  onChange={(e) => setBsKhach(e.target.value.replace(/[^\d]/g, ''))} />
+              </Field>
+            </div>
+            {bsVuot && <p className="text-xs text-danger">Tổng bổ sung lớn hơn SL in của tem ({fmtNum(slSoSanh)}).</p>}
+            <p className="text-xs text-ink-soft">Số của RIÊNG tem này — lưu xong gửi lại phiếu in tem (SF0) của tem sang ERP cùng IDMES.</p>
+          </div>
+        )}
         <p className="text-xs text-ink-soft">Vải hủy / thiếu: sửa ở khối &quot;Vải hủy / thiếu&quot; trong panel tem (bấm vào dòng tem) — lưu ở đó cũng tự gửi lại ERP.</p>
         <Field label="Lý do sửa" required>
           <Textarea rows={2} value={lyDo} onChange={(e) => setLyDo(e.target.value)} placeholder="Vì sao sửa tem (vd: nhập nhầm số lượng / ca)..." />

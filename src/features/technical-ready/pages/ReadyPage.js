@@ -21,7 +21,8 @@ import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import useNow from '../../../hooks/useNow';
 import useSocketReload from '../../../hooks/useSocketReload';
-import taiHetTrang, { LIMIT_TAI_LON } from '../../../utils/taiHetTrang';
+// READY theo công đoạn (14/11/2026): tải cả bộ gốc + bộ Ép/Logo, dòng ép ngay dưới dòng in cùng phần in.
+import taiReadyCongDoan, { laDongEp, gdCuaDong, GD_EP } from '../utils/taiReadyCongDoan';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 import TraVeBadge from '../../../components/common/TraVeBadge';
 import TraVeFilter from '../../../components/common/TraVeFilter';
@@ -40,11 +41,12 @@ import PhuongAnInCell from '../../../components/common/PhuongAnInCell';
 import { PHUONG_AN_IN } from '../../../components/common/PhuongAnInBadge';
 import { fmtDateTime, fmtDate, fmtNum } from '../../../utils/format';
 import slDongReady from '../utils/slDongReady';
-import { khuonRequired } from '../constants';
+import { khuonRequired, mucRequired, hsktRequired, NHAN_KT_YC } from '../constants';
 import exportReadyExcel from '../utils/exportReadyExcel';
 import useLyDoNghen from '../../../hooks/useLyDoNghen';
 import { trangThaiSla } from '../../../utils/nghen';
 import { ungVienGn } from '../../../components/common/TraVeGnModal';
+import CodePhanCongDoan from '../../../components/common/CodePhanCongDoan';
 
 // Khóa lý do nghẽn (mig 106) — màn này đếm theo PHẦN IN (`r.id` = phan_in_id).
 const KHOA_NGHEN = (r) => ({ phan_in_id: r.id, ma: r.ma_phan });
@@ -68,6 +70,8 @@ const ITEMS = [
   { ma: 'FILM', label: 'Film', perm: 'READY_FILM', hasOptions: true },
   { ma: 'KHUON', label: 'Khuôn', perm: 'READY_KHUON', hasOptions: true },
   { ma: 'MUC', label: 'Mực', perm: 'READY_MUC', hasOptions: true },
+  // mig 134 (16/11/2026): chỉ dòng Ép/Logo mà tính chất in bật "Xác nhận HSKT" (`r.kt_hskt`) — BE bỏ qua với dòng không cần.
+  { ma: 'HSKT', label: 'HSKT', perm: 'READY_HSKT' },
 ];
 
 const DoneCell = (done) =>
@@ -151,14 +155,15 @@ export default function ReadyPage() {
 
   const permItems = ITEMS.filter((it) => can(it.perm));
   // Đổi phương án in ngay tại cột — khớp đúng rbac của `PATCH /hskt/:id/phuong-an-in`
-  // (`READY_KHUON | READY_FILM | READY_MUC`), tức bằng `permItems.length > 0`.
-  const canDoiPain = permItems.length > 0;
+  // (`READY_KHUON | READY_FILM | READY_MUC`) ⇒ không tính mục HSKT (quyền READY_HSKT không đổi được PA / nhận file).
+  const permKt = permItems.filter((it) => it.ma !== 'HSKT');
+  const canDoiPain = permKt.length > 0;
 
   // NHẬN FILE BH (11/11/2026): chuột phải dòng ⇒ menu nhỏ đưa vào / hủy khỏi danh sách đã nhận hồ sơ cứng của Bán hàng
   //   (theo ĐỢT VẢI của dòng). Quyền = quyền xác nhận READY kỹ thuật (BE `POST /ready/nhan-file`). Không quyền / chỉ xem ⇒
   //   để nguyên menu chuột phải của trình duyệt.
   const chiXem = useChiXem();
-  const canNhanFile = permItems.length > 0 && !chiXem;
+  const canNhanFile = permKt.length > 0 && !chiXem;
   const [nfMenu, setNfMenu] = useState(null); // { x, y, dong: [row] }
   const [nfOpen, setNfOpen] = useState(false);
   const [nfSaving, setNfSaving] = useState(false);
@@ -166,6 +171,9 @@ export default function ReadyPage() {
   const soNhanFile = rows.filter(daNhanFile).length;
   // Mục sẽ xác nhận khi quét/tích (mặc định = tất cả mục mình có quyền). Người phụ trách 1 mục → tự khóa mục đó.
   const [scanSel, setScanSel] = useState(() => new Set());
+  // Quét / tích xác nhận cho 1 CÔNG ĐOẠN (14/11/2026): mặc định công đoạn in; chọn Ép/Logo khi đang làm khuôn/mực của ép.
+  const [scanGd, setScanGd] = useState('IN');
+  const coDongEp = rows.some(laDongEp);
   const scanItemsRef = useRef({}); // rowId -> mảng mục đã xác nhận (để Hủy đúng)
   const labelOf = (ma) => ITEMS.find((i) => i.ma === ma)?.label || ma;
   useEffect(() => {
@@ -194,7 +202,7 @@ export default function ReadyPage() {
       // ⚠⚠ `limit: 200` cũ ĐÚNG BẰNG trần của `getPaging` ⇒ vượt 200 phần in là mất dòng ÂM THẦM.
       //   Đo prod 19/08/2026: READY đang 164 — chỉ cách trần 36 dòng. Đây là màn quét mã nhiều nhất,
       //   thiếu dòng thì kỹ thuật quét ra "không thấy" mà không hiểu vì sao (xem sự cố Test Run - QA).
-      const { items, total, thieu } = await taiHetTrang((p) => listReadyCandidates({ search, ...p }), { limit: LIMIT_TAI_LON });
+      const { items, total, thieu } = await taiReadyCongDoan(listReadyCandidates, search);
       setRows(items);
       setMeta({ total });
       if (thieu) show(`Chỉ tải được ${items.length}/${total} phần in — hãy thu hẹp bằng ô tìm kiếm`, 'error');
@@ -219,7 +227,7 @@ export default function ReadyPage() {
   const refresh = useCallback(async () => {
     try {
       // ⚠ Lượt tải NGẦM: cờ `thieu` CỐ Ý không báo — người dùng không bấm gì, toast đỏ ở đây là quấy rầy.
-      const { items, total } = await taiHetTrang((p) => listReadyCandidates({ search, ...p }), { limit: LIMIT_TAI_LON });
+      const { items, total } = await taiReadyCongDoan(listReadyCandidates, search);
       setRows(items);
       setMeta({ total });
       getReadyItemCounts().then((c) => setCounts(c.data)).catch(() => {});
@@ -273,7 +281,8 @@ export default function ReadyPage() {
   // Danh sách cho modal Quét/tích: 1 dòng / PHẦN IN (dòng đầu). Quét code phần mà đưa cả 2 dòng loại
   // đợt vải vào thì `khongGomSet` coi là "mã trỏ nhiều phần in" và từ chối — vòng thử từng nhóm nằm ở
   // `onScanAction` bên dưới.
-  const scanRows = rows.filter((r, i) => rows.findIndex((x) => x.id === r.id) === i);
+  const scanDs = rows.filter((r) => laDongEp(r) === (scanGd === GD_EP));
+  const scanRows = scanDs.filter((r, i) => scanDs.findIndex((x) => x.id === r.id) === i);
 
   const openBulk = () => setBulk({ ma: permItems[0]?.ma || '' });
 
@@ -299,16 +308,18 @@ export default function ReadyPage() {
       //   — đúng lỗi người dùng báo 16/09/2026. Chỉ dòng KHÔNG có đợt chờ nào (nhánh Test Run trả về)
       //   mới đi đường hàng loạt mức phần in như cũ.
       const coDot = (r) => Array.isArray(r.dot_vai_ids) && r.dot_vai_ids.length > 0;
-      const thuong = [...new Set(chon.filter((r) => !coDot(r)).map((r) => r.id))];
       const tach = chon.filter(coDot);
       let okCount = 0;
       let skippedCount = 0;
-      if (thuong.length) {
-        const res = await confirmReadyBulk({ phanInIds: thuong, ma: bulk.ma, value: bulk.value || undefined });
+      // Mỗi CÔNG ĐOẠN 1 lượt hàng loạt (dòng Ép/Logo dùng bộ checklist riêng — 14/11/2026).
+      for (const ep of [false, true]) {
+        const thuong = [...new Set(chon.filter((r) => !coDot(r) && laDongEp(r) === ep).map((r) => r.id))];
+        if (!thuong.length) continue;
+        const res = await confirmReadyBulk({ phanInIds: thuong, ma: bulk.ma, value: bulk.value || undefined, ...(ep ? { giaiDoan: GD_EP } : {}) });
         okCount += res.data.okCount; skippedCount += res.data.skippedCount;
       }
       for (const r of tach) {
-        try { await confirmReadyItemsBatch(r.id, [{ ma: bulk.ma }], r.dot_vai_ids); okCount += 1; }
+        try { await confirmReadyItemsBatch(r.id, [{ ma: bulk.ma }], r.dot_vai_ids, gdCuaDong(r)); okCount += 1; }
         catch (e) { skippedCount += 1; }
       }
       show(`Đã xác nhận ${okCount} dòng${skippedCount ? `, bỏ qua ${skippedCount}` : ''}`);
@@ -332,7 +343,7 @@ export default function ReadyPage() {
     }] : []),
     { key: 'ma_phan', header: 'Code phần', className: 'font-medium text-ink', copyText: (r) => r.ma_phan, render: (r) => (
       <div>
-        <div>{r.ma_phan || '—'}</div>
+        <CodePhanCongDoan ma={r.ma_phan} luong={r.luong_sx} gd={r.giai_doan} hienLogo />
         {btMap.has(r.id) && (
           <span title={btMap.get(r.id)} className="mt-1 inline-block"><Badge tone="danger"><Icon name="alert-triangle" size={12} className="mr-1" />Bất thường</Badge></span>
         )}
@@ -380,10 +391,15 @@ export default function ReadyPage() {
     // ⚠ Backend/quyền/checkpoint GIỮ NGUYÊN — Film vẫn là mục thật, vẫn bấm riêng được trong panel.
     // Hàng GIA CÔNG (II/AD) không làm khuôn lẫn film ⇒ ô này để trống.
     { key: 'khuon_done', header: `Film-Khuôn${counts.khuon ? ` (${counts.khuon})` : ''}`, className: 'text-center', copy: false,
-      render: (r) => (khuonRequired(r.ten_khach_hang)
-        ? FilmKhuonCell(r)
-        : <span className="text-ink-soft" title="Hàng gia công — không cần xác nhận Film/Khuôn">—</span>) },
-    { key: 'muc_done', header: `Mực${counts.muc ? ` (${counts.muc})` : ''}`, className: 'text-center', copy: false, render: (r) => DoneCell(r.muc_done) },
+      render: (r) => (khuonRequired(r)
+        ? (r.kt_ep ? DoneCell(r.khuon_done) : FilmKhuonCell(r))
+        : <span className="text-ink-soft" title={r.kt_ep ? `Ép/Logo — ${NHAN_KT_YC[r.kt_yc] || ''}` : 'Hàng gia công — không cần xác nhận Film/Khuôn'}>—</span>) },
+    { key: 'muc_done', header: `Mực${counts.muc ? ` (${counts.muc})` : ''}`, className: 'text-center', copy: false,
+      render: (r) => (mucRequired(r) ? DoneCell(r.muc_done)
+        : <span className="text-ink-soft" title={`Ép/Logo — ${NHAN_KT_YC[r.kt_yc] || ''}`}>—</span>) },
+    // Cột HSKT (mig 134) — chỉ hiện khi có dòng Ép/Logo cần xác nhận HSKT.
+    ...(rows.some(hsktRequired) ? [{ key: 'hskt_done', header: 'HSKT', className: 'text-center', copy: false,
+      render: (r) => (hsktRequired(r) ? DoneCell(r.hskt_done) : <span className="text-ink-soft">—</span>) }] : []),
     { key: 'trang_thai_ready', header: 'Trạng thái', render: (r) => {
       const s = STATUS[r.trang_thai_ready] || STATUS.CHUA;
       return <Badge tone={s.tone}>{s.label}</Badge>;
@@ -463,15 +479,17 @@ export default function ReadyPage() {
           // đúng trạng thái của đợt đó, nếu không nó nói "đã xác nhận" trong khi bảng nói chưa.
           dotVaiIds: (r.dot_vai_ids && r.dot_vai_ids.length) ? r.dot_vai_ids : null,
           loai: r.loai_dot_vai,
+          gd: gdCuaDong(r),
+          luong: r.luong_sx,
         })}
-        rowClassName={(r) => slaRowClass(evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status)}
+        rowClassName={(r) => `${slaRowClass(evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status)}${laDongEp(r) ? ' border-l-[3px] border-l-orange-300' : ''}`}
         emptyText="Tất cả phần in đã READY 🎉" />
 
       {sel && (() => {
         // Dòng đang mở (đọc lại từ `rows` ⇒ trạng thái nhận file luôn mới sau khi tải ngầm).
         const dongSel = rows.find((x) => x._key === sel.key);
         return (
-          <ReadyPanel phanInId={sel.id} dotVaiIds={sel.dotVaiIds} loaiDotVai={sel.loai}
+          <ReadyPanel phanInId={sel.id} dotVaiIds={sel.dotVaiIds} loaiDotVai={sel.loai} giaiDoan={sel.gd} luongSx={sel.luong}
             truocXacNhan={() => hoiLyDoNghen(rows.filter((x) => x.id === sel.id))}
             onClose={() => setSel(null)} onChanged={load} onToast={show}
             ungVienGn={ungVienGn(viewRows, { pinId: (r) => r.id, dotIds: (r) => r.dot_vai_ids })}
@@ -541,6 +559,16 @@ export default function ReadyPage() {
         disabledScan={scanSel.size === 0}
         renderHeader={(
           <div className="rounded-control border border-line bg-surface-muted px-3 py-2">
+            {coDongEp && (
+              <div className="mb-2 flex flex-wrap items-center gap-3">
+                <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Công đoạn</span>
+                {[['IN', 'In / In kiếng'], [GD_EP, 'Ép/Logo']].map(([v, ten]) => (
+                  <label key={v} className="flex cursor-pointer items-center gap-1.5 text-sm text-ink">
+                    <input type="radio" name="scan-gd" checked={scanGd === v} onChange={() => setScanGd(v)} />{ten}
+                  </label>
+                ))}
+              </div>
+            )}
             <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-ink-soft">Mục xác nhận khi quét</div>
             {permItems.length === 0 ? (
               <div className="text-xs text-danger">Bạn không có quyền xác nhận mục nào.</div>
@@ -593,24 +621,25 @@ export default function ReadyPage() {
           //    người đứng máy không biết mình còn thiếu lần nào.)
           // ⚠ Backend nhận TẬP CON bất kỳ của các đợt đang chờ (`chonNhom`) nên gửi hết id trong MỘT
           //   lời gọi — 1 transaction, không có cảnh nửa đợt xác nhận được nửa đợt lỗi.
-          const nhom = rows.filter((x) => x.id === r.id
+          const gdQ = scanGd === GD_EP ? GD_EP : undefined;
+          const nhom = scanDs.filter((x) => x.id === r.id
             && Array.isArray(x.dot_vai_ids) && x.dot_vai_ids.length > 0);
           if (!nhom.length) {
-            await confirmReadyItemsBatch(r.id, items.map((ma) => ({ ma })));
-            st.push({ items, dotVaiIds: null, loai: null });
+            await confirmReadyItemsBatch(r.id, items.map((ma) => ({ ma })), undefined, gdQ);
+            st.push({ items, dotVaiIds: null, loai: null, gd: gdQ });
             return;
           }
           const tatCaIds = [...new Set(nhom.flatMap((g) => g.dot_vai_ids))];
           const nhan = nhom.length > 1
             ? `${nhom.length} đợt` : (nhom[0].loai_dot_vai || null);
-          await confirmReadyItemsBatch(r.id, items.map((ma) => ({ ma })), tatCaIds);
-          st.push({ items, dotVaiIds: tatCaIds, loai: nhan });
+          await confirmReadyItemsBatch(r.id, items.map((ma) => ({ ma })), tatCaIds, gdQ);
+          st.push({ items, dotVaiIds: tatCaIds, loai: nhan, gd: gdQ });
         }}
         onUndo={async (r) => {
           const st = scanItemsRef.current[r.id] || [];
           const cuoi = st.pop() || { items: [...scanSel], dotVaiIds: null };
           for (const ma of cuoi.items) {
-            try { await uncheckReadyItem(r.id, ma, cuoi.dotVaiIds); } catch { /* đã bỏ hoặc chưa có */ }
+            try { await uncheckReadyItem(r.id, ma, cuoi.dotVaiIds, cuoi.gd); } catch { /* đã bỏ hoặc chưa có */ }
           }
         }}
       />

@@ -12,9 +12,9 @@ const TONE = {
 export default function CongDoanBadge({ luong, gd, hienLogo = false, className = '', title }) {
   if (hienLogo && laLogo(luong)) {
     return (
-      <span title={title || 'Luồng Logo — không qua Kỹ thuật / Test Run / Release 2'}
+      <span title={title || 'Chỉ công đoạn Ép/Logo — qua READY, không qua Test Run'}
         className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${TONE.LOGO} ${className}`}>
-        Logo
+        Ép/Logo
       </span>
     );
   }
@@ -30,7 +30,7 @@ export default function CongDoanBadge({ luong, gd, hienLogo = false, className =
   if (!nhan) return null;
   const ep = chuanGd(gd) === GD_EP;
   return (
-    <span title={title || (ep ? 'Công đoạn ép ủi (lệnh riêng của phần in 2 công đoạn)' : 'Công đoạn in (lệnh riêng của phần in 2 công đoạn)')}
+    <span title={title || (ep ? `Công đoạn ${nhan} (lệnh riêng của phần in 2 công đoạn)` : `Công đoạn ${nhan} (lệnh riêng của phần in 2 công đoạn)`)}
       className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${ep ? TONE.EP : TONE.IN} ${className}`}>
       {nhan}
     </span>

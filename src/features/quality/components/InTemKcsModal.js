@@ -148,6 +148,7 @@ export default function InTemKcsModal({ open, rows, busy, onClose, onIn }) {
               <th className="px-2 py-2">Màu · Kích</th>
               <th className="px-2 py-2 text-right">SL kiểm</th>
               <th className="px-2 py-2 text-right">SL đạt</th>
+              <th className="px-2 py-2 text-right">SL lỗi</th>
               <th className="px-2 py-2">Giờ kiểm</th>
             </tr>
           </thead>
@@ -184,6 +185,7 @@ export default function InTemKcsModal({ open, rows, busy, onClose, onIn }) {
                 </td>
                 <td className="px-2 py-2 text-right tabular-nums">{fmtNum(r.so_luong_kiem)}</td>
                 <td className="px-2 py-2 text-right tabular-nums">{fmtNum(r.so_luong)}</td>
+                <td className="px-2 py-2 text-right tabular-nums">{fmtNum(r.so_luong_loi || 0)}</td>
                 <td className="whitespace-nowrap px-2 py-2 tabular-nums">{r.tg ? fmtDateTime(r.tg) : '—'}</td>
               </tr>
             ))}

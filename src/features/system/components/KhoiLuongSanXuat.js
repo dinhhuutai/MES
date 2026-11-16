@@ -21,7 +21,7 @@ const MO_TA = {
   THUONG: 'Luồng hiện tại: Kỹ thuật → IQC → Release 1 → Test Run → Release 2 → In → KCS → OQC → Giao.',
   IN_KIENG: '2 công đoạn: in kiếng + ép ủi — 2 tờ kế hoạch (2 lệnh), tem in kiếng nhập loại kiếng + hệ số, tem in không vào KCS.',
   IN_EP: '2 công đoạn: in + ép ủi — 2 tờ kế hoạch (2 lệnh), tem công đoạn đầu không vào KCS.',
-  LOGO: 'Không qua Kỹ thuật / IQC / Test Run / Release 2: vào thẳng Kế hoạch, release xong vào Chờ chạy (Tổ Logo).',
+  LOGO: '1 công đoạn Ép/Logo: qua Kỹ thuật + QA READY rồi mới vào Kế hoạch; release xong vào thẳng Chờ chạy (không Test Run).',
   KIENG_KHONG_EP: '1 công đoạn in kiếng (đã bỏ ép ủi) — như In thường nhưng tem in vẫn nhập loại / SL / hệ số kiếng.',
 };
 

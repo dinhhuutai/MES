@@ -42,7 +42,14 @@ import VuaQuet from '../../../components/common/VuaQuet';
 import SuaNhieuModal, { danhGiaSua, formMoi as formSuaMoi, O_SO as O_SO_SUA } from '../components/SuaNhieuModal';
 import TichTemNhapModal from '../../../components/common/TichTemNhapModal';
 import useDsNguoi, { nhoTen, KHOA_NGUOI_SUA } from '../../../hooks/useDsNguoi';
+// Badge công đoạn của tem (phần in 2 công đoạn) dưới mã tem — 14/11/2026.
+import CongDoanBadge from '../../../components/common/CongDoanBadge';
+import { laHaiCongDoan } from '../../../utils/luongSanXuat';
+import NhanSuaModal from '../components/NhanSuaModal';
 
+// 14/11/2026: màn Sửa chỉ có phần ĐÃ NHẬN SỬA (phân loại lỗi → Chờ nhận sửa → nút "Nhận sửa"; BE `utils/choSua.js`)
+//   ⇒ báo rõ khi quét không thấy. Cột "SL cần sửa" = phần đang sửa (đã nhận, chưa sửa).
+const KHONG_CHO_SUA = 'Không có tem chờ sửa khớp mã này — tem có hư phải Phân loại lỗi rồi bấm "Nhận sửa" trước';
 const empty = { soLuongHuyThang: '', soLuongSua: '', soLuongSuaDat: '', soLuongSuaHuy: '' };
 // Tối đa số tem tích để xác nhận sửa 1 lượt (27/10/2026, như KCS) — mỗi tem 1 lần gọi recordSua tuần tự.
 const TOI_DA_TICH = 100;
@@ -95,6 +102,7 @@ export default function SuaPage() {
   const [histOpen, setHistOpen] = useState(false);
   const [doneOpen, setDoneOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
+  const [nhanOpen, setNhanOpen] = useState(false); // hộp "Nhận sửa" (mig 132)
   // TEM ĐÃ TÍCH (27/10/2026, như KCS): giữ bản dòng lúc tích ⇒ dòng tích ghim đầu bảng kể cả khi ô tìm / bộ lọc loại nó.
   const [chon, setChon] = useState([]);
   const daChon = useMemo(() => new Set(chon.map((r) => r.tem_id)), [chon]);
@@ -168,8 +176,8 @@ export default function SuaPage() {
       const res = await listSuaCandidates({ search: code });
       const row = timTheoMaTem(res.data || [], code);
       if (!row) {
-        setVuaQuet({ ma: code, tone: 'loi', chu: 'Không có tem chờ sửa khớp mã này' });
-        show(`Tem ${code} không có phần chờ sửa`, 'error');
+        setVuaQuet({ ma: code, tone: 'loi', chu: KHONG_CHO_SUA });
+        show(`Tem ${code} không có phần chờ sửa (hàng hư phải phân loại lỗi rồi Nhận sửa trước)`, 'error');
         oTim.datConTro();
         return;
       }
@@ -196,7 +204,7 @@ export default function SuaPage() {
   const traTemSua = async (code) => {
     const res = await listSuaCandidates({ search: code });
     const row = timTheoMaTem(res.data || [], code);
-    return row ? { row } : { loi: 'Không có tem chờ sửa khớp mã này' };
+    return row ? { row } : { loi: KHONG_CHO_SUA };
   };
   const sauTichTem = (so, loi, ketIn) => {
     taiNgam();
@@ -381,7 +389,7 @@ export default function SuaPage() {
       const res = await listSuaCandidates({ search: code });
       const row = timTheoMaTem(res.data || [], code);
       if (row) openRow(row);
-      else show(`Tem ${code} không có phần chờ sửa`, 'error');
+      else show(`Tem ${code} không có phần chờ sửa (hàng hư phải phân loại lỗi rồi Nhận sửa trước)`, 'error');
     } catch (e) { show(e.message || 'Không tra được tem', 'error'); }
   };
 
@@ -440,6 +448,7 @@ export default function SuaPage() {
     { key: 'ma_tem', header: 'Tem', render: (r) => (
       <div>
         <Badge tone="info">{r.ma_tem}</Badge>
+        {laHaiCongDoan(r.luong_sx) && <div className="mt-1"><CongDoanBadge luong={r.luong_sx} gd={r.giai_doan} /></div>}
         {(r.tra_ve || r.tra_ve_ly_do) && <div className="mt-1"><TraVeBadge data={r.tra_ve || r.tra_ve_ly_do} label="Bị OQC trả về" nguon="OQC" /></div>}
       </div>
     ) },
@@ -461,7 +470,16 @@ export default function SuaPage() {
     { key: 'ca', header: 'Ca SX', render: (r) => (r.ca ? <Badge tone="default">{r.ca}</Badge> : '—') },
     { key: 'nguoi_truoc', header: 'Người XN trạm trước', render: (r) => r.nguoi_truoc || '—' },
     { key: 'con_sua', header: 'SL cần sửa', className: 'text-right tabular-nums font-semibold',
-      render: (r) => <span className="text-amber-600">{fmtNum(r.con_sua)}</span> },
+      render: (r) => (
+        <div>
+          <span className="text-amber-600">{fmtNum(r.con_sua)}</span>
+          {Number(r.cho_nhan_sua) > 0 && (
+            <div className="text-[11px] font-normal text-ink-soft" title="Phần đã phân loại nhưng chưa nhận sửa — bấm Nhận sửa">
+              còn {fmtNum(r.cho_nhan_sua)} chờ nhận
+            </div>
+          )}
+        </div>
+      ) },
     { key: 'actions', header: '', className: 'text-right', render: (r) =>
       canSua && <Button className="px-3 py-1.5" onClick={() => openRow(r)}>Sửa</Button> },
   ];
@@ -501,6 +519,7 @@ export default function SuaPage() {
       <Toolbar title="Sửa hàng lỗi" subtitle="Xử lý tem lỗi từ KCS / OQC"
         search={search} onSearch={setSearch} searchPlaceholder="Quét mã tem rồi Enter để mở Sửa — gõ để tìm..." searchRef={oTim.ref}
         onSearchEnter={canSua ? quetSua : undefined}>
+        {canSua && <Button variant="secondary" icon="package" onClick={() => setNhanOpen(true)}>Nhận sửa</Button>}
         {canSua && <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét QR</Button>}
         {canSua && <Button icon="barcode" onClick={() => setTichTemOpen(true)}>Tích tem</Button>}
         {canSua && chon.length > 0 && (
@@ -752,6 +771,7 @@ export default function SuaPage() {
         tenMan="Sửa" rows={rows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status} tenFile="nghen-sua"
         maTrang="SX_SUA" />
       {lyDoNghenModal}
+      <NhanSuaModal open={nhanOpen} onClose={() => setNhanOpen(false)} show={show} onDone={() => taiNgam()} />
       <Toast toast={toast} />
     </div>
   );

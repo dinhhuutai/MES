@@ -12,7 +12,7 @@ import useToast from '../../../hooks/useToast';
 import usePermissions from '../../../hooks/usePermissions';
 import {
   getRun, printTemBatch, getTemLabel, savePhanCong, listToIn, listLyDoNgung, stopLine, resumeLine, addVaiHuy, finishRun,
-  gopLenh, luuLyDoBoSungDotVai, doiChuyen, listChuyen,
+  gopLenh, doiChuyen, listChuyen,
 } from '../../../services/productionService';
 import { listUserOptions } from '../../../services/userService';
 import printTemLabel, { printTemLabelNhieu, moSanCuaSoIn, dongCuaSoIn } from '../utils/printTemLabel';
@@ -95,10 +95,9 @@ const ChoVai = ({ v, k }) => (v && v[k] > 0 ? (
     Chờ: {fmtNum(v[k])}
   </div>
 ) : null);
-// Đợt BỔ SUNG của 1 dòng (đợt đầu thuộc loại BO_SUNG trong các lệnh của dòng) — ô SL bổ sung ghi vào đợt này.
+// Đợt BỔ SUNG của 1 dòng (đợt đầu thuộc loại BO_SUNG trong các lệnh của dòng) — có ⇒ dòng hiện 2 ô SL bổ sung CỦA TEM.
 const dotBoSungCuaDong = (d) => (d.nhom || [d.run]).flatMap((r) => r.dot_vai || [])
   .filter((x) => (!d.dotVaiId || x.dot_vai_ve_id === d.dotVaiId) && x.ma_loai_dot_vai === 'BO_SUNG')[0] || null;
-const chuoiSo = (v) => (v == null ? '' : String(v));
 
 function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn }) {
   // key dòng → { sl, huy, thieu, gc, btpTruoc, btpCuoi, bsCty, bsKhach, loaiKiengId, heSoKieng, slKieng } (chuỗi / bool)
@@ -116,16 +115,11 @@ function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn 
   });
   const thieuKiengDong = (d) => (kiengDong(d) && so(d.key) > 0 ? thieuKieng(kiengDong(d), kiengCuaDong(d)) : '');
   const coVai = (k) => o(k, 'huy') > 0 || o(k, 'thieu') > 0;
-  // SL bổ sung (đợt BO_SUNG, 25/10/2026): ô đổ sẵn số đã lưu; khác số đã lưu ⇒ ghi khi bấm In.
-  const bsDoi = (d) => {
-    const dot = dotBoSungCuaDong(d);
-    if (!dot) return null;
-    const cty = giaTri(d.key, 'bsCty', chuoiSo(dot.sl_bo_sung_cty));
-    const khach = giaTri(d.key, 'bsKhach', chuoiSo(dot.sl_bo_sung_khach));
-    if (cty === chuoiSo(dot.sl_bo_sung_cty) && khach === chuoiSo(dot.sl_bo_sung_khach)) return null;
-    return { dotVaiId: dot.dot_vai_ve_id, slCty: cty === '' ? null : soNguyen(cty), slKhach: khach === '' ? null : soNguyen(khach),
-      ghiChu: dot.ghi_chu_bo_sung || '' };
-  };
+  // SL bổ sung do công ty / khách CỦA TEM (16/11/2026, mig 135 — "theo từng 1 tem"): dòng có đợt BO_SUNG ⇒ 2 ô, gửi theo tem
+  //   (BE `printTemBatch` nhận theo item). Σ ≤ SL in của dòng (1 dòng = 1 tem).
+  const bsDong = (d) => (dotBoSungCuaDong(d)
+    ? { slBsCty: String(giaTri(d.key, 'bsCty', '')).trim(), slBsKhach: String(giaTri(d.key, 'bsKhach', '')).trim() } : null);
+  const bsVuot = (d) => !!bsDong(d) && so(d.key) > 0 && o(d.key, 'bsCty') + o(d.key, 'bsKhach') > so(d.key);
   // Trần: Σ dòng của 1 lệnh ≤ còn in được của lệnh; dòng đợt vải ≤ 110% SL vào SX của đợt (backend chặn lại y vậy).
   //   Dòng nhóm (nhiều lệnh cùng code phần, sẽ GỘP thành 1 lệnh khi in) ≤ 110% TỔNG SL release − tổng đã in.
   //   29/10/2026: dòng tích BTP trước KHÔNG bị chặn số lượng; tem BTP trước đã in không tính vào trần của tem thường
@@ -151,21 +145,21 @@ function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn 
     ...d, soLuong: so(d.key), soLuongHuy: o(d.key, 'huy'), soLuongThieu: o(d.key, 'thieu'),
     gcMauVai: String(giaTri(d.key, 'gc', meta.gcMauVai || '')).trim(),
     btpTruoc: !!giaTri(d.key, 'btpTruoc', !!meta.btpTruoc), btpCuoi: !!giaTri(d.key, 'btpCuoi', !!meta.btpCuoi),
-    boSung: bsDoi(d),
+    ...(bsDong(d) || {}),
     ...(kiengDong(d) ? kiengCuaDong(d) : {}),
   }];
   // Số vải hủy / thiếu CHỜ gắn tem của lệnh (lưu ở sidebar 1 lệnh — 21/10/2026): hiện ở DÒNG ĐẦU của lệnh. Lệnh nào
   //   nhập hủy/thiếu ở bảng này ⇒ BE ưu tiên số ở bảng, bỏ số chờ; không nhập ⇒ số chờ gắn vào tem đầu của lệnh.
   const choCuaDong = (d) => (dong.find((x) => x.run === d.run) === d ? d.run.vai_cho_tem : null);
   const coSo = dong.filter((d) => so(d.key) > 0);
-  const coNhap = dong.filter((d) => so(d.key) > 0 || coVai(d.key) || bsDoi(d));
-  const coVuot = coSo.some(vuot);
+  const coNhap = dong.filter((d) => so(d.key) > 0 || coVai(d.key));
+  const coVuot = coSo.some(vuot) || coSo.some(bsVuot);
   const coThieuKieng = coSo.some((d) => !!thieuKiengDong(d));
   const chiLuu = coSo.length > 0 && coSo.every((d) => !!giaTri(d.key, 'btpTruoc', !!meta.btpTruoc));
-  const chiVai = coNhap.length - coSo.length; // dòng chỉ ghi hủy/thiếu / bổ sung, không in tem
+  const chiVai = coNhap.length - coSo.length; // dòng chỉ ghi hủy/thiếu, không in tem
   const nhanNut = coSo.length
     ? `${chiLuu ? 'Lưu' : 'In'} ${fmtNum(coSo.length)} tem${chiVai ? ` + ghi ${fmtNum(chiVai)} dòng` : ''}`
-    : `Ghi hư/thiếu/bổ sung (${fmtNum(chiVai)} dòng)`;
+    : `Ghi hư/thiếu (${fmtNum(chiVai)} dòng)`;
   const chk = 'h-4 w-4 rounded border-line text-primary focus:ring-primary/30';
 
   return (
@@ -192,7 +186,7 @@ function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn 
               <th className={`${TH} text-right`}>SL thiếu</th>
               <th className={TH}>GC màu vải</th>
               <th className={TH}>BTP</th>
-              <th className={TH}>SL bổ sung (cty / khách)</th>
+              <th className={TH}>SL bổ sung của tem (cty / khách)</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
@@ -258,12 +252,12 @@ function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn 
                     {dotBs ? (
                       <div className="flex items-center gap-1">
                         <input type="number" min="0" aria-label="SL bổ sung do công ty" placeholder="Cty"
-                          value={giaTri(d.key, 'bsCty', chuoiSo(dotBs.sl_bo_sung_cty))}
-                          onChange={(e) => datO(d.key, 'bsCty', e.target.value)} className={`${numCls} !w-20`} />
+                          value={giaTri(d.key, 'bsCty', '')}
+                          onChange={(e) => datO(d.key, 'bsCty', e.target.value)} className={`${numCls} !w-20 ${bsVuot(d) ? 'border-danger' : ''}`} />
                         <span className="text-ink-soft">/</span>
                         <input type="number" min="0" aria-label="SL bổ sung do khách" placeholder="Khách"
-                          value={giaTri(d.key, 'bsKhach', chuoiSo(dotBs.sl_bo_sung_khach))}
-                          onChange={(e) => datO(d.key, 'bsKhach', e.target.value)} className={`${numCls} !w-20`} />
+                          value={giaTri(d.key, 'bsKhach', '')}
+                          onChange={(e) => datO(d.key, 'bsKhach', e.target.value)} className={`${numCls} !w-20 ${bsVuot(d) ? 'border-danger' : ''}`} />
                       </div>
                     ) : <span className="text-xs text-ink-soft">—</span>}
                   </td>
@@ -533,7 +527,7 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh, t
   const doInNhieu = async (dongVao) => {
     // Gom theo phiếu, giữ thứ tự dòng ⇒ phiếu CÓ in tem: 1 lượt `printTemBatch` (dòng chỉ có hủy/thiếu đi kèm với
     //   SL 0 — BE ghi sổ vải, không tạo tem); phiếu CHỈ ghi vải: `addVaiHuy` như 2 ô Vải hủy / thiếu của RunPanel.
-    // 25/10/2026: GC màu vải + BTP trước/cuối RIÊNG từng dòng (BE `printTemBatch` nhận theo item); SL bổ sung ghi ở đợt.
+    // 25/10/2026: GC màu vải + BTP trước/cuối RIÊNG từng dòng (BE `printTemBatch` nhận theo item); SL bổ sung theo tem (mig 135).
     const gomTheoPhieu = (ds) => {
       const out = [];
       ds.forEach((d) => {
@@ -545,6 +539,8 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh, t
           gcMauVai: d.gcMauVai || null, btpTruoc: !!d.btpTruoc, btpCuoi: !!d.btpCuoi,
           // In kiếng: bộ loại · hệ số · SL kiếng RIÊNG của dòng (BE `printTemBatch` nhận theo item).
           ...(d.loaiKiengId !== undefined ? { loaiKiengId: d.loaiKiengId, heSoKieng: d.heSoKieng, slKieng: d.slKieng } : {}),
+          // SL bổ sung công ty / khách CỦA TEM của dòng (mig 135).
+          ...(d.slBsCty !== undefined ? { slBsCty: d.slBsCty, slBsKhach: d.slBsKhach } : {}),
           dotVaiGhi: d.dotVaiId || d.info?.dot_vai_ve_id || null });
       });
       return out;
@@ -573,7 +569,6 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh, t
     const tems = [];
     const loi = [];
     let soVai = 0;
-    let soBs = 0;
     const meta = metaGuiDi(temMeta);
     // ① GỘP LỆNH: dòng nhóm (nhiều lệnh cùng code phần + cùng chuyền) có in tem ⇒ gộp thành 1 lệnh rồi in 1 tem đủ số
     //   (25/10/2026, người dùng: "gộp số lượng lại thành 1 phần 1 dòng"). Gộp lỗi ⇒ bỏ dòng đó, báo lỗi.
@@ -615,15 +610,6 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh, t
         loi.push(`${tenLenh(g.run)}: ${e.message || 'lỗi'}`);
       }
     }
-    // ② SL BỔ SUNG (đợt BO_SUNG) — ghi vào đợt vải như khối "Số lượng bổ sung" của RunPanel.
-    for (const d of dong) {
-      if (!d.boSung) continue;
-      try {
-        // eslint-disable-next-line no-await-in-loop
-        await luuLyDoBoSungDotVai(d.boSung.dotVaiId, { slCty: d.boSung.slCty, slKhach: d.boSung.slKhach, ghiChu: d.boSung.ghiChu });
-        soBs += 1;
-      } catch (e) { loi.push(`${tenLenh(d.run)}: chưa lưu SL bổ sung — ${e.message || 'lỗi'}`); }
-    }
     try {
       const temNhan = tems.filter((t) => !t.btp_truoc);
       if (w) await inNhan(temNhan, w);
@@ -631,7 +617,6 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh, t
       const phan = [
         tems.length ? `Đã tạo ${fmtNum(tems.length)} tem${soBtp ? ` (${fmtNum(soBtp)} tem BTP trước — không in nhãn)` : ''} — tự vào xe phơi` : null,
         soVai ? `đã ghi hư/thiếu ${fmtNum(soVai)} dòng (lệnh không in tem: lưu chờ gắn tem in kế tiếp)` : null,
-        soBs ? `đã lưu SL bổ sung ${fmtNum(soBs)} đợt` : null,
       ].filter(Boolean).join(' · ');
       if (phan) show(`${phan}${loi.length ? ` · LỖI: ${loi.join(' · ')}` : ''}`, loi.length ? 'error' : 'success');
       else show(`Chưa ghi được gì — ${loi.join(' · ')}`, 'error');

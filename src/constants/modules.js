@@ -12,6 +12,8 @@ export const MODULES = [
     children: [
       { ten: 'Danh sách phần in vải về', route: '/don-hang/phan-in', perm: 'ORDER_VIEW' },
       { ten: 'Phần in chờ sửa thông tin', route: '/don-hang/cho-sua-thong-tin', perm: ['GN_SUA_THONG_TIN', 'ORDER_VIEW', 'READY_VIEW', 'READY_QC'] },
+      // Lịch sử thao tác 1 phần in (16/11/2026) — BE `/api/lich-su-phan-in` gác cùng 2 quyền.
+      { ten: 'Lịch sử phần in', route: '/don-hang/lich-su-phan-in', perm: ['ORDER_VIEW', 'PHAN_IN_ADMIN'] },
     ],
   },
   {
@@ -189,6 +191,9 @@ export const MODULES = [
       // Chốt chặn "bán hàng tích tem" (mig 092). Tem chưa tích thì màn Giao hàng KHÔNG hiện.
       // Quyền trang = WORKFLOW_VIEW (quản trị); tổ giao tích ở màn Giao hàng. API `/giao-hang/tich/*` giữ nguyên.
       { ten: 'Chờ GN tích', route: '/he-thong/tich-giao', perm: 'WORKFLOW_VIEW' },
+      // Chờ nhận sửa (mig 132, 14/11/2026) — chốt giữa Phân loại lỗi và màn Sửa, cùng kiểu Chờ GN tích. Tổ sửa (SUA) thao tác
+      //   được (Nhận sửa · hủy lượt nhận); Phân loại lỗi / KCS chỉ xem.
+      { ten: 'Chờ nhận sửa', route: '/he-thong/cho-nhan-sua', perm: ['WORKFLOW_VIEW', 'SUA'], permXem: ['PHAN_LOAI_LOI', 'KCS'] },
       { ten: 'Đồng bộ ERP', route: '/he-thong/erp-sync', perm: 'ERP_SYNC' },
       { ten: 'Nhập tay đơn → đợt vải', route: '/he-thong/nhap-tay', perm: 'ERP_SYNC' },
       { ten: 'Cập nhật SL nhận vải / release', route: '/he-thong/cap-nhat-vai', perm: 'ERP_SYNC' },
@@ -262,7 +267,7 @@ export const NHOM_HE_THONG = [
     '/he-thong/erp-sync', '/he-thong/nhap-tay', '/he-thong/cap-nhat-vai', '/he-thong/quan-tri-phan-in', '/he-thong/btp-khac-ke-hoach',
     '/he-thong/khach-hang', '/he-thong/kpi-don-hang'] },
   { ma: 'THAO_TAC', ten: 'Hủy / tích tem', icon: 'history', routes: [
-    '/he-thong/lich-su-trang-thai', '/he-thong/tich-giao'] },
+    '/he-thong/lich-su-trang-thai', '/he-thong/tich-giao', '/he-thong/cho-nhan-sua'] },
   { ma: 'MAU_IN', ten: 'Mẫu in & danh mục', icon: 'printer', routes: [
     '/he-thong/mau-form', '/he-thong/thiet-ke-tem', '/he-thong/thiet-ke-phieu', '/he-thong/to-in'] },
   { ma: 'CAI_DAT', ten: 'Cài đặt', icon: 'settings', routes: [

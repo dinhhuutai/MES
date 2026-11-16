@@ -1,5 +1,9 @@
 import client from './axiosClient';
 
+// ⚠ READY THEO CÔNG ĐOẠN (14/11/2026): `giaiDoan` = bộ checklist — 'EP_UI' = công đoạn Ép/Logo của phần in 2 công đoạn,
+//   bỏ trống / 'IN' = bộ gốc (như cũ). Mọi lời gọi thao tác trên DÒNG READY phải gửi `giaiDoan` của dòng đó.
+const gdP = (gd) => (gd === 'EP_UI' ? { giaiDoan: 'EP_UI' } : {});
+
 export const getReadyConfig = () => client.get('/ready/config');
 export const listReadyCandidates = (params) => client.get('/ready/candidates', { params });
 export const listReadyQcCandidates = (params) => client.get('/ready/qc-candidates', { params });
@@ -9,26 +13,26 @@ export const getReadyItemCounts = () => client.get('/ready/item-counts');
 // Chỉ để hiện LÝ DO cho người quét (đã QC xong / đã release / đã hủy) — không dùng cho nghiệp vụ.
 export const traCuuMaQuet = (code) => client.get('/ready/tra-cuu', { params: { code } });
 // `dotVaiIds` (tùy chọn, mig 098): thao tác/xem theo 1 DÒNG LOẠI ĐỢT VẢI của phần in chờ ≥2 loại.
-export const getReadyDetail = (id, dotVaiIds) => client.get(`/ready/${id}`,
-  { params: dotVaiIds && dotVaiIds.length ? { dotVaiIds: dotVaiIds.join(',') } : {} });
+export const getReadyDetail = (id, dotVaiIds, gd) => client.get(`/ready/${id}`,
+  { params: { ...(dotVaiIds && dotVaiIds.length ? { dotVaiIds: dotVaiIds.join(',') } : {}), ...gdP(gd) } });
 // Xác nhận 1 mục kỹ thuật: ma ∈ KHUON|FILM|MUC|HSKT; value cho KHUON/FILM/MUC.
-export const confirmReadyItem = (id, ma, value, dotVaiIds) =>
-  client.post(`/ready/${id}/confirm/${ma}`, { value, dotVaiIds });
+export const confirmReadyItem = (id, ma, value, dotVaiIds, gd) =>
+  client.post(`/ready/${id}/confirm/${ma}`, { value, dotVaiIds, ...gdP(gd) });
 // Xác nhận nhiều mục cùng lúc: items = [{ ma, value }].
-export const confirmReadyItemsBatch = (id, items, dotVaiIds) =>
-  client.post(`/ready/${id}/confirm-batch`, { items, dotVaiIds });
+export const confirmReadyItemsBatch = (id, items, dotVaiIds, gd) =>
+  client.post(`/ready/${id}/confirm-batch`, { items, dotVaiIds, ...gdP(gd) });
 // Bulk 1 mục cho nhiều phần in (theo mã hàng): { phanInIds, ma, value }.
 export const confirmReadyBulk = (payload) => client.post('/ready/confirm-bulk', payload);
 // `dotVaiIds` = QC xác nhận THEO ĐỢT VẢI (21/09/2026); bỏ trống = mức phần in như cũ.
-export const confirmReadyQC = (id, dotVaiIds) =>
-  client.post(`/ready/${id}/confirm-qc`, { dotVaiIds: dotVaiIds || [] });
+export const confirmReadyQC = (id, dotVaiIds, gd) =>
+  client.post(`/ready/${id}/confirm-qc`, { dotVaiIds: dotVaiIds || [], ...gdP(gd) });
 // QC trả về Ready kỹ thuật: { checklists: ['FILM',...], lyDo }.
 export const returnReadyToTech = (id, body) => client.post(`/ready/${id}/tra-ve`, body);
 // Hủy xác nhận 1 mục (Admin/READY_CANCEL): ma ∈ KHUON|FILM|MUC|HSKT|QC_XAC_NHAN.
 // `dotVaiId` (09/10/2026): hủy lượt xác nhận THEO ĐỢT VẢI (dòng `ready_xac_nhan_dot`) — bỏ trống = mức phần in.
 export const cancelReadyItem = (id, ma, dotVaiId = null) => client.post(`/ready/${id}/huy`, { ma, ...(dotVaiId ? { dotVaiId } : {}) });
 // Bỏ tích 1 mục kỹ thuật ngay trong luồng Quét/tích (quyền tech, khi tích lộn): ma ∈ KHUON|FILM|MUC.
-export const uncheckReadyItem = (id, ma, dotVaiIds) => client.post(`/ready/${id}/uncheck/${ma}`, { dotVaiIds });
+export const uncheckReadyItem = (id, ma, dotVaiIds, gd) => client.post(`/ready/${id}/uncheck/${ma}`, { dotVaiIds, ...gdP(gd) });
 // Lịch sử trạng thái (xác nhận READY đang hiệu lực) theo ngày — cho trang Hệ thống.
 export const listConfirmHistory = (params) => client.get('/ready/lich-su-xac-nhan', { params });
 
