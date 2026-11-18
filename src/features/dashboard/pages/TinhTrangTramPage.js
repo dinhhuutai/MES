@@ -14,7 +14,7 @@ import taiSoDoPdf from '../utils/taiSoDoPdf';
 const CL_LABEL = { KHUON: 'Khuôn', FILM: 'Film', MUC: 'Mực', QC_XAC_NHAN: 'QC' };
 const TEM_TONE = {
   IN: 'default', DANG_PHOI: 'info', DA_KHO: 'info', CHO_CD_SAU: 'info', CHO_SUA: 'warning',
-  CHO_OQC: 'info', OQC_DAT: 'success', DA_GIAO: 'success', LOAI: 'danger', HUY: 'danger',
+  CHO_OQC: 'info', OQC_DAT: 'success', DA_GIAO: 'success', LOAI: 'danger', HUY: 'danger', DA_TACH: 'default',
 };
 const HEAD_TONE = {
   slate: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',

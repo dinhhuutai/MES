@@ -126,6 +126,8 @@ export const TT = {
   CHO_SUA: ['Chờ sửa', 'warning'],
   CHO_OQC: ['Chờ OQC', 'warning'],
   LOAI: ['Loại', 'danger'],
+  // Tem gốc đã tách hết hàng sang tem 17 (giao trước + chốt, hoặc sửa đạt) — hàng đi tiếp trên tem 17 (18/11/2026).
+  DA_TACH: ['Đã tách tem 17', 'default'],
   OQC_DAT: ['OQC đạt', 'success'],
   DA_GIAO: ['Đã giao', 'success'],
   HUY: ['Đã hủy', 'danger'],
@@ -384,9 +386,14 @@ export default function DanhSachTemView({
         (p) => fetcher({ search, ...thamSoLoc(filters), ...p }), { limit: LIMIT_TAI_LON }
       );
       if (thieu) show(`Chỉ tải được ${items.length}/${total} tem — hãy thu hẹp bằng bộ lọc`, 'error');
+      const cotSlIn = { header: 'SL in', width: 12, num: true, value: (r) => (r.so_luong == null ? null : Number(r.so_luong)) };
+      // Danh sách tem in (18/11/2026, người dùng: "cột số lượng in nằm sau cột kích phim"): chèn "SL in" ngay sau
+      //   "Kích phim" của bộ cột chung. Tem gia công giữ chỗ cũ (sau "Giờ nhận về").
+      const cotChung = cotTemChung((r) => maHienThi(r, laGiaCong));
+      if (!laGiaCong) cotChung.splice(cotChung.findIndex((c) => c.header === 'Kích phim') + 1, 0, cotSlIn);
       await exportCheckpointExcel({
         cols: [
-          ...cotTemChung((r) => maHienThi(r, laGiaCong)),
+          ...cotChung,
           { header: 'Trạng thái', width: 14, value: (r) => (TT[r.trang_thai] || [r.trang_thai || ''])[0] },
           { header: laGiaCong ? 'Giờ nhận về' : 'Giờ in tem', width: 18, center: true,
             value: (r) => (r.created_date ? new Date(r.created_date).toLocaleString('vi-VN') : '') },
@@ -396,7 +403,7 @@ export default function DanhSachTemView({
             { header: 'Giờ SX', width: 16, center: true,
               value: (r) => [r.gio_sx_bd, r.gio_sx_kt].filter(Boolean).join(' → ') },
           ]),
-          { header: 'SL in', width: 12, num: true, value: (r) => (r.so_luong == null ? null : Number(r.so_luong)) },
+          ...(laGiaCong ? [cotSlIn] : []),
           ...(laGiaCong ? [] : [
             { header: 'Vải hủy', width: 10, num: true, value: (r) => Number(r.sl_vai_huy_tem) || null },
             { header: 'Vải thiếu', width: 10, num: true, value: (r) => Number(r.sl_vai_thieu_tem) || null },

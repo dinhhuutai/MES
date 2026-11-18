@@ -40,7 +40,7 @@ import useNow from '../../../hooks/useNow';
 import { evalSla, slaRowClass } from '../../../utils/sla';
 import useLyDoNghen from '../../../hooks/useLyDoNghen';
 import VuaQuet from '../../../components/common/VuaQuet';
-import KcsNhieuModal, { danhGiaKcs, formMoi as formKcsMoi, O_SO as O_SO_KCS } from '../components/KcsNhieuModal';
+import KcsNhieuModal, { danhGiaKcs, coGiaoTruoc, formMoi as formKcsMoi, O_SO as O_SO_KCS } from '../components/KcsNhieuModal';
 import TichTemNhapModal from '../../../components/common/TichTemNhapModal';
 import KiemTruocKhoModal from '../components/KiemTruocKhoModal';
 import { trangThaiSla } from '../../../utils/nghen';
@@ -268,7 +268,8 @@ export default function KcsPage() {
     { key: 'ma', header: 'Tem', className: 'whitespace-nowrap', render: (r) => (
       <div className="leading-tight">
         <Badge tone="info">{r.ma || '—'}</Badge>
-        {r.ma_tem_goc && <div className="mt-0.5 text-xs text-ink-soft">Kiểm một phần · tem gốc {r.ma_tem_goc}</div>}
+        {/* Lượt tách tem 17: kiểm một phần (giao trước) HOẶC lượt chốt sau giao trước (18/11/2026). */}
+        {r.ma_tem_goc && <div className="mt-0.5 text-xs text-ink-soft">Tách tem 17 · tem gốc {r.ma_tem_goc}</div>}
       </div>
     ) },
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
@@ -357,9 +358,11 @@ export default function KcsPage() {
     const thieu = n(form.soLuongThieu); const du = n(form.soLuongDu); const mau = n(form.soLuongMau);
     const tong = canKiem + du - thieu;
     const daNhap = dat + hu + mau;
-    const dg = danhGiaKcs(canKiem, form);
+    const dg = danhGiaKcs(canKiem, form, coGiaoTruoc(editing));
     const motPhan = dg.motPhan ? dg : null;
-    return { canKiem, dat, hu, thieu, du, mau, tong, daNhap, lech: daNhap - tong, motPhan,
+    // Lượt chốt của tem đã giao trước: phần đạt thành tem 17 riêng (BE `recordKcs`, 18/11/2026).
+    const tem17 = dg.tem17 ? dg.chu : '';
+    return { canKiem, dat, hu, thieu, du, mau, tong, daNhap, lech: daNhap - tong, motPhan, tem17,
       can: motPhan ? motPhan.ok : (daNhap === tong && dat + hu > 0) };
   }, [editing, form]);
 
@@ -674,7 +677,7 @@ export default function KcsPage() {
             {canDoi.motPhan
               ? `${canDoi.motPhan.ok ? '✓ ' : ''}${canDoi.motPhan.chu}`
               : canDoi.can
-                ? '✓ Chênh lệch 0 — cân đối, lưu được'
+                ? `✓ Chênh lệch 0 — cân đối, lưu được${canDoi.tem17 ? ` · đã giao trước ⇒ ${fmtNum(canDoi.dat)} đạt thành tem 17` : ''}`
                 : `Chênh lệch ${canDoi.lech > 0 ? '+' : ''}${fmtNum(canDoi.lech)} — chưa lưu được`}
           </div>
         </div>
@@ -684,7 +687,8 @@ export default function KcsPage() {
           màn này. Có nhập thiếu/dư thì <b>cần kiểm + dư − thiếu = đạt + hư + mẫu</b> phải khớp tuyệt đối.
           Toàn bộ <b>SL hư</b> vào <b>chờ sửa</b>; chia sửa/hủy theo từng loại lỗi làm ở trang{' '}
           <b>Sản xuất › Phân loại lỗi</b> (số ở đó là chính thức). <b>Mẫu</b> tính vào tổng (lấy ra khỏi lô), không vào SL đạt.
-          Đạt → chờ <b>OQC</b>. Phần chưa kiểm giữ lại kiểm lần sau.
+          Đạt → chờ <b>OQC</b>. Phần chưa kiểm giữ lại kiểm lần sau. Tem <b>đã giao trước</b> thì phần đạt của lượt sau
+          (kể cả lượt kiểm hết) cũng thành <b>tem 17</b> riêng.
         </p>
       </SidePanel>
 
@@ -813,7 +817,7 @@ export default function KcsPage() {
         traMa={traTemKcs} khoaDong={(r) => r.tem_id} maHien={(r) => r.ma_tem}
         soCan={(r) => r.con_kcs} nhanSoCan="Còn kiểm" truong={truongTichTem} formMoi={formKcsMoi}
         danhGia={(r, f) => {
-          const dg = danhGiaKcs(Number(r.con_kcs ?? r.so_luong ?? 0) || 0, f);
+          const dg = danhGiaKcs(Number(r.con_kcs ?? r.so_luong ?? 0) || 0, f, coGiaoTruoc(r));
           return dg.ok && thieuNguoiKiem(f) ? { ok: false, chu: 'Nhập người kiểm' } : dg;
         }}
         luu={async (r, f) => {

@@ -172,6 +172,7 @@ const TEM_STATUS = {
   OQC_DAT: { label: 'OQC đạt', tone: 'success' },
   DA_GIAO: { label: 'Đã giao', tone: 'success' },
   LOAI: { label: 'Loại/hủy', tone: 'danger' },
+  DA_TACH: { label: 'Đã tách tem 17', tone: 'default' }, // tem gốc — hàng đi tiếp trên tem 17 (18/11/2026)
 };
 
 function TemQuality({ tm }) {

@@ -18,7 +18,10 @@ import useDsNguoi, { tenNguoi, timNguoi, nhoTen, KHOA_NGUOI_KIEM } from '../../.
 // ⚠ 09/11/2026: cột NGƯỜI KIỂM ở cuối — BẮT BUỘC (BE 422 `NO_NGUOI_KIEM`, Sh6 gửi người này), điền sẵn tên vừa dùng trên máy.
 const n = (v) => Math.max(0, Math.trunc(Number(v) || 0));
 //   · MẪU tính vào tổng (29/10/2026, người dùng: "616 = đạt 615 + mẫu 1 là ok") — cùng vế với đạt + hư.
-export function danhGiaKcs(canKiem, f) {
+//   · `daGiaoTruoc` (18/11/2026) = tem đã có phần giao trước tách tem 17 (`r.sl_kcs_tach` > 0) ⇒ lượt chốt cũng tách phần đạt
+//     thành TEM 17 riêng (BE `recordKcs`) — báo trước để người kiểm biết nhãn in ra là tem 17.
+export const coGiaoTruoc = (r) => (Number(r?.sl_kcs_tach) || 0) > 0;
+export function danhGiaKcs(canKiem, f, daGiaoTruoc = false) {
   const dat = n(f.soLuongDat); const hu = n(f.soLuongHu);
   const thieu = n(f.soLuongThieu); const du = n(f.soLuongDu);
   const mau = n(f.soLuongMau);
@@ -31,6 +34,7 @@ export function danhGiaKcs(canKiem, f) {
   const tong = canKiem + du - thieu;
   const lech = daNhap - tong;
   if (lech !== 0) return { ok: false, chu: `Lệch ${lech > 0 ? '+' : ''}${fmtNum(lech)} (cần ${fmtNum(tong)})` };
+  if (daGiaoTruoc && dat > 0) return { ok: true, tem17: true, chu: `Cân đối · đã giao trước ⇒ ${fmtNum(dat)} đạt thành tem 17` };
   return { ok: true, chu: 'Cân đối' };
 }
 
@@ -61,7 +65,7 @@ export default function KcsNhieuModal({ open, rows, onClose, onXong, truocXacNha
   const set = (id, k, v) => setForms((f) => ({ ...f, [id]: { ...f[id], [k]: v } }));
   const danhGia = useMemo(() => Object.fromEntries((rows || []).map((r) => {
     const f = forms[r.tem_id] || formMoiCoNguoi(r);
-    const dg = danhGiaKcs(Number(r.con_kcs ?? r.so_luong ?? 0) || 0, f);
+    const dg = danhGiaKcs(Number(r.con_kcs ?? r.so_luong ?? 0) || 0, f, coGiaoTruoc(r));
     return [r.tem_id, dg.ok && !String(f.nguoiKiem || '').trim() ? { ok: false, chu: 'Nhập người kiểm' } : dg];
   })), [rows, forms]);
   const soSai = (rows || []).filter((r) => !danhGia[r.tem_id]?.ok).length;

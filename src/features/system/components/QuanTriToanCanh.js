@@ -30,7 +30,7 @@ export const TEN_TT_LENH = {
 };
 const TEN_TT_TEM = {
   IN: 'Mới in', DANG_PHOI: 'Đang phơi', DA_KHO: 'Đã khô (chờ KCS)', CHO_CD_SAU: 'Đã khô (chờ công đoạn sau)', CHO_SUA: 'Chờ sửa', CHO_OQC: 'Chờ OQC',
-  OQC_DAT: 'Qua OQC (chờ giao)', DA_GIAO: 'Đã giao', HUY: 'Đã hủy',
+  OQC_DAT: 'Qua OQC (chờ giao)', DA_GIAO: 'Đã giao', HUY: 'Đã hủy', DA_TACH: 'Đã tách hết sang tem 17',
 };
 const TONE_TEM = { HUY: 'danger', DA_GIAO: 'success', OQC_DAT: 'success', CHO_SUA: 'warning', CHO_OQC: 'info' };
 // Ngày / giờ trong ngày theo giờ máy (VN) — đổ sẵn ô sửa kế hoạch; ghép lại `${ngày}T${giờ}:00` như màn Lập lại kế hoạch.
