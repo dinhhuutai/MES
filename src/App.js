@@ -53,6 +53,7 @@ const VaiVeUpdatePage = taiLuoi(() => import('./features/system/pages/VaiVeUpdat
 const PhanInListPage = taiLuoi(() => import('./features/orders/pages/PhanInListPage'));
 const SuaThongTinPage = taiLuoi(() => import('./features/orders/pages/SuaThongTinPage'));
 const LichSuPhanInPage = taiLuoi(() => import('./features/orders/pages/LichSuPhanInPage'));
+const GhiNhanFileKtPage = taiLuoi(() => import('./features/orders/pages/GhiNhanFileKtPage'));
 const ReadyPage = taiLuoi(() => import('./features/technical-ready/pages/ReadyPage'));
 const HoSoKyThuatPage = taiLuoi(() => import('./features/technical-ready/pages/HoSoKyThuatPage'));
 const GomSetPage = taiLuoi(() => import('./features/technical-ready/pages/GomSetPage'));
@@ -95,6 +96,7 @@ const ReportByDeptPage = taiLuoi(() => import('./features/reports/pages/ReportBy
 // Màn hình đã hiện thực. Route khác dùng PlaceholderPage.
 const PAGES = {
   '/don-hang/phan-in': <PhanInListPage />,
+  '/don-hang/ghi-nhan-file-kt': <GhiNhanFileKtPage />,
   '/don-hang/cho-sua-thong-tin': <SuaThongTinPage />,
   '/don-hang/lich-su-phan-in': <LichSuPhanInPage />,
   '/ky-thuat/ready': <ReadyPage />,

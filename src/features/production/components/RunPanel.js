@@ -770,9 +770,11 @@ const TEM_CHUA_KIEM = ['IN', 'DANG_PHOI', 'DA_KHO', 'CHO_CD_SAU'];
 const temHuyDuoc = (t) => TEM_CHUA_KIEM.includes(t.trang_thai) && !t.da_kiem;
 
 export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
-  const { can } = usePermissions();
+  const { can, permissions } = usePermissions();
   const { toast, show } = useToast();
   const canRun = can('PROD_RUN');
+  // Tem in quá 48 giờ ⇒ `da_khoa` (17/11/2026, backend `utils/khoaTem.js`): chỉ admin ('*') còn Hủy / Mở lại.
+  const khoaVoiToi = (t) => !!t.da_khoa && !permissions.includes('*');
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -1682,6 +1684,11 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
                       className={`flex items-center justify-between gap-2 rounded-control border px-3 py-2 text-sm ${huy ? 'border-line/60 bg-surface-muted/40 opacity-70' : 'border-line'}`}>
                       <span className={`flex items-center gap-1.5 font-medium ${huy ? 'text-ink-soft line-through' : 'text-ink'}`}>
                         {t.ma_tem}
+                        {t.da_khoa && (
+                          <span className="text-ink-soft" title="Tem in quá 2 ngày nên đã khóa — chỉ admin mới hủy / mở lại / sửa">
+                            <Icon name="lock" size={12} />
+                          </span>
+                        )}
                       </span>
                       <span className="text-ink-soft">{fmtNum(t.so_luong)}</span>
                       <div className="flex items-center gap-2">
@@ -1692,13 +1699,13 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
                               className="text-ink-soft hover:text-primary"><Icon name="printer" size={15} /></button>
                             <button onClick={() => { setReprint(t); setReprintReason(''); }}
                               className="text-xs font-medium text-primary hover:underline">In lại</button>
-                            {temHuyDuoc(t) && (
+                            {temHuyDuoc(t) && !khoaVoiToi(t) && (
                               <button onClick={() => huyTem.moHuy(t)} title="Hủy tem này (nhập lý do) — báo ERP hủy phiếu in tem"
                                 className="text-xs font-medium text-danger hover:underline">Hủy</button>
                             )}
                           </>
                         )}
-                        {canRun && huy && t.mo_lai_duoc && (
+                        {canRun && huy && t.mo_lai_duoc && !khoaVoiToi(t) && (
                           <button onClick={() => moLaiTem.moHuy(t)} title="Mở lại tem đã hủy (nhập lý do) — gửi lại phiếu in tem sang ERP"
                             className="text-xs font-medium text-primary hover:underline">Mở lại</button>
                         )}

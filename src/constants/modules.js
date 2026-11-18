@@ -11,6 +11,8 @@ export const MODULES = [
     mau: 'bg-blue-50 text-blue-600',
     children: [
       { ten: 'Danh sách phần in vải về', route: '/don-hang/phan-in', perm: 'ORDER_VIEW' },
+      // Ghi nhận file phần in xuống Phòng KT (17/11/2026, mig 136) — quét: `FILE_KT_GHI_NHAN`; `ORDER_VIEW` chỉ xem. BE `/api/file-kt`.
+      { ten: 'Ghi nhận file xuống KT', route: '/don-hang/ghi-nhan-file-kt', perm: ['FILE_KT_GHI_NHAN', 'ORDER_VIEW'] },
       { ten: 'Phần in chờ sửa thông tin', route: '/don-hang/cho-sua-thong-tin', perm: ['GN_SUA_THONG_TIN', 'ORDER_VIEW', 'READY_VIEW', 'READY_QC'] },
       // Lịch sử thao tác 1 phần in (16/11/2026) — BE `/api/lich-su-phan-in` gác cùng 2 quyền.
       { ten: 'Lịch sử phần in', route: '/don-hang/lich-su-phan-in', perm: ['ORDER_VIEW', 'PHAN_IN_ADMIN'] },

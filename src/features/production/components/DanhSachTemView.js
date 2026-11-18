@@ -22,6 +22,8 @@ import { GOI_Y_SO_LUONG, loiLocSoLuong, soLuongGui } from '../../../utils/locSoL
 import { LOAI_TABS, locSiSoTheoChip } from '../../../utils/khuChuyen';
 import useToast from '../../../hooks/useToast';
 import useHuyLichSu from '../../../hooks/useHuyLichSu';
+import usePermissions from '../../../hooks/usePermissions';
+import Icon from '../../../components/common/Icon';
 import { fmtNum, fmtDateTime, temCode, ngayLocalISO } from '../../../utils/format';
 import exportCheckpointExcel, { cotTemChung, moTaBoLoc } from '../../../utils/exportCheckpointExcel';
 import taiHetTrang, { LIMIT_TAI_LON } from '../../../utils/taiHetTrang';
@@ -80,6 +82,18 @@ const thamSoLoc = (filters) => {
   return { ...con, ...(sl ? { soLuong: sl } : {}), ...locSiSoTheoChip(khu || '') };
 };
 const temHuyDuoc = (r) => TEM_CHUA_KIEM.includes(r.trang_thai) && !r.da_kiem;
+// KHÓA TEM (17/11/2026): tem in quá 48 giờ ⇒ `da_khoa` (backend tính theo giờ DB + công tắc "Khóa tem sau 2 ngày" ở Cài đặt
+//   tính năng) — chỉ admin ('*') còn Sửa · Hủy · Mở lại · sửa vải hủy/thiếu. Ở đây chỉ ẩn nút; chốt chặn thật ở backend
+//   (`utils/khoaTem.js`, 403 TEM_DA_KHOA). In lại tờ tem vẫn mở.
+const NHAN_KHOA = (r) => `Tem in quá 2 ngày nên đã khóa${r.khoa_luc ? ` từ ${fmtDateTime(r.khoa_luc)}` : ''} — chỉ admin mới sửa / hủy / mở lại`;
+function DauKhoa({ r }) {
+  if (!r.da_khoa) return null;
+  return (
+    <span className="inline-flex text-ink-soft" title={NHAN_KHOA(r)} aria-label="Tem đã khóa">
+      <Icon name="lock" size={13} />
+    </span>
+  );
+}
 // HỦY NHIỀU TEM (21/10/2026, người dùng yêu cầu): tối đa mỗi lượt — mỗi tem 1 lần gọi route hủy (transaction riêng +
 //   báo ERP riêng), chạy tuần tự.
 const TOI_DA_HUY = 100;
@@ -180,6 +194,11 @@ export default function DanhSachTemView({
   title, subtitle, fetcher, laGiaCong = false, layNhan = null, huyTem = null, moLaiTem = null, coQuyenHuy = false,
 }) {
   const { toast, show } = useToast();
+  const { permissions } = usePermissions();
+  const laAdmin = permissions.includes('*');
+  // Tem đã khóa với NGƯỜI ĐANG XEM (admin luôn mở) ⇒ ẩn Sửa / Hủy / Mở lại + ô tích hủy nhiều.
+  const khoaVoiToi = (r) => !!r.da_khoa && !laAdmin;
+  const huyDuoc = (r) => temHuyDuoc(r) && !khoaVoiToi(r);
 
   const [search, setSearch] = useState('');
   // Trang Sản xuất mở sẵn NGÀY IN TEM = HÔM NAY (29/10/2026, người dùng: "phân trang tới số lớn rồi, cho hiện theo ngày in
@@ -256,7 +275,7 @@ export default function DanhSachTemView({
   const [chon, setChon] = useState(() => new Map());
   const [hopHuyNhieu, setHopHuyNhieu] = useState(null); // { ds: [dòng] } khi hộp lý do đang mở
   const [dangHuyNhieu, setDangHuyNhieu] = useState(null); // { xong, tong } trong lúc chạy
-  const chonDuocTrang = coNutHuy ? rows.filter(temHuyDuoc) : [];
+  const chonDuocTrang = coNutHuy ? rows.filter(huyDuoc) : [];
   const tatCaTrang = chonDuocTrang.length > 0 && chonDuocTrang.every((r) => chon.has(r.id));
   const doiChon = (r) => setChon((m) => {
     const n = new Map(m);
@@ -368,7 +387,7 @@ export default function DanhSachTemView({
       header: <input type="checkbox" checked={tatCaTrang} disabled={!chonDuocTrang.length}
         onChange={chonCaTrang} aria-label="Chọn mọi tem hủy được của trang" />,
       render: (r) => {
-        if (!temHuyDuoc(r)) return null;
+        if (!huyDuoc(r)) return null;
         const tick = chon.has(r.id);
         const khoa = !tick && chon.size >= TOI_DA_HUY;
         return (
@@ -377,7 +396,9 @@ export default function DanhSachTemView({
             onClick={(e) => e.stopPropagation()} onChange={() => doiChon(r)} aria-label="Chọn tem để hủy" />
         );
       } }] : []),
-    { key: 'ma_tem', header: 'Mã tem', render: (r) => <span className="font-medium text-ink">{chu(maHienThi(r, laGiaCong))}</span> },
+    { key: 'ma_tem', header: 'Mã tem', render: (r) => (
+      <span className="inline-flex items-center gap-1 font-medium text-ink">{chu(maHienThi(r, laGiaCong))}{!laGiaCong && <DauKhoa r={r} />}</span>
+    ) },
     { key: 'trang_thai', header: 'Trạng thái', render: (r) => ttBadge(r.trang_thai) },
     { key: 'so_luong', header: 'SL in', className: 'text-right tabular-nums', headerClassName: 'text-right', render: (r) => fmtNum(r.so_luong) },
     // Vải hủy / thiếu CỦA TEM (21/10/2026 — hủy/thiếu theo tem). Không có ⇒ để trống.
@@ -404,20 +425,30 @@ export default function DanhSachTemView({
     ...(coNutHuy ? [{
       key: '_thao_tac', header: '', className: 'text-right whitespace-nowrap',
       render: (r) => {
+        const khoa = khoaVoiToi(r);
+        // Chữ "Đã khóa" thay chỗ nút Sửa / Mở lại khi tem khóa với người đang xem (admin vẫn thấy nút).
+        const chuKhoa = (
+          <span className="inline-flex items-center gap-1 px-1 text-xs text-ink-soft" title={NHAN_KHOA(r)}>
+            <Icon name="lock" size={12} />Đã khóa
+          </span>
+        );
         if (r.trang_thai === 'HUY') {
-          return r.mo_lai_duoc ? (
+          if (!r.mo_lai_duoc) return null;
+          return khoa ? chuKhoa : (
             <Button className="px-2.5 py-1 text-xs" title="Mở lại tem đã hủy — gửi lại phiếu in tem sang ERP"
               onClick={(e) => { e.stopPropagation(); moLai.moHuy(r); }}>Mở lại</Button>
-          ) : null;
+          );
         }
         // Sửa (SL / giờ / ca — gửi lại ERP) + In lại (25/10/2026) ở mọi tem sản xuất chưa hủy.
         return (
           <span className="inline-flex items-center gap-1.5">
-            <Button variant="secondary" className="px-2.5 py-1 text-xs" title="Sửa số lượng / giờ / ca — gửi lại ERP cùng IDMES"
-              onClick={(e) => { e.stopPropagation(); setSuaTemDong(r); }}>Sửa</Button>
+            {khoa ? chuKhoa : (
+              <Button variant="secondary" className="px-2.5 py-1 text-xs" title="Sửa số lượng / giờ / ca — gửi lại ERP cùng IDMES"
+                onClick={(e) => { e.stopPropagation(); setSuaTemDong(r); }}>Sửa</Button>
+            )}
             <Button variant="secondary" className="px-2.5 py-1 text-xs" title="In lại tờ tem (giữ nguyên mã)"
               onClick={(e) => { e.stopPropagation(); setInLaiDong(r); }}>In lại</Button>
-            {temHuyDuoc(r) && (
+            {huyDuoc(r) && (
               <Button variant="danger" className="px-2.5 py-1 text-xs" title="Hủy tem (nhập lý do) — báo ERP hủy phiếu in tem"
                 onClick={(e) => { e.stopPropagation(); huy.moHuy(r); }}>Hủy</Button>
             )}
@@ -526,7 +557,7 @@ export default function DanhSachTemView({
       <Pagination page={meta.page} totalPages={meta.totalPages} total={meta.total} onPage={setPage} />
 
       <TemPanel tem={tem} onClose={() => setTem(null)} laGiaCong={laGiaCong} layNhan={layNhan}
-        coSuaVai={coNutHuy} show={show}
+        coSuaVai={coNutHuy && !!tem && !khoaVoiToi(tem)} laAdmin={laAdmin} show={show}
         onDaLuuVai={(kq) => {
           setTem((t) => (t ? { ...t, sl_vai_huy_tem: kq.huy, sl_vai_thieu_tem: kq.thieu } : t));
           load();
@@ -563,7 +594,7 @@ export default function DanhSachTemView({
 // ⚠⚠ Route đó gác `PROD_RUN`/`PROD_MONITOR` ⇒ trang GIA CÔNG (quyền RELEASE1/RELEASE2) gọi vào sẽ
 //    403 ⇒ chỉ trang Sản xuất truyền `layNhan`. Ngoài ra tem 13 vốn được in từ dữ liệu LỆNH
 //    (`printGiaCongVeTem`), không phải từ bản ghi tem, nên khối này cũng không đúng nguồn cho nó.
-function TemPanel({ tem, onClose, laGiaCong, layNhan, coSuaVai = false, show, onDaLuuVai }) {
+function TemPanel({ tem, onClose, laGiaCong, layNhan, coSuaVai = false, laAdmin = false, show, onDaLuuVai }) {
   const [nhan, setNhan] = useState(null);
   const [dangTai, setDangTai] = useState(false);
   const temId = tem?.id;
@@ -598,6 +629,16 @@ function TemPanel({ tem, onClose, laGiaCong, layNhan, coSuaVai = false, show, on
     <SidePanel open={!!tem} onClose={onClose} title={`Tem ${maHienThi(t, laGiaCong) || ''}`}
       subtitle={`${t.ma_lenh_san_xuat || '—'} · SL in ${fmtNum(t.so_luong)}`} width="max-w-2xl">
       <div className="space-y-4">
+        {/* Tem đã khóa (in quá 2 ngày, 17/11/2026) — chỉ trang Sản xuất (tem gia công không khóa). */}
+        {!laGiaCong && t.da_khoa && (
+          <div className="flex items-start gap-2 rounded-control border border-line bg-surface-muted px-3 py-2 text-sm text-ink">
+            <Icon name="lock" size={16} className="mt-0.5 shrink-0 text-ink-soft" />
+            <span>
+              {NHAN_KHOA(t)}.
+              {laAdmin && <span className="text-ink-soft"> Bạn là admin nên vẫn sửa được.</span>}
+            </span>
+          </div>
+        )}
         {/* ═══ TỜ TEM ĐÚNG NHƯ LÚC IN ═══════════════════════════════════════════════════════════
             Dựng bằng CHÍNH đường in (`toTemSanXuat`/`toTemGiaCongVe`): đã gắn mẫu ở *Hệ thống →
             Thiết kế tem* thì ra mẫu, chưa gắn thì ra bố cục mặc định — y hệt tờ giấy sẽ in ra.
