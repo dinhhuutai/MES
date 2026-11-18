@@ -9,12 +9,13 @@
 import CongDoanBadge from './CongDoanBadge';
 import { chuanGd, GD_EP, laHaiCongDoan } from '../../utils/luongSanXuat';
 
-export default function CodePhanCongDoan({ ma, luong, gd, hienLogo = false, muiTen = true, children, className = '' }) {
+// `pa` = phương án in của dòng (`r.phuong_an_in`) ⇒ badge công đoạn ép ghi "Ép" (4) hay "Logo" (`CongDoanBadge`).
+export default function CodePhanCongDoan({ ma, luong, gd, pa, hienLogo = false, muiTen = true, children, className = '' }) {
   const ep = muiTen && laHaiCongDoan(luong) && chuanGd(gd) === GD_EP;
   return (
     <div className={`flex flex-col items-start gap-0.5 ${className}`}>
-      <span>{ep && <span className="mr-1 text-orange-500" title="Công đoạn Ép/Logo của phần in ở dòng trên">↳</span>}{ma || '—'}</span>
-      <CongDoanBadge luong={luong} gd={gd} hienLogo={hienLogo} />
+      <span>{ep && <span className="mr-1 text-orange-500" title="Công đoạn Logo / Ép của phần in ở dòng trên">↳</span>}{ma || '—'}</span>
+      <CongDoanBadge luong={luong} gd={gd} pa={pa} hienLogo={hienLogo} />
       {children}
     </div>
   );

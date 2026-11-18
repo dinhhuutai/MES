@@ -145,6 +145,8 @@ export const huyTemTaiLichSu = (temId, lyDo) => client.post(`/production/huy-tem
 export const listReopenableTem = (params) => client.get('/production/mo-lai-tem/candidates', { params });
 export const moLaiTem = (temId, lyDo) => client.post(`/production/mo-lai-tem/${temId}`, { lyDo });
 export const moLaiTemTaiLichSu = (temId, lyDo) => client.post(`/production/mo-lai-tem/${temId}/lich-su`, { lyDo });
+// KHÓA / MỞ KHÓA TAY THEO TỪNG TEM (18/11/2026) — chỉ admin. `khoa` true = khóa, false = mở khóa.
+export const datKhoaTem = (temIds, khoa, lyDo) => client.post('/production/khoa-tem', { temIds, khoa, lyDo });
 // Danh sách release CỦA SẢN XUẤT (26/10/2026, nút ở Xác nhận chạy).
 // Theo khoảng NGÀY IN TEM (26/10/2026).
 export const getDsReleaseSx = (tuNgay, denNgay) => client.get('/production/ds-release', { params: { tuNgay, denNgay } });

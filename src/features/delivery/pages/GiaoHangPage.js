@@ -457,7 +457,7 @@ export default function GiaoHangPage() {
     ) },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
     // Badge công đoạn (phần in 2 công đoạn) DƯỚI code phần — 14/11/2026.
-    { key: 'phan_list', header: 'Code phần', render: (r) => <CodePhanCongDoan ma={r.phan_list} luong={r.luong_sx} gd={r.giai_doan} muiTen={false} /> },
+    { key: 'phan_list', header: 'Code phần', render: (r) => <CodePhanCongDoan ma={r.phan_list} luong={r.luong_sx} gd={r.giai_doan} pa={r.phuong_an_in} muiTen={false} /> },
     { key: 'mau_kich', header: 'Màu · Kích (vải/phim)', render: (r) => (
       <div className="leading-tight">
         <div className="text-ink">{r.mau_vai || '—'}</div>

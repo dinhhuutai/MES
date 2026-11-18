@@ -33,6 +33,11 @@ const CONG_DOAN = [
 const khoaCd = (cd) => CONG_DOAN.map((c) => (cd && cd[c.k] ? 1 : 0)).join('');
 // Có công đoạn loại ép (Logo hoặc Ép) ⇒ mới có cột "Kỹ thuật Ép/Logo" / "Xác nhận HSKT" (gương BE `tinhChatIn.coCongDoanEp`).
 const coEp = (cd) => !!(cd && (cd.ep || cd.logo));
+// DÒNG SẢN PHẨM LOGO (18/11/2026, mig 137 — gương BE `tinhChatIn.epThanhLogo` / `khongInRoiEp`): bật "DSP Logo" ⇒ công tắc Ép
+//   thành Logo (CoEp ⇒ công đoạn Logo); In + Ép ⇒ In + Logo = 1 phần in 2 công đoạn (2 dòng In + Logo ở Release 1, 2 lệnh độc
+//   lập) — được lưu dù luật 17/11 "không có In rồi Ép".
+const dspCua = (r) => r.dsp_logo === true;
+const epThanhLogo = (cd) => ({ ...cd, logo: !!(cd && (cd.logo || cd.ep)), ep: false });
 
 const LOC_BO_QUA = [
   { v: '', label: 'Tất cả' },
@@ -57,7 +62,7 @@ const ktYcCua = (r) => r.kt_yeu_cau || 'KHUON_MUC';
 //   xác nhận thêm mục HSKT (quyền READY_HSKT). Còn công tắc tổng ở Hệ thống › Cài đặt tính năng.
 const ktHsktCua = (r) => r.kt_hskt !== false;
 const doiGoc = (r, g) => !!g && (r.luong !== g.luong || r.bo_qua !== g.bo_qua || ghiChuCua(r) !== ghiChuCua(g)
-  || cheDoCua(r) !== cheDoCua(g) || ktYcCua(r) !== ktYcCua(g) || ktHsktCua(r) !== ktHsktCua(g));
+  || cheDoCua(r) !== cheDoCua(g) || ktYcCua(r) !== ktYcCua(g) || ktHsktCua(r) !== ktHsktCua(g) || dspCua(r) !== dspCua(g));
 // READY của tính chất NHIỀU công đoạn (14/11/2026, mig 131 — BE `utils/readyCongDoan.js`): mặc định mỗi công đoạn Ready
 //   riêng (1 dòng / công đoạn từ READY). 2 công tắc loại trừ nhau: "Ready 1 lần" (MOT_LAN) · "Công đoạn sau không Ready"
 //   (SAU_THEO_DAU — công đoạn sau theo READY của công đoạn đầu).
@@ -73,8 +78,11 @@ const TEN_SX = { THUONG: 'In thường', KIENG_KHONG_EP: 'In kiếng', LOGO: '1 
 function hienTai(r, dsLuong) {
   if (r.bo_qua) return { ten: 'Không vào MES', tone: 'default' };
   const l = dsLuong.find((x) => x.ma === r.luong);
-  // 17/11/2026: không có công đoạn In rồi Ép/Logo (BE `utils/tinhChatIn.js khongInRoiEp`) — lưu sẽ bị chặn.
-  if (l && l.khong_dung) return { ten: 'Không có In rồi Ép/Logo — chọn lại: bật In HOẶC Logo/Ép', tone: 'danger' };
+  // 17/11/2026: không có công đoạn In rồi Ép/Logo (BE `utils/tinhChatIn.js khongInRoiEp`) — lưu sẽ bị chặn. Trừ DSP Logo:
+  //   In + Logo là 2 công đoạn độc lập (18/11/2026).
+  const dspInLogo = dspCua(r) && l && l.cd && !l.cd.ep;
+  if (l && l.khong_dung && !dspInLogo) return { ten: 'Không có In rồi Ép/Logo — chọn lại: bật In HOẶC Logo/Ép (In + Logo chỉ cho DSP Logo)', tone: 'danger' };
+  if (dspInLogo && l.cd.in && l.cd.logo) return { ten: 'Vào MES · In + Logo (2 công đoạn độc lập)', tone: 'success' };
   if (l && l.tam) return { ten: `Vào MES · ${l.ten} chưa có luồng riêng — tạm chạy ${TEN_SX[l.sx] || 'In thường'}`, tone: 'warning' };
   if (l && l.da_lam) return { ten: 'Vào MES', tone: 'success' };
   return { ten: 'Vào MES · chưa bật công đoạn — tạm đi in thường', tone: 'warning' };
@@ -125,6 +133,7 @@ export default function TinhChatInPage() {
   const [coCheDo, setCoCheDo] = useState(false); // đã chạy mig 131 (lưu được chế độ READY)
   const [coKtYc, setCoKtYc] = useState(false);   // đã chạy mig 133 (lưu được yêu cầu KT Ép/Logo)
   const [coKtHskt, setCoKtHskt] = useState(false); // đã chạy mig 134 (lưu được "Xác nhận HSKT")
+  const [coDsp, setCoDsp] = useState(false);       // đã chạy mig 137 (lưu được "DSP Logo")
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -145,6 +154,7 @@ export default function TinhChatInPage() {
     setCoCheDo(!!d.co_che_do_ready);
     setCoKtYc(!!d.co_kt_yeu_cau);
     setCoKtHskt(!!d.co_kt_hskt);
+    setCoDsp(!!d.co_dsp_logo);
   }, []);
 
   useEffect(() => {
@@ -197,12 +207,23 @@ export default function TinhChatInPage() {
   const luongTuCd = useCallback((cd) => (dsLuong.find((l) => khoaCd(l.cd) === khoaCd(cd)) || {}).ma || 'CHUA_PHAN_LOAI', [dsLuong]);
   const cdCua = (r) => r.cong_doan || (dsLuong.find((l) => l.ma === r.luong) || {}).cd || {};
   const doiCongDoan = (r, k, v) => {
-    const cd = { ...cdCua(r), [k]: v };
+    let cd = { ...cdCua(r), [k]: v };
+    if (dspCua(r)) cd = epThanhLogo(cd); // DSP Logo: Ép tính là Logo
     doiDong(r.ma_chuan, { cong_doan: cd, luong: luongTuCd(cd) });
+  };
+  // Bật DSP Logo ⇒ Ép đang bật chuyển sang Logo ngay (tắt lại không tự đổi Logo về Ép — người dùng tự chọn).
+  const doiDsp = (r, v) => {
+    const cd = v ? epThanhLogo(cdCua(r)) : { ...cdCua(r) };
+    doiDong(r.ma_chuan, { dsp_logo: v, cong_doan: cd, luong: luongTuCd(cd) });
   };
   const datLuongNhieu = (ma) => {
     const l = dsLuong.find((x) => x.ma === ma);
-    if (l) doiNhieu({ luong: l.ma, cong_doan: { ...l.cd } });
+    if (!l) return;
+    setRows((rs) => rs.map((r) => {
+      if (!chon.has(r.ma_chuan)) return r;
+      const cd = dspCua(r) ? epThanhLogo(l.cd) : { ...l.cd }; // DSP Logo: Ép tính là Logo
+      return { ...r, cong_doan: cd, luong: luongTuCd(cd) };
+    }));
   };
 
   const hienDaChon = hien.filter((r) => chon.has(r.ma_chuan)).length;
@@ -226,6 +247,7 @@ export default function TinhChatInPage() {
         cols: [
           { header: 'Mã tính chất in', width: 22, value: (r) => r.ten || '' },
           { header: 'Tên tính chất in', width: 44, value: (r) => r.ghi_chu || '' },
+          { header: 'DSP Logo', width: 10, center: true, value: (r) => (dspCua(r) ? 1 : 0) },
           { header: 'Có in', width: 9, center: true, value: (r) => so(cdCua(r).in) },
           { header: 'Có in kiếng', width: 11, center: true, value: (r) => so(cdCua(r).kieng) },
           { header: 'Có logo', width: 9, center: true, value: (r) => so(cdCua(r).logo) },
@@ -255,7 +277,7 @@ export default function TinhChatInPage() {
     const coDoiBoQua = dsMo.length + dsBoQuaMoi.length > 0;
     try {
       const res = await saveTinhChatIn(dsDoi.map((r) => ({ ten: r.ten, cong_doan: cdCua(r), bo_qua: r.bo_qua, ghi_chu: ghiChuCua(r),
-        ready_che_do: cheDoCua(r), kt_yeu_cau: coEp(cdCua(r)) ? ktYcCua(r) : 'KHUON_MUC', kt_hskt: ktHsktCua(r) })));
+        ready_che_do: cheDoCua(r), kt_yeu_cau: coEp(cdCua(r)) ? ktYcCua(r) : 'KHUON_MUC', kt_hskt: ktHsktCua(r), dsp_logo: dspCua(r) })));
       nap(res.data);
       setChon(new Set());
       setHoiLuu(false);
@@ -279,13 +301,14 @@ export default function TinhChatInPage() {
     setRows((d.items || []).map((r) => {
       const s = dangSua.get(r.ma_chuan);
       return s ? { ...r, luong: s.luong, cong_doan: s.cong_doan, bo_qua: s.bo_qua, ghi_chu: s.ghi_chu, ready_che_do: s.ready_che_do,
-        kt_yeu_cau: s.kt_yeu_cau, kt_hskt: s.kt_hskt } : r;
+        kt_yeu_cau: s.kt_yeu_cau, kt_hskt: s.kt_hskt, dsp_logo: s.dsp_logo } : r;
     }));
   };
   const luuThem = async () => {
     setSaving(true);
     try {
-      const res = await addTinhChatIn({ ten: them.ten, cong_doan: them.cong_doan, bo_qua: them.bo_qua, ghi_chu: them.ghi_chu });
+      const res = await addTinhChatIn({ ten: them.ten, cong_doan: them.dsp_logo ? epThanhLogo(them.cong_doan) : them.cong_doan,
+        bo_qua: them.bo_qua, ghi_chu: them.ghi_chu, dsp_logo: !!them.dsp_logo });
       napGiuSua(res.data);
       setThem(null);
       show('Đã thêm tính chất in');
@@ -326,12 +349,24 @@ export default function TinhChatInPage() {
         </span>
       ),
     },
+    {
+      key: 'dsp_logo', header: 'DSP Logo', headerClassName: 'text-center', className: 'text-center',
+      render: (r) => (
+        <Toggle on={dspCua(r)} disabled={!suaDuoc || !coDsp}
+          title={coDsp ? `Dòng sản phẩm Logo — Ép tính là Logo, In + Ép thành In + Logo (2 công đoạn) — ${r.ten}` : 'Chưa chạy migration 137'}
+          onChange={(v) => doiDsp(r, v)} />
+      ),
+    },
     ...CONG_DOAN.map((c) => ({
       key: `cd_${c.k}`, header: c.ten, headerClassName: 'text-center', className: 'text-center',
-      render: (r) => (
-        <Toggle on={!!cdCua(r)[c.k]} disabled={!suaDuoc} title={`${c.ten} — ${r.ten}`}
-          onChange={(v) => doiCongDoan(r, c.k, v)} />
-      ),
+      render: (r) => {
+        const khoaEp = c.k === 'ep' && dspCua(r); // DSP Logo: không có công đoạn Ép (Ép = Logo)
+        return (
+          <Toggle on={!!cdCua(r)[c.k]} disabled={!suaDuoc || khoaEp}
+            title={khoaEp ? `DSP Logo — công đoạn ép tính là Logo — ${r.ten}` : `${c.ten} — ${r.ten}`}
+            onChange={(v) => doiCongDoan(r, c.k, v)} />
+        );
+      },
     })),
     {
       key: 'luong', header: 'Luồng',
@@ -437,7 +472,7 @@ export default function TinhChatInPage() {
         {suaDuoc && (
           <>
             <Button variant="secondary" icon="plus" onClick={() => setThem({
-              ten: '', cong_doan: { ...((dsLuong.find((l) => l.ma === chip) || {}).cd || { in: false, kieng: false, logo: false, ep: false }) }, bo_qua: false, ghi_chu: '',
+              ten: '', cong_doan: { ...((dsLuong.find((l) => l.ma === chip) || {}).cd || { in: false, kieng: false, logo: false, ep: false }) }, bo_qua: false, ghi_chu: '', dsp_logo: false,
             })}>
               Thêm tính chất
             </Button>
@@ -523,8 +558,14 @@ export default function TinhChatInPage() {
                   </label>
                 ))}
               </div>
-              <div className="mt-1 text-xs text-ink-soft">Luồng: {tenLuong(luongTuCd(them.cong_doan))}</div>
+              <div className="mt-1 text-xs text-ink-soft">Luồng: {tenLuong(luongTuCd(them.dsp_logo ? epThanhLogo(them.cong_doan) : them.cong_doan))}</div>
             </Field>
+            {coDsp && (
+              <label className="flex items-center gap-2 text-sm text-ink">
+                <input type="checkbox" checked={!!them.dsp_logo} onChange={(e) => setThem((s) => ({ ...s, dsp_logo: e.target.checked }))} />
+                Dòng sản phẩm Logo (Ép tính là Logo, In + Ép thành In + Logo)
+              </label>
+            )}
             <label className="flex items-center gap-2 text-sm text-ink">
               <input type="checkbox" checked={them.bo_qua} onChange={(e) => setThem((s) => ({ ...s, bo_qua: e.target.checked }))} />
               Bỏ qua khi đồng bộ ERP

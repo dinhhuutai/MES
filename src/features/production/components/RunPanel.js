@@ -274,7 +274,7 @@ export function KhungCongDoan({ data }) {
   const dau = !!data.lenh?.la_cong_doan_dau;
   const kieng = !!data.kieng?.can;
   const khac = data.cong_doan_khac || [];
-  const tenKhac = ep ? (data.lenh?.luong_sx === 'IN_KIENG' ? 'In kiếng' : 'In') : 'Ép/Logo';
+  const tenKhac = ep ? (data.lenh?.luong_sx === 'IN_KIENG' ? 'In kiếng' : 'In') : 'Logo';
   const mau = ep
     ? 'border-orange-300 bg-orange-50 text-orange-900 dark:border-orange-800 dark:bg-orange-950/40 dark:text-orange-200'
     : 'border-violet-300 bg-violet-50 text-violet-900 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-200';
@@ -773,7 +773,8 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
   const { can, permissions } = usePermissions();
   const { toast, show } = useToast();
   const canRun = can('PROD_RUN');
-  // Tem in quá 48 giờ ⇒ `da_khoa` (17/11/2026, backend `utils/khoaTem.js`): chỉ admin ('*') còn Hủy / Mở lại.
+  // Tem ĐÃ KHÓA ⇒ `da_khoa` (tự động sau 48 giờ / admin khóa tay từng tem ở Danh sách tem in — backend `utils/khoaTem.js`):
+  //   chỉ admin ('*') còn Hủy / Mở lại.
   const khoaVoiToi = (t) => !!t.da_khoa && !permissions.includes('*');
 
   const [data, setData] = useState(null);
@@ -1685,7 +1686,8 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
                       <span className={`flex items-center gap-1.5 font-medium ${huy ? 'text-ink-soft line-through' : 'text-ink'}`}>
                         {t.ma_tem}
                         {t.da_khoa && (
-                          <span className="text-ink-soft" title="Tem in quá 2 ngày nên đã khóa — chỉ admin mới hủy / mở lại / sửa">
+                          <span className="text-ink-soft" title="Tem đã khóa (in quá 2 ngày hoặc admin khóa) — chỉ admin mới hủy / mở lại / sửa; admin mở khóa ở Danh sách tem in">
+
                             <Icon name="lock" size={12} />
                           </span>
                         )}

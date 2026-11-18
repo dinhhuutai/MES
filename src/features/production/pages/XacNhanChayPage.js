@@ -503,7 +503,7 @@ export default function XacNhanChayPage() {
     ) },
     // Mig 126: nhãn công đoạn (In kiếng / In / Ép ủi) + Logo cạnh code phần.
     { key: 'ma_phan', header: 'Code phần', render: (r) => (
-      <CodePhanCongDoan ma={r.ma_phan} luong={r.luong_sx} gd={r.giai_doan} hienLogo />
+      <CodePhanCongDoan ma={r.ma_phan} luong={r.luong_sx} gd={r.giai_doan} pa={r.phuong_an_in} hienLogo />
     ) },
     { key: 'mau_vai', header: 'Màu vải', render: (r) => r.mau_vai || '—' },
     { key: 'kich_vai', header: 'Kích vải', render: (r) => r.kich_vai || '—' },

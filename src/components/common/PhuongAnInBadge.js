@@ -1,8 +1,11 @@
 import Badge from './Badge';
 
-// Phương án in (HSKT / ERP Pain): 1 Bàn · 2 Máy · 3 Robot · 4 Logo · 5 Ép (4 + 5 thêm 10/11/2026, người dùng chốt bộ số).
+// Phương án in (HSKT / ERP Pain): 1 Bàn · 2 Máy · 3 Robot · **4 Ép · 5 Logo** (18/11/2026 người dùng chốt đảo — bản 10/11
+//   ghi 4 Logo · 5 Ép là nhầm; ERP gửi 5 cho hàng Logo).
 // ⚠ ERP CÓ gửi Pain = 0 = chưa xác định (chưa gán) — khớp `backend/src/utils/hskt.js`, đổi cả 2 nơi.
-export const PHUONG_AN_IN = { 0: 'Chưa xác định', 1: 'Bàn', 2: 'Máy', 3: 'Robot', 4: 'Logo', 5: 'Ép' };
+export const PHUONG_AN_IN = { 0: 'Chưa xác định', 1: 'Bàn', 2: 'Máy', 3: 'Robot', 4: 'Ép', 5: 'Logo' };
+export const PAIN_EP = 4;
+export const PAIN_LOGO = 5;
 // Giá trị người dùng ĐẶT được (không có 0 — chỉ ERP ghi "chưa xác định"); gương BE `utils/hskt.js PAIN_HOP_LE`.
 export const PAIN_HOP_LE = [1, 2, 3, 4, 5];
 

@@ -12,8 +12,8 @@ export const GD_EP = 'EP_UI';
 export const LUONG_SX = [
   { ma: 'THUONG', ten: 'In thường' },
   { ma: 'IN_KIENG', ten: 'In kiếng + Ép (kiếng ủi)' },
-  { ma: 'IN_EP', ten: 'In + Ép/Logo' },
-  { ma: 'LOGO', ten: 'Ép/Logo' },
+  { ma: 'IN_EP', ten: 'In + Logo' },
+  { ma: 'LOGO', ten: 'Logo' },
   { ma: 'KIENG_KHONG_EP', ten: 'In kiếng' },
 ];
 
@@ -33,11 +33,17 @@ export const laEp = (r) => chuanGd(r && r.giai_doan) === GD_EP;
 //   ô chọn ở Release 1 / Gom đợt vải. Có mig 128 ⇒ dòng ép chưa Ready lưu Kế hoạch tạm như dòng in.
 export const epChoLapSau = (r) => laEp(r) && !r.qc_done && !r.ep_tam_duoc;
 
+// Nhãn công đoạn loại ép theo PHƯƠNG ÁN IN của dòng (18/11/2026, người dùng: "badge còn ghi Ép/Logo, đổi thành Logo"): BE
+//   tính PA dòng công đoạn ép theo tính chất in (`paCongDoanSql`: công tắc Logo ⇒ 5 Logo, còn lại 4 Ép; 4 Ép · 5 Logo từ
+//   18/11). `pa` = 4 ⇒ "Ép"; còn lại (5 / dòng không mang PA) ⇒ "Logo" — từ 17/11 không còn In + Ép, chỉ In + Logo (DSP Logo)
+//   và hàng 1 công đoạn luồng LOGO là hàng tổ Logo (ERP gửi Pain 5).
+export const PAIN_EP = 4;
+export const tenCdEp = (pa) => (Number(pa) === PAIN_EP ? 'Ép' : 'Logo');
 // Nhãn công đoạn — null với phần in 1 công đoạn (không vẽ badge). Kiếng ủi (IN_KIENG) ⇒ "In kiếng" / "Ép" (16/11/2026 —
-//   công tắc Logo tách khỏi Ép; ERP gửi kiếng ủi 2 lần: 4I In kiếng, đợt khác Ép); In + Ép/Logo ⇒ "In" / "Ép/Logo".
-export function nhanCongDoan(luong, gd) {
+//   công tắc Logo tách khỏi Ép; ERP gửi kiếng ủi 2 lần: 4I In kiếng, đợt khác Ép); In + Logo ⇒ "In" / "Logo" (`tenCdEp(pa)`).
+export function nhanCongDoan(luong, gd, pa) {
   if (!laHaiCongDoan(luong)) return null;
-  if (chuanGd(gd) === GD_EP) return luong === 'IN_KIENG' ? 'Ép' : 'Ép/Logo';
+  if (chuanGd(gd) === GD_EP) return luong === 'IN_KIENG' ? 'Ép' : tenCdEp(pa);
   return luong === 'IN_KIENG' ? 'In kiếng' : 'In';
 }
 

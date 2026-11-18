@@ -11,7 +11,7 @@ import { Input, Select, Field, Textarea } from '../../../components/common/contr
 import Modal from '../../../components/common/Modal';
 import TimeSelect from '../../../components/common/TimeSelect';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
-import { listChuyen, getVaiTem, suaVaiTem, suaTem, reprintTem, getTemLabel, listToIn } from '../../../services/productionService';
+import { listChuyen, getVaiTem, suaVaiTem, suaTem, reprintTem, getTemLabel, listToIn, datKhoaTem } from '../../../services/productionService';
 import { listUserOptions } from '../../../services/userService';
 import SearchableSelect from '../../../components/common/SearchableSelect';
 import NhieuNguoiSelect from '../../../components/common/NhieuNguoiSelect';
@@ -85,12 +85,28 @@ const temHuyDuoc = (r) => TEM_CHUA_KIEM.includes(r.trang_thai) && !r.da_kiem;
 // KHÓA TEM (17/11/2026): tem in quá 48 giờ ⇒ `da_khoa` (backend tính theo giờ DB + công tắc "Khóa tem sau 2 ngày" ở Cài đặt
 //   tính năng) — chỉ admin ('*') còn Sửa · Hủy · Mở lại · sửa vải hủy/thiếu. Ở đây chỉ ẩn nút; chốt chặn thật ở backend
 //   (`utils/khoaTem.js`, 403 TEM_DA_KHOA). In lại tờ tem vẫn mở.
-const NHAN_KHOA = (r) => `Tem in quá 2 ngày nên đã khóa${r.khoa_luc ? ` từ ${fmtDateTime(r.khoa_luc)}` : ''} — chỉ admin mới sửa / hủy / mở lại`;
+// 18/11/2026 — KHÓA / MỞ KHÓA TAY THEO TỪNG TEM (chỉ admin, nút ở cột thao tác): `khoa_tay` = lần bấm mới nhất
+//   { hd: 'KHOA_TEM' | 'MO_KHOA_TEM', luc, boi, ly_do } — thắng khóa tự động; mở khóa giữ tới khi admin khóa lại.
+const khoaTayCua = (r) => (r.khoa_tay && r.khoa_tay.hd ? r.khoa_tay : null);
+const vetTay = (k) => `admin ${k.boi || '?'}${k.luc ? ` lúc ${fmtDateTime(k.luc)}` : ''}${k.ly_do ? ` (${k.ly_do})` : ''}`;
+const NHAN_KHOA = (r) => {
+  const k = khoaTayCua(r);
+  if (k && k.hd === 'KHOA_TEM') return `Tem bị khóa bởi ${vetTay(k)} — chỉ admin mới sửa / hủy / mở lại`;
+  return `Tem in quá 2 ngày nên đã khóa${r.khoa_luc ? ` từ ${fmtDateTime(r.khoa_luc)}` : ''} — chỉ admin mới sửa / hủy / mở lại`;
+};
+const NHAN_MO_KHOA = (r) => `Tem được mở khóa bởi ${vetTay(khoaTayCua(r))} — ai có quyền sản xuất cũng sửa / hủy được tới khi admin khóa lại`;
 function DauKhoa({ r }) {
-  if (!r.da_khoa) return null;
+  if (r.da_khoa) {
+    return (
+      <span className="inline-flex text-ink-soft" title={NHAN_KHOA(r)} aria-label="Tem đã khóa">
+        <Icon name="lock" size={13} />
+      </span>
+    );
+  }
+  if (khoaTayCua(r)?.hd !== 'MO_KHOA_TEM') return null;
   return (
-    <span className="inline-flex text-ink-soft" title={NHAN_KHOA(r)} aria-label="Tem đã khóa">
-      <Icon name="lock" size={13} />
+    <span className="inline-flex text-success" title={NHAN_MO_KHOA(r)} aria-label="Tem đã được admin mở khóa">
+      <Icon name="lock-open" size={13} />
     </span>
   );
 }
@@ -199,6 +215,8 @@ export default function DanhSachTemView({
   // Tem đã khóa với NGƯỜI ĐANG XEM (admin luôn mở) ⇒ ẩn Sửa / Hủy / Mở lại + ô tích hủy nhiều.
   const khoaVoiToi = (r) => !!r.da_khoa && !laAdmin;
   const huyDuoc = (r) => temHuyDuoc(r) && !khoaVoiToi(r);
+  // Nút Khóa / Mở khóa từng tem (18/11/2026) — chỉ admin; `dangKhoa` = id tem đang gửi (chặn bấm đôi).
+  const [dangKhoa, setDangKhoa] = useState(null);
 
   const [search, setSearch] = useState('');
   // Trang Sản xuất mở sẵn NGÀY IN TEM = HÔM NAY (29/10/2026, người dùng: "phân trang tới số lớn rồi, cho hiện theo ngày in
@@ -235,6 +253,30 @@ export default function DanhSachTemView({
   }, [fetcher, search, page, filters, show]);
 
   useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
+
+  const doiKhoa = async (r) => {
+    if (dangKhoa) return;
+    const khoa = !r.da_khoa;
+    setDangKhoa(r.id);
+    try {
+      await datKhoaTem([r.id], khoa);
+      show(khoa ? `Đã khóa tem ${r.ma_tem} — chỉ admin sửa / hủy được`
+        : `Đã mở khóa tem ${r.ma_tem} — xưởng sửa / hủy được tới khi khóa lại`);
+      setTem((t) => (t && t.id === r.id ? null : t));
+      load();
+    } catch (e) { show(e.message || 'Khóa / mở khóa tem thất bại', 'error'); }
+    finally { setDangKhoa(null); }
+  };
+  const nutKhoa = (r) => (laAdmin ? (
+    <Button variant="ghost" className="px-2 py-1 text-xs" loading={dangKhoa === r.id}
+      title={r.da_khoa ? 'Mở khóa tem này — người có quyền sản xuất sửa / hủy được tới khi khóa lại'
+        : 'Khóa tem này — chỉ admin sửa / hủy / mở lại được'}
+      onClick={(e) => { e.stopPropagation(); doiKhoa(r); }}>
+      <span className="inline-flex items-center gap-1">
+        <Icon name={r.da_khoa ? 'lock-open' : 'lock'} size={12} />{r.da_khoa ? 'Mở khóa' : 'Khóa'}
+      </span>
+    </Button>
+  ) : null);
 
   // NÚT HỦY / MỞ LẠI Ở TỪNG DÒNG (14/10/2026) — cùng hộp lý do + cùng route với "Tem đã in" của màn Xác nhận chạy.
   const huy = useHuyLichSu({
@@ -419,7 +461,7 @@ export default function DanhSachTemView({
     { key: 'ten_khach_hang', header: 'Khách · Đơn', render: (r) => <HaiDong tren={r.ten_khach_hang} duoi={r.ma_don_hang} /> },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => chu(r.ma_hang) },
     // Badge công đoạn (phần in 2 công đoạn) DƯỚI code phần — 14/11/2026.
-    { key: 'ma_phan', header: 'Code phần', render: (r) => <CodePhanCongDoan ma={chu(r.ma_phan)} luong={r.luong_sx} gd={r.giai_doan} muiTen={false} /> },
+    { key: 'ma_phan', header: 'Code phần', render: (r) => <CodePhanCongDoan ma={chu(r.ma_phan)} luong={r.luong_sx} gd={r.giai_doan} pa={r.phuong_an_in} muiTen={false} /> },
     { key: 'mau_vai', header: 'Màu · Kích (vải/phim)', render: (r) => <HaiDong tren={r.mau_vai} duoi={`${chu(r.kich_vai)} / ${chu(r.kich_phim)}`} /> },
     // Cột thao tác (header rỗng ⇒ DataTable ghim phải). `stopPropagation` để bấm nút không mở SidePanel của dòng.
     ...(coNutHuy ? [{
@@ -434,14 +476,21 @@ export default function DanhSachTemView({
         );
         if (r.trang_thai === 'HUY') {
           if (!r.mo_lai_duoc) return null;
-          return khoa ? chuKhoa : (
-            <Button className="px-2.5 py-1 text-xs" title="Mở lại tem đã hủy — gửi lại phiếu in tem sang ERP"
-              onClick={(e) => { e.stopPropagation(); moLai.moHuy(r); }}>Mở lại</Button>
+          return (
+            <span className="inline-flex items-center gap-1.5">
+              {nutKhoa(r)}
+              {khoa ? chuKhoa : (
+                <Button className="px-2.5 py-1 text-xs" title="Mở lại tem đã hủy — gửi lại phiếu in tem sang ERP"
+                  onClick={(e) => { e.stopPropagation(); moLai.moHuy(r); }}>Mở lại</Button>
+              )}
+            </span>
           );
         }
         // Sửa (SL / giờ / ca — gửi lại ERP) + In lại (25/10/2026) ở mọi tem sản xuất chưa hủy.
+        // Admin có thêm nút Khóa / Mở khóa từng tem (18/11/2026).
         return (
           <span className="inline-flex items-center gap-1.5">
+            {nutKhoa(r)}
             {khoa ? chuKhoa : (
               <Button variant="secondary" className="px-2.5 py-1 text-xs" title="Sửa số lượng / giờ / ca — gửi lại ERP cùng IDMES"
                 onClick={(e) => { e.stopPropagation(); setSuaTemDong(r); }}>Sửa</Button>
@@ -635,8 +684,14 @@ function TemPanel({ tem, onClose, laGiaCong, layNhan, coSuaVai = false, laAdmin 
             <Icon name="lock" size={16} className="mt-0.5 shrink-0 text-ink-soft" />
             <span>
               {NHAN_KHOA(t)}.
-              {laAdmin && <span className="text-ink-soft"> Bạn là admin nên vẫn sửa được.</span>}
+              {laAdmin && <span className="text-ink-soft"> Bạn là admin nên vẫn sửa được (nút Mở khóa ở cột thao tác).</span>}
             </span>
+          </div>
+        )}
+        {!laGiaCong && !t.da_khoa && khoaTayCua(t)?.hd === 'MO_KHOA_TEM' && (
+          <div className="flex items-start gap-2 rounded-control border border-line bg-surface-muted px-3 py-2 text-sm text-ink">
+            <Icon name="lock-open" size={16} className="mt-0.5 shrink-0 text-success" />
+            <span>{NHAN_MO_KHOA(t)}.</span>
           </div>
         )}
         {/* ═══ TỜ TEM ĐÚNG NHƯ LÚC IN ═══════════════════════════════════════════════════════════

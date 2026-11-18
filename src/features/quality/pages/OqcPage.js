@@ -324,7 +324,7 @@ export default function OqcPage() {
         <Badge tone={r.la_gia_cong ? 'success' : r.la_sua ? 'warning' : 'info'}>{r.ma_tem_display || r.ma_tem}</Badge>
         <span className="text-[11px] text-ink-soft">{r.la_gia_cong ? 'gia công' : r.la_sua ? 'đã sửa' : 'từ KCS'}</span>
       </div>
-      {laHaiCongDoan(r.luong_sx) && <div className="mt-1"><CongDoanBadge luong={r.luong_sx} gd={r.giai_doan} /></div>}
+      {laHaiCongDoan(r.luong_sx) && <div className="mt-1"><CongDoanBadge luong={r.luong_sx} gd={r.giai_doan} pa={r.phuong_an_in} /></div>}
     </>) },
     { key: 'khach_don', header: 'Khách hàng · Đơn hàng', render: (r) => (
       <div className="leading-tight">

@@ -90,6 +90,7 @@ import {
   Maximize2,
   List,
   Lock,
+  LockOpen,
 } from 'lucide-react';
 
 // Map tên kebab → component Lucide.
@@ -193,6 +194,8 @@ const MAP = {
   'maximize-2': Maximize2,
   // Tem đã khóa (in quá 48 giờ, chỉ admin sửa) — Danh sách tem in + "Tem đã in" (17/11/2026).
   lock: Lock,
+  // Tem admin đã MỞ KHÓA tay (18/11/2026) — Danh sách tem in.
+  'lock-open': LockOpen,
 };
 
 export default function Icon({ name, size = 20, className = '' }) {

@@ -343,7 +343,7 @@ export default function ReadyPage() {
     }] : []),
     { key: 'ma_phan', header: 'Code phần', className: 'font-medium text-ink', copyText: (r) => r.ma_phan, render: (r) => (
       <div>
-        <CodePhanCongDoan ma={r.ma_phan} luong={r.luong_sx} gd={r.giai_doan} hienLogo />
+        <CodePhanCongDoan ma={r.ma_phan} luong={r.luong_sx} gd={r.giai_doan} pa={r.phuong_an_in} hienLogo />
         {btMap.has(r.id) && (
           <span title={btMap.get(r.id)} className="mt-1 inline-block"><Badge tone="danger"><Icon name="alert-triangle" size={12} className="mr-1" />Bất thường</Badge></span>
         )}

@@ -208,7 +208,7 @@ export default function Release2Page() {
     // Code phần là trường ĐANG ĐƯỢC LỌC/QUÉT, và là thứ duy nhất phân biệt các dòng con của gom set.
     // Mig 126: nhãn công đoạn (In kiếng / In / Ép ủi) + Logo cạnh code phần.
     { key: 'ma_phan', header: 'Code phần', render: (r) => (
-      <CodePhanCongDoan ma={r.ma_phan} luong={r.luong_sx} gd={r.giai_doan} hienLogo />
+      <CodePhanCongDoan ma={r.ma_phan} luong={r.luong_sx} gd={r.giai_doan} pa={r.phuong_an_in} hienLogo />
     ) },
     { key: 'mau_kich', header: 'Màu · Kích (vải/phim)', render: (r) => (
       <div className="leading-tight">

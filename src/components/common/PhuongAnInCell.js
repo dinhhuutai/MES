@@ -29,10 +29,10 @@ import useChiXem, { NHAC_CHI_XEM } from '../../hooks/useChiXem';
 // Endpoint đó cũng lo luôn: tạo phiên bản HSKT mới, relink `hskt_phan_in`, ghi `lich_su_hskt`,
 // và ĐỔI SỐ CUỐI `barcode_hskt` theo phương án in.
 
-// Vòng xoay theo yêu cầu nghiệp vụ: Bàn(1) → Robot(3) → Máy(2) → Logo(4) → Ép(5) → Bàn…
+// Vòng xoay theo yêu cầu nghiệp vụ: Bàn(1) → Robot(3) → Máy(2) → Logo(5) → Ép(4) → Bàn…
 // ⚠ KHÔNG phải 1→2→3. Đổi thứ tự này là đổi thao tác tay của kỹ thuật, đừng "sửa cho gọn". Logo + Ép thêm 10/11/2026
-//   (nối SAU vòng cũ để 3 nhịp quen tay Bàn → Robot → Máy giữ nguyên).
-const VONG_XOAY = [1, 3, 2, 4, 5];
+//   (nối SAU vòng cũ để 3 nhịp quen tay Bàn → Robot → Máy giữ nguyên). 18/11/2026 đảo số: 4 = Ép, 5 = Logo (giữ thứ tự nhãn).
+const VONG_XOAY = [1, 3, 2, 5, 4];
 const NHAN_VONG = VONG_XOAY.map((v) => PHUONG_AN_IN[v]).join(' → ');
 
 // Gương của `backend/src/utils/hskt.js` (BARCODE_RE + applyPainToBarcode): barcode HSKT 12 chữ số,

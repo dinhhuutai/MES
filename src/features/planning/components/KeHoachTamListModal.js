@@ -60,7 +60,7 @@ const COT = [
   { key: 'ma_hang', ten: 'Mã hàng' },
   // Mig 128: 1 đợt có thể có kế hoạch tạm cho phần in VÀ phần ép (mỗi phần 1 dòng) ⇒ badge công đoạn.
   { key: 'ma_phan', ten: 'Code phần', render: (r) => (
-    <CodePhanCongDoan ma={r.ma_phan} luong={r.luong_sx} gd={r.giai_doan} />
+    <CodePhanCongDoan ma={r.ma_phan} luong={r.luong_sx} gd={r.giai_doan} pa={r.phuong_an_in} />
   ) },
   { key: 'mau_vai', ten: 'Màu vải' },
   { key: 'kich_vai', ten: 'Kích vải' },
@@ -160,7 +160,7 @@ export default function KeHoachTamListModal({ open, onClose }) {
           width: c.ngay ? 14 : 18,
           value: (r) => (c.key === 'tinh_trang' ? (TT[r.tinh_trang] || {}).nhan || r.tinh_trang
             : c.key === 'phuong_an_in' ? r.phuong_an_in
-              : c.key === 'ma_phan' ? `${r.ma_phan || ''}${nhanCongDoan(r.luong_sx, r.giai_doan) ? ` · ${nhanCongDoan(r.luong_sx, r.giai_doan)}` : ''}`
+              : c.key === 'ma_phan' ? `${r.ma_phan || ''}${nhanCongDoan(r.luong_sx, r.giai_doan, r.phuong_an_in) ? ` · ${nhanCongDoan(r.luong_sx, r.giai_doan, r.phuong_an_in)}` : ''}`
                 : r[c.key]),
           ok: c.key === 'tinh_trang' ? (r) => r.tinh_trang === 'DA_RELEASE' : undefined,
           red: c.key === 'tinh_trang' ? (r) => r.tinh_trang === 'CHO_READY' : undefined,

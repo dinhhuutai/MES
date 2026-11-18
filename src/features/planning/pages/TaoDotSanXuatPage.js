@@ -196,7 +196,7 @@ export default function TaoDotSanXuatPage() {
                         {r.ma_phan} · <span className="font-normal text-ink-soft">{r.ten_khach_hang}</span> · <span className="font-normal text-ink-soft">{r.ma_don_hang}</span>
                       </div>
                       {/* Badge công đoạn DƯỚI code phần (14/11/2026) */}
-                      <CongDoanBadge luong={r.luong_sx} gd={r.giai_doan} hienLogo />
+                      <CongDoanBadge luong={r.luong_sx} gd={r.giai_doan} pa={r.phuong_an_in} hienLogo />
                       {/* Hàng 2: mã hàng · tính chất in */}
                       <div className="truncate text-xs text-ink-soft">
                         {r.ma_hang}{r.tinh_chat_in ? <> · <span className="text-ink">{r.tinh_chat_in}</span></> : null}

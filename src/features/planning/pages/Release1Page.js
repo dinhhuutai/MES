@@ -55,7 +55,7 @@ import { gomDotCungCodePhan, dotIdsCuaDong, slaCuaDong, rowKey } from '../utils/
 // Luồng theo tính chất in (mig 126): phần in 2 công đoạn có dòng ÉP ỦI riêng nằm ngay dưới dòng in · Logo bỏ Test Run.
 import CongDoanBadge from '../../../components/common/CongDoanBadge';
 import CodePhanCongDoan from '../../../components/common/CodePhanCongDoan';
-import { laEp, laLogo, nhanCongDoan, epChoLapSau } from '../../../utils/luongSanXuat';
+import { laEp, laLogo, nhanCongDoan, epChoLapSau, tenCdEp } from '../../../utils/luongSanXuat';
 
 // Dòng ép ủi chưa Ready: có Kế hoạch tạm theo công đoạn (mig 128, BE gắn `ep_tam_duoc`) ⇒ lưu KH tạm như dòng in — lập
 //   phần nào trước cũng được; chưa chạy mig ⇒ khóa ô tích như cũ.
@@ -394,7 +394,7 @@ export default function Release1Page() {
   // "hết mọi trang"). Cột "Gom set" giữ lại để vẫn biết đợt nào vốn định in chung. Excel giữ 1 dòng / ĐỢT VẢI.
   const doExcel = () => exportCheckpointExcel({
     cols: [{ header: 'Gom set', width: 12, value: (r) => r.ma_set || '' },
-      { header: 'Công đoạn', width: 11, value: (r) => nhanCongDoan(r.luong_sx, r.giai_doan) || (laLogo(r.luong_sx) ? 'Ép/Logo' : r.luong_sx === 'KIENG_KHONG_EP' ? 'In kiếng' : '') },
+      { header: 'Công đoạn', width: 11, value: (r) => nhanCongDoan(r.luong_sx, r.giai_doan, r.phuong_an_in) || (laLogo(r.luong_sx) ? tenCdEp(r.phuong_an_in) : r.luong_sx === 'KIENG_KHONG_EP' ? 'In kiếng' : '') },
       ...COT_DOT_VAI],
     rows: viewRowsGom.flatMap((g) => g._dots || [g]),
     title: 'Release 1 — chờ release',
@@ -649,7 +649,7 @@ export default function Release1Page() {
                       </div>
                     </td>
                     <td className={TD}>{r.ma_hang || '—'}</td>
-                    <td className={TD}><CodePhanCongDoan ma={r.ma_phan} luong={r.luong_sx} gd={r.giai_doan} hienLogo muiTen={false} /></td>
+                    <td className={TD}><CodePhanCongDoan ma={r.ma_phan} luong={r.luong_sx} gd={r.giai_doan} pa={r.phuong_an_in} hienLogo muiTen={false} /></td>
                     <td className={TD}>
                       <div className="leading-tight">
                         <div className="text-ink">{r.mau_vai || '—'}</div>
@@ -844,7 +844,7 @@ export default function Release1Page() {
       <SidePanel
         open={!!detail}
         onClose={() => setDetail(null)}
-        title={detail ? `Release 1 — ${detail.ma_phan || ''}${laEp(detail) ? ' · Ép/Logo' : ''}` : 'Chi tiết phần in'}
+        title={detail ? `Release 1 — ${detail.ma_phan || ''}${laEp(detail) ? ` · ${nhanCongDoan(detail.luong_sx, detail.giai_doan, detail.phuong_an_in) || 'Logo'}` : ''}` : 'Chi tiết phần in'}
         subtitle={detail ? `${detail.ten_khach_hang || ''} · ${detail.mau_vai || ''}` : ''}
         footer={
           <>
@@ -867,11 +867,11 @@ export default function Release1Page() {
         {detail && (
           <div className="space-y-4">
             {/* Mig 126: phần in 2 công đoạn — nói rõ dòng đang mở là phần nào. */}
-            {nhanCongDoan(detail.luong_sx, detail.giai_doan) && (
+            {nhanCongDoan(detail.luong_sx, detail.giai_doan, detail.phuong_an_in) && (
               <div className={`rounded-control border px-3 py-2 text-sm ${laEp(detail)
                 ? 'border-orange-200 bg-orange-50 text-orange-800 dark:border-orange-900/60 dark:bg-orange-950/40 dark:text-orange-300'
                 : 'border-violet-200 bg-violet-50 text-violet-800 dark:border-violet-900/60 dark:bg-violet-950/40 dark:text-violet-300'}`}>
-                <div className="mb-0.5 flex items-center gap-2"><CongDoanBadge luong={detail.luong_sx} gd={detail.giai_doan} />
+                <div className="mb-0.5 flex items-center gap-2"><CongDoanBadge luong={detail.luong_sx} gd={detail.giai_doan} pa={detail.phuong_an_in} />
                   <b>{detail.luong_sx === 'IN_KIENG' ? 'Phần in kiếng ủi' : 'Phần in + ép'} — 2 công đoạn, 2 lệnh</b></div>
                 {detail.cong_doan_dot && (
                   <div className="mb-1">ERP gửi riêng từng công đoạn: đợt <b>4I</b> là công đoạn <b>In kiếng</b>, đợt khác là công đoạn <b>Ép</b> ⇒ đợt này
@@ -883,7 +883,7 @@ export default function Release1Page() {
                     {!detail.qc_done && (epChoLapSau(detail)
                       ? <> Đợt <b>chưa Ready</b> ⇒ chưa lập được (ép ủi không lưu Kế hoạch tạm).</>
                       : <> Đợt <b>chưa Ready</b> ⇒ lưu <b>Kế hoạch tạm</b> phần ép, xác nhận ở màn Kế hoạch tạm khi Ready xong.</>)}</>
-                  : <>Đây là phần <b>{nhanCongDoan(detail.luong_sx, detail.giai_doan).toLowerCase()}</b>.{detail.cong_doan_dot ? '' : ' Phần ép ủi nằm ở dòng ngay dưới — lập kế hoạch riêng.'}</>}
+                  : <>Đây là phần <b>{nhanCongDoan(detail.luong_sx, detail.giai_doan, detail.phuong_an_in).toLowerCase()}</b>.{detail.cong_doan_dot ? '' : ' Phần ép ủi nằm ở dòng ngay dưới — lập kế hoạch riêng.'}</>}
                 {detail.ep_truoc && <div className="mt-1 text-xs">Phần in này đánh dấu <b>ép trước, in sau</b>.</div>}
               </div>
             )}
@@ -1077,7 +1077,7 @@ export default function Release1Page() {
         matchMultiple
         isSelected={(r) => !!selected[rowKey(r)]}
         onToggle={(r) => toggle(r)}
-        primaryLabel={(r) => `${r.ma_phan || '—'}${laEp(r) ? ' · Ép/Logo' : ''}`}
+        primaryLabel={(r) => `${r.ma_phan || '—'}${laEp(r) ? ` · ${nhanCongDoan(r.luong_sx, r.giai_doan, r.phuong_an_in) || 'Logo'}` : ''}`}
         secondaryLabel={(r) => [r.ten_khach_hang, r.mau_vai, r.kich_vai].filter(Boolean).join(' · ')}
         onConfirm={() => { setScanOpen(false); openReleaseAll(); }}
         confirmLabel="Release"

@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
+import { nhanCongDoan } from '../../../utils/luongSanXuat';
 import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
 import useNghenMap from '../../../hooks/useNghenMap';
 import useLyDoNghen from '../../../hooks/useLyDoNghen';
@@ -290,7 +291,7 @@ export default function KeHoachTamPage() {
       : <span className="text-ink-soft">—</span>) },
     // Phần in 2 công đoạn: mỗi đợt có thể có kế hoạch tạm cho phần in VÀ phần ép (mig 128) ⇒ badge công đoạn cạnh code phần.
     { key: 'ma_phan', header: 'Code phần', className: 'font-medium text-ink', render: (r) => (
-      <CodePhanCongDoan ma={r.ma_phan} luong={r.luong_sx} gd={r.giai_doan} />
+      <CodePhanCongDoan ma={r.ma_phan} luong={r.luong_sx} gd={r.giai_doan} pa={r.phuong_an_in} />
     ) },
     { key: 'ten_khach_hang', header: 'Khách hàng', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
@@ -424,7 +425,7 @@ export default function KeHoachTamPage() {
       <SidePanel
         open={!!edit}
         onClose={() => setEdit(null)}
-        title={edit ? `Sửa kế hoạch tạm — ${edit.ma_phan || ''}${edit.giai_doan === 'EP_UI' ? ' · Ép/Logo' : ''}` : 'Chỉnh sửa kế hoạch tạm'}
+        title={edit ? `Sửa kế hoạch tạm — ${edit.ma_phan || ''}${edit.giai_doan === 'EP_UI' ? ` · ${nhanCongDoan(edit.luong_sx, edit.giai_doan, edit.phuong_an_in) || 'Logo'}` : ''}` : 'Chỉnh sửa kế hoạch tạm'}
         subtitle={edit ? `${edit.ten_khach_hang || ''} · ${edit.mau_vai || ''}` : ''}
         footer={(
           <>
