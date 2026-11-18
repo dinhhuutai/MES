@@ -95,11 +95,21 @@ export const maNgayCaSai = (ma) => {
   const d = new Date(Date.UTC(2000 + yy, mm - 1, dd));
   return d.getUTCMonth() === mm - 1 && d.getUTCDate() === dd ? '' : NGAY_CA_SAI;
 };
-// Thiếu Ngày ca / Ngày chứng từ, hoặc ngày ca sai dạng ⇒ câu báo (rỗng = đủ). Gọi TRƯỚC khi mở cửa sổ in.
+// TỪ GIỜ = ĐẾN GIỜ (0 phút, vd 20:00 → 20:00) ⇒ không in, bắt chọn lại giờ (18/11/2026, người dùng chốt). Xét ĐÚNG giờ sẽ
+//   gửi đi: "Đến giờ" chưa sửa tay thì chạy theo đồng hồ (`metaGuiDi`). Gương BE `kiemNgayCaChungTu` (422 `GIO_0_PHUT`).
+//   Đến giờ < Từ giờ vẫn hợp lệ (ca qua đêm). Trả câu báo hoặc ''.
+export const gioSxKhongPhut = (m) => {
+  const bd = String(m?.gioBd || '').trim().slice(0, 5);
+  const kt = String((m?._suaGioKt ? m?.gioKt : gioHienTai()) || '').trim().slice(0, 5);
+  return bd && kt && bd === kt
+    ? `Từ giờ và Đến giờ đang trùng nhau (${bd} → ${kt}, 0 phút) — chọn lại giờ rồi mới in tem`
+    : '';
+};
+// Thiếu Ngày ca / Ngày chứng từ, ngày ca sai dạng, hoặc Từ giờ = Đến giờ ⇒ câu báo (rỗng = đủ). Gọi TRƯỚC khi mở cửa sổ in.
 export const thieuNgayCaCt = (m) => {
   const thieu = [!String(m?.ngayCa || '').trim() && 'Ngày ca', !m?.ngayCt && 'Ngày chứng từ'].filter(Boolean);
   if (thieu.length) return `Chưa nhập ${thieu.join(' và ')} — nhập đủ rồi mới in tem được`;
-  return maNgayCaSai(m?.ngayCa);
+  return maNgayCaSai(m?.ngayCa) || gioSxKhongPhut(m);
 };
 export const CHUA_THO_IN = 'Chưa phân công thợ in / tổ in — chọn thợ in và tổ in ở khối Phân công rồi bấm Lưu trước khi in tem';
 const KHOA_IN_NGC = 'Lệnh gom đợt vải của nhiều nhà gia công — bấm "Tách theo nhà gia công" trước khi in tem';
