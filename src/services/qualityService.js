@@ -32,8 +32,18 @@ export const oqcHistory = (date, q) => client.get('/quality/oqc/history', { para
 export const oqcDone = (date) => client.get('/quality/oqc/done', { params: { date } });
 // Danh sách finish (03/10/2026): 1 dòng / (ngày OQC × phần in) + tập MỤC TIÊU (hạn giao = denNgay).
 // `nguon` 'SX' (29/10/2026, Xác nhận chạy) = finish khi đã in + vải hư/thiếu ≥ SLNV; mặc định theo OQC cho qua giao.
-export const getOqcFinishList = (tuNgay, denNgay, heThong = false, nguon) =>
-  client.get('/quality/oqc/finish-list', { params: { tuNgay, denNgay, heThong: heThong ? 1 : undefined, nguon: nguon || undefined } });
+// 18/11/2026: `nguon='SX'` = finish theo 7 điều kiện (BE `utils/dieuKienFinish.js`); `cheDo='CHUA'` = phần in chưa finish
+//   (khoảng ngày = ngày chạy hoàn tất).
+export const getOqcFinishList = (tuNgay, denNgay, heThong = false, nguon, cheDo) =>
+  client.get('/quality/oqc/finish-list', {
+    params: { tuNgay, denNgay, heThong: heThong ? 1 : undefined, nguon: nguon || undefined, cheDo: cheDo || undefined },
+  });
+// Chuyển finish (SL đạt < SLĐH, hoặc admin đã mở điều kiện) — lý do bắt buộc.
+export const chuyenFinish = (phanInId, lyDo) => client.post(`/quality/finish/${phanInId}/chuyen`, { lyDo });
+// Trang admin "Mở điều kiện finish": danh sách (khoảng ngày chạy hoàn tất, hoặc `q` = code phần / TDTHĐH) · mở / đóng · hủy chuyển.
+export const dsMoDieuKienFinish = (params) => client.get('/quality/finish/mo-dieu-kien', { params });
+export const moDieuKienFinish = (phanInId, mo, lyDo) => client.post(`/quality/finish/${phanInId}/mo-dieu-kien`, { mo, lyDo });
+export const huyChuyenFinish = (phanInId, lyDo) => client.post(`/quality/finish/${phanInId}/huy-chuyen`, { lyDo });
 
 // Hủy xác nhận KCS / Sửa / OQC (lỡ xác nhận lộn / nhập sai số) — trang Hủy lệnh xác nhận
 export const listCancelKcs = (date) => client.get('/quality/kcs/cancelable', { params: { date } });

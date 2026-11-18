@@ -196,6 +196,9 @@ export const MODULES = [
       // Chờ nhận sửa (mig 132, 14/11/2026) — chốt giữa Phân loại lỗi và màn Sửa, cùng kiểu Chờ GN tích. Tổ sửa (SUA) thao tác
       //   được (Nhận sửa · hủy lượt nhận); Phân loại lỗi / KCS chỉ xem.
       { ten: 'Chờ nhận sửa', route: '/he-thong/cho-nhan-sua', perm: ['WORKFLOW_VIEW', 'SUA'], permXem: ['PHAN_LOAI_LOI', 'KCS'] },
+      // Mở điều kiện finish (18/11/2026) — CHỈ ADMIN: `FINISH_MO_DIEU_KIEN` không có trong bảng quyền ⇒ chỉ tài khoản '*' qua
+      //   (BE route cùng mã). Mở cho phần in đã chạy hoàn tất ⇒ người dùng bấm được "Chuyển finish" ở Danh sách finish.
+      { ten: 'Mở điều kiện finish', route: '/he-thong/mo-dieu-kien-finish', perm: 'FINISH_MO_DIEU_KIEN' },
       { ten: 'Đồng bộ ERP', route: '/he-thong/erp-sync', perm: 'ERP_SYNC' },
       { ten: 'Nhập tay đơn → đợt vải', route: '/he-thong/nhap-tay', perm: 'ERP_SYNC' },
       { ten: 'Cập nhật SL nhận vải / release', route: '/he-thong/cap-nhat-vai', perm: 'ERP_SYNC' },
@@ -269,7 +272,7 @@ export const NHOM_HE_THONG = [
     '/he-thong/erp-sync', '/he-thong/nhap-tay', '/he-thong/cap-nhat-vai', '/he-thong/quan-tri-phan-in', '/he-thong/btp-khac-ke-hoach',
     '/he-thong/khach-hang', '/he-thong/kpi-don-hang'] },
   { ma: 'THAO_TAC', ten: 'Hủy / tích tem', icon: 'history', routes: [
-    '/he-thong/lich-su-trang-thai', '/he-thong/tich-giao', '/he-thong/cho-nhan-sua'] },
+    '/he-thong/lich-su-trang-thai', '/he-thong/tich-giao', '/he-thong/cho-nhan-sua', '/he-thong/mo-dieu-kien-finish'] },
   { ma: 'MAU_IN', ten: 'Mẫu in & danh mục', icon: 'printer', routes: [
     '/he-thong/mau-form', '/he-thong/thiet-ke-tem', '/he-thong/thiet-ke-phieu', '/he-thong/to-in'] },
   { ma: 'CAI_DAT', ten: 'Cài đặt', icon: 'settings', routes: [

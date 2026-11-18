@@ -4,6 +4,8 @@ import Toolbar from '../../../components/common/Toolbar';
 import Pagination from '../../../components/common/Pagination';
 import Badge from '../../../components/common/Badge';
 import TinhChatInCell from '../../../components/common/TinhChatInCell';
+import CongDoanBadge, { CongDoanPhanInBadges } from '../../../components/common/CongDoanBadge';
+import { dsCongDoan, laHaiCongDoan } from '../../../utils/luongSanXuat';
 import PhuongAnInBadge from '../../../components/common/PhuongAnInBadge';
 import Button from '../../../components/common/Button';
 import SidePanel from '../../../components/common/SidePanel';
@@ -57,6 +59,26 @@ const FIELD_LABEL = {
   ...Object.fromEntries(FILTER_FIELDS.map((f) => [f.key, f.label])),
   ngayVaiTu: 'Ngày vải từ', ngayVaiDen: 'Ngày vải đến',
 };
+
+// Badge công đoạn của PHẦN IN theo luồng (18/11/2026): In + Logo (DSP Logo) ⇒ "In + Logo", kiếng ủi ⇒ "In kiếng + Ép",
+//   chỉ Logo / Ép / In kiếng ⇒ 1 badge, in thường ⇒ không vẽ. `pa_cd_ep` = PA công đoạn Logo/Ép BE tính theo tính chất in.
+const congDoanCuaPhanIn = (g, className) => (
+  <CongDoanPhanInBadges luong={g.luong_sx} pa={g.phuong_an_in} paEp={g.pa_cd_ep} epTruoc={!!g.ep_truoc} className={className} />
+);
+// Badge công đoạn của 1 LỆNH (đợt SX) của phần in `g`: phần in 2 công đoạn ⇒ "In" / "Logo" ("In kiếng" / "Ép" với kiếng
+//   ủi); lệnh ép của phần in nay đã 1 công đoạn (dữ liệu cũ) ⇒ giữ nhãn "Ép ủi" như trước.
+const congDoanLenh = (g, gd) => {
+  if (g && laHaiCongDoan(g.luong_sx)) return <CongDoanBadge luong={g.luong_sx} gd={gd} pa={g.pa_cd_ep} />;
+  return gd === 'EP_UI' ? <Badge tone="warning">Ép ủi</Badge> : null;
+};
+function TinhChatCongDoanCell({ g }) {
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <TinhChatInCell value={g.tinh_chat_in} />
+      {congDoanCuaPhanIn(g)}
+    </div>
+  );
+}
 
 function Row({ label, value }) {
   return (
@@ -550,7 +572,7 @@ export default function PhanInListPage() {
                       <td rowSpan={n} className={TD}>{g.mau_vai || '—'}</td>
                       <td rowSpan={n} className={TD}>{g.kich_vai || '—'}</td>
                       <td rowSpan={n} className={TD}>{g.kich_phim || '—'}</td>
-                      <td rowSpan={n} className={TD}><TinhChatInCell value={g.tinh_chat_in} /></td>
+                      <td rowSpan={n} className={TD}><TinhChatCongDoanCell g={g} /></td>
                       {showSxCols && <td rowSpan={n} className={TD}><PhuongAnInBadge value={g.phuong_an_in} /></td>}
                       {showSxCols && <td rowSpan={n} className={`${TD} tabular-nums whitespace-normal break-words`}>{hienDsMa(g.barcode_phan_in)}</td>}
                       <td rowSpan={n} className={`${TD} tabular-nums`}>{g.barcode || '—'}</td>
@@ -587,7 +609,7 @@ export default function PhanInListPage() {
                                 <div className="text-ink">{g.mau_vai || '—'}</div>
                                 <div className="text-xs text-ink-soft">{[g.kich_vai, g.kich_phim].filter(Boolean).join(' · ') || '—'}</div>
                               </td>
-                              <td rowSpan={n} className={TD}><TinhChatInCell value={g.tinh_chat_in} /></td>
+                              <td rowSpan={n} className={TD}><TinhChatCongDoanCell g={g} /></td>
                               <td rowSpan={n} className={`${TD} text-right tabular-nums border-r border-line/60`}>
                                 <div className="font-medium text-ink">{fmtNum(agg.total)}</div>
                                 <div className="text-[10px] text-ink-soft">đơn {fmtNum(g.so_luong_don_hang)}</div>
@@ -698,6 +720,7 @@ export default function PhanInListPage() {
                 {g.barcode_phan_in && <Badge tone="default">TDTHĐH {hienDsMa(g.barcode_phan_in)}</Badge>}
                 {g.barcode && <Badge tone="default">Barcode {g.barcode}</Badge>}
                 {g.so_dot > 1 && <Badge tone="warning">{g.so_dot} đợt vải</Badge>}
+                {congDoanCuaPhanIn(g)}
               </div>
               <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-0.5 border-t border-line/60 pt-2 text-xs text-ink-soft">
                 <span>SL đơn: <b className="text-ink">{fmtNum(g.so_luong_don_hang)}</b></span>
@@ -742,6 +765,8 @@ export default function PhanInListPage() {
               <Row label="Kích vải" value={detail.kich_vai || '—'} />
               <Row label="Kích phim" value={detail.kich_phim || '—'} />
               <Row label="Tính chất in" value={detail.tinh_chat_in || '—'} />
+              {/* Phần in nhiều công đoạn / chỉ Logo-Ép / In kiếng ⇒ thêm dòng công đoạn (18/11/2026). */}
+              {dsCongDoan(detail.luong_sx).length > 0 && <Row label="Công đoạn" value={congDoanCuaPhanIn(detail, 'justify-end')} />}
               <Row label="Độ in / Màu in" value={`${detail.do_in || '—'} / ${detail.mau_in || '—'}`} />
               <Row label="SL đơn hàng" value={fmtNum(detail.so_luong_don_hang)} />
               <Row label="Lợi nhuận" value={detail.loi_nhuan == null ? 'Chưa có' : fmtCurrency(detail.loi_nhuan)} />
@@ -975,7 +1000,7 @@ export default function PhanInListPage() {
                               <Badge tone="info">Đợt SX {ji + 1}/{journeys.length}</Badge>
                               <span className="text-sm font-semibold text-ink">{j.ma_lenh_san_xuat}</span>
                               {j.gia_cong && <Badge tone="warning">Gia công</Badge>}
-                              {j.giai_doan === 'EP_UI' && <Badge tone="warning">Ép ủi</Badge>}
+                              {congDoanLenh(detail, j.giai_doan)}
                               {j.dot_vai?.length > 0 && (
                                 <span className="text-xs text-ink-soft">vải: {j.dot_vai.map((d) => (d.tg_len_mes ? `${d.ma_dot_vai} (lên MES ${fmtDateTime(d.tg_len_mes)})` : d.ma_dot_vai)).join(', ')}</span>
                               )}
@@ -1073,7 +1098,7 @@ export default function PhanInListPage() {
                           <td className={`${td} border-l border-line/60 font-medium text-ink`}>
                             <div className="flex flex-wrap items-center gap-1">
                               <span>{s.ma_lenh_san_xuat}</span>
-                              {s.giai_doan === 'EP_UI' && <Badge tone="info">Ép ủi</Badge>}
+                              {congDoanLenh(detailModal, s.giai_doan)}
                               {composeBadge(s)}
                             </div>
                           </td>

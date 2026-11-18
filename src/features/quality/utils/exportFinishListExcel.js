@@ -37,7 +37,9 @@ const ngayExcel = (s) => {
   return y && m && d ? new Date(Date.UTC(y, m - 1, d)) : null;
 };
 
-export default async function exportFinishListExcel(items, { ngay, mucTieu, ketQua }, fileName = 'danh-sach-finish') {
+// `tieuDe` (18/11/2026): chế độ "Chưa finish" ghi 'DANH SÁCH CHƯA FINISH — CHẠY HOÀN TẤT NGÀY' (dòng KẾT QUẢ = tập chưa finish).
+export default async function exportFinishListExcel(items, { ngay, mucTieu, ketQua, tieuDe = 'DANH SÁCH FINISH NGÀY' },
+  fileName = 'danh-sach-finish') {
   const ExcelJS = (await import('exceljs')).default || (await import('exceljs'));
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('Danh sách finish', { views: [{ state: 'frozen', ySplit: 4 }] });
@@ -48,7 +50,7 @@ export default async function exportFinishListExcel(items, { ngay, mucTieu, ketQ
 
   // Dòng 1 — tiêu đề (A→H) + ngày (I→L), chữ to như tờ giấy.
   ws.mergeCells(1, 1, 1, 8); ws.mergeCells(1, 9, 1, 12);
-  ws.getCell(1, 1).value = 'DANH SÁCH FINISH NGÀY';
+  ws.getCell(1, 1).value = tieuDe;
   ws.getCell(1, 9).value = fmtDMY(ngay);
   ws.getCell(1, 1).font = { bold: true, size: 20 }; ws.getCell(1, 9).font = { bold: true, size: 20 };
   ws.getCell(1, 1).alignment = { horizontal: 'right', vertical: 'middle' };

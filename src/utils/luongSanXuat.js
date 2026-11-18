@@ -51,6 +51,21 @@ export function nhanCongDoan(luong, gd, pa) {
 //   kiếng, đợt khác ⇒ Ép; null = đợt có cả 2 công đoạn. BE trả sẵn `cong_doan_dot` ở Release 1.
 export const dotGd = (luong, maLoaiDot) => (luong === 'IN_KIENG' ? (maLoaiDot === 'IN_KIENG' ? GD_IN : GD_EP) : null);
 
+// Đợt của phần in 2 công đoạn KHÔNG tách theo đợt (In + Logo — ERP gửi 1 lần; gương BE `theoDot`) mang CẢ 2 công đoạn ⇒ dòng
+//   mức đợt trước Release 1 (READY · QC READY) vẽ đủ 2 badge (18/11/2026). Kiếng ủi mỗi đợt 1 công đoạn (`dotGd`) ⇒ không.
+export const dotCaHaiCongDoan = (luong) => laHaiCongDoan(luong) && luong !== 'IN_KIENG';
+
+// MỌI công đoạn của PHẦN IN theo luồng, công đoạn đầu trước (`epTruoc` ⇒ ép trước): [{ gd, ten }] — phần in thường ⇒ [].
+//   `pa` = PA của dòng (phần in 1 công đoạn LOGO: 4 ⇒ "Ép", còn lại "Logo" — như `CongDoanBadge hienLogo`);
+//   `paEp` = PA công đoạn ép của phần in 2 công đoạn (BE `pa_cd_ep` = `paCongDoanEp(tính chất in)`; thiếu ⇒ "Logo").
+export function dsCongDoan(luong, { pa, paEp, epTruoc = false } = {}) {
+  if (luong === 'LOGO') return [{ gd: GD_EP, ten: tenCdEp(pa) }];
+  if (luong === 'KIENG_KHONG_EP') return [{ gd: GD_IN, ten: 'In kiếng' }];
+  if (!laHaiCongDoan(luong)) return [];
+  const ds = [{ gd: GD_IN, ten: nhanCongDoan(luong, GD_IN) }, { gd: GD_EP, ten: nhanCongDoan(luong, GD_EP, paEp) }];
+  return epTruoc ? ds.reverse() : ds;
+}
+
 export const tenLuong = (luong) => (LUONG_SX.find((l) => l.ma === luong) || LUONG_SX[0]).ten;
 
 // Khóa so sánh "cùng công đoạn" khi gom dòng / gộp lệnh — lệnh in và lệnh ép ủi KHÔNG BAO GIỜ gom chung.

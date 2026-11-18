@@ -12,7 +12,8 @@ import { evalSla, SLA_BADGE, fmtDur } from '../../../utils/sla';
 import { getReadyDetail, confirmReadyItem, confirmReadyItemsBatch } from '../../../services/readyService';
 import GhiChuPhanIn from './GhiChuPhanIn';
 import TraVeGnModal from '../../../components/common/TraVeGnModal';
-import CongDoanBadge from '../../../components/common/CongDoanBadge';
+import CongDoanBadge, { CongDoanPhanInBadges } from '../../../components/common/CongDoanBadge';
+import { dotCaHaiCongDoan } from '../../../utils/luongSanXuat';
 import { NHAN_KT_YC } from '../constants';
 
 // 3 mục kỹ thuật + quyền tương ứng. Thứ tự hiển thị: FILM → KHUÔN → MỰC (HSKT đã bỏ).
@@ -56,8 +57,9 @@ function ReturnNote({ info, nguon }) {
 // `nhanFile` (11/11/2026) = { daNhan, moTa, coQuyen, dangLuu } của ĐỢT trên dòng đang mở + `onNhanFile(nhan)` — khối "File BH"
 //   (cùng việc với menu chuột phải ở bảng; để máy không có chuột phải — iPhone — vẫn đánh dấu được). Không truyền ⇒ ẩn.
 // `giaiDoan` / `luongSx` (14/11/2026 — READY theo công đoạn): panel của DÒNG công đoạn Ép/Logo ('EP_UI') ⇒ mọi lời gọi dùng bộ
-//   checklist của công đoạn đó. Không truyền = bộ gốc như cũ.
-export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, giaiDoan, luongSx, onClose, onChanged, onToast, truocXacNhan, ungVienGn, nhanFile, onNhanFile }) {
+//   checklist của công đoạn đó. Không truyền = bộ gốc như cũ. (17/11/2026 dùng chung 1 bộ — BE bỏ qua `giaiDoan`.)
+// `paEp` / `epTruoc` (18/11/2026): đợt In + Logo mang cả 2 công đoạn ⇒ banner vẽ "In + Logo" (`paEp` = dòng `pa_cd_ep`).
+export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, giaiDoan, luongSx, paEp, epTruoc, onClose, onChanged, onToast, truocXacNhan, ungVienGn, nhanFile, onNhanFile }) {
   const { can } = usePermissions();
   const { toast, show } = useToast();
   const now = useNow(1000);
@@ -205,11 +207,17 @@ export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, giaiDoan, 
         <div className="py-10 text-center text-ink-soft">Đang tải...</div>
       ) : (
         <div className="space-y-4">
-          {/* Phần in 2 công đoạn: panel này là READY của 1 công đoạn — công đoạn kia nằm ở dòng riêng. */}
-          {(giaiDoan === 'EP_UI' || ['IN_KIENG', 'IN_EP'].includes(luongSx)) && (
+          {/* Phần in 2 công đoạn (READY dùng chung 1 bộ từ 17/11/2026): đợt In + Logo mang CẢ 2 công đoạn ⇒ xác nhận 1 lần;
+              kiếng ủi mỗi đợt 1 công đoạn (4I In kiếng, đợt khác Ép) ⇒ công đoạn kia ở đợt vải khác. */}
+          {dotCaHaiCongDoan(luongSx) && giaiDoan !== 'EP_UI' ? (
+            <div className="flex flex-wrap items-center gap-2 rounded-control border border-line bg-surface-muted px-3 py-2 text-xs text-ink-soft">
+              <CongDoanPhanInBadges luong={luongSx} paEp={paEp} epTruoc={epTruoc} />
+              <span>Đợt này có 2 công đoạn — READY xác nhận 1 lần cho cả đợt; Release 1 tách 2 dòng, mỗi công đoạn 1 lệnh riêng.</span>
+            </div>
+          ) : (giaiDoan === 'EP_UI' || luongSx === 'IN_KIENG') && (
             <div className="flex items-center gap-2 rounded-control border border-line bg-surface-muted px-3 py-2 text-xs text-ink-soft">
               <CongDoanBadge luong={luongSx || 'IN_EP'} gd={giaiDoan} />
-              <span>READY riêng của công đoạn này — công đoạn kia xác nhận ở dòng riêng.</span>
+              <span>Đợt này chỉ là 1 công đoạn — công đoạn kia ở đợt vải khác (ERP gửi riêng).</span>
             </div>
           )}
           {/* ⚠ Chỉ nhắc khi phần in đang chờ ≥2 ĐỢT VẢI — 1 đợt thì panel vẫn chạy theo đợt nhưng

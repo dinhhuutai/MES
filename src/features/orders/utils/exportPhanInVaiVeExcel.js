@@ -3,6 +3,7 @@
 // khối định danh (Khách→SL đơn) GỘP Ô (rowspan); khối đợt vải & khối đợt SX theo từng hàng.
 // Lazy import exceljs để không phình bundle chính.
 import { ngayLocalISO } from '../../../utils/format';
+import { nhanCongDoan } from '../../../utils/luongSanXuat';
 
 const HEADERS = [
   'STT', 'Khách hàng', 'Đơn hàng', 'Mã hàng', 'Màu vải', 'Kích vải', 'Kích phim', 'SL đơn hàng',
@@ -77,7 +78,9 @@ export default async function exportPhanInVaiVeExcel(rows, fileName = 'danh-sach
     for (let i = 0; i < R; i += 1) {
       const d = dv[i]; const s = sx[i];
       const donHang = g.ma_don_hang ? `${g.ma_don_hang}${g.so_po ? ` (${g.so_po})` : ''}` : '';
-      const maDot = s ? `${s.ma_lenh_san_xuat || ''}${s.giai_doan === 'EP_UI' ? ' (Ép ủi)' : ''}` : '';
+      // Lệnh công đoạn ép: nhãn theo luồng phần in (In + Logo ⇒ "Logo", kiếng ủi ⇒ "Ép" — 18/11/2026); dữ liệu cũ ⇒ "Ép ủi".
+      const nhanEp = s && s.giai_doan === 'EP_UI' ? (nhanCongDoan(g.luong_sx, 'EP_UI', g.pa_cd_ep) || 'Ép ủi') : '';
+      const maDot = s ? `${s.ma_lenh_san_xuat || ''}${nhanEp ? ` (${nhanEp})` : ''}` : '';
       const values = [
         i === 0 ? stt : '',
         i === 0 ? (g.ten_khach_hang || '') : '',

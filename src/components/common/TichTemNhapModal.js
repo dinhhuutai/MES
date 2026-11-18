@@ -170,6 +170,9 @@ export default function TichTemNhapModal({
 
   const keys = useMemo(() => truong.map((t) => t.k), [truong]);
   const oCua = (d) => (d.tt === 'OK' ? keys : ['ma']);
+  // Bảng KHÔNG có ô nhập (`truong` rỗng — Nhận sửa 18/11/2026: "tích thì nhảy xuống dòng dưới, SL nhận lấy theo phân loại
+  //   lỗi"): dòng đã tra không còn ô nào để đặt con trỏ ⇒ quét xong tự sang ô quét của dòng dưới (chưa có thì thêm).
+  const khongONhap = keys.length === 0;
   // `chon` = bôi đen chữ trong ô (mặc định có — quét lại là thay mã cũ); tra trượt khi người đang GÕ TAY thì không bôi đen.
   const datConTro = useCallback((id, k, chon = true) => setMuonFocus((m) => ({ id, k, chon, n: (m?.n || 0) + 1 })), []);
   // TỰ TRA MÃ (29/10/2026, người dùng: "đủ 12 số tự tìm luôn khỏi Enter, tự gõ thì dừng ~0,5 s tự hiện"):
@@ -263,7 +266,9 @@ export default function TichTemNhapModal({
     const ds = dongRef.current;
     const i = ds.findIndex((d) => d.id === id);
     if (buoc === 1 && themTiep(ds, i)) return;
-    const j = i + buoc;
+    let j = i + buoc;
+    // Bỏ qua dòng không có ô nào để đặt con trỏ (dòng đã tra của bảng không ô nhập).
+    while (j >= 0 && j < ds.length && !oCua(ds[j]).length) j += buoc;
     if (j < 0) return;
     if (j >= ds.length) { themDong(); return; }
     const dich = ds[j];
@@ -320,11 +325,12 @@ export default function TichTemNhapModal({
     }
     if (trung >= 0) {
       sua(id, { tt: 'LOI', ma: '', chu: `Tem ${maHien(kq.row)} đã có ở dòng ${trung + 1}` });
-      datConTro(ds[trung].id, keys[0]);
+      // Không ô nhập ⇒ con trỏ ở lại ô quét (đã xóa) của chính dòng này để quét tem khác.
+      if (khongONhap) datConTro(id, 'ma'); else datConTro(ds[trung].id, keys[0]);
       return;
     }
     sua(id, { tt: 'OK', row: kq.row, f: keThuaF(id, formMoi(kq.row)), tich: true, chu: '', kq: null });
-    datConTro(id, keys[0]);
+    if (khongONhap) themDong(); else datConTro(id, keys[0]);
   };
 
   // Ô `keThua` còn trống ⇒ lấy giá trị dòng đã tra gần nhất phía trên (chưa có ⇒ `macDinh()`).
@@ -410,7 +416,10 @@ export default function TichTemNhapModal({
   const nhomTich = cacNhom;
   const soSai = nhomTich.filter((g) => !g.dg?.ok).length;
   const donVi = nhom ? 'tem' : 'dòng';
-  const tongSo = truong.filter((t) => t.kieu !== 'chon' && t.kieu !== 'nguoi').map((t) => [t.label, dongTich.reduce((s, d) => s + n(d.f[t.k]), 0)]);
+  const tongSo = khongONhap
+    // Không ô nhập ⇒ tổng theo cột số cần (vd Nhận sửa: SL nhận = chờ nhận theo phân loại lỗi).
+    ? [[nhanSoCan || 'Số lượng', nhomTich.reduce((s, g) => s + n(soCan(g.ds[0].row)), 0)]]
+    : truong.filter((t) => t.kieu !== 'chon' && t.kieu !== 'nguoi').map((t) => [t.label, dongTich.reduce((s, d) => s + n(d.f[t.k]), 0)]);
 
   // Áp 1 hàm cho mọi dòng đã tra được (nút phụ trợ của màn: "Đạt hết", "Mã lỗi chung"…).
   //   `fn(row, f, { thu, so })` — `thu` = vị trí dòng trong tem, `so` = số dòng của tem (chế độ `nhom`; không có ⇒ 0 / 1).
@@ -466,7 +475,7 @@ export default function TichTemNhapModal({
     onXong?.(soOk, loi, ketIn);
     if (loi.length) {
       const dauLoi = conDong.find((d) => d.kq);
-      if (dauLoi) datConTro(dauLoi.id, keys[0]);
+      if (dauLoi && !khongONhap) datConTro(dauLoi.id, keys[0]);
     }
   };
 
@@ -504,7 +513,9 @@ export default function TichTemNhapModal({
             {phuTro && phuTro({ apMoiDong, dangLuu, coDong: dongOk.length > 0 })}
             <Button variant="secondary" icon="plus" onClick={themDong} disabled={dangLuu}>Thêm dòng (↓)</Button>
             <span className="text-xs text-ink-soft">
-              Quét mã tem + Enter ⇒ tự nhảy sang ô nhập · Enter sang ô kế · ↓ thêm dòng / xuống dòng · ↑ lên dòng.
+              {khongONhap
+                ? 'Quét mã tem ⇒ tự xuống dòng dưới, quét tiếp tem kế · ↓ thêm dòng · ↑ lên dòng · bỏ tem quét nhầm bằng ×.'
+                : 'Quét mã tem + Enter ⇒ tự nhảy sang ô nhập · Enter sang ô kế · ↓ thêm dòng / xuống dòng · ↑ lên dòng.'}
               {nhom && ' 1 tem nhiều lỗi: còn thiếu số lượng thì ↓ (hoặc quét lại mã tem) để thêm dòng lỗi cho tem đó.'}
             </span>
           </div>

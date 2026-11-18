@@ -42,4 +42,16 @@ export function tongHop(rows) {
   return { tong_po: po.size, tong_ma: ma.size, phan: pin.size, sldh, slnv };
 }
 
+// 7 ĐIỀU KIỆN FINISH (18/11/2026) — gương nhãn BE `utils/dieuKienFinish.js DK_FINISH` (luật chấm ở BE, dòng trả sẵn `dk`,
+//   `thieu`, `finish`, `loai_finish`, `duoc_chuyen`, `mo_dieu_kien`).
+export const DK_FINISH = [
+  { ma: 'CHAY', ten: 'Chạy hoàn tất', gon: 'Chạy' },
+  { ma: 'KIEM', ten: 'Kiểm xong', gon: 'Kiểm' },
+  { ma: 'PHAN_LOAI', ten: 'Phân loại lỗi xong', gon: 'PL lỗi' },
+  { ma: 'SUA', ten: 'Sửa xong', gon: 'Sửa' },
+  { ma: 'OQC', ten: 'Qua OQC', gon: 'OQC' },
+  { ma: 'TICH', ten: 'Đã tích giao', gon: 'Tích' },
+  { ma: 'SL', ten: 'SL đạt ≥ SLĐH', gon: 'SL' },
+];
+
 export const fmtDMY = (s) => { if (!s) return ''; const [y, m, d] = String(s).slice(0, 10).split('-'); return d ? `${d}/${m}/${y}` : ''; };
