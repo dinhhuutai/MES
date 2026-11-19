@@ -19,11 +19,12 @@ import { searchPhanInForCancel, huyPhanIn, listDeletedPhanIn, moPhanIn,
 import { listCancelableLenh, cancelLenh, listLanTestChoHuy, giaCongTemCancelable, huyGiaCongTem,
   listLanTestCancelable, huyLanTest, listKeHoachTamHuy, huyKeHoachTam } from '../../../services/planningService';
 import taiHetTrang, { LIMIT_TAI_LON } from '../../../utils/taiHetTrang';
-import { listNgungChoHuy, huyNgungChuyen, listCancelableTem, cancelPrintTem, listReopenableTem, moLaiTem, listCloseCandidates, closeProduction, listReopenCandidates, reopenProduction, listUndoStartCandidates, undoStartProduction } from '../../../services/productionService';
+import { listNgungChoHuy, huyNgungChuyen, listCancelableTem, cancelPrintTem, listReopenableTem, moLaiTem, listCloseCandidates, closeProduction, listReopenCandidates, reopenProduction, listUndoStartCandidates, undoStartProduction,
+  dsGopCuaLenh, tachLenhGop } from '../../../services/productionService';
 import { listCancelKcs, cancelKcs, listCancelSua, cancelSua, listCancelOqc, cancelOqc,
   listTemSuaCancelable, listTemSuaDeleted, huyTemSua, moTemSua } from '../../../services/qualityService';
 import { listPhieuGiaoCancelable, huyPhieuGiao, listTemChoTich, boTichTemGiao } from '../../../services/deliveryService';
-import { fmtNum, fmtDateTime, ngayLocalISO } from '../../../utils/format';
+import { fmtNum, fmtDate, fmtDateTime, ngayLocalISO } from '../../../utils/format';
 import Spinner from '../../../components/common/Spinner';
 import HanGiaoCell from '../../../components/common/HanGiaoCell';
 import { khopNhieu, chuanTuKhoa } from '../../../utils/timKiem';
@@ -183,6 +184,115 @@ const KQ_TEST = {
   KHONG_DAT_CHO_IN: { tone: 'info', label: 'Không đạt (cho IN)' },
 };
 
+// ─── LỆNH ĐANG GỘP NHIỀU KẾ HOẠCH (19/11/2026) ─────────────────────────────────────────────────────────────
+// Xác nhận chạy chung các lệnh cùng code phần + cùng chuyền ⇒ 1 lệnh mang SL của nhiều ngày kế hoạch; "Hủy lệnh" hủy CẢ
+//   lệnh. Khối này liệt kê từng kế hoạch đang chạy chung (`GET /production/lenh/:id/gop`) và cho TÁCH riêng 1 kế hoạch
+//   (`production.service tachLenhGop`): hủy luôn (đợt về chờ release) hoặc chỉ tách thành lệnh riêng ở Chờ chạy.
+const gioGop = (t) => (t ? new Date(t).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }) : '');
+function KeHoachGopKhoi({ lenhId, show, onDaTach }) {
+  const [gop, setGop] = useState(null); // null = đang tải
+  const [chon, setChon] = useState(null); // kế hoạch nguồn đang tách
+  const [huyLuon, setHuyLuon] = useState(true);
+  const [lyDo, setLyDo] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const tai = useCallback(async () => {
+    setGop(null);
+    try {
+      const res = await dsGopCuaLenh(lenhId);
+      setGop(res.data);
+    } catch (e) {
+      setGop({ loi: e.message || 'Lỗi tải các kế hoạch gộp' });
+    }
+  }, [lenhId]);
+  useEffect(() => { tai(); setChon(null); }, [tai]);
+
+  if (gop === null) {
+    return <div className="mb-3 flex items-center gap-2 text-xs text-ink-soft"><Spinner size={14} /> Đang tải các kế hoạch gộp…</div>;
+  }
+  if (gop.loi) return <p className="mb-3 text-xs text-danger">{gop.loi}</p>;
+  if (!gop.nguon || !gop.nguon.length) return null;
+
+  const tong = gop.lenh.sl;
+  const doTach = async () => {
+    if (!lyDo.trim()) { show('Nhập lý do tách lệnh', 'error'); return; }
+    setBusy(true);
+    try {
+      const res = await tachLenhGop(lenhId, { nguonId: chon.lenh_id, lyDo: lyDo.trim(), huyLuon });
+      show(res.message || `Đã tách ${chon.ma_lenh}`, res.data?.huy_loi ? 'error' : 'success');
+      setChon(null); setLyDo('');
+      onDaTach(res.data);
+      tai();
+    } catch (e) {
+      show(e.message || 'Tách lệnh thất bại', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mb-3 rounded-control border border-amber-300 bg-amber-50 px-3 py-2.5">
+      <div className="text-sm font-semibold text-amber-800">
+        Lệnh này đang chạy chung {gop.nguon.length + 1} kế hoạch — tổng {fmtNum(tong)}
+      </div>
+      <p className="mt-0.5 text-xs text-amber-700">
+        Nút "Xác nhận hủy lệnh" bên dưới hủy <b>CẢ {fmtNum(tong)}</b>. Muốn bỏ 1 kế hoạch thì bấm <b>Tách riêng</b> ở kế hoạch đó.
+      </p>
+      <div className="mt-2 divide-y divide-amber-200 rounded-control border border-amber-200 bg-white">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-2.5 py-2 text-xs">
+          <Badge tone="info">{gop.lenh.ma_lenh}</Badge>
+          <span className="text-ink-soft">lệnh đang giữ · KH {fmtDate(gop.lenh.ngay_ke_hoach)}</span>
+          <span className="ml-auto tabular-nums font-medium text-ink">{fmtNum(gop.sl_rieng)}</span>
+        </div>
+        {gop.nguon.map((s) => (
+          <div key={s.lenh_id} className="px-2.5 py-2 text-xs">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <Badge tone="default">{s.ma_lenh}</Badge>
+              <span className="text-ink-soft">
+                KH {fmtDate(s.ngay_ke_hoach)}{s.tg_bd_kh ? ` · ${gioGop(s.tg_bd_kh)}–${gioGop(s.tg_kt_kh)}` : ''}
+              </span>
+              <span className="ml-auto tabular-nums font-medium text-ink">{fmtNum(s.sl)}</span>
+              {s.tach_duoc ? (
+                <Button variant="secondary" className="px-2.5 py-1 text-xs" disabled={busy}
+                  onClick={() => { setChon(s); setHuyLuon(true); setLyDo(''); }}>
+                  Tách riêng
+                </Button>
+              ) : null}
+            </div>
+            {!s.tach_duoc && <div className="mt-1 text-[11px] text-ink-soft">{s.ly_do_khong}</div>}
+            {chon?.lenh_id === s.lenh_id && (
+              <div className="mt-2 space-y-2 rounded-control border border-line bg-surface-muted/60 p-2.5">
+                <div className="text-ink">
+                  Tách <b>{s.ma_lenh}</b> ({fmtNum(s.sl)}) ra khỏi <b>{gop.lenh.ma_lenh}</b> ⇒ {gop.lenh.ma_lenh} còn <b>{fmtNum(tong - s.sl)}</b>.
+                </div>
+                {[
+                  { v: true, label: 'Hủy luôn kế hoạch này', desc: 'Đợt vải có lại số này ở "chờ release" (Release 1)' },
+                  { v: false, label: 'Chỉ tách thành lệnh riêng', desc: `Về Chờ chạy, giữ kế hoạch ngày ${fmtDate(s.ngay_ke_hoach)}` },
+                ].map((o) => (
+                  <label key={String(o.v)} className={`flex cursor-pointer items-start gap-2 rounded-control border p-2 ${huyLuon === o.v ? 'border-primary bg-primary-wash/40' : 'border-line bg-white'}`}>
+                    <input type="radio" name={`tach-${s.lenh_id}`} checked={huyLuon === o.v} onChange={() => setHuyLuon(o.v)} className="mt-0.5" />
+                    <span>
+                      <span className="block font-medium text-ink">{o.label}</span>
+                      <span className="block text-ink-soft">{o.desc}</span>
+                    </span>
+                  </label>
+                ))}
+                <Textarea rows={2} value={lyDo} onChange={(e) => setLyDo(e.target.value)} placeholder="Lý do (bắt buộc)" />
+                <div className="flex justify-end gap-2">
+                  <Button chiXemOk variant="ghost" className="px-2.5 py-1 text-xs" onClick={() => setChon(null)}>Thôi</Button>
+                  <Button variant={huyLuon ? 'danger' : 'primary'} className="px-2.5 py-1 text-xs" loading={busy} onClick={doTach}>
+                    {huyLuon ? `Tách & hủy ${s.ma_lenh}` : `Tách ${s.ma_lenh}`}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function LenhCancelSection({ show }) {
   const [rows, setRows] = useState([]);
   const [meta, setMeta] = useState({ page: 1, totalPages: 1, total: 0 });
@@ -270,7 +380,12 @@ function LenhCancelSection({ show }) {
   // đang đứng, tức đúng bước sẽ bị hoàn tác.
   const columns = [
     cotNgayXacNhan((r) => r.tg_xac_nhan, (r) => XN_BUOC_LENH[r.xn_buoc] || null),
-    { key: 'ma_lenh_san_xuat', header: 'Mã lệnh', render: (r) => <Badge tone="info">{r.ma_lenh_san_xuat}</Badge> },
+    { key: 'ma_lenh_san_xuat', header: 'Mã lệnh', render: (r) => (
+      <div className="flex flex-col items-start gap-1">
+        <Badge tone="info">{r.ma_lenh_san_xuat}</Badge>
+        {r.co_gop && <span className="text-[11px] font-medium text-amber-700" title="Lệnh khác đã gộp vào lệnh này khi chạy chung — mở để tách riêng">có gộp lệnh</span>}
+      </div>
+    ) },
     { key: 'trang_thai', header: 'Đang ở', render: (r) => {
       const s = TT[r.trang_thai] || { tone: 'default', label: r.trang_thai };
       return (
@@ -344,7 +459,7 @@ function LenhCancelSection({ show }) {
       <Modal
         open={!!target}
         onClose={() => setTargetRow(null)}
-        title={`Hủy lệnh ${target?.ma_lenh_san_xuat || ''}`}
+        title={`Hủy lệnh ${target?.ma_lenh_san_xuat || ''}${target ? ` · SL ${fmtNum(target.so_luong_release)}` : ''}`}
         footer={
           <>
             <Button chiXemOk variant="ghost" onClick={() => setTargetRow(null)}>Đóng</Button>
@@ -352,6 +467,10 @@ function LenhCancelSection({ show }) {
           </>
         }
       >
+        {target?.co_gop && (
+          <KeHoachGopKhoi lenhId={target.id} show={show}
+            onDaTach={(d) => { setTargetRow((p) => (p ? { ...p, so_luong_release: d.so_luong_release } : p)); load(); }} />
+        )}
         <Field label="Đưa về checkpoint">
           <div className="space-y-2">
             {options.map((o) => (

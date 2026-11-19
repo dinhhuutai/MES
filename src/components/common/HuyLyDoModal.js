@@ -20,6 +20,8 @@ export default function HuyLyDoModal({
   nhanLyDo = 'Lý do hủy',
   ghiChuErp = 'Hủy xong hệ thống tự báo ERP hủy chứng từ tương ứng (nếu lượt này đã gửi sang ERP).',
   kieuNut = 'danger',
+  // `batBuoc = false` (19/11/2026 — Xác nhận DONE ở Giao hàng): ô thành GHI CHÚ tùy chọn, nút bấm được khi để trống.
+  batBuoc = true,
 }) {
   const [lyDo, setLyDo] = useState('');
   const [dangLuu, setDangLuu] = useState(false);
@@ -28,7 +30,7 @@ export default function HuyLyDoModal({
 
   const bam = async () => {
     const ly = lyDo.trim();
-    if (!ly || dangLuu) return;
+    if ((batBuoc && !ly) || dangLuu) return;
     setDangLuu(true);
     try {
       await onXacNhan(muc, ly);
@@ -42,13 +44,13 @@ export default function HuyLyDoModal({
       footer={
         <>
           <Button variant="ghost" chiXemOk onClick={onClose}>Đóng</Button>
-          <Button variant={kieuNut} onClick={bam} loading={dangLuu} disabled={!lyDo.trim()}>{nhanNut}</Button>
+          <Button variant={kieuNut} onClick={bam} loading={dangLuu} disabled={batBuoc && !lyDo.trim()}>{nhanNut}</Button>
         </>
       }>
       {muc && (
         <div className="space-y-3">
           {moTa && <div className="rounded-card border border-line bg-surface-muted p-3 text-sm text-ink">{moTa(muc)}</div>}
-          <Field label={nhanLyDo} required>
+          <Field label={nhanLyDo} required={batBuoc}>
             <Textarea rows={3} value={lyDo} onChange={(e) => setLyDo(e.target.value)} placeholder={goiY} autoFocus />
           </Field>
           {(hauQua || ghiChuErp) && (

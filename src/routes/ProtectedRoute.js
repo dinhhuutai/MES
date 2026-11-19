@@ -4,6 +4,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { selectIsAuthenticated, selectAuth, fetchMeThunk } from '../store/authSlice';
 import usePresenceTracker from '../hooks/usePresenceTracker';
 import useBiDangXuat from '../hooks/useBiDangXuat';
+import AgentLoader from '../features/ai-agent/AgentLoader';
 
 export default function ProtectedRoute() {
   const dispatch = useDispatch();
@@ -24,5 +25,11 @@ export default function ProtectedRoute() {
   if (!isAuth) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   }
-  return <Outlet />;
+  return (
+    <>
+      <Outlet />
+      {/* Agent MES THLA (19/11/2026) — sống xuyên mọi màn; chỉ hiện với người có vai trò AI. */}
+      <AgentLoader />
+    </>
+  );
 }

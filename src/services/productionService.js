@@ -23,6 +23,9 @@ export const getTemBoSung = (temId) => client.get(`/production/tem/${temId}/bo-s
 export const gopLenh = (lenhIds, lyDo = '') => client.post('/production/gop-lenh', { lenhIds, lyDo });
 // Tách lệnh gom đợt khác nhà gia công — mỗi NGC 1 lệnh (27/10/2026). Trả { ma_lenh, nha_gia_cong, so_luong_release, tach[] }.
 export const tachLenhNgc = (lenhId, lyDo = '') => client.post(`/production/lenh/${lenhId}/tach-ngc`, { lyDo });
+// Tách 1 lệnh ra khỏi lệnh gộp (19/11/2026) — tab Hủy lệnh sản xuất.
+export const dsGopCuaLenh = (lenhId) => client.get(`/production/lenh/${lenhId}/gop`);
+export const tachLenhGop = (lenhId, { nguonId, lyDo, huyLuon }) => client.post(`/production/lenh/${lenhId}/tach-gop`, { nguonId, lyDo, huyLuon });
 // dotVaiId (tùy chọn) → nhãn lấy đúng phần in của đợt vải đó (in tem lệnh gom set)
 export const getTemLabel = (temId, dotVaiId) =>
   client.get(`/production/tem/${temId}/label`, { params: dotVaiId ? { dotVaiId } : undefined });

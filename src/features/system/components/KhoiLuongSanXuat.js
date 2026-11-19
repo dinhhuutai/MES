@@ -8,14 +8,20 @@
 //     công đoạn đầu ⇒ tem chờ công đoạn sau được nhả vào KCS.
 //   · BỎ 1 CÔNG ĐOẠN (11/11/2026): 2 nút ở phần in 2 công đoạn ⇒ `BoCongDoanModal` (xem trước rồi mới làm — tự hủy lệnh /
 //     kế hoạch tạm của công đoạn bị bỏ chưa in tem).
+//   · THÊM 1 CÔNG ĐOẠN (19/11/2026): nút ở phần in 1 công đoạn ⇒ `ThemCongDoanModal` (chọn thứ tự + màn đích của công đoạn
+//     mới: Release 1 / READY / Test Run / Chờ chạy).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useState } from 'react';
 import Badge from '../../../components/common/Badge';
 import Button from '../../../components/common/Button';
 import { Field, Textarea } from '../../../components/common/controls';
-import { LUONG_SX, laHaiCongDoan, tenLuong, GD_IN, GD_EP } from '../../../utils/luongSanXuat';
+import { LUONG_SX, laHaiCongDoan, tenLuong, GD_IN, GD_EP, luongSauKhiThem } from '../../../utils/luongSanXuat';
 import { fmtDate } from '../../../utils/format';
 import BoCongDoanModal from './BoCongDoanModal';
+import ThemCongDoanModal from './ThemCongDoanModal';
+
+// Nhãn nút Thêm công đoạn theo luồng hiện tại (luật `luongSauKhiThem`).
+const NUT_THEM = { THUONG: 'Thêm công đoạn Ép/Logo (sau In)', KIENG_KHONG_EP: 'Thêm công đoạn Ép (kiếng ủi)', LOGO: 'Thêm công đoạn In' };
 
 const MO_TA = {
   THUONG: 'Luồng hiện tại: Kỹ thuật → IQC → Release 1 → Test Run → Release 2 → In → KCS → OQC → Giao.',
@@ -25,11 +31,13 @@ const MO_TA = {
   KIENG_KHONG_EP: '1 công đoạn in kiếng (đã bỏ ép ủi) — như In thường nhưng tem in vẫn nhập loại / SL / hệ số kiếng.',
 };
 
-export default function KhoiLuongSanXuat({ pin, dangLuu, onLuu, show, onXong }) {
+export default function KhoiLuongSanXuat({ pin, dangLuu, onLuu, show, onXong, chuyen, users }) {
   const [luong, setLuong] = useState(pin.luong_sx || 'THUONG');
   const [epTruoc, setEpTruoc] = useState(!!pin.ep_truoc);
   const [lyDo, setLyDo] = useState('');
   const [bo, setBo] = useState(null); // 'IN' | 'EP_UI' — modal bỏ công đoạn
+  const [them, setThem] = useState(false); // modal thêm công đoạn
+  const coThem = !!luongSauKhiThem(pin.luong_sx || 'THUONG');
   useEffect(() => { setLuong(pin.luong_sx || 'THUONG'); setEpTruoc(!!pin.ep_truoc); setLyDo(''); }, [pin.id, pin.luong_sx, pin.ep_truoc]);
   const doi = luong !== (pin.luong_sx || 'THUONG') || (laHaiCongDoan(luong) && epTruoc !== !!pin.ep_truoc);
   const luu = async () => { if (await onLuu({ luong, epTruoc: laHaiCongDoan(luong) && epTruoc, lyDo: lyDo.trim() })) setLyDo(''); };
@@ -81,6 +89,7 @@ export default function KhoiLuongSanXuat({ pin, dangLuu, onLuu, show, onXong }) 
           {!laHaiCongDoan(pin.luong_sx) && laHaiCongDoan(luong) && (
             <p className="rounded-control border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800 dark:border-sky-900/60 dark:bg-sky-950/40 dark:text-sky-300">
               Thêm công đoạn ép ủi: mỗi đợt vải sống của phần in hiện thêm 1 dòng <b>Ép ủi</b> ở Release 1 (ngay dưới dòng in).
+              Muốn đặt công đoạn mới vào READY / Test Run / Chờ chạy thì dùng nút <b>Thêm 1 công đoạn</b> bên dưới.
             </p>
           )}
           <Field label="Lý do đổi luồng" required>
@@ -100,8 +109,17 @@ export default function KhoiLuongSanXuat({ pin, dangLuu, onLuu, show, onXong }) 
           <Button variant="secondary" onClick={() => setBo(GD_EP)}>Bỏ công đoạn Ép ủi — chỉ giữ in</Button>
         </div>
       )}
+      {coThem && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3">
+          <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Thêm 1 công đoạn</span>
+          <Button variant="secondary" onClick={() => setThem(true)}>{NUT_THEM[pin.luong_sx || 'THUONG']}</Button>
+          <span className="text-xs text-ink-soft">Chọn thứ tự + màn đặt công đoạn mới (Release 1 · READY · Test Run · Chờ chạy)</span>
+        </div>
+      )}
       <BoCongDoanModal phanInId={pin.id} bo={bo} show={show} onClose={() => setBo(null)}
         onDone={() => { setBo(null); if (onXong) onXong(); }} />
+      <ThemCongDoanModal phanInId={pin.id} mo={them} show={show} chuyen={chuyen} users={users} onClose={() => setThem(false)}
+        onDone={() => { setThem(false); if (onXong) onXong(); }} />
     </div>
   );
 }

@@ -7,6 +7,7 @@ import Toast from '../../../components/common/Toast';
 import { Field, Input, Select } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import ThongBaoSettings from '../components/ThongBaoSettings';
+import ChonMauRobot from '../../ai-agent/ChonMauRobot';
 import { avatarFor } from '../../../utils/brand';
 import { apiChangePassword } from '../../../services/authService';
 import {
@@ -236,6 +237,9 @@ export default function ProfilePage() {
 
           {/* Thông báo phần in bị trả về (mig 085) — tự ẩn nếu không thuộc diện nhận. */}
           <ThongBaoSettings onThongBao={show} />
+
+          {/* Hình robot Agent MES THLA (mig 138) — tự ẩn nếu không có vai trò AI. */}
+          <ChonMauRobot onThongBao={show} />
 
           {/* Giao diện sáng/tối (lưu theo tài khoản trên thiết bị này) */}
           <div className="card p-6">

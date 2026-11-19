@@ -311,7 +311,8 @@ export default function QuanTriPhanInPage() {
                 </div>
               </div>
 
-              <KhoiLuongSanXuat pin={pin} dangLuu={dangLuu} onLuu={luuLuong} show={show} onXong={() => tai(chon, true)} />
+              <KhoiLuongSanXuat pin={pin} dangLuu={dangLuu} onLuu={luuLuong} show={show} onXong={() => tai(chon, true)}
+                chuyen={chuyen} users={users} />
 
               {/* 4 mục READY */}
               <div className="rounded-card border border-line bg-surface p-4">

@@ -27,6 +27,13 @@ export function luongSauKhiBo(luong, bo) {
   if (bo !== GD_EP) return 'LOGO';
   return luong === 'IN_KIENG' ? 'KIENG_KHONG_EP' : 'THUONG';
 }
+// Thêm 1 công đoạn cho phần in 1 công đoạn — gương BE `luongSauKhiThem` (Quản trị phần in › Thêm công đoạn).
+const THEM_CONG_DOAN = {
+  THUONG: { luong: 'IN_EP', them: GD_EP },
+  KIENG_KHONG_EP: { luong: 'IN_KIENG', them: GD_EP },
+  LOGO: { luong: 'IN_EP', them: GD_IN },
+};
+export const luongSauKhiThem = (luong) => THEM_CONG_DOAN[luong || 'THUONG'] || null;
 export const chuanGd = (gd) => (gd === GD_EP ? GD_EP : GD_IN);
 export const laEp = (r) => chuanGd(r && r.giai_doan) === GD_EP;
 // Dòng ép ủi của đợt CHƯA Ready mà chưa lưu được Kế hoạch tạm (BE chưa chạy mig 128 ⇒ không gắn `ep_tam_duoc`) — khóa

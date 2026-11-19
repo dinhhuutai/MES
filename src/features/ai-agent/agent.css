@@ -1,0 +1,41 @@
+/* Agent MES THLA — chuyển động robot Vàng Nắng (19/11/2026). Mọi lớp mang tiền tố agt- */
+.agt-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+.agt-bot { display: block; width: 100%; height: auto; overflow: visible; }
+.agt-bot-dau { overflow: hidden; }
+.agt-shadow { fill: rgba(120, 80, 0, .2); transform-box: fill-box; transform-origin: center; animation: agt-shad 3.4s ease-in-out infinite; }
+.agt-float { animation: agt-bob 3.4s ease-in-out infinite; }
+.agt-bot-dau .agt-float { animation: none; }
+@keyframes agt-bob { 50% { transform: translateY(-7px); } }
+@keyframes agt-shad { 50% { transform: scale(.84); opacity: .65; } }
+.agt-eye { transform-box: fill-box; transform-origin: center; animation: agt-blink 5.2s infinite; }
+@keyframes agt-blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.1); } }
+.agt-wave { transform-box: view-box; animation: agt-wave 1.4s ease-in-out infinite; }
+@keyframes agt-wave { 0%, 100% { transform: rotate(-8deg); } 50% { transform: rotate(14deg); } }
+.agt-ant { transform-box: view-box; transform-origin: 120px 44px; animation: agt-sway 3.2s ease-in-out infinite; }
+@keyframes agt-sway { 0%, 100% { transform: rotate(-5deg); } 50% { transform: rotate(5deg); } }
+.agt-mouth { transform-box: fill-box; transform-origin: center; animation: agt-talk .45s ease-in-out infinite alternate; }
+@keyframes agt-talk { from { transform: scaleY(.35); } to { transform: scaleY(1); } }
+.agt-f-dots circle { animation: agt-dot 1.1s ease-in-out infinite; }
+.agt-f-dots circle:nth-child(2) { animation-delay: .18s; }
+.agt-f-dots circle:nth-child(3) { animation-delay: .36s; }
+@keyframes agt-dot { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
+.agt-f-think { animation: agt-look 2.6s ease-in-out infinite; }
+@keyframes agt-look { 50% { transform: translateX(-5px); } }
+.agt-headg { transform-box: view-box; transform-origin: 120px 172px; transition: transform .5s cubic-bezier(.3, 1.4, .5, 1); }
+.agt-bot[data-state="nghi"]:not(.agt-bot-dau) .agt-headg { transform: rotate(-7deg); }
+.agt-bot[data-state="vui"]:not(.agt-bot-dau) .agt-headg { transform: rotate(5deg); }
+.agt-bot .agt-f, .agt-bot .agt-wave, .agt-bot .agt-arm-r { display: none; }
+.agt-bot[data-state="chao"] .agt-f-eyes, .agt-bot[data-state="chao"] .agt-f-smile, .agt-bot[data-state="chao"] .agt-wave,
+.agt-bot[data-state="nghi"] .agt-f-think, .agt-bot[data-state="nghi"] .agt-f-dots, .agt-bot[data-state="nghi"] .agt-arm-r,
+.agt-bot[data-state="noi"] .agt-f-eyes, .agt-bot[data-state="noi"] .agt-f-talk, .agt-bot[data-state="noi"] .agt-arm-r,
+.agt-bot[data-state="vui"] .agt-f-happy, .agt-bot[data-state="vui"] .agt-f-big, .agt-bot[data-state="vui"] .agt-wave { display: inline; }
+
+/* Robot nổi + khung chat */
+.agt-noi { touch-action: none; user-select: none; -webkit-user-select: none; }
+.agt-dau-bong { filter: drop-shadow(0 6px 10px rgba(120, 80, 0, .28)); }
+.agt-buoc-chay svg { animation: agt-spin 1s linear infinite; }
+@keyframes agt-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .agt-bot *, .agt-buoc-chay svg { animation: none !important; transition: none !important; }
+}

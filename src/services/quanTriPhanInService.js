@@ -17,6 +17,8 @@ export const datKhoaErp = (phanInId, khoa) => client.post(`${P}/${phanInId}/khoa
 export const datLuongSx = (phanInId, body) => client.post(`${P}/${phanInId}/luong-sx`, body);
 // 11/11/2026: bỏ 1 công đoạn của phần in 2 công đoạn — { bo: 'IN'|'EP_UI', lyDo, doiPa, xemTruoc }.
 export const boCongDoanQt = (phanInId, body) => client.post(`${P}/${phanInId}/bo-cong-doan`, body);
+// Thêm 1 công đoạn + đặt công đoạn mới vào màn đích (19/11/2026) — body.xemTruoc = chỉ dựng kế hoạch.
+export const themCongDoanQt = (phanInId, body) => client.post(`${P}/${phanInId}/them-cong-doan`, body);
 export const luiVeTram = (phanInId, lenhId, body) => client.post(`${P}/${phanInId}/lenh/${lenhId}/lui-ve`, body);
 export const huyLeQt = (phanInId, body) => client.post(`${P}/${phanInId}/huy-le`, body);
 export const luuPhanCongQt = (phanInId, phieuId, body) => client.post(`${P}/${phanInId}/phieu/${phieuId}/phan-cong`, body);

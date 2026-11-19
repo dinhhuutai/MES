@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useSelector } from 'react-redux';
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
 import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
+import DoneDeliveryModal from '../components/DoneDeliveryModal';
 import Toolbar from '../../../components/common/Toolbar';
 import MenuNut from '../../../components/common/MenuNut';
 import DataTable from '../../../components/common/DataTable';
@@ -142,6 +143,7 @@ export default function GiaoHangPage() {
 
   const [tab, setTab] = useState('tem');           // 'tem' = tem chờ giao · 'phieu' = danh sách phiếu
   const [nghenOpen, setNghenOpen] = useState(false);
+  const [doneDeliveryOpen, setDoneDeliveryOpen] = useState(false);
   const { hoiLyDoNghen, lyDoNghenModal } = useLyDoNghen({ maTrang: 'GH_TEM', trangThai: trangThaiSla });
   const [tems, setTems] = useState([]);
   const [choTich, setChoTich] = useState([]);      // tem đang ở *Chờ GN tích* — nguồn của modal quét
@@ -533,6 +535,8 @@ export default function GiaoHangPage() {
             phải đúng tập đang hiện trên bảng thì số trên nút mới khớp số hàng đỏ. */}
         <NghenButton rows={displayRows} trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status}
           onClick={() => setNghenOpen(true)} />
+        {/* DONE DELIVERY theo phần in (19/11/2026) — modal Đã done / Chưa done + Xác nhận DONE. */}
+        <Button chiXemOk variant="secondary" icon="check" onClick={() => setDoneDeliveryOpen(true)}>DONE</Button>
         {canManage && (
           <Button variant="secondary" icon="scan" onClick={() => { setSelTich(new Set()); setScanOpen(true); }}>
             Tích tem ({choTich.length})
@@ -737,6 +741,7 @@ export default function GiaoHangPage() {
         tenMan="Giao hàng" rows={displayRows} tenFile="nghen-giao-hang"
         trangThai={(r) => evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status}
         maTrang="GH_TEM" />
+      <DoneDeliveryModal open={doneDeliveryOpen} onClose={() => setDoneDeliveryOpen(false)} />
       {lyDoNghenModal}
       {/* ⚠⚠ Bấm "In phiếu" KHÔNG in ngay mà hỏi "Giao hàng tại" trước — địa điểm này được LƯU VÀO
           PHIẾU (mig 099) nên phải nhập TRƯỚC khi tạo, không vá vào sau được.

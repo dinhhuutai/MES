@@ -24,6 +24,12 @@ export const doneGiao = (date) => client.get('/giao-hang/done', { params: { date
 export const listPhieuGiaoCancelable = (params) => client.get('/giao-hang/huy/cancelable', { params });
 export const huyPhieuGiao = (id, lyDo) => client.post(`/giao-hang/${id}/huy`, { lyDo });
 
+// DONE DELIVERY theo phần in (19/11/2026): `cheDo` DONE | CHUA · xác nhận DONE (SL giao < SLĐH) · admin hủy xác nhận.
+export const getDoneDelivery = (tuNgay, denNgay, cheDo, heThong = false) =>
+  client.get('/giao-hang/done-delivery', { params: { tuNgay, denNgay, cheDo, heThong: heThong ? 1 : undefined } });
+export const xacNhanDoneDelivery = (phanInId, ghiChu) => client.post(`/giao-hang/done-delivery/${phanInId}/xac-nhan`, { ghiChu });
+export const huyXacNhanDoneDelivery = (phanInId, lyDo) => client.post(`/giao-hang/done-delivery/${phanInId}/huy-xac-nhan`, { lyDo });
+
 // ─── Chốt chặn "bán hàng tích tem" (mig 092) — trang ở module Hệ thống ───────────────────────
 // `daTich=1` ⇒ tab "Đã tích" (để bỏ tích khi bấm nhầm). Trả `{ items, co_cot }` — `co_cot=false`
 // nghĩa là môi trường CHƯA chạy mig 092, FE hiện banner thay vì bảng trống khó hiểu.
