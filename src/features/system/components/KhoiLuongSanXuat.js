@@ -10,6 +10,8 @@
 //     kế hoạch tạm của công đoạn bị bỏ chưa in tem).
 //   · THÊM 1 CÔNG ĐOẠN (19/11/2026): nút ở phần in 1 công đoạn ⇒ `ThemCongDoanModal` (chọn thứ tự + màn đích của công đoạn
 //     mới: Release 1 / READY / Test Run / Chờ chạy).
+//   · THÊM ĐỢT VẢI TAY (19/11/2026): ERP lỗi không gửi đợt (In · In kiếng · Logo/Ép · kiếng ủi đợt 4I…) ⇒ `ThemDotVaiModal`
+//     tạo đợt theo công đoạn + đặt màn (READY / Release 1 / Test Run / Chờ chạy).
 // ─────────────────────────────────────────────────────────────────────────────
 import { useEffect, useState } from 'react';
 import Badge from '../../../components/common/Badge';
@@ -19,6 +21,7 @@ import { LUONG_SX, laHaiCongDoan, tenLuong, GD_IN, GD_EP, luongSauKhiThem } from
 import { fmtDate } from '../../../utils/format';
 import BoCongDoanModal from './BoCongDoanModal';
 import ThemCongDoanModal from './ThemCongDoanModal';
+import ThemDotVaiModal from './ThemDotVaiModal';
 
 // Nhãn nút Thêm công đoạn theo luồng hiện tại (luật `luongSauKhiThem`).
 const NUT_THEM = { THUONG: 'Thêm công đoạn Ép/Logo (sau In)', KIENG_KHONG_EP: 'Thêm công đoạn Ép (kiếng ủi)', LOGO: 'Thêm công đoạn In' };
@@ -37,6 +40,7 @@ export default function KhoiLuongSanXuat({ pin, dangLuu, onLuu, show, onXong, ch
   const [lyDo, setLyDo] = useState('');
   const [bo, setBo] = useState(null); // 'IN' | 'EP_UI' — modal bỏ công đoạn
   const [them, setThem] = useState(false); // modal thêm công đoạn
+  const [themDot, setThemDot] = useState(false); // modal thêm đợt vải tay (ERP thiếu đợt)
   const coThem = !!luongSauKhiThem(pin.luong_sx || 'THUONG');
   useEffect(() => { setLuong(pin.luong_sx || 'THUONG'); setEpTruoc(!!pin.ep_truoc); setLyDo(''); }, [pin.id, pin.luong_sx, pin.ep_truoc]);
   const doi = luong !== (pin.luong_sx || 'THUONG') || (laHaiCongDoan(luong) && epTruoc !== !!pin.ep_truoc);
@@ -109,6 +113,13 @@ export default function KhoiLuongSanXuat({ pin, dangLuu, onLuu, show, onXong, ch
           <Button variant="secondary" onClick={() => setBo(GD_EP)}>Bỏ công đoạn Ép ủi — chỉ giữ in</Button>
         </div>
       )}
+      <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3">
+        <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">ERP thiếu đợt vải</span>
+        <Button variant="secondary" icon="plus" onClick={() => setThemDot(true)}>Thêm đợt vải tay</Button>
+        <span className="text-xs text-ink-soft">
+          Tạo đợt theo công đoạn ({pin.luong_sx === 'IN_KIENG' ? 'In kiếng 4I / Ép' : tenLuong(pin.luong_sx)}) và đặt vào READY · Release 1 · Test Run · Chờ chạy
+        </span>
+      </div>
       {coThem && (
         <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3">
           <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Thêm 1 công đoạn</span>
@@ -120,6 +131,8 @@ export default function KhoiLuongSanXuat({ pin, dangLuu, onLuu, show, onXong, ch
         onDone={() => { setBo(null); if (onXong) onXong(); }} />
       <ThemCongDoanModal phanInId={pin.id} mo={them} show={show} chuyen={chuyen} users={users} onClose={() => setThem(false)}
         onDone={() => { setThem(false); if (onXong) onXong(); }} />
+      <ThemDotVaiModal phanInId={pin.id} mo={themDot} show={show} chuyen={chuyen} users={users} onClose={() => setThemDot(false)}
+        onDone={() => { setThemDot(false); if (onXong) onXong(); }} />
     </div>
   );
 }

@@ -19,7 +19,7 @@ import {
   getDsReleaseSx, getNhatKyIn, luuDongDsReleaseSx, getChuyenThemDsRelease, luuChuyenThemDsRelease, listChuyen,
 } from '../../../services/productionService';
 import {
-  COT_DS_RELEASE_SX, COT_NHAT_KY_IN, LOC_DS_RELEASE, tieuDeNhom, locDsRelease, tongDsRelease, tongNhatKy, tongDong, clDong,
+  COT_DS_RELEASE_SX, COT_NHAT_KY_IN, LOC_DS_RELEASE, tieuDeNhom, locDsRelease, tongDsRelease, tongNhatKy, dongTongNhatKy, tongDong, clDong,
   ganTruongLoc, chuoiTim,
 } from '../utils/dsReleaseSx';
 import { LOAI_TABS, demChip, hopChipChuyen, nhanChip } from '../../../utils/khuChuyen';
@@ -134,6 +134,8 @@ export default function DsReleaseSxModal({ open, onClose }) {
   const rows = useMemo(() => locDsRelease(daLoc, chip, them), [daLoc, chip, them]);
   const tong = useMemo(() => tongDsRelease(rows), [rows]);
   const tongNk = useMemo(() => tongNhatKy(rows), [rows]);
+  // Dòng TỔNG cuối bảng Nhật ký in (19/11/2026) — cùng hàm với Excel.
+  const dongTong = useMemo(() => (nhatKy ? dongTongNhatKy(rows) : null), [nhatKy, rows]);
   const counts = useMemo(() => demChip(daLoc), [daLoc]);
   const soLoc = Object.values(loc).filter(Boolean).length;
   const cols = nhatKy ? COT_NHAT_KY_IN : COT_DS_RELEASE_SX;
@@ -169,6 +171,12 @@ export default function DsReleaseSxModal({ open, onClose }) {
     if (c.key === 'dm_test') return <ONhap giaTri={r.dm_test} kieu="so" khoa={!ghiDuoc} onLuu={(v) => luuDong(r, 'dmTest', v)} />;
     if (c.key === 'ghi_chu') return <ONhap giaTri={r.ghi_chu_sx} khoa={!ghiDuoc} onLuu={(v) => luuDong(r, 'ghiChu', v)} />;
     const v = c.value(r);
+    // Phần in 2 công đoạn: nhãn công đoạn tô màu cho dễ thấy 2 dòng In / Ép của cùng phần in.
+    if (c.key === 'cong_doan') {
+      return r.hai_cong_doan
+        ? <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${r.giai_doan === 'EP_UI' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200' : 'bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-200'}`}>{v}</span>
+        : <span className="text-ink-soft">{v}</span>;
+    }
     if (c.key === 'tong') return fmtNum(tongDong(r));
     // Số có phần do script "chạy đến giao" tạo (tem HT-, không phải tem in thật) ⇒ dấu * màu cam.
     if (c.ht && c.ht(r) > 0) return <span>{fmtNum(v)}<span className="ml-0.5 font-bold text-amber-600">*</span></span>;
@@ -276,6 +284,21 @@ export default function DsReleaseSxModal({ open, onClose }) {
                 </tr>
               ))}
             </tbody>
+            {dongTong && (
+              <tfoot className="sticky bottom-0 z-10">
+                <tr>
+                  {cols.map((c) => {
+                    const v = dongTong[c.key];
+                    return (
+                      <td key={c.key}
+                        className={`whitespace-nowrap border-r border-t-2 border-line border-t-ink/40 bg-amber-100 px-1.5 py-1.5 font-bold text-ink dark:bg-amber-900/50 ${c.num ? 'text-right tabular-nums' : ''}`}>
+                        {typeof v === 'number' ? fmtNum(v) : (v || '')}
+                      </td>
+                    );
+                  })}
+                </tr>
+              </tfoot>
+            )}
           </table>
         )}
       </div>

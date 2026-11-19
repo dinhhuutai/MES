@@ -5,6 +5,9 @@
 // Thông báo thuộc họ DUYỆT (mig 086) hay họ TRẢ VỀ (mig 085)?
 // ⚠ Dựa vào `ma_loai` chứ không vào sự có mặt của trường nào đó — 2 nguồn cố ý trả CÙNG bộ cột.
 export const laThongBaoDuyet = (t) => String(t?.ma_loai || '').startsWith('DUYET_');
+// Họ thứ 3 — THÔNG BÁO HỆ THỐNG (19/11/2026: gửi ERP lỗi → quản trị · hàng đợi tích tem chạy xong → người xếp). BE trả sẵn
+//   `nguon_tb='HE_THONG'`, `tieu_de` (= `ma_phan`), `ly_do` (nội dung), `trang` (đường dẫn khi bấm).
+export const laThongBaoHeThong = (t) => t?.nguon_tb === 'HE_THONG';
 
 // Loại trả về có đích KHÁC READY Kỹ thuật (07/10/2026: Test Run trả về Kế hoạch → màn Release 1).
 const TRANG_TRA_VE = { TRA_VE_TEST_RUN_KH: '/ke-hoach/release-1' };
@@ -18,6 +21,7 @@ const TRANG_TRA_VE = { TRA_VE_TEST_RUN_KH: '/ke-hoach/release-1' };
 // ⚠ Bản backend gương y hệt ở `backend/src/utils/thongBao.js duongDanDoiPa` (dùng cho Web Push) —
 //   sửa thì sửa CẢ HAI, lệch nhau là bấm ở chuông và bấm ở popup vào 2 màn khác nhau.
 export const duongDanThongBao = (t) => {
+  if (laThongBaoHeThong(t)) return t?.trang || '/thong-bao';
   // Với họ duyệt, `ma_phan_dau` là MỘT mã sạch; `ma_phan` có thể là danh sách "A, B" (gom set)
   // hoặc câu ngữ cảnh của dữ liệu cũ ⇒ nhét cả câu vào `?q=` thì tra không ra gì.
   if (laThongBaoDuyet(t)) {
@@ -41,6 +45,7 @@ export const luongThongBao = (t) => t?.nhan_luong
 // ⚠ Trước đây chuông ghi cứng 'Phần in bị trả về' cho MỌI thông báo ⇒ yêu cầu đổi phương án in cũng
 //   hiện thành "phần in bị trả về", sai hẳn nội dung.
 export const tieuDeThongBao = (t) => {
+  if (laThongBaoHeThong(t)) return t?.tieu_de || 'Thông báo hệ thống';
   if (!laThongBaoDuyet(t)) return 'Phần in bị trả về';
   if (t?.ma_loai === 'DUYET_PA_IN_MOI') return 'Có yêu cầu đổi phương án in chờ duyệt';
   if (t?.duyet_trang_thai === 'TU_CHOI') return 'Yêu cầu đổi phương án in bị từ chối';
@@ -55,6 +60,7 @@ export const doiPhuongAnIn = (t) => (laThongBaoDuyet(t) && t?.pa_cu_ten && t?.pa
 // ⚠ Họ DUYỆT phải nói rõ: đổi CODE PHẦN NÀO, TỪ phương án in nào SANG cái nào (yêu cầu 18/08/2026).
 //   Trước đây dùng chung khuôn "trả về" nên chỉ hiện mỗi câu luồng, người nhận không biết đổi cái gì.
 export const moTaThongBao = (t) => {
+  if (laThongBaoHeThong(t)) return String(t?.ly_do || '').slice(0, 300);
   if (laThongBaoDuyet(t)) {
     const pa = doiPhuongAnIn(t);
     const dong1 = `Thay đổi phương án in${t?.ma_phan ? `: ${t.ma_phan}` : ''}`;

@@ -30,6 +30,8 @@ import usePermissions from '../../../hooks/usePermissions';
 import useHuyLichSu from '../../../hooks/useHuyLichSu';
 import useOTimKiem from '../../../hooks/useOTimKiem';
 import { listKcsCandidates, recordKcs, gopTem, kcsHistory, kcsDone, getTemHanhTrinh, huyKcsLichSu, luuNguoiKiemKcs, kcsTonChuaKiem } from '../../../services/qualityService';
+import useHangDoi from '../../../hooks/useHangDoi';
+import HangDoiNut from '../../../components/common/HangDoiNut';
 import exportPhieuChuaKiem, { tongTon } from '../utils/exportPhieuChuaKiem';
 import XuatTonKcsModal from '../components/XuatTonKcsModal';
 import { redryTem, getTemLabel } from '../../../services/productionService';
@@ -136,6 +138,13 @@ export default function KcsPage() {
   const { dsTen, idTheoTen } = useDsNguoi(canKcs);
   const oNguoiKiem = useRef(null);
   const idNguoi = (ten) => idTheoTen.get(String(ten || '').trim()) || null;
+  // HÀNG ĐỢI TÍCH TEM (19/11/2026, `useHangDoi`): bảng Tích tem / Xác nhận nhiều tem lưu quá 5 s ⇒ phần còn lại vào hàng đợi
+  //   máy chủ; lô của mình chạy xong ⇒ toast + tải lại danh sách.
+  const taiNgamRef = useRef(() => {});
+  const hd = useHangDoi('KCS', { show, bat: canKcs, onXongLo: () => taiNgamRef.current() });
+  const mapKcs = ({ row, f }) => ({ temId: row.tem_id, body: { ...f, nguoiKiemId: idNguoi(f.nguoiKiem) } });
+  const hangDoiTichTem = hd.hangDoi(mapKcs, 'TICH_TEM');
+  const hangDoiNhieu = hd.hangDoi(mapKcs, 'XAC_NHAN_NHIEU');
   const truongTichTem = useMemo(() => [...TRUONG_SO_KCS, {
     k: 'nguoiKiem', label: 'Người kiểm', kieu: 'nguoi', options: dsTen, keThua: true, minW: 170,
     placeholder: 'Chọn / gõ tên người kiểm…', macDinh: () => nhoTen.lay(KHOA_NGUOI_KIEM),
@@ -305,6 +314,7 @@ export default function KcsPage() {
   // ⚠ Đang mở bảng Tích tem / modal xác nhận nhiều tem ⇒ HOÃN (mỗi tem lưu xong lại bắn sự kiện — tải lại cả danh sách
   //   hàng nghìn tem giữa lượt lưu làm modal khựng); đóng modal ⇒ tải 1 lần (`useHoanTai`, 09/11/2026).
   const taiNgam = useHoanTai(tichTemOpen || nhieuOpen, () => load(true));
+  taiNgamRef.current = taiNgam;
   useSocketReload(['quality:updated', 'drying:updated'], taiNgam);
   // NÚT "HỦY" Ở TỪNG DÒNG LỊCH SỬ (14/10/2026): nhập lý do ⇒ backend đảo sổ cái lượt đó rồi báo ERP hủy chứng từ
   // theo IDMES. Chỉ cần quyền công đoạn của màn này (người dùng chốt).
@@ -408,15 +418,17 @@ export default function KcsPage() {
     }
   };
   // Modal nhiều tem lưu xong: bỏ tích dòng đã lưu; hết lỗi ⇒ đóng modal, con trỏ về ô tìm.
-  const sauKcsNhieu = (okIds, loi) => {
+  const sauKcsNhieu = (okIds, loi, soHangDoi = 0) => {
     setChon((c) => c.filter((x) => !okIds.includes(x.tem_id)));
     taiNgam(); // modal còn mở (có lỗi) ⇒ hoãn tới lúc đóng; hết lỗi ⇒ đóng ngay dưới đây ⇒ tải 1 lần
+    const soLuu = okIds.length - soHangDoi;
+    const hangDoiChu = soHangDoi ? ` · ${soHangDoi} tem vào hàng đợi, máy chủ đang xác nhận dần (xem nút Hàng đợi)` : '';
     if (!loi.length) {
-      show(`Đã xác nhận KCS ${okIds.length} tem`);
+      show(`Đã xác nhận KCS ${soLuu} tem${hangDoiChu}`);
       setNhieuOpen(false);
       oTim.datConTro();
     } else {
-      show(`Đã lưu ${okIds.length}/${okIds.length + loi.length} tem — lỗi: ${loi.join(', ')}`, 'error');
+      show(`Đã lưu ${soLuu}/${okIds.length + loi.length} tem${hangDoiChu} — lỗi: ${loi.join(', ')}`, 'error');
     }
   };
 
@@ -426,14 +438,15 @@ export default function KcsPage() {
     const row = timTheoMaTem(res.data || [], code);
     return row ? { row } : { loi: 'Không có tem chờ KCS khớp mã này' };
   };
-  const sauTichTem = (so, loi) => {
+  const sauTichTem = (so, loi, _ketIn, soHangDoi = 0) => {
     taiNgam();
+    const hangDoiChu = soHangDoi ? ` · ${soHangDoi} tem vào hàng đợi — máy chủ xác nhận dần, xong sẽ báo` : '';
     if (!loi.length) {
-      show(`Đã xác nhận KCS ${so} tem`);
+      show(`Đã xác nhận KCS ${so} tem${hangDoiChu}`);
       setTichTemOpen(false);
       oTim.datConTro();
     } else {
-      show(`Đã lưu ${so}/${so + loi.length} tem — lỗi: ${loi.join(', ')}`, 'error');
+      show(`Đã lưu ${so}/${so + soHangDoi + loi.length} tem${hangDoiChu} — lỗi: ${loi.join(', ')}`, 'error');
     }
   };
 
@@ -540,6 +553,7 @@ export default function KcsPage() {
         searchPlaceholder="Quét mã tem rồi Enter để mở KCS — gõ để tìm...">
         {canKcs && <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét QR</Button>}
         {canKcs && <Button icon="barcode" onClick={() => setTichTemOpen(true)}>Tích tem</Button>}
+        {canKcs && <HangDoiNut hd={hd} loai="KCS" />}
         {canKcs && chon.length > 0 && (
           <Button icon="check-circle" onClick={() => setNhieuOpen(true)}>Xác nhận KCS ({chon.length})</Button>
         )}
@@ -811,7 +825,8 @@ export default function KcsPage() {
 
       <QrScanner open={scanOpen} onClose={() => setScanOpen(false)} onResult={onScan} />
       <KcsNhieuModal open={nhieuOpen} rows={selectedRows} onClose={() => { setNhieuOpen(false); oTim.datConTro(); }}
-        onXong={sauKcsNhieu} truocXacNhan={(rs) => hoiLyDoNghen(rs)} show={show} />
+        onXong={sauKcsNhieu} truocXacNhan={(rs) => hoiLyDoNghen(rs)} show={show}
+        hangDoi={hangDoiNhieu} />
       <TichTemNhapModal open={tichTemOpen} onClose={() => { setTichTemOpen(false); oTim.datConTro(); }}
         title="Tích tem — xác nhận KCS nhiều tem" nhanXacNhan="Xác nhận KCS" show={show}
         traMa={traTemKcs} khoaDong={(r) => r.tem_id} maHien={(r) => r.ma_tem}
@@ -825,7 +840,7 @@ export default function KcsPage() {
           nhoTen.dat(KHOA_NGUOI_KIEM, f.nguoiKiem);
           return res;
         }}
-        truocXacNhan={(rs) => hoiLyDoNghen(rs)} onXong={sauTichTem}
+        truocXacNhan={(rs) => hoiLyDoNghen(rs)} onXong={sauTichTem} hangDoi={hangDoiTichTem}
         phuTro={({ apMoiDong, dangLuu, coDong }) => (
           <Button variant="secondary" icon="check" disabled={dangLuu || !coDong}
             onClick={() => apMoiDong((r, f) => ({ ...f, soLuongDat: String(r.con_kcs ?? ''), soLuongHu: '', soLuongThieu: '', soLuongDu: '' }))}>

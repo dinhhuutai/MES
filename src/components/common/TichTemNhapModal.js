@@ -36,6 +36,13 @@ import { tenNguoi, timNguoi } from '../../hooks/useDsNguoi';
 //   · Bảng `w-full` (bỏ `min-w` cố định), ô nhập hẹp, chữ thông tin được xuống dòng ⇒ laptop 1366 px không cuộn ngang
 //     (điện thoại vẫn cuộn được nhờ khung `overflow-auto`).
 //   · Màu vải · Kích vải · Kích film: < 1536 px (`2xl`) gộp 1 cột (màu ở trên, kích vải / kích film ở dưới); ≥ 1536 px 3 cột.
+// ─── HÀNG ĐỢI (`hangDoi`, 19/11/2026 — KCS · Phân loại lỗi · Nhận sửa · Sửa: "lưu nhiều tem mà xoay lâu sau 5 s thì đưa
+//   vào hàng đợi, hệ thống tự chạy từng tem") ─── `hangDoi = { sauMs, xep(ds) }` (hook `useHangDoi`): lưu thẳng từng tem như
+//   cũ; đã lưu quá `sauMs` mà còn tem ⇒ gọi `xep([{ row, f, fs }])` 1 lần cho PHẦN CÒN LẠI (máy chủ chạy dần, xong báo chuông
+//   + toast) — các dòng đó rời bảng như đã lưu. `xep` lỗi ⇒ lưu thẳng tiếp. `onXong(soOk, loi, ketIn, soHangDoi)`.
+//   Có `sauKhiLuu` (in tem — trang Sửa) ⇒ chỉ in các tem đã lưu thẳng; tem vào hàng đợi in sau ở "Đã hoàn thành".
+// `luuLo(nhomList)` (tùy chọn — Nhận sửa): lưu CẢ LÔ 1 lần gọi (API nhận nhiều tem, 1 transaction) ⇒ nhanh nhất; lỗi ⇒ lùi về
+//   lưu từng tem như trên (để biết tem nào hỏng).
 const TOI_DA_DONG = 100;
 const n = (v) => Math.max(0, Math.trunc(Number(v) || 0));
 
@@ -157,7 +164,7 @@ const DongTichTem = memo(function DongTichTem({
 export default function TichTemNhapModal({
   open, onClose, title, nhanXacNhan, show,
   traMa, khoaDong, maHien, soCan, nhanSoCan, truong, formMoi, danhGia, luu,
-  truocXacNhan, onXong, phuTro, moTruoc, sauKhiLuu, iconXacNhan = 'check-circle', nhom,
+  truocXacNhan, onXong, phuTro, moTruoc, sauKhiLuu, iconXacNhan = 'check-circle', nhom, hangDoi, luuLo,
 }) {
   const [dong, setDong] = useState(() => [dongTrong()]);
   const [dangLuu, setDangLuu] = useState(false);
@@ -447,7 +454,41 @@ export default function TichTemNhapModal({
     setDangLuu(true);
     const okIds = new Set(); const loi = []; const kq = {}; const daLuu = [];
     let soOk = 0;
-    for (let i = 0; i < nhomTich.length; i += 1) {
+    let soHangDoi = 0;
+    let daLuuLo = false;
+    if (luuLo && nhomTich.length > 1) {
+      setTienDo(`Đang lưu ${nhomTich.length} tem…`);
+      try {
+        await luuLo(nhomTich.map((g) => ({ row: g.ds[0].row, f: g.ds[0].f, fs: g.ds.map((x) => x.f) })));
+        nhomTich.forEach((g) => { g.ds.forEach((x) => okIds.add(x.id)); soOk += 1; daLuu.push({ row: g.ds[0].row, f: g.ds[0].f, fs: g.ds.map((x) => x.f), data: null }); });
+        daLuuLo = true;
+      } catch (e) { /* lùi về lưu từng tem — biết tem nào hỏng */ }
+    }
+    const bd = Date.now();
+    for (let i = 0; !daLuuLo && i < nhomTich.length; i += 1) {
+      // Quá ngưỡng mà còn tem ⇒ đẩy PHẦN CÒN LẠI vào hàng đợi máy chủ 1 lần (lỗi ⇒ lưu thẳng tiếp).
+      if (hangDoi && i > 0 && Date.now() - bd > hangDoi.sauMs) {
+        const con = nhomTich.slice(i);
+        setTienDo(`Lâu quá — đang đưa ${con.length} tem còn lại vào hàng đợi…`);
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          const kqXep = await hangDoi.xep(con.map((x) => ({ row: x.ds[0].row, f: x.ds[0].f, fs: x.ds.map((y) => y.f) })));
+          const boQua = new Map((kqXep?.bo_qua || []).map((b) => [b.khoa, b.ly_do]));
+          for (const x of con) {
+            const khoa = khoaDong(x.ds[0].row);
+            if (boQua.has(khoa)) {
+              for (const y of x.ds) kq[y.id] = boQua.get(khoa) || 'Không xếp được';
+              loi.push(maHien(x.ds[0].row));
+            } else {
+              for (const y of x.ds) okIds.add(y.id);
+              soHangDoi += 1;
+            }
+          }
+          break;
+        } catch (e) {
+          show?.(`Không đưa vào hàng đợi được (${e.message || 'lỗi'}) — lưu tiếp từng tem`, 'error');
+        }
+      }
       const g = nhomTich[i];
       const d = g.ds[0];
       setTienDo(`Đang lưu ${i + 1}/${nhomTich.length} · ${maHien(d.row)}`);
@@ -472,7 +513,7 @@ export default function TichTemNhapModal({
     const con = dongRef.current.filter((d) => !okIds.has(d.id)).map((d) => (kq[d.id] ? { ...d, kq: kq[d.id] } : d));
     const conDong = con.length ? con : [dongTrong()];
     setDong(conDong);
-    onXong?.(soOk, loi, ketIn);
+    onXong?.(soOk, loi, ketIn, soHangDoi);
     if (loi.length) {
       const dauLoi = conDong.find((d) => d.kq);
       if (dauLoi && !khongONhap) datConTro(dauLoi.id, keys[0]);

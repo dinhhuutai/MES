@@ -21,6 +21,10 @@ export const COT_DS_RELEASE_SX = [
   { key: 'kh', header: 'KH', width: 12, value: (r) => r.ten_khach_hang || '' },
   { key: 'po', header: 'PO', width: 16, value: tuChecklist('po') },
   { key: 'ma', header: 'Mã', width: 28, value: tuChecklist('ten_hang') },
+  // CÔNG ĐOẠN của lệnh (19/11/2026, người dùng: "tách dòng theo công đoạn, 2 công đoạn thì 2 dòng") — mỗi công đoạn là 1 lệnh
+  //   riêng ⇒ 1 dòng; BE (`production/dsReleaseSx`) trả nhãn `cong_doan` (In · In kiếng · Ép · Logo) và tính SL đã in / đã
+  //   giao / SLNV theo ĐÚNG công đoạn của dòng với phần in 2 công đoạn (`hai_cong_doan`).
+  { key: 'cong_doan', header: 'CÔNG ĐOẠN', width: 10, value: (r) => r.cong_doan || '' },
   { key: 'mau_vai', header: 'Màu vải', nhom: 'PHẦN IN', width: 16, value: (r) => r.mau_vai || '' },
   { key: 'kich_vai', header: 'Kích vải', nhom: 'PHẦN IN', width: 11, value: (r) => r.kich_vai || '' },
   { key: 'kich_phim', header: 'Kích phim', nhom: 'PHẦN IN', width: 11, value: (r) => r.kich_phim || '' },
@@ -86,7 +90,7 @@ export const ganTruongLoc = (r) => ({
 });
 // Chuỗi cho ô tìm chung (code phần · mã tem · mã lệnh · khách · đơn · mã hàng · màu · kích).
 export const chuoiTim = (r) => [r.ma_phan, r.ma_tem, r.ma_lenh_san_xuat, r.ten_khach_hang, r._don_po, r.ma_hang,
-  r.mau_vai, r.kich_vai, r.kich_phim, r._chuyen, r.barcode_phan_in].filter(Boolean).join(' ');
+  r.mau_vai, r.kich_vai, r.kich_phim, r._chuyen, r.barcode_phan_in, r.cong_doan].filter(Boolean).join(' ');
 
 // ─── NHẬT KÝ IN (26/10/2026, mẫu ERP "DANH SÁCH NHẬT KÝ IN") — 1 dòng / tem gốc in trong kỳ (`GET …/nhat-ky-in`). ──
 const ngayVn = (v) => {
@@ -116,10 +120,10 @@ export const COT_NHAT_KY_IN = [
   { key: 'do_in', header: 'Độ in', nhom: 'Hàng hóa', width: 6, value: (r) => r.do_in || '' },
   { key: 'barcode', header: 'Barcode', width: 15, value: (r) => r.ma_tem || '' },
   { key: 'ngc', header: 'NGC', width: 8, value: (r) => r.nha_gia_cong || '' },
-  { key: 'sl_in', header: 'In', nhom: 'Số lượng', width: 8, num: true, value: (r) => so(r.so_luong) },
-  { key: 'vai_hu', header: 'Vải hư', nhom: 'Số lượng', width: 7, num: true, value: (r) => (so(r.vai_hu) || '') },
-  { key: 'vai_thieu', header: 'Vải thiếu', nhom: 'Số lượng', width: 7, num: true, value: (r) => (so(r.vai_thieu) || '') },
-  { key: 'so_phut', header: 'Số phút', width: 7, num: true, value: (r) => (r.so_phut == null ? '' : so(r.so_phut)) },
+  { key: 'sl_in', header: 'In', nhom: 'Số lượng', width: 8, num: true, cong: (r) => so(r.so_luong), value: (r) => so(r.so_luong) },
+  { key: 'vai_hu', header: 'Vải hư', nhom: 'Số lượng', width: 7, num: true, cong: (r) => so(r.vai_hu), value: (r) => (so(r.vai_hu) || '') },
+  { key: 'vai_thieu', header: 'Vải thiếu', nhom: 'Số lượng', width: 7, num: true, cong: (r) => so(r.vai_thieu), value: (r) => (so(r.vai_thieu) || '') },
+  { key: 'so_phut', header: 'Số phút', width: 7, num: true, cong: (r) => so(r.so_phut), value: (r) => (r.so_phut == null ? '' : so(r.so_phut)) },
   { key: 'to', header: 'Tổ', nhom: 'Thông tin hàng in', width: 6, value: (r) => r.ma_to || '' },
   { key: 'chuyen', header: 'Máy/Bàn', nhom: 'Thông tin hàng in', width: 8, value: maChuyenIn },
   { key: 'tho', header: 'Thợ', nhom: 'Thông tin hàng in', width: 18, value: (r) => r.tho_in || '' },
@@ -137,8 +141,8 @@ export const COT_NHAT_KY_IN = [
   { key: 'ddhsubid', header: 'ddhsubid', nhom: 'Thông tin hàng in', width: 7, value: (r) => r.ddh_sub_id || '' },
   { key: 'lenh', header: 'Lệnh SX', nhom: 'Thông tin hàng in', width: 10, value: (r) => r.ma_lenh_san_xuat || '' },
   { key: 'ma_phan', header: 'Mã phần', nhom: 'Thông tin hàng in', width: 26, value: (r) => r.ma_phan || '' },
-  { key: 'slbs_cty', header: 'SLBS cty', nhom: 'Thông tin hàng in', width: 7, num: true, value: (r) => (so(r.sl_bo_sung_cty) || '') },
-  { key: 'slbs_khach', header: 'SLBS khách', nhom: 'Thông tin hàng in', width: 7, num: true, value: (r) => (so(r.sl_bo_sung_khach) || '') },
+  { key: 'slbs_cty', header: 'SLBS cty', nhom: 'Thông tin hàng in', width: 7, num: true, cong: (r) => so(r.sl_bo_sung_cty), value: (r) => (so(r.sl_bo_sung_cty) || '') },
+  { key: 'slbs_khach', header: 'SLBS khách', nhom: 'Thông tin hàng in', width: 7, num: true, cong: (r) => so(r.sl_bo_sung_khach), value: (r) => (so(r.sl_bo_sung_khach) || '') },
   { key: 'gom', header: 'gom', nhom: 'Thông tin hàng in', width: 9, value: (r) => r.ma_set || (r.so_phan_in_lenh > 1 ? `${r.so_phan_in_lenh} phần` : '') },
   { key: 'ma_lo', header: 'Mã lô', nhom: 'Thông tin hàng in', width: 20, value: (r) => r.ma_lo || '' },
   { key: 'day_chuyen', header: 'Dây chuyền', width: 9, value: (r) => r.day_chuyen || '' },
@@ -154,6 +158,17 @@ export function tongNhatKy(rows) {
     vai_thieu: ds.reduce((a, r) => a + so(r.vai_thieu), 0),
     so_phan: new Set(ds.map((r) => r.ma_phan).filter(Boolean)).size,
   };
+}
+
+// DÒNG TỔNG CUỐI BẢNG Nhật ký in (19/11/2026, người dùng: "cho thêm dòng ở cuối là dòng tổng, cả xuất Excel") — NGUỒN DUY NHẤT
+//   cho bảng (`DsReleaseSxModal`) và Excel (`exportDsReleaseSx`): { key cột: giá trị } — cột có `cong` = Σ các dòng đang hiện;
+//   STT = "TỔNG", Barcode = số tem, Mã phần = số code phần; cột khác để trống.
+export function dongTongNhatKy(rows) {
+  const ds = rows || [];
+  const t = tongNhatKy(ds);
+  const out = { stt: 'TỔNG', barcode: `${ds.length} tem`, ma_phan: `${t.so_phan} code phần` };
+  COT_NHAT_KY_IN.filter((c) => c.cong).forEach((c) => { out[c.key] = ds.reduce((a, r) => a + c.cong(r), 0); });
+  return out;
 }
 
 // Số tổng đầu trang (đếm như Danh sách release: đơn / mã / phần in khác nhau · Σ SL release · Σ SL IN).

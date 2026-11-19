@@ -8,6 +8,7 @@ import { Field, Input, Select, inputClass } from '../../../components/common/con
 import useToast from '../../../hooks/useToast';
 import { searchKhach, searchDon, searchMaHang, searchPhanIn, listLoaiDotVai, createManualChain } from '../../../services/manualEntryService';
 import { PHUONG_AN_IN, PAIN_HOP_LE } from '../../../components/common/PhuongAnInBadge';
+import ThemDotTheoCodePhan from '../components/ThemDotTheoCodePhan';
 
 // Ô tìm-chọn "có sẵn" (server-search, debounce). onSelect(item|null). resetKey đổi → nạp lại.
 function AsyncPicker({ fetcher, resetKey, selected, onSelect, placeholder, renderLabel, disabled }) {
@@ -210,6 +211,9 @@ export default function ManualEntryPage() {
         <Button chiXemOk variant="ghost" onClick={reset}>Làm mới</Button>
         <Button icon="plus" loading={saving} onClick={submit}>{phanInExisting ? 'Thêm đợt vải vào phần in' : 'Tạo phần in + đợt vải'}</Button>
       </Toolbar>
+
+      {/* 19/11/2026: phần in ĐÃ CÓ mà ERP thiếu đợt ⇒ thêm đợt theo code phần (chọn công đoạn + đặt màn) — khỏi đi 4 cấp. */}
+      <ThemDotTheoCodePhan show={show} />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* 1. Khách hàng */}

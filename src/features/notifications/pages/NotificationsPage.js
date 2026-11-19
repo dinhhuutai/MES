@@ -15,7 +15,7 @@ import useSocketReload from '../../../hooks/useSocketReload';
 import { avatarFor } from '../../../utils/brand';
 import { layThongBao, danhDauDoc, layCaiDatCuaToi } from '../../../services/thongBaoService';
 import {
-  duongDanThongBao, nhanThoiGian, luongThongBao, laThongBaoDuyet, doiPhuongAnIn, tieuDeThongBao,
+  duongDanThongBao, nhanThoiGian, luongThongBao, laThongBaoDuyet, laThongBaoHeThong, doiPhuongAnIn, tieuDeThongBao,
 } from '../../../utils/thongBaoHienThi';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -192,13 +192,23 @@ export default function NotificationsPage() {
       </div>
 
       <SidePanel open={!!xem} onClose={() => setXem(null)} width="max-w-xl"
-        title={xem ? `${tieuDeThongBao(xem)} — ${xem.ma_phan}` : ''}
+        title={xem ? (laThongBaoHeThong(xem) ? tieuDeThongBao(xem) : `${tieuDeThongBao(xem)} — ${xem.ma_phan}`) : ''}
         footer={xem && (
           <Button icon="arrow-right" onClick={() => navigate(duongDanThongBao(xem))}>
-            {laThongBaoDuyet(xem) ? 'Mở danh sách phần in vải về' : 'Mở màn READY Kỹ thuật'}
+            {laThongBaoHeThong(xem) ? 'Mở trang liên quan'
+              : laThongBaoDuyet(xem) ? 'Mở danh sách phần in vải về' : 'Mở màn READY Kỹ thuật'}
           </Button>
         )}>
-        {xem && (
+        {xem && laThongBaoHeThong(xem) && (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 text-sm">
+              <Badge tone="info">{luongThongBao(xem)}</Badge>
+              <span className="ml-auto text-xs text-ink-soft">{new Date(xem.tg).toLocaleString('vi-VN')}</span>
+            </div>
+            <div className="whitespace-pre-wrap rounded-control border border-line p-3 text-sm text-ink">{xem.ly_do}</div>
+          </div>
+        )}
+        {xem && !laThongBaoHeThong(xem) && (
           <div className="space-y-5">
             <div className="rounded-control border border-warning/40 bg-warning/5 p-3">
               <div className="flex items-center gap-2">

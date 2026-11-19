@@ -49,6 +49,7 @@ const ToInPage = taiLuoi(() => import('./features/system/pages/ToInPage'));
 const KhachHangPage = taiLuoi(() => import('./features/system/pages/KhachHangPage'));
 const TichGiaoPage = taiLuoi(() => import('./features/system/pages/TichGiaoPage'));
 const ChoNhanSuaPage = taiLuoi(() => import('./features/system/pages/ChoNhanSuaPage'));
+const HangDoiTichTemPage = taiLuoi(() => import('./features/system/pages/HangDoiTichTemPage'));
 const ManualEntryPage = taiLuoi(() => import('./features/system/pages/ManualEntryPage'));
 const VaiVeUpdatePage = taiLuoi(() => import('./features/system/pages/VaiVeUpdatePage'));
 const PhanInListPage = taiLuoi(() => import('./features/orders/pages/PhanInListPage'));
@@ -173,6 +174,7 @@ const PAGES = {
   '/he-thong/khach-hang': <KhachHangPage />,
   '/he-thong/tich-giao': <TichGiaoPage />,
   '/he-thong/cho-nhan-sua': <ChoNhanSuaPage />,
+  '/he-thong/hang-doi-tich-tem': <HangDoiTichTemPage />,
 };
 
 // Route CŨ của module Sản xuất đã gộp trang (24/09/2026) — chuyển hướng để link/bookmark cũ vẫn vào được.

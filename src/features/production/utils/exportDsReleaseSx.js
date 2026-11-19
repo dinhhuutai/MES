@@ -3,12 +3,12 @@
 //     IN · HẠN HOÀN THÀNH · SL IN) + dòng số tổng như tờ mẫu.
 //   · `cheDo: 'NHAT_KY'` (26/10/2026) — "DANH SÁCH NHẬT KÝ IN" + dòng "Từ ngày … đến ngày …" như mẫu ERP, bộ cột
 //     `COT_NHAT_KY_IN` (tiêu đề 2 tầng: Hàng hóa · Số lượng · Thông tin hàng in).
-import { COT_DS_RELEASE_SX, COT_NHAT_KY_IN, tieuDeNhom, tongDsRelease } from './dsReleaseSx';
+import { COT_DS_RELEASE_SX, COT_NHAT_KY_IN, tieuDeNhom, tongDsRelease, dongTongNhatKy } from './dsReleaseSx';
 
 const XANH = 'FFE2EFDA';
 const VANG = 'FFFFE699';
 const TIM = 'FFD9E1F2';
-const GIUA = ['chuyen', 'gio_bd', 'gio_kt', 'trang_thai', 'tho_in', 'to', 'ca', 'ngay', 'gio', 'gio_sx', 'btp', 'btp2', 'ngay_giao', 'ngay_xn_kiem', 'day_chuyen'];
+const GIUA = ['chuyen', 'cong_doan', 'gio_bd', 'gio_kt', 'trang_thai', 'tho_in', 'to', 'ca', 'ngay', 'gio', 'gio_sx', 'btp', 'btp2', 'ngay_giao', 'ngay_xn_kiem', 'day_chuyen'];
 const ngayHien = (iso) => String(iso || '').split('-').reverse().join('/');
 
 export default async function exportDsReleaseSx(rows, { tieuDe, ngay, denNgay, cheDo = 'RELEASE' }) {
@@ -95,6 +95,20 @@ export default async function exportDsReleaseSx(rows, { tieuDe, ngay, denNgay, c
       if (ci === iTong) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: TIM } };
     });
   });
+
+  // Dòng TỔNG cuối bảng Nhật ký in (19/11/2026) — cùng hàm với bảng trên màn (`dongTongNhatKy`), Σ các dòng đang xuất.
+  if (nhatKy) {
+    const tong = dongTongNhatKy(rows);
+    const row = ws.addRow(cols.map((c) => (tong[c.key] === undefined ? '' : tong[c.key])));
+    row.eachCell({ includeEmpty: true }, (cell, ci) => {
+      const c = cols[ci - 1];
+      cell.border = { ...border, top: { style: 'medium', color: { argb: 'FF000000' } } };
+      cell.font = font({ bold: true });
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: VANG } };
+      cell.alignment = { vertical: 'middle', horizontal: c.num || c.key === 'stt' ? 'center' : 'left' };
+      if (typeof cell.value === 'number') cell.numFmt = '#,##0';
+    });
+  }
 
   const buf = await wb.xlsx.writeBuffer();
   const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });

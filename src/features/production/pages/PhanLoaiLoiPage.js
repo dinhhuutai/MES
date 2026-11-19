@@ -17,6 +17,8 @@ import PhanLoaiNhieuModal, {
 import TichTemNhapModal from '../../../components/common/TichTemNhapModal';
 import SearchableSelect from '../../../components/common/SearchableSelect';
 import VuaQuet from '../../../components/common/VuaQuet';
+import HangDoiNut from '../../../components/common/HangDoiNut';
+import useHangDoi from '../../../hooks/useHangDoi';
 import { listLoaiLoi } from '../../../services/qualityService';
 import {
   listPhanLoaiLoi, traTemPhanLoai, luuPhanLoaiLoi, listBienPhap, huyPhanLoaiLoi,
@@ -237,14 +239,18 @@ export default function PhanLoaiLoiPage() {
     danhGia: danhGiaNhom, conLai: conLaiNhom, formTiep,
     luu: (r, fs) => luuPhanLoaiLoi(r.tem_id, { dong: dongLuuNhom(fs), ghiChu: '' }),
   }), []);
-  const sauTichTem = (so, loi) => {
+  // HÀNG ĐỢI TÍCH TEM (19/11/2026, `useHangDoi`): lưu quá 5 s ⇒ tem còn lại vào hàng đợi máy chủ (1 tem = cả các dòng lỗi).
+  const hd = useHangDoi('PHAN_LOAI_LOI', { show, bat: canPll, onXongLo: () => load() });
+  const hangDoiPll = hd.hangDoi(({ row, fs }) => ({ temId: row.tem_id, body: { dong: dongLuuNhom(fs || []), ghiChu: '' } }));
+  const sauTichTem = (so, loi, _ketIn, soHangDoi = 0) => {
     load();
+    const hangDoiChu = soHangDoi ? ` · ${soHangDoi} tem vào hàng đợi — máy chủ lưu dần, xong sẽ báo` : '';
     if (!loi.length) {
-      show(`Đã phân loại lỗi ${so} tem`);
+      show(`Đã phân loại lỗi ${so} tem${hangDoiChu}`);
       setTichTemOpen(false);
       oTim.datConTro();
     } else {
-      show(`Đã lưu ${so}/${so + loi.length} tem — lỗi: ${loi.join(', ')}`, 'error');
+      show(`Đã lưu ${so}/${so + soHangDoi + loi.length} tem${hangDoiChu} — lỗi: ${loi.join(', ')}`, 'error');
     }
   };
 
@@ -345,6 +351,7 @@ export default function PhanLoaiLoiPage() {
         onSearchEnter={canPll ? quetPll : undefined}
       >
         {canPll && <Button icon="barcode" onClick={() => setTichTemOpen(true)}>Tích tem</Button>}
+        {canPll && <HangDoiNut hd={hd} loai="PHAN_LOAI_LOI" />}
         {canPll && tich.length > 0 && (
           <Button icon="check-circle" onClick={() => setNhieuOpen(true)}>Phân loại ({tich.length})</Button>
         )}
@@ -401,7 +408,7 @@ export default function PhanLoaiLoiPage() {
         title="Tích tem — phân loại lỗi nhiều tem" nhanXacNhan="Lưu phân loại" show={show}
         traMa={traTemPll} khoaDong={(r) => r.tem_id} maHien={(r) => temCode(r.ma_tem, 16)}
         soCan={slHuCua} nhanSoCan="SL hư" truong={truongPll} formMoi={formPllMoi} danhGia={danhGiaPll}
-        nhom={nhomPll} onXong={sauTichTem}
+        nhom={nhomPll} onXong={sauTichTem} hangDoi={hangDoiPll}
         phuTro={(p) => <ChungPll optLoi={optLoi} optBP={optBP} {...p} />} />
 
       {huyLs.modal}

@@ -48,7 +48,7 @@ export const O_SO = [
 
 const formMoiCoNguoi = (r) => ({ ...formMoi(r), nguoiKiem: nhoTen.lay(KHOA_NGUOI_KIEM) });
 
-export default function KcsNhieuModal({ open, rows, onClose, onXong, truocXacNhan, show }) {
+export default function KcsNhieuModal({ open, rows, onClose, onXong, truocXacNhan, show, hangDoi }) {
   const { dsTen, idTheoTen } = useDsNguoi(open);
   const [forms, setForms] = useState({});
   const [ketQua, setKetQua] = useState({}); // tem_id → { ok, chu }
@@ -85,7 +85,26 @@ export default function KcsNhieuModal({ open, rows, onClose, onXong, truocXacNha
     setDangLuu(true);
     const ok = []; const loi = [];
     const kq = {};
+    const bd = Date.now();
+    let soHangDoi = 0;
     for (let i = 0; i < rows.length; i += 1) {
+      // HÀNG ĐỢI (19/11/2026): lưu quá `hangDoi.sauMs` mà còn tem ⇒ phần còn lại vào hàng đợi máy chủ 1 lần (lỗi ⇒ lưu tiếp).
+      if (hangDoi && i > 0 && Date.now() - bd > hangDoi.sauMs) {
+        const con = rows.slice(i);
+        setTienDo(`Lâu quá — đang đưa ${con.length} tem còn lại vào hàng đợi…`);
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          const kx = await hangDoi.xep(con.map((r) => ({ row: r, f: forms[r.tem_id] || {} })));
+          const boQua = new Map((kx?.bo_qua || []).map((b) => [b.khoa, b.ly_do]));
+          for (const r of con) {
+            if (boQua.has(r.tem_id)) { kq[r.tem_id] = { ok: false, chu: boQua.get(r.tem_id) || 'Không xếp được' }; loi.push(r.ma_tem); }
+            else { kq[r.tem_id] = { ok: true, chu: 'Đã vào hàng đợi' }; ok.push(r.tem_id); soHangDoi += 1; }
+          }
+          break;
+        } catch (e) {
+          show(`Không đưa vào hàng đợi được (${e.message || 'lỗi'}) — lưu tiếp từng tem`, 'error');
+        }
+      }
       const r = rows[i];
       setTienDo(`Đang lưu ${i + 1}/${rows.length} · ${r.ma_tem}`);
       try {
@@ -104,7 +123,7 @@ export default function KcsNhieuModal({ open, rows, onClose, onXong, truocXacNha
     setKetQua(kq);
     setTienDo('');
     setDangLuu(false);
-    onXong?.(ok, loi);
+    onXong?.(ok, loi, soHangDoi);
   };
 
   if (!open) return null;

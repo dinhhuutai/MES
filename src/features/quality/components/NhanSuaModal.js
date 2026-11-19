@@ -2,6 +2,7 @@ import { useCallback, useMemo } from 'react';
 import TichTemNhapModal from '../../../components/common/TichTemNhapModal';
 import { listChoNhanSua, nhanSua } from '../../../services/qualityService';
 import { fmtNum, timTheoMaTem } from '../../../utils/format';
+import useHangDoi from '../../../hooks/useHangDoi';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // HỘP "NHẬN SỬA" (mig 132, 14/11/2026 — người dùng chốt) — mở từ màn Sửa (và trang Hệ thống › Chờ nhận sửa).
@@ -33,13 +34,20 @@ export default function NhanSuaModal({ open, onClose, show, onDone }) {
     return { row: { ...r, ma_phan: r.phan_list } };
   }, []);
   const luu = useCallback((r) => nhanSua([{ temId: r.tem_id, soLuong: soCan(r) }], ''), []);
-  const onXong = useMemo(() => (so, loi) => {
+  // 19/11/2026 (người dùng: "tích tem nhận sửa… hết chậm"): API nhận NHIỀU tem trong 1 transaction ⇒ lưu cả lô 1 lần gọi;
+  //   lô lỗi (1 tem hỏng là hỏng cả lô) ⇒ `TichTemNhapModal` lùi về từng tem + hàng đợi quá 5 s.
+  const luuLo = useCallback((ds) => nhanSua(ds.map(({ row }) => ({ temId: row.tem_id, soLuong: soCan(row) })), ''), []);
+  // Toast "đã chạy xong" do trang mở hộp lo (SuaPage `hdNhan`); chuông vẫn báo ở mọi trang.
+  const hd = useHangDoi('NHAN_SUA', { bat: open });
+  const hangDoi = useMemo(() => hd.hangDoi(({ row }) => ({ temId: row.tem_id, body: { soLuong: soCan(row) } })), [hd]);
+  const onXong = useMemo(() => (so, loi, _ketIn, soHangDoi = 0) => {
     if (so) onDone?.();
+    const hangDoiChu = soHangDoi ? ` · ${fmtNum(soHangDoi)} tem vào hàng đợi — máy chủ nhận dần, xong sẽ báo` : '';
     if (!loi.length) {
-      show?.(`Đã nhận sửa ${fmtNum(so)} tem — đã lên màn Sửa`);
+      show?.(`Đã nhận sửa ${fmtNum(so)} tem — đã lên màn Sửa${hangDoiChu}`);
       onClose();
     } else {
-      show?.(`Đã nhận ${fmtNum(so)}/${fmtNum(so + loi.length)} tem — lỗi: ${loi.join(', ')}`, 'error');
+      show?.(`Đã nhận ${fmtNum(so)}/${fmtNum(so + soHangDoi + loi.length)} tem${hangDoiChu} — lỗi: ${loi.join(', ')}`, 'error');
     }
   }, [onDone, onClose, show]);
 
@@ -47,6 +55,6 @@ export default function NhanSuaModal({ open, onClose, show, onDone }) {
     <TichTemNhapModal open={open} onClose={onClose} show={show}
       title="Nhận sửa — quét tem (SL nhận lấy theo phân loại lỗi)" nhanXacNhan="Xác nhận nhận sửa" iconXacNhan="check"
       traMa={traMa} khoaDong={khoaDong} maHien={maHien} soCan={soCan} nhanSoCan="SL nhận"
-      truong={TRUONG} formMoi={formMoi} danhGia={danhGia} luu={luu} onXong={onXong} />
+      truong={TRUONG} formMoi={formMoi} danhGia={danhGia} luu={luu} luuLo={luuLo} hangDoi={hangDoi} onXong={onXong} />
   );
 }

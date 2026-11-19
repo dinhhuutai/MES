@@ -19,6 +19,8 @@ export const datLuongSx = (phanInId, body) => client.post(`${P}/${phanInId}/luon
 export const boCongDoanQt = (phanInId, body) => client.post(`${P}/${phanInId}/bo-cong-doan`, body);
 // Thêm 1 công đoạn + đặt công đoạn mới vào màn đích (19/11/2026) — body.xemTruoc = chỉ dựng kế hoạch.
 export const themCongDoanQt = (phanInId, body) => client.post(`${P}/${phanInId}/them-cong-doan`, body);
+// ERP lỗi không gửi đợt: tạo đợt vải tay (mọi luồng) + đặt vào màn (19/11/2026) — body.xemTruoc = chỉ đọc kế hoạch.
+export const themDotVaiQt = (phanInId, body) => client.post(`${P}/${phanInId}/them-dot-vai`, body);
 export const luiVeTram = (phanInId, lenhId, body) => client.post(`${P}/${phanInId}/lenh/${lenhId}/lui-ve`, body);
 export const huyLeQt = (phanInId, body) => client.post(`${P}/${phanInId}/huy-le`, body);
 export const luuPhanCongQt = (phanInId, phieuId, body) => client.post(`${P}/${phanInId}/phieu/${phieuId}/phan-cong`, body);

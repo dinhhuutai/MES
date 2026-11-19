@@ -32,6 +32,8 @@ import { trangThaiSla } from '../../../utils/nghen';
 import usePermissions from '../../../hooks/usePermissions';
 import useHuyLichSu from '../../../hooks/useHuyLichSu';
 import useOTimKiem from '../../../hooks/useOTimKiem';
+import useHangDoi from '../../../hooks/useHangDoi';
+import HangDoiNut from '../../../components/common/HangDoiNut';
 import { listSuaCandidates, recordSua, suaHistory, suaDone, luuNguoiSua, guiLaiErpSua, huySuaLichSu } from '../../../services/qualityService';
 import { getTemLabel } from '../../../services/productionService';
 import { listUserOptions } from '../../../services/userService';
@@ -206,17 +208,27 @@ export default function SuaPage() {
     const row = timTheoMaTem(res.data || [], code);
     return row ? { row } : { loi: KHONG_CHO_SUA };
   };
-  const sauTichTem = (so, loi, ketIn) => {
+  // HÀNG ĐỢI TÍCH TEM (19/11/2026, `useHangDoi`): lưu quá 5 s ⇒ tem còn lại vào hàng đợi máy chủ. Tem vào hàng đợi KHÔNG in
+  //   trong lượt này (cửa sổ in cần dữ liệu đã lưu) — in ở sidebar "Đã hoàn thành" khi máy chủ báo xong.
+  const hd = useHangDoi('SUA', { show, bat: canSua, onXongLo: () => taiNgam() });
+  const hdNhan = useHangDoi('NHAN_SUA', { show, bat: canSua, onXongLo: () => taiNgam() }); // nút + toast của hộp Nhận sửa
+  const hangDoiSua = hd.hangDoi(({ row, f }) => {
+    const ten = String(f.nguoiSua || '').trim();
+    return { temId: row.tem_id, body: { ...f, nguoiSua: ten, nguoiSuaId: idNguoiSua.get(ten) || null } };
+  });
+  const sauTichTem = (so, loi, ketIn, soHangDoi = 0) => {
     taiNgam();
     const chuIn = ketIn && ketIn.loi
       ? ` — IN TEM 17 LỖI: ${ketIn.loi} (in lại ở "Đã hoàn thành")`
       : (ketIn && ketIn.so ? ` · đã mở ${ketIn.so} tem 17 để in (${Math.ceil(ketIn.so / 2)} tờ)` : '');
+    const hangDoiChu = soHangDoi
+      ? ` · ${soHangDoi} tem vào hàng đợi — máy chủ xác nhận dần, xong sẽ báo; tem 17 của chúng in ở "Đã hoàn thành"` : '';
     if (!loi.length) {
-      show(`Đã xác nhận sửa ${so} tem${chuIn}`, ketIn && ketIn.loi ? 'error' : undefined);
+      show(`Đã xác nhận sửa ${so} tem${chuIn}${hangDoiChu}`, ketIn && ketIn.loi ? 'error' : undefined);
       setTichTemOpen(false);
       oTim.datConTro();
     } else {
-      show(`Đã lưu ${so}/${so + loi.length} tem — lỗi: ${loi.join(', ')}${chuIn}`, 'error');
+      show(`Đã lưu ${so}/${so + soHangDoi + loi.length} tem${hangDoiChu} — lỗi: ${loi.join(', ')}${chuIn}`, 'error');
     }
   };
   // Cửa sổ in mở NGAY trong lượt bấm (trước khi gọi API — mở sau là trình duyệt chặn popup); không dòng nào có sửa đạt ⇒ không mở.
@@ -522,6 +534,8 @@ export default function SuaPage() {
         {canSua && <Button variant="secondary" icon="package" onClick={() => setNhanOpen(true)}>Nhận sửa</Button>}
         {canSua && <Button variant="secondary" icon="scan-line" onClick={() => setScanOpen(true)}>Quét QR</Button>}
         {canSua && <Button icon="barcode" onClick={() => setTichTemOpen(true)}>Tích tem</Button>}
+        {canSua && <HangDoiNut hd={hd} loai="SUA" />}
+        {canSua && <HangDoiNut hd={hdNhan} loai="NHAN_SUA" />}
         {canSua && chon.length > 0 && (
           <Button icon="check-circle" onClick={() => setNhieuOpen(true)}>Xác nhận sửa ({chon.length})</Button>
         )}
@@ -613,7 +627,7 @@ export default function SuaPage() {
           nhoTen.dat(KHOA_NGUOI_SUA, ten);
           return res;
         }}
-        moTruoc={moInTichTem} sauKhiLuu={inTichTem}
+        moTruoc={moInTichTem} sauKhiLuu={inTichTem} hangDoi={hangDoiSua}
         truocXacNhan={(rs) => hoiLyDoNghen(rs)} onXong={sauTichTem}
         phuTro={({ apMoiDong, dangLuu, coDong }) => (
           <Button variant="secondary" icon="check" disabled={dangLuu || !coDong}
