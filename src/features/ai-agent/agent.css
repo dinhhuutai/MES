@@ -28,7 +28,18 @@
 .agt-bot[data-state="chao"] .agt-f-eyes, .agt-bot[data-state="chao"] .agt-f-smile, .agt-bot[data-state="chao"] .agt-wave,
 .agt-bot[data-state="nghi"] .agt-f-think, .agt-bot[data-state="nghi"] .agt-f-dots, .agt-bot[data-state="nghi"] .agt-arm-r,
 .agt-bot[data-state="noi"] .agt-f-eyes, .agt-bot[data-state="noi"] .agt-f-talk, .agt-bot[data-state="noi"] .agt-arm-r,
-.agt-bot[data-state="vui"] .agt-f-happy, .agt-bot[data-state="vui"] .agt-f-big, .agt-bot[data-state="vui"] .agt-wave { display: inline; }
+.agt-bot[data-state="vui"] .agt-f-happy, .agt-bot[data-state="vui"] .agt-f-big, .agt-bot[data-state="vui"] .agt-wave,
+.agt-bot[data-state="yen"] .agt-f-eyes, .agt-bot[data-state="yen"] .agt-f-smile { display: inline; }
+
+/* Cảm xúc (19/11): chào lắc đầu · nghĩ ăng-ten đung đưa nhanh · nói gật gù · vui nhún nhảy · yên chỉ chớp mắt + lơ lửng */
+@keyframes agt-lac { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-7deg); } 75% { transform: rotate(7deg); } }
+@keyframes agt-gat { 0%, 100% { transform: rotate(0) translateY(0); } 50% { transform: rotate(2.5deg) translateY(2px); } }
+@keyframes agt-hop { 0%, 100% { transform: translateY(0); } 35%, 55% { transform: translateY(-15px); } 75% { transform: translateY(2px); } }
+.agt-bot[data-state="chao"] .agt-headg { animation: agt-lac 1.3s ease-in-out 2; }
+.agt-bot[data-state="nghi"] .agt-ant { animation-duration: 1.1s; }
+.agt-bot[data-state="noi"] .agt-headg { animation: agt-gat .8s ease-in-out infinite; }
+.agt-bot[data-state="vui"]:not(.agt-bot-dau) .agt-float { animation: agt-hop .85s ease-in-out infinite; }
+.agt-bot-dau[data-state="vui"] .agt-headg { animation: agt-lac .9s ease-in-out infinite; }
 
 /* Robot nổi + khung chat */
 .agt-noi { touch-action: none; user-select: none; -webkit-user-select: none; }

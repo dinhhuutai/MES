@@ -12,3 +12,13 @@ export const datMauRobotAi = (mau) => client.put('/ai/mau-robot', { mau_robot: m
 // Sự kiện trình duyệt khi người dùng đổi mẫu robot (`ChonMauRobot` phát, `AgentLoader` nghe). Để ở đây (file nhỏ,
 // đã nằm trong bundle chính) ⇒ AgentLoader không kéo code robot vào bundle chính.
 export const SU_KIEN_DOI_MAU_ROBOT = 'agent-mes:mau-robot';
+
+// Chỗ hiện robot của chính người dùng (Thông tin cá nhân) — gương BE `modules/ai/ai.service.js CHE_DO_HIEN`.
+export const CHE_DO_HIEN = [
+  { ma: 'MOI_TRANG', ten: 'Mọi trang', mo_ta: 'Robot ở trang chủ, các màn khác thu gọn ở góc.' },
+  { ma: 'TRANG_CHU', ten: 'Chỉ trang chủ', mo_ta: 'Chỉ hiện khi ở trang chủ, màn khác ẩn hẳn.' },
+  { ma: 'AN', ten: 'Ẩn', mo_ta: 'Ẩn robot ở mọi trang. Bật lại ở đây.' },
+];
+export const HIEN_MAC_DINH = 'MOI_TRANG';
+export const datCheDoHienAi = (hien) => client.put('/ai/che-do-hien', { hien });
+export const SU_KIEN_DOI_CHE_DO_HIEN = 'agent-mes:che-do-hien';

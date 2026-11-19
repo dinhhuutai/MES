@@ -2,7 +2,8 @@
 // ROBOT của Agent MES THLA (19/11/2026) — SVG 3D bóng: đầu to, mặt kính đen, mắt đèn vàng, tay nổi, ăng-ten là
 // bông hoa 5 cánh nhụy nâu đúng logo MES. KHÔNG viền tròn. 2 MẪU cùng dáng, mỗi người tự chọn ở Thông tin cá nhân
 // (lưu `nguoi_dung.ai_mau_robot`, mặc định Vàng Nắng — gương BE `modules/ai/ai.service.js MAU_ROBOT`).
-// Trạng thái (`data-state`): chao (vẫy tay) · nghi (đang tra dữ liệu) · noi (đang trả lời) · vui.
+// Trạng thái (`data-state`): chao (vẫy tay) · nghi (đang tra dữ liệu) · noi (đang trả lời) · vui (nhún nhảy) · yen (rảnh,
+//   chỉ chớp mắt). Khung chat đổi trạng thái theo việc đang làm — `AgentMesThla.js datCamXuc`.
 // Id gradient / class đều mang tiền tố `agt` để không đụng SVG khác của app. CSS chuyển động: `agent.css`.
 // Component React bọc chuỗi này: `RobotAgent.js` (⚠ đừng đặt tên `Robot.js` — Windows không phân biệt hoa thường).
 // ═════════════════════════════════════════════════════════════════════════════

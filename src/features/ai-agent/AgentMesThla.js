@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
   Pin, PinOff, Maximize2, Minimize2, Minus, X, Plus, History, Send, ThumbsUp, ThumbsDown, Trash2,
@@ -38,6 +38,9 @@ const TEN_CONG_CU = {
 const ICON_MAY_CHU = { 'mes-docs': BookOpen, 'mes-web': Globe, 'mes-db': Database };
 
 const kep = (v, a, b) => Math.min(Math.max(v, a), Math.max(a, b));
+const giamChuyenDong = () => { try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } };
+// Khóa 1 tin nhắn (tin mới từ BE có `id`; tin tạm phía máy có `tam`).
+const khoaTin = (t, i) => String(t.id || t.tam || `t${i}`);
 const khoaLuu = (uid) => `agentMes.v1.${uid || 'an-danh'}`;
 function docLuu(uid) {
   try { return JSON.parse(localStorage.getItem(khoaLuu(uid)) || '{}') || {}; } catch (e) { return {}; }
@@ -134,6 +137,28 @@ export default function AgentMesThla({ trangThai, userId }) {
 
   useEffect(() => { setConLai(trangThai.con_lai); }, [trangThai.con_lai]);
 
+  // ─── Cảm xúc robot (19/11/2026) ─────────────────────────────────────────────
+  // chao: vừa vào trang / mở khung chat / rê chuột vào robot · nghi: đang chờ Agent (luôn thắng, theo `dangHoi`) ·
+  // noi: câu trả lời đang hiện dần · vui: trả lời xong / được bấm "hữu ích" · yen: rảnh. Trạng thái có hạn ⇒ tự về `sau`.
+  const [camXuc, setCamXuc] = useState('chao');
+  const henGio = useRef(null);
+  const datCamXuc = useCallback((cx, ms = 0, sau = 'yen') => {
+    clearTimeout(henGio.current);
+    setCamXuc(cx);
+    if (ms) henGio.current = setTimeout(() => setCamXuc(sau), ms);
+  }, []);
+  useEffect(() => { datCamXuc('chao', 4000); return () => clearTimeout(henGio.current); }, [datCamXuc]);
+  useEffect(() => { if (mo) datCamXuc('chao', 2600); }, [mo, datCamXuc]);
+
+  // Câu trả lời mới hiện DẦN như đang gõ (robot "nói"), xong thì robot "vui". `go` = { khoa, dai, hien, buoc }.
+  const [go, setGo] = useState(null);
+  useEffect(() => {
+    if (!go) return undefined;
+    if (go.hien >= go.dai) { setGo(null); datCamXuc('vui', 2600); return undefined; }
+    const t = setTimeout(() => setGo((g) => g && { ...g, hien: Math.min(g.dai, g.hien + g.buoc) }), 30);
+    return () => clearTimeout(t);
+  }, [go, datCamXuc]);
+
   // Cửa sổ đổi cỡ ⇒ kéo robot / khung ghim về trong màn hình.
   useEffect(() => {
     const doi = () => setW({ rong: window.innerWidth, cao: window.innerHeight });
@@ -156,9 +181,10 @@ export default function AgentMesThla({ trangThai, userId }) {
     return () => clearInterval(t);
   }, [dangHoi]);
 
+  const goHien = go ? go.hien : -1;
   useEffect(() => {
     if (thanRef.current) thanRef.current.scrollTop = thanRef.current.scrollHeight;
-  }, [tinNhan, dangHoi, mo]);
+  }, [tinNhan, dangHoi, mo, goHien]);
 
   useEffect(() => {
     if (mo && oNhapRef.current) oNhapRef.current.focus({ preventScroll: true });
@@ -241,15 +267,26 @@ export default function AgentMesThla({ trangThai, userId }) {
     setXemLichSu(false);
     if (oNhapRef.current) oNhapRef.current.style.height = '';
     setTinNhan((ds) => [...ds, { tam: Date.now(), vai_tro: 'NGUOI_DUNG', noi_dung: q }]);
+    setGo(null); // câu trước còn đang hiện dần ⇒ hiện hết luôn
     setDangHoi(true);
     try {
       const r = await hoiAi({ cau_hoi: q, hoi_thoai_id: hoiThoaiId, trang_hien_tai: location.pathname });
       const d = r.data || {};
       setHoiThoaiId(d.hoi_thoai_id || hoiThoaiId);
       if (typeof d.con_lai === 'number') setConLai(d.con_lai);
-      if (d.tin_nhan) setTinNhan((ds) => [...ds, d.tin_nhan]);
+      if (d.tin_nhan) {
+        const tin = { tam: Date.now(), ...d.tin_nhan };
+        setTinNhan((ds) => [...ds, tin]);
+        const dai = String(tin.noi_dung || '').length;
+        if (dai && !giamChuyenDong()) {
+          // ~3,6 giây tối đa cho câu dài; câu ngắn mỗi lượt 2 ký tự.
+          setGo({ khoa: khoaTin(tin), dai, hien: 0, buoc: Math.max(2, Math.ceil(dai / 120)) });
+          datCamXuc('noi');
+        } else datCamXuc('vui', 2600);
+      } else datCamXuc('yen');
     } catch (e) {
       setTinNhan((ds) => [...ds, { tam: Date.now(), vai_tro: 'AI', loi: (e && e.message) || 'Không gọi được Agent' }]);
+      datCamXuc('yen');
     } finally {
       setDangHoi(false);
     }
@@ -280,10 +317,12 @@ export default function AgentMesThla({ trangThai, userId }) {
     try {
       await danhGiaTinNhanAi(t.id, moi);
       setTinNhan((ds) => ds.map((x) => (x.id === t.id ? { ...x, danh_gia: moi || null } : x)));
+      if (moi === 1) datCamXuc('vui', 2200); // được khen ⇒ vui
     } catch (e) { /* bỏ qua */ }
   };
 
-  const trangThaiRobot = dangHoi ? 'nghi' : 'chao';
+  const trangThaiRobot = dangHoi ? 'nghi' : camXuc;
+  const chaoKhiRe = () => { if (!dangHoi && camXuc === 'yen') datCamXuc('chao', 2200); };
   const dongTrangThai = dangHoi
     ? BUOC_CHO[buocCho]
     : trangThai.san_sang ? `Sẵn sàng · còn ${conLai} câu` : 'Chưa sẵn sàng';
@@ -298,6 +337,7 @@ export default function AgentMesThla({ trangThai, userId }) {
           className="agt-noi fixed z-[44] cursor-grab active:cursor-grabbing"
           style={viTriRobot()}
           onPointerDown={batDauKeoRobot}
+          onMouseEnter={chaoKhiRe}
         >
           {daiDien === 'ca-con' ? (
             <div className="relative flex items-start gap-1 pt-1">
@@ -395,24 +435,32 @@ export default function AgentMesThla({ trangThai, userId }) {
             ) : (
               <>
                 <div className="flex items-start gap-2">
-                  <span className="block w-8 shrink-0"><Robot mau={mau} dau /></span>
+                  <span className="block w-8 shrink-0"><Robot mau={mau} dau trangThai={!tinNhan.length && camXuc === 'chao' ? 'chao' : 'yen'} /></span>
                   <div className="rounded-[4px_14px_14px_14px] border border-line bg-surface-muted px-3 py-2.5 text-[13.5px] leading-relaxed">{LOI_CHAO}</div>
                 </div>
-                {tinNhan.map((t, i) => (t.vai_tro === 'NGUOI_DUNG' ? (
-                  <div key={t.id || `t${i}`} className="flex justify-end">
-                    <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-[14px_4px_14px_14px] bg-primary px-3 py-2 text-[13.5px] text-white">{t.noi_dung}</div>
-                  </div>
-                ) : (
+                {tinNhan.map((t, i) => {
+                  if (t.vai_tro === 'NGUOI_DUNG') {
+                    return (
+                      <div key={t.id || `t${i}`} className="flex justify-end">
+                        <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-[14px_4px_14px_14px] bg-primary px-3 py-2 text-[13.5px] text-white">{t.noi_dung}</div>
+                      </div>
+                    );
+                  }
+                  const dangGo = !!go && go.khoa === khoaTin(t, i);
+                  const cuoi = i === tinNhan.length - 1;
+                  return (
                   <div key={t.id || `t${i}`} className="flex items-start gap-2">
-                    <span className="block w-8 shrink-0"><Robot mau={mau} dau /></span>
+                    <span className="block w-8 shrink-0">
+                      <Robot mau={mau} dau trangThai={dangGo ? 'noi' : cuoi && camXuc === 'vui' ? 'vui' : 'yen'} />
+                    </span>
                     <div className="min-w-0 flex-1 space-y-2 rounded-[4px_14px_14px_14px] border border-line bg-surface-muted px-3 py-2.5 text-[13.5px] leading-relaxed">
                       <CacBuoc buoc={t.cong_cu} />
                       {t.loi ? (
                         <div className="flex items-start gap-1.5 text-danger"><AlertTriangle size={14} className="mt-0.5 shrink-0" /><span>{t.loi}</span></div>
                       ) : (
-                        <NoiDungAi text={t.noi_dung} />
+                        <NoiDungAi text={dangGo ? String(t.noi_dung || '').slice(0, go.hien) : t.noi_dung} />
                       )}
-                      {t.id && !t.loi && (
+                      {t.id && !t.loi && !dangGo && (
                         <div className="flex items-center gap-1 pt-0.5 text-ink-soft">
                           <button type="button" title="Câu trả lời hữu ích" aria-label="Hữu ích" aria-pressed={t.danh_gia === 1}
                             className={`rounded p-1 hover:text-success ${t.danh_gia === 1 ? 'text-success' : ''}`} onClick={() => danhGia(t, 1)}>
@@ -426,7 +474,8 @@ export default function AgentMesThla({ trangThai, userId }) {
                       )}
                     </div>
                   </div>
-                )))}
+                  );
+                })}
                 {dangHoi && (
                   <div className="flex items-start gap-2">
                     <span className="block w-8 shrink-0"><Robot mau={mau} dau trangThai="nghi" /></span>
