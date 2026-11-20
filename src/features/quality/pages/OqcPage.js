@@ -490,7 +490,7 @@ export default function OqcPage() {
         title="Lịch sử OQC" fetcher={oqcHistory} extraColumns={huyLs.cotHuy} taiLai={huyLs.taiLai} />
       {huyLs.modal}
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
-        title="Tem đã OQC" maHeader="Tem" fetcher={oqcDone}
+        title="Tem đã OQC" maHeader="Tem" fetcher={oqcDone} timMoiNgay
         columns={[
           { key: 'ma', header: 'Tem', className: 'whitespace-nowrap', render: (r) => <Badge tone={laSuaDone(r) ? 'warning' : 'info'}>{maHienDone(r)}</Badge> },
           { key: 'nguon', header: 'Nguồn', render: (r) => (r.nguon === 'SUA' ? 'Sửa' : 'KCS') },

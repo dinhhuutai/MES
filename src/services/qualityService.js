@@ -7,7 +7,7 @@ export const recordKcs = (temId, body) => client.post(`/quality/kcs/${temId}`, b
 export const gopTem = (body) => client.post('/quality/kcs/gop-tem', body);
 export const getTemHanhTrinh = (temId) => client.get(`/quality/tem/${temId}/hanh-trinh`);
 export const kcsHistory = (date, q) => client.get('/quality/kcs/history', { params: { date, q } });
-export const kcsDone = (date) => client.get('/quality/kcs/done', { params: { date } });
+export const kcsDone = (date, q) => client.get('/quality/kcs/done', { params: { date, q } });
 
 export const listSuaCandidates = (params) => client.get('/quality/sua/candidates', { params });
 export const recordSua = (temId, body) => client.post(`/quality/sua/${temId}`, body);
@@ -17,7 +17,7 @@ export const nhanSua = (items, ghiChu) => client.post('/quality/sua/nhan', { ite
 export const lichSuNhanSua = (params) => client.get('/quality/sua/nhan-lich-su', { params });
 export const huyNhanSua = (id, lyDo) => client.post(`/quality/sua/nhan/${id}/huy`, { lyDo });
 export const suaHistory = (date, q) => client.get('/quality/sua/history', { params: { date, q } });
-export const suaDone = (date) => client.get('/quality/sua/done', { params: { date } });
+export const suaDone = (date, q) => client.get('/quality/sua/done', { params: { date, q } });
 // Ghi NGƯỜI SỬA cho các lượt sửa được chọn, nhập ở modal In tem (mig 080).
 // items: [{ suaId, nguoiSuaId?, nguoiSua }]
 export const luuNguoiSua = (items) => client.post('/quality/sua/nguoi-sua', { items });
@@ -29,7 +29,7 @@ export const listOqcCandidates = (params) => client.get('/quality/oqc/candidates
 export const recordOqc = (temId, body) => client.post(`/quality/oqc/${temId}`, body);
 export const returnOqcToKcs = (temId, body) => client.post(`/quality/oqc/${temId}/tra-ve`, body);
 export const oqcHistory = (date, q) => client.get('/quality/oqc/history', { params: { date, q } });
-export const oqcDone = (date) => client.get('/quality/oqc/done', { params: { date } });
+export const oqcDone = (date, q) => client.get('/quality/oqc/done', { params: { date, q } });
 // Danh sách finish (03/10/2026): 1 dòng / (ngày OQC × phần in) + tập MỤC TIÊU (hạn giao = denNgay).
 // `nguon` 'SX' (29/10/2026, Xác nhận chạy) = finish khi đã in + vải hư/thiếu ≥ SLNV; mặc định theo OQC cho qua giao.
 // 18/11/2026: `nguon='SX'` = finish theo 7 điều kiện (BE `utils/dieuKienFinish.js`); `cheDo='CHUA'` = phần in chưa finish

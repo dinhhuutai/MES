@@ -17,6 +17,8 @@ const fmtNgayGio = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '');
 // thấy gì, đáng lẽ không có ngày thì tìm theo code phần". Backend `utils/lichSuTim.js` (≥ 3 ký tự, ≤ 500 lượt mới nhất).
 const TU_KHOA_TOI_THIEU = 3;
 const TOI_DA_TIM = 500;
+// Ô tìm là MÃ TEM (9–12 số — nhãn 15 · 16 · 17) ⇒ tìm mọi ngày ở server (backend khớp cả tem gốc ↔ tem 17 con, nhãn 16).
+export const laMaTemTim = (q) => /^\d{9,12}$/.test(String(q || '').trim());
 
 // BỘ LỌC (27/10/2026, người dùng: "các modal chỗ lịch sử cho thêm bộ lọc") — lọc CLIENT-SIDE trên 1 ngày đã tải:
 //   ô tìm (không dấu, khớp từng từ, quét mọi trường chữ của dòng — kể cả trường phụ như code phần nếu fetcher trả) ·
@@ -60,15 +62,16 @@ export default function HistoryPanel({ open, onClose, title = 'Lịch sử', fet
   const [filters, setFilters] = useState({});
   const [showFilters, setShowFilters] = useState(false);
 
-  // Chế độ "mọi ngày": không chọn ngày. Từ khóa gửi server sau khi ngừng gõ 400 ms (tránh gọi mỗi phím).
-  const moiNgay = !date;
+  // Chế độ "mọi ngày": không chọn ngày, HOẶC ô tìm là MÃ TEM (20/11/2026, người dùng: "nhập tem nào cũng ra đúng, có tìm
+  //   mã tem thì xóa ngày vẫn ra") — mã tem tìm ở server mọi ngày, bỏ qua ngày đang chọn. Từ khóa gửi server sau khi ngừng
+  //   gõ 400 ms (tránh gọi mỗi phím).
   const [qTre, setQTre] = useState('');
   useEffect(() => {
-    if (!moiNgay) { setQTre(''); return undefined; }
     const h = setTimeout(() => setQTre(q.trim()), 400);
     return () => clearTimeout(h);
-  }, [q, moiNgay]);
-  const qServer = moiNgay && timMoiNgay && qTre.length >= TU_KHOA_TOI_THIEU ? qTre : '';
+  }, [q]);
+  const qServer = timMoiNgay && qTre.length >= TU_KHOA_TOI_THIEU && (!date || laMaTemTim(qTre)) ? qTre : '';
+  const moiNgay = !date || !!qServer;
   const choTuKhoa = moiNgay && !qServer;
 
   const dsHanhDong = useMemo(() => [...new Set(rows.map((r) => r.hanh_dong).filter(Boolean))].sort(), [rows]);
@@ -95,7 +98,7 @@ export default function HistoryPanel({ open, onClose, title = 'Lịch sử', fet
     if (!date && !qServer) { setRows([]); return; }
     setLoading(true);
     try {
-      const res = await fetcherRef.current(date, qServer || undefined);
+      const res = await fetcherRef.current(qServer ? '' : date, qServer || undefined);
       setRows((res.data || []).map((r, i) => ({ ...r, _k: i })));
     } catch (e) {
       show(e.message || 'Lỗi tải lịch sử', 'error');

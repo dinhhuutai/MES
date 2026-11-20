@@ -13,9 +13,18 @@ import useToast from '../../hooks/useToast';
 import { fmtNum, ngayLocalISO } from '../../utils/format';
 import { chuanTim } from '../../utils/timKiem';
 import NgayInput from './NgayInput';
+import { laMaTemTim } from './HistoryPanel';
 
 const todayStr = () => ngayLocalISO(new Date());
 const fmtTime = (t) => (t ? new Date(t).toLocaleTimeString('vi-VN') : '');
+const fmtNgayGioDai = (t) => (t ? new Date(t).toLocaleString('vi-VN') : '');
+const TU_KHOA_TOI_THIEU = 3;
+// Mã của dòng để ô tìm so: mã đang hiện + mã tem gốc (dòng KCS giao trước hiện tem 17) + tem 17 của lượt (20/11/2026).
+//   Gõ mã ERP 12 số ⇒ so 10 số đuôi ⇒ nhãn 16 khớp tem 15.
+const khopMa = (r, tu) => {
+  const duoi = /^\d{12}$/.test(tu) ? tu.slice(2) : tu;
+  return [r.ma, r.ma_tem_goc, r.ma_tem_17].some((m) => m && norm(m).includes(duoi));
+};
 // Ngày + giờ ngắn "dd/mm/yyyy HH:mm" — cột "Giờ lên MES" (đợt có thể lên MES từ ngày trước ngày hoàn thành).
 const fmtNgayGio = (t) => {
   if (!t) return '';
@@ -75,10 +84,13 @@ const FILTER_FIELDS = [
 //   · `footerChon` : ({ rows, clear }) => JSX — thanh hành động ở CHÂN panel (vd nút "In tem (N)")
 // XUẤT EXCEL THEO KHUÔN RIÊNG (14/10/2026): `xuatExcel({ rows, date })` (async) thay hẳn bộ xuất mặc định — vd màn OQC
 //   xuất đúng tờ "DANH SÁCH KIỂM TRA CHẤT LƯỢNG ĐẦU RA QCO". `rows` = danh sách ĐANG LỌC (như bộ xuất mặc định).
+// TÌM MỌI NGÀY (`timMoiNgay`, 20/11/2026 — KCS · Sửa · OQC; người dùng: "tem 15 giao trước + tem 17 tìm khó, nhập tem nào
+//   cũng ra, có tìm mã tem thì xóa ngày vẫn ra"): fetcher(date, q) — bỏ ngày (nút ×) + gõ ≥ 3 ký tự, HOẶC ô tìm là MÃ TEM
+//   (9–12 số, kể cả khi đang chọn ngày) ⇒ gọi `fetcher('', q)`: backend tìm mọi ngày, khớp cả tem gốc ↔ tem 17 con (`utils/lichSuTim`).
 export default function DonePanel({
   open, onClose, title = 'Đã hoàn thành', maHeader = 'Mã', fetcher, columns, excelColumns, showChuyen = true,
   extraColumns, extraExcelColumns, showPhuongAnIn = false, showLoaiDotVai = false, showGioLenMes = false,
-  chonNhieu = false, toiDaChon = 0, chonDuoc, footerChon, xuatExcel,
+  chonNhieu = false, toiDaChon = 0, chonDuoc, footerChon, xuatExcel, timMoiNgay = false,
 }) {
   const { toast, show } = useToast();
   const [date, setDate] = useState(todayStr);
@@ -95,11 +107,22 @@ export default function DonePanel({
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
 
+  // Từ khóa gửi server sau khi ngừng gõ 400 ms (chế độ tìm mọi ngày).
+  const [qTre, setQTre] = useState('');
+  useEffect(() => {
+    const h = setTimeout(() => setQTre(q.trim()), 400);
+    return () => clearTimeout(h);
+  }, [q]);
+  const qServer = timMoiNgay && qTre.length >= TU_KHOA_TOI_THIEU && (!date || laMaTemTim(qTre)) ? qTre : '';
+  const moiNgay = !!qServer;
+  const choTuKhoa = timMoiNgay && !date && !qServer;
+
   const load = useCallback(async () => {
     if (!open || !fetcherRef.current) return;
+    if (!date && !qServer) { setRows([]); return; }
     setLoading(true);
     try {
-      const res = await fetcherRef.current(date);
+      const res = qServer ? await fetcherRef.current('', qServer) : await fetcherRef.current(date);
       setRows((res.data || []).map((r, i) => ({ ...r, _k: i })));
       setChon(new Set()); // dữ liệu đổi → bỏ tích cũ (đừng in theo lựa chọn của danh sách trước)
     } catch (e) {
@@ -108,22 +131,23 @@ export default function DonePanel({
     } finally {
       setLoading(false);
     }
-  }, [open, date, show]);
+  }, [open, date, qServer, show]);
 
   useEffect(() => { load(); }, [load]);
 
   // Lọc CLIENT-SIDE (panel tải trọn 1 ngày nên lọc tại chỗ là đủ, không cần gọi lại API).
-  // Ô tìm kiếm quét MỌI trường ở FILTER_FIELDS + cột mã (mã tem / mã lệnh / mã set) — không dấu.
+  // Ô tìm kiếm quét MỌI trường ở FILTER_FIELDS + cột mã (mã tem / mã lệnh / mã set + mã tem gốc / tem 17) — không dấu.
+  //   Chế độ mọi ngày: server đã lọc theo từ khóa (khớp cả tem gốc ↔ tem con) ⇒ ô tìm không lọc thêm.
   const viewRows = useMemo(() => {
-    const tuKhoa = norm(q);
+    const tuKhoa = moiNgay ? '' : norm(q);
     const dangLoc = FILTER_FIELDS.filter((f) => (filters[f.key] || '').trim());
     if (!tuKhoa && !dangLoc.length) return rows;
     return rows.filter((r) => {
       if (dangLoc.some((f) => !khopTruong(r, f, norm(filters[f.key])))) return false;
       if (!tuKhoa) return true;
-      return FILTER_FIELDS.some((f) => khopTruong(r, f, tuKhoa)) || norm(r.ma).includes(tuKhoa);
+      return FILTER_FIELDS.some((f) => khopTruong(r, f, tuKhoa)) || khopMa(r, tuKhoa);
     });
-  }, [rows, q, filters]);
+  }, [rows, q, filters, moiNgay]);
 
   // Số PHẦN IN khác nhau đang hiện — để so trực tiếp với ô "Làm được trong kỳ" của dải "Theo dõi"
   // (dải đó đếm theo PHẦN IN, còn bảng này mỗi dòng là 1 LƯỢT xác nhận / 1 lệnh).
@@ -157,7 +181,8 @@ export default function DonePanel({
     { key: 'so_luong', header: 'SL', className: 'text-right tabular-nums', merge: true, render: (r) => (r.so_luong != null ? fmtNum(r.so_luong) : '—') },
     { key: 'han_giao_hang', header: 'Hạn giao', merge: true, render: (r) => <HanGiaoCell value={r.han_giao_hang} /> },
     ...(showGioLenMes ? [{ key: 'tg_len_mes', header: 'Giờ lên MES', className: 'whitespace-nowrap tabular-nums', merge: true, render: (r) => fmtNgayGio(r.tg_len_mes) || '—' }] : []),
-    { key: 'tg', header: 'Giờ HT', className: 'whitespace-nowrap tabular-nums', merge: true, render: (r) => fmtTime(r.tg) },
+    { key: 'tg', header: moiNgay ? 'Ngày giờ HT' : 'Giờ HT', className: 'whitespace-nowrap tabular-nums', merge: true,
+      render: (r) => (moiNgay ? fmtNgayGioDai(r.tg) : fmtTime(r.tg)) },
     { key: 'nguoi', header: 'Người', merge: true, render: (r) => r.nguoi || '—' },
   ];
 
@@ -181,7 +206,7 @@ export default function DonePanel({
     { header: 'SL', value: (r) => (r.so_luong != null ? Number(r.so_luong) : ''), num: true },
     { header: 'Hạn giao', value: (r) => r.han_giao_hang || '', type: 'date' },
     ...(showGioLenMes ? [{ header: 'Giờ lên MES', value: (r) => fmtNgayGio(r.tg_len_mes), center: true, width: 18 }] : []),
-    COT_EXCEL_GIO_HT,
+    moiNgay ? { header: 'Ngày giờ HT', value: (r) => fmtNgayGioDai(r.tg), center: true, width: 20 } : COT_EXCEL_GIO_HT,
     { header: 'Người', value: (r) => r.nguoi || '' },
   ];
 
@@ -252,7 +277,7 @@ export default function DonePanel({
         cols: xlsCols,
         rows: viewRows,
         title: title.toUpperCase(),
-        subtitle: `Ngày ${date} · ${viewRows.length} dòng${moTa ? ` · Lọc: ${moTa}` : ''}`,
+        subtitle: `${moiNgay ? `Mọi ngày · tìm "${qServer}"` : `Ngày ${date}`} · ${viewRows.length} dòng${moTa ? ` · Lọc: ${moTa}` : ''}`,
         fileName: 'da-hoan-thanh',
       });
     } catch (e) {
@@ -264,9 +289,12 @@ export default function DonePanel({
 
   return (
     <SidePanel open={open} onClose={onClose} side="left" title={title}
-      subtitle={`${soLoc
-        ? `${viewRows.length}/${rows.length} đã hoàn thành trong ngày (đang lọc)`
-        : `${rows.length} đã hoàn thành trong ngày`}`
+      subtitle={`${moiNgay
+        ? `${viewRows.length} lượt ở mọi ngày khớp "${qServer}"${rows.length >= 500 ? ' (500 lượt mới nhất)' : ''}`
+        : choTuKhoa ? 'Mọi ngày — nhập mã tem / code phần để tìm'
+          : soLoc
+            ? `${viewRows.length}/${rows.length} đã hoàn thành trong ngày (đang lọc)`
+            : `${rows.length} đã hoàn thành trong ngày`}`
         // Chỉ thêm vế phần in khi KHÁC số dòng (lệnh gom set) — panel theo phần in/tem thì 2 số bằng
         // nhau, hiện thêm chỉ tổ rối.
         + (soPhanIn && soPhanIn !== viewRows.length ? ` · ${soPhanIn} phần in` : '')}
@@ -276,17 +304,25 @@ export default function DonePanel({
         : undefined}>
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <label className="text-sm font-medium text-ink">Ngày</label>
-        <NgayInput value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className="h-10 rounded-input border border-line px-3 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
-        />
+        <div className="relative">
+          <NgayInput value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="h-10 rounded-input border border-line px-3 pr-8 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
+          />
+          {date && timMoiNgay && (
+            <button onClick={() => setDate('')} aria-label="Bỏ ngày — tìm mọi ngày" title="Bỏ ngày — tìm theo mã tem / code phần ở mọi ngày"
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-soft hover:text-danger">
+              <Icon name="x" size={14} />
+            </button>
+          )}
+        </div>
         {/* 1 ô tìm: code phần · khách hàng · đơn hàng · mã hàng · màu vải · kích vải · kích phim (+ cột mã) */}
         <div className="relative min-w-[13rem] flex-1">
           <Icon name="search" size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" />
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Tìm code phần, khách, đơn, mã hàng, màu, kích..."
+            placeholder={timMoiNgay ? 'Tìm mã tem (mọi ngày), code phần, khách, đơn, mã hàng...' : 'Tìm code phần, khách, đơn, mã hàng, màu, kích...'}
             className="h-10 w-full rounded-input border border-line bg-surface pl-9 pr-8 text-base md:text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10"
           />
           {q && (
@@ -327,7 +363,9 @@ export default function DonePanel({
           Trả `null` khi không có `phan_in_list` ⇒ mọi panel khác render y như cũ. */}
       <DataTable columns={tableCols} rows={viewRows} loading={loading} rowKey="_k" sttStart={0}
         subRows={(r) => (r.phan_in_list && r.phan_in_list.length > 1 ? r.phan_in_list : null)}
-        emptyText={soLoc ? 'Không có dòng nào khớp bộ lọc' : 'Chưa có mục nào hoàn thành trong ngày'} />
+        emptyText={choTuKhoa ? `Chưa chọn ngày — nhập mã tem / code phần (từ ${TU_KHOA_TOI_THIEU} ký tự) để tìm ở mọi ngày`
+          : moiNgay ? `Không có lượt nào khớp "${qServer}" ở mọi ngày`
+            : soLoc ? 'Không có dòng nào khớp bộ lọc' : 'Chưa có mục nào hoàn thành trong ngày'} />
       <Toast toast={toast} />
     </SidePanel>
   );

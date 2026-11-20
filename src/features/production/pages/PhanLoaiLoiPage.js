@@ -359,6 +359,10 @@ export default function PhanLoaiLoiPage() {
         <NgayInput value={ngay} onChange={(e) => { setNgay(e.target.value); setPage(1); }}
           className="h-11 rounded-input border border-line bg-surface px-3 text-sm outline-none focus:border-primary" />
         {ngay && <Button variant="ghost" onClick={() => { setNgay(''); setPage(1); }}>Mọi ngày</Button>}
+        {/* Ô tìm là mã tem ⇒ backend bỏ lọc ngày (20/11/2026) — nhãn 15 · 16 · 17 đều ra tem gốc. */}
+        {ngay && /^\d{9,12}$/.test(String(search || '').trim()) && (
+          <span className="text-xs text-primary">Đang tìm mã tem ở mọi ngày</span>
+        )}
         <Button chiXemOk variant="secondary" icon="download" onClick={doExcel}
           loading={dangXuat} disabled={!total}>Excel ({total})</Button>
         <Button icon="plus" onClick={() => { setMoThem(true); setMaNhap(''); }}>Thêm</Button>
@@ -370,7 +374,8 @@ export default function PhanLoaiLoiPage() {
       <DataTable columns={columns} rows={rows} loading={loading} pageSize={0}
         onRowClick={(r) => traTem(r.ma_tem)}
         rowClassName={(r) => (r.da_phan_loai ? '' : 'bg-amber-50/60 dark:bg-amber-950/20')}
-        emptyText={ngay ? 'Không có tem nào KCS có hàng hư trong ngày này' : 'Chưa có dữ liệu'} />
+        emptyText={/^\d{9,12}$/.test(String(search || '').trim()) ? 'Không có tem nào khớp mã này (đã tìm mọi ngày)'
+          : ngay ? 'Không có tem nào KCS có hàng hư trong ngày này' : 'Chưa có dữ liệu'} />
       <Pagination page={page} total={total} totalPages={Math.ceil(total / 20)} onPage={setPage} />
 
       {/* ── Modal THÊM: quét mã vạch hoặc gõ mã ─────────────────────────── */}

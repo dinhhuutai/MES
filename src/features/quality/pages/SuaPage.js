@@ -667,7 +667,7 @@ export default function SuaPage() {
         title="Lịch sử Sửa" fetcher={suaHistory} extraColumns={huyLs.cotHuy} taiLai={huyLs.taiLai} />
       {huyLs.modal}
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
-        title="Tem đã sửa" maHeader="Tem" fetcher={suaDone} columns={doneColumns}
+        title="Tem đã sửa" maHeader="Tem" fetcher={suaDone} timMoiNgay columns={doneColumns}
         chonNhieu
         chonDuoc={(r) => (r.tem_id ? (r.sua_id ? true : 'Thiếu migration 080 — chưa in được tem có tên người sửa') : 'Dòng này không có tem')}
         footerChon={({ rows: sel, clear }) => (

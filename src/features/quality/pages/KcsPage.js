@@ -772,7 +772,7 @@ export default function KcsPage() {
         title="Lịch sử KCS" fetcher={kcsHistory} extraColumns={huyLs.cotHuy} taiLai={huyLs.taiLai} />
       {huyLs.modal}
       <DonePanel open={doneOpen} onClose={() => setDoneOpen(false)}
-        title="Tem đã KCS" maHeader="Tem" fetcher={kcsDone} columns={doneColumns}
+        title="Tem đã KCS" maHeader="Tem" fetcher={kcsDone} timMoiNgay columns={doneColumns}
         chonNhieu
         chonDuoc={(r) => (r.tem_id ? true : 'Dòng này không có tem')}
         footerChon={({ rows: sel, clear }) => (
