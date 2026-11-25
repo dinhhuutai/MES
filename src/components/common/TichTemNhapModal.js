@@ -43,6 +43,11 @@ import { tenNguoi, timNguoi } from '../../hooks/useDsNguoi';
 //   Có `sauKhiLuu` (in tem — trang Sửa) ⇒ chỉ in các tem đã lưu thẳng; tem vào hàng đợi in sau ở "Đã hoàn thành".
 // `luuLo(nhomList)` (tùy chọn — Nhận sửa): lưu CẢ LÔ 1 lần gọi (API nhận nhiều tem, 1 transaction) ⇒ nhanh nhất; lỗi ⇒ lùi về
 //   lưu từng tem như trên (để biết tem nào hỏng).
+// ─── TEM CÒN CHỜ BƯỚC TRƯỚC TRONG HÀNG ĐỢI (25/11/2026, người dùng: "phân loại lỗi đang trong hàng đợi chưa kịp lưu thì bên sửa
+//   vẫn cho lên hàng đợi, phân loại lỗi chạy xong mới chạy sửa") ─── `hangDoi.duKien(code)`: màn tra không ra tem ⇒ hỏi BE xem tem
+//   có mục CHỜ ở bước trước (KCS → Phân loại lỗi → Nhận sửa → Sửa) ⇒ dòng mang SỐ DỰ KIẾN + `row.qua_hang_doi`; ô Kiểm tra ghi
+//   "vào hàng đợi sau …" (vàng). Xác nhận: các dòng này KHÔNG lưu thẳng (DB chưa có số) mà vào THẲNG hàng đợi — BE xếp sau bước
+//   trước của tem, chạy đúng thứ tự. Không in tem 17 trong lượt (in ở "Đã hoàn thành").
 const TOI_DA_DONG = 100;
 const n = (v) => Math.max(0, Math.trunc(Number(v) || 0));
 
@@ -302,6 +307,14 @@ export default function TichTemNhapModal({
     sua(id, { tt: 'TRA', chu: 'Đang tra…' });
     let kq;
     try { kq = await traMa(code); } catch (e) { kq = { loi: e.message || 'Không tra được mã' }; }
+    // Màn không có tem này ⇒ tem có đang chờ BƯỚC TRƯỚC trong hàng đợi không (dòng số dự kiến). Hỏi lỗi ⇒ giữ câu của màn.
+    if (!kq?.row && hangDoi?.duKien) {
+      try {
+        const dk = await hangDoi.duKien(code);
+        if (dk && dk.row) kq = { row: dk.row };
+        else if (dk && dk.loi) kq = { loi: dk.loi };
+      } catch (e) { /* giữ câu lỗi của màn */ }
+    }
     delete dangTra.current[id];
     // Trong lúc chờ người dùng đã sửa mã ⇒ bỏ kết quả cũ (lượt tra của mã mới tự chạy).
     const hienTai = dongRef.current.find((x) => x.id === id);
@@ -412,6 +425,9 @@ export default function TichTemNhapModal({
     ds.forEach((g) => {
       const d0 = g.ds[0];
       g.dg = nhom ? nhom.danhGia(d0.row, g.ds.map((x) => x.f)) : danhGia(d0.row, d0.f);
+      // Tem còn chờ bước trước trong hàng đợi ⇒ hợp lệ thì ghi rõ sẽ vào hàng đợi (vàng).
+      const hd = d0.row && d0.row.qua_hang_doi;
+      if (hd && g.dg && g.dg.ok) g.dg = { ...g.dg, motPhan: true, chu: `${g.dg.chu ? `${g.dg.chu} · ` : ''}vào hàng đợi, chạy sau ${hd.ten_truoc}` };
       g.ds.forEach((x, k) => { vt[x.id] = { dau: k === 0, so: g.ds.length, dg: g.dg }; });
     });
     return { cacNhom: ds, viTri: vt };
@@ -447,51 +463,58 @@ export default function TichTemNhapModal({
     if (!nhomTich.length) { show?.('Chưa quét tem nào', 'error'); return; }
     if (soSai) { show?.(`Còn ${soSai} ${donVi} chưa hợp lệ — sửa số hoặc bỏ dòng (×) trước khi xác nhận`, 'error'); return; }
     if (truocXacNhan && !(await truocXacNhan(nhomTich.map((g) => g.ds[0].row)))) return;
+    // Tem còn chờ bước trước trong hàng đợi ⇒ vào THẲNG hàng đợi (không lưu thẳng, không in trong lượt này).
+    const nhomHd = nhomTich.filter((g) => g.ds[0].row && g.ds[0].row.qua_hang_doi);
+    const nhomThang = nhomTich.filter((g) => !(g.ds[0].row && g.ds[0].row.qua_hang_doi));
+    const goi = (g) => ({ row: g.ds[0].row, f: g.ds[0].f, fs: g.ds.map((x) => x.f) });
     let ctx = null;
-    if (moTruoc) {
-      try { ctx = moTruoc(nhomTich.map((g) => ({ row: g.ds[0].row, f: g.ds[0].f, fs: g.ds.map((x) => x.f) }))); } catch (e) { show?.(e.message || 'Không mở được cửa sổ in', 'error'); return; }
+    if (moTruoc && nhomThang.length) {
+      try { ctx = moTruoc(nhomThang.map(goi)); } catch (e) { show?.(e.message || 'Không mở được cửa sổ in', 'error'); return; }
     }
     setDangLuu(true);
     const okIds = new Set(); const loi = []; const kq = {}; const daLuu = [];
     let soOk = 0;
     let soHangDoi = 0;
     let daLuuLo = false;
-    if (luuLo && nhomTich.length > 1) {
-      setTienDo(`Đang lưu ${nhomTich.length} tem…`);
+    // Đưa 1 lô nhóm vào hàng đợi; tem BE bỏ qua ⇒ ở lại kèm lý do. Trả true khi gọi được.
+    const xepVao = async (ds) => {
+      const kqXep = await hangDoi.xep(ds.map(goi));
+      const boQua = new Map((kqXep?.bo_qua || []).map((b) => [b.khoa, b.ly_do]));
+      for (const x of ds) {
+        const khoa = khoaDong(x.ds[0].row);
+        if (boQua.has(khoa)) {
+          for (const y of x.ds) kq[y.id] = boQua.get(khoa) || 'Không xếp được';
+          loi.push(maHien(x.ds[0].row));
+        } else {
+          for (const y of x.ds) okIds.add(y.id);
+          soHangDoi += 1;
+        }
+      }
+    };
+    if (luuLo && nhomThang.length > 1) {
+      setTienDo(`Đang lưu ${nhomThang.length} tem…`);
       try {
-        await luuLo(nhomTich.map((g) => ({ row: g.ds[0].row, f: g.ds[0].f, fs: g.ds.map((x) => x.f) })));
-        nhomTich.forEach((g) => { g.ds.forEach((x) => okIds.add(x.id)); soOk += 1; daLuu.push({ row: g.ds[0].row, f: g.ds[0].f, fs: g.ds.map((x) => x.f), data: null }); });
+        await luuLo(nhomThang.map(goi));
+        nhomThang.forEach((g) => { g.ds.forEach((x) => okIds.add(x.id)); soOk += 1; daLuu.push({ ...goi(g), data: null }); });
         daLuuLo = true;
       } catch (e) { /* lùi về lưu từng tem — biết tem nào hỏng */ }
     }
     const bd = Date.now();
-    for (let i = 0; !daLuuLo && i < nhomTich.length; i += 1) {
+    for (let i = 0; !daLuuLo && i < nhomThang.length; i += 1) {
       // Quá ngưỡng mà còn tem ⇒ đẩy PHẦN CÒN LẠI vào hàng đợi máy chủ 1 lần (lỗi ⇒ lưu thẳng tiếp).
       if (hangDoi && i > 0 && Date.now() - bd > hangDoi.sauMs) {
-        const con = nhomTich.slice(i);
+        const con = nhomThang.slice(i);
         setTienDo(`Lâu quá — đang đưa ${con.length} tem còn lại vào hàng đợi…`);
         try {
-          // eslint-disable-next-line no-await-in-loop
-          const kqXep = await hangDoi.xep(con.map((x) => ({ row: x.ds[0].row, f: x.ds[0].f, fs: x.ds.map((y) => y.f) })));
-          const boQua = new Map((kqXep?.bo_qua || []).map((b) => [b.khoa, b.ly_do]));
-          for (const x of con) {
-            const khoa = khoaDong(x.ds[0].row);
-            if (boQua.has(khoa)) {
-              for (const y of x.ds) kq[y.id] = boQua.get(khoa) || 'Không xếp được';
-              loi.push(maHien(x.ds[0].row));
-            } else {
-              for (const y of x.ds) okIds.add(y.id);
-              soHangDoi += 1;
-            }
-          }
+          await xepVao(con); // eslint-disable-line no-await-in-loop
           break;
         } catch (e) {
           show?.(`Không đưa vào hàng đợi được (${e.message || 'lỗi'}) — lưu tiếp từng tem`, 'error');
         }
       }
-      const g = nhomTich[i];
+      const g = nhomThang[i];
       const d = g.ds[0];
-      setTienDo(`Đang lưu ${i + 1}/${nhomTich.length} · ${maHien(d.row)}`);
+      setTienDo(`Đang lưu ${i + 1}/${nhomThang.length} · ${maHien(d.row)}`);
       try {
         // eslint-disable-next-line no-await-in-loop
         const res = nhom ? await nhom.luu(d.row, g.ds.map((x) => x.f)) : await luu(d.row, d.f);
@@ -501,6 +524,15 @@ export default function TichTemNhapModal({
       } catch (e) {
         g.ds.forEach((x) => { kq[x.id] = e.message || 'Lưu lỗi'; });
         loi.push(maHien(d.row));
+      }
+    }
+    if (nhomHd.length) {
+      setTienDo(`Đang đưa ${nhomHd.length} tem (chờ bước trước) vào hàng đợi…`);
+      try {
+        if (!hangDoi) throw new Error('Màn này không có hàng đợi');
+        await xepVao(nhomHd);
+      } catch (e) {
+        nhomHd.forEach((g) => { g.ds.forEach((x) => { kq[x.id] = `Không đưa vào hàng đợi được: ${e.message || 'lỗi'}`; }); loi.push(maHien(g.ds[0].row)); });
       }
     }
     let ketIn = null;

@@ -874,8 +874,8 @@ export default function Release1Page() {
                 <div className="mb-0.5 flex items-center gap-2"><CongDoanBadge luong={detail.luong_sx} gd={detail.giai_doan} pa={detail.phuong_an_in} />
                   <b>{detail.luong_sx === 'IN_KIENG' ? 'Phần in kiếng ủi' : 'Phần in + ép'} — 2 công đoạn, 2 lệnh</b></div>
                 {detail.cong_doan_dot && (
-                  <div className="mb-1">ERP gửi riêng từng công đoạn: đợt <b>4I</b> là công đoạn <b>In kiếng</b>, đợt khác là công đoạn <b>Ép</b> ⇒ đợt này
-                    chỉ lập kế hoạch công đoạn <b>{laEp(detail) ? 'Ép' : 'In kiếng'}</b>.</div>
+                  <div className="mb-1">Đợt này chỉ là 1 công đoạn (kiếng ủi: đợt <b>4I</b> là <b>In kiếng</b>, đợt khác là <b>Ép</b> — trừ đợt đã đánh dấu
+                    công đoạn ở Quản trị phần in) ⇒ chỉ lập kế hoạch công đoạn <b>{nhanCongDoan(detail.luong_sx, detail.giai_doan, detail.phuong_an_in)}</b>.</div>
                 )}
                 {laEp(detail)
                   ? <>Đây là phần <b>ép ủi</b>: ra lệnh ép riêng (số lượng release riêng, tối đa = SL vải), lập trước hay sau phần in đều được.

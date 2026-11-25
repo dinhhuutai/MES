@@ -2,8 +2,10 @@
 // THÊM ĐỢT VẢI TAY + ĐẶT VÀO MÀN (19/11/2026, người dùng: "phần in có ép rồi mà ERP lỗi không lên được phần in … không chỉ
 //   kiếng mà logo hay ép hay in đều thêm được, cho nhập nhanh theo code phần"). Mở từ Quản trị phần in › Luồng sản xuất và
 //   Nhập tay › "Thêm đợt theo code phần".
-//   · Chọn CÔNG ĐOẠN (nút nhanh) hoặc LOẠI đợt — công đoạn của đợt theo luật luồng sẵn có: kiếng ủi đợt 4I = In kiếng, loại
-//     khác = Ép · In + Logo/Ép: 1 đợt mang cả 2 công đoạn · In / In kiếng / Logo: công đoạn duy nhất của luồng.
+//   · ⚠ 25/11/2026 (người dùng: "cho phép đánh dấu đợt đó là in hay kiếng hay logo hay ép gì cũng đều được"; mig 139): CÔNG ĐOẠN
+//     chọn TỰ DO bằng 5 nút In · In kiếng · Logo · Ép · Cả 2 — chỉ công đoạn phần in đang có bấm được (thiếu ⇒ "Thêm 1 công đoạn");
+//     LOẠI đợt (số lượng / bổ sung / mẫu…) chọn riêng, không còn quyết định công đoạn. BE lưu `dot_vai_ve.cong_doan_dot`. Chưa chạy
+//     mig 139 (`co_cot_cong_doan` false) ⇒ giao diện cũ: công đoạn theo loại đợt (kiếng ủi 4I = In kiếng, loại khác = Ép).
 //   · SL / hạn giao / mã phiếu ready mặc định theo 1 đợt đang có, sửa được. Đặt màn: READY Kỹ thuật · READY chờ QA · Release 1
 //     · Test Run · Chờ chạy (2 màn sau lập lệnh ngay; In + Logo chọn công đoạn lập lệnh).
 //   · ERP sau này gửi đợt thật ⇒ vào như đợt mới (đợt tạo tay thừa hủy ở tab Hủy đợt vải). Luật: BE
@@ -33,7 +35,12 @@ const DICH = [
   { v: 'TEST_RUN', ten: 'Test Run', moTa: 'Ready + lập lệnh ngay — lệnh In vào Test Run (lệnh Ép/Logo vào thẳng Chờ chạy).' },
   { v: 'CHO_CHAY', ten: 'Chờ chạy', moTa: 'Ready + lập lệnh ngay và bỏ qua Test Run (quản trị, có ghi vết) — vào thẳng Chờ chạy.' },
 ];
-const CD_LAP = [{ v: 'CA_HAI', ten: 'Cả 2 công đoạn' }, { v: 'IN', ten: 'Chỉ In' }, { v: 'EP_UI', ten: 'Chỉ Ép/Logo' }];
+// 5 nút công đoạn — `nut` khớp BE `phaninadmin.service luaChonCongDoan`.
+const NUT_CD = [
+  { nut: 'IN', ten: 'In' }, { nut: 'KIENG', ten: 'In kiếng' }, { nut: 'LOGO', ten: 'Logo' }, { nut: 'EP', ten: 'Ép' },
+  { nut: 'CA_HAI', ten: 'Cả 2 công đoạn' },
+];
+const LOAI_TU_DONG = new Set(['SO_LUONG', 'IN_KIENG']); // loại đợt do nút công đoạn tự đặt (người chọn loại khác thì giữ)
 
 function TheChon({ chon, onChon, ten, moTa, tat }) {
   return (
@@ -52,6 +59,7 @@ function TheChon({ chon, onChon, ten, moTa, tat }) {
 export default function ThemDotVaiModal({ phanInId, mo, onClose, onDone, show, chuyen, users }) {
   const [ke, setKe] = useState(null);
   const [loaiDot, setLoaiDot] = useState('SO_LUONG');
+  const [nutCd, setNutCd] = useState('');        // nút công đoạn đang chọn (chế độ chọn tự do)
   const [nguon, setNguon] = useState('');
   const [sl, setSl] = useState('');
   const [hanGiao, setHanGiao] = useState('');
@@ -79,7 +87,9 @@ export default function ThemDotVaiModal({ phanInId, mo, onClose, onDone, show, c
         if (!song) return;
         const d = r.data;
         setKe(d);
-        setLoaiDot((d.nhanh && d.nhanh[0] && d.nhanh[0].ma) || 'SO_LUONG');
+        const md = (d.cong_doan_chon || []).find((c) => c.ma === d.cong_doan_mac_dinh) || (d.cong_doan_chon || [])[0];
+        setNutCd(md ? md.nut : '');
+        setLoaiDot((md && md.loai_goi_y) || (d.nhanh && d.nhanh[0] && d.nhanh[0].ma) || 'SO_LUONG');
         apNguon((d.dot || []).find((x) => x.id === d.goi_y_nguon) || null);
       })
       .catch((e) => { if (song) { show(e.message || 'Không đọc được phần in', 'error'); onClose(); } });
@@ -91,9 +101,24 @@ export default function ThemDotVaiModal({ phanInId, mo, onClose, onDone, show, c
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
   const lapLenh = LAP_LENH.has(dich);
   const slSo = Number(sl);
+  // Chế độ chọn công đoạn tự do (BE mới + mig 139; phần in 1 công đoạn không cần cột). Không ⇒ công đoạn theo loại đợt như cũ.
+  const dsChon = ke?.cong_doan_chon || [];
+  const haiCd = dsChon.length > 1;
+  const tuDo = dsChon.length > 0 && (!haiCd || !!ke?.co_cot_cong_doan);
+  const cd = tuDo ? dsChon.find((c) => c.nut === nutCd) : null;
+  const gdChon = tuDo ? (cd ? cd.gd : []) : (loai ? loai.gd : []);
+  const tenCd = tuDo ? (cd ? cd.ten : '') : (loai ? loai.cong_doan : '');
+  const quaTestRun = tuDo ? !!(cd && cd.qua_test_run) : !!(loai && loai.qua_test_run);
+  const lapHaiCd = gdChon.length > 1; // đợt mang cả 2 công đoạn ⇒ chọn công đoạn lập lệnh
+  const tenGd = (g) => (dsChon.find((c) => c.gd.length === 1 && c.gd[0] === g) || {}).ten || (g === 'IN' ? 'In' : 'Ép/Logo');
+  const CD_LAP = [{ v: 'CA_HAI', ten: 'Cả 2 công đoạn' }, { v: 'IN', ten: `Chỉ ${tenGd('IN')}` }, { v: 'EP_UI', ten: `Chỉ ${tenGd('EP_UI')}` }];
+  const chonCd = (c) => {
+    setNutCd(c.nut);
+    if (LOAI_TU_DONG.has(loaiDot) && c.loai_goi_y) setLoaiDot(c.loai_goi_y);
+  };
   // Test Run chỉ có nghĩa khi có công đoạn In được lập (Ép/Logo không qua Test Run).
-  const coIn = loai && loai.gd.includes('IN') && (!ke?.hai_cong_doan_chung || cdLap !== 'EP_UI') && loai.qua_test_run;
-  const thieu = !ke || !loai || !lyDo.trim() || !Number.isInteger(slSo) || slSo <= 0
+  const coIn = gdChon.includes('IN') && (!lapHaiCd || cdLap !== 'EP_UI') && quaTestRun;
+  const thieu = !ke || !loai || (tuDo && !cd) || !lyDo.trim() || !Number.isInteger(slSo) || slSo <= 0
     || (lapLenh && (!f.chuyenId || !f.ngay)) || (dich === 'TEST_RUN' && !coIn);
 
   const lam = async () => {
@@ -101,6 +126,7 @@ export default function ThemDotVaiModal({ phanInId, mo, onClose, onDone, show, c
     try {
       const r = await themDotVaiQt(phanInId, {
         loaiDot, dotNguonId: nguon || null, soLuong: slSo, hanGiao: hanGiao || null, barcode: barcode.trim(), dich, lyDo: lyDo.trim(),
+        ...(tuDo && haiCd && cd ? { congDoanDot: cd.ma } : {}),
         ...(lapLenh ? {
           congDoanLap: cdLap, chuyenId: f.chuyenId, ngayKeHoach: f.ngay, tgBdKh: mkTs(f.ngay, f.gioBd), tgKtKh: mkTs(f.ngay, f.gioKt), thoIn: f.thoIn,
         } : {}),
@@ -139,17 +165,44 @@ export default function ThemDotVaiModal({ phanInId, mo, onClose, onDone, show, c
             <p key={c} className="rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300">⚠ {c}</p>
           ))}
 
-          <Field label="Công đoạn của đợt" required hint={loai ? `Loại đợt ${loai.ten} ⇒ ${loai.cong_doan}` : ''}>
-            <div className="flex flex-wrap gap-2">
-              {ke.nhanh.map((n) => (
-                <Button key={n.ma} variant={loaiDot === n.ma ? 'primary' : 'secondary'} onClick={() => setLoaiDot(n.ma)}>{n.ten}</Button>
-              ))}
-              <select className="h-10 rounded-input border border-line bg-surface px-2 text-sm" value={loaiDot}
-                onChange={(e) => setLoaiDot(e.target.value)} aria-label="Loại đợt vải">
-                {ke.loai_dot.map((l) => <option key={l.ma} value={l.ma}>{l.ten} → {l.cong_doan}</option>)}
-              </select>
+          {tuDo ? (
+            <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+              <Field label="Công đoạn của đợt" required
+                hint={cd ? `Đợt này là công đoạn ${cd.ten}${cd.gd.length > 1 ? ' — Release 1 tách 2 dòng, mỗi công đoạn 1 lệnh' : ''}` : 'Chọn 1 công đoạn'}>
+                <div className="flex flex-wrap gap-2">
+                  {NUT_CD.filter((n) => n.nut !== 'CA_HAI' || haiCd).map((n) => {
+                    const c = dsChon.find((x) => x.nut === n.nut);
+                    return (
+                      <Button key={n.nut} variant={c && nutCd === n.nut ? 'primary' : 'secondary'} disabled={!c}
+                        title={c ? c.ten : `Phần in ${ke.ten_luong} chưa có công đoạn ${n.ten} — dùng "Thêm 1 công đoạn" ở Quản trị phần in`}
+                        onClick={() => c && chonCd(c)}>{n.nut === 'CA_HAI' && c ? c.ten : n.ten}</Button>
+                    );
+                  })}
+                </div>
+              </Field>
+              <Field label="Loại đợt vải" hint="Số lượng / bổ sung / mẫu… — không đổi công đoạn">
+                <select className="h-10 w-full rounded-input border border-line bg-surface px-2 text-sm" value={loaiDot}
+                  onChange={(e) => setLoaiDot(e.target.value)} aria-label="Loại đợt vải">
+                  {ke.loai_dot.map((l) => <option key={l.ma} value={l.ma}>{l.ten}</option>)}
+                </select>
+              </Field>
             </div>
-          </Field>
+          ) : (
+            <Field label="Công đoạn của đợt" required hint={loai ? `Loại đợt ${loai.ten} ⇒ ${loai.cong_doan}` : ''}>
+              <div className="flex flex-wrap gap-2">
+                {ke.nhanh.map((n) => (
+                  <Button key={n.ma} variant={loaiDot === n.ma ? 'primary' : 'secondary'} onClick={() => setLoaiDot(n.ma)}>{n.ten}</Button>
+                ))}
+                <select className="h-10 rounded-input border border-line bg-surface px-2 text-sm" value={loaiDot}
+                  onChange={(e) => setLoaiDot(e.target.value)} aria-label="Loại đợt vải">
+                  {ke.loai_dot.map((l) => <option key={l.ma} value={l.ma}>{l.ten} → {l.cong_doan}</option>)}
+                </select>
+              </div>
+              {haiCd && !ke.co_cot_cong_doan && (
+                <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">Chưa chạy migration 139 — công đoạn đi theo loại đợt.</p>
+              )}
+            </Field>
+          )}
 
           <div className="rounded-control border border-line">
             <div className="border-b border-line px-3 py-2 text-sm font-semibold text-ink">Đợt vải đang có — chọn 1 đợt làm số mặc định</div>
@@ -183,8 +236,8 @@ export default function ThemDotVaiModal({ phanInId, mo, onClose, onDone, show, c
             <div className="grid gap-2 sm:grid-cols-2">
               {DICH.map((o) => (
                 <TheChon key={o.v} chon={dich === o.v} onChon={() => setDich(o.v)} ten={o.ten}
-                  tat={o.v === 'TEST_RUN' && loai && !loai.qua_test_run}
-                  moTa={o.v === 'TEST_RUN' && loai && !loai.qua_test_run ? `${loai.cong_doan} không qua Test Run — chọn Chờ chạy` : o.moTa} />
+                  tat={o.v === 'TEST_RUN' && !!tenCd && !quaTestRun}
+                  moTa={o.v === 'TEST_RUN' && !!tenCd && !quaTestRun ? `${tenCd} không qua Test Run — chọn Chờ chạy` : o.moTa} />
               ))}
             </div>
           </Field>
@@ -192,7 +245,7 @@ export default function ThemDotVaiModal({ phanInId, mo, onClose, onDone, show, c
           {lapLenh && (
             <div className="space-y-3 rounded-control border border-line p-3">
               <div className="text-sm font-semibold text-ink">Kế hoạch lệnh (hết SL đợt {fmtNum(slSo || 0)})</div>
-              {ke.hai_cong_doan_chung && (
+              {lapHaiCd && (
                 <Field label="Công đoạn lập lệnh">
                   <div className="flex flex-wrap gap-2">
                     {CD_LAP.map((c) => (

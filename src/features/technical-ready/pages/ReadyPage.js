@@ -344,7 +344,7 @@ export default function ReadyPage() {
     { key: 'ma_phan', header: 'Code phần', className: 'font-medium text-ink', copyText: (r) => r.ma_phan, render: (r) => (
       <div>
         <CodePhanCongDoan ma={r.ma_phan} luong={r.luong_sx} gd={r.giai_doan} pa={r.phuong_an_in} hienLogo
-          caCongDoan paEp={r.pa_cd_ep} epTruoc={r.ep_truoc} />
+          caCongDoan caHaiDot={r.ca_hai_cong_doan} paEp={r.pa_cd_ep} epTruoc={r.ep_truoc} />
         {btMap.has(r.id) && (
           <span title={btMap.get(r.id)} className="mt-1 inline-block"><Badge tone="danger"><Icon name="alert-triangle" size={12} className="mr-1" />Bất thường</Badge></span>
         )}
@@ -484,6 +484,7 @@ export default function ReadyPage() {
           luong: r.luong_sx,
           paEp: r.pa_cd_ep,
           epTruoc: !!r.ep_truoc,
+          caHai: r.ca_hai_cong_doan,
         })}
         rowClassName={(r) => `${slaRowClass(evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status)}${laDongEp(r) ? ' border-l-[3px] border-l-orange-300' : ''}`}
         emptyText="Tất cả phần in đã READY 🎉" />
@@ -493,7 +494,7 @@ export default function ReadyPage() {
         const dongSel = rows.find((x) => x._key === sel.key);
         return (
           <ReadyPanel phanInId={sel.id} dotVaiIds={sel.dotVaiIds} loaiDotVai={sel.loai} giaiDoan={sel.gd} luongSx={sel.luong}
-            paEp={sel.paEp} epTruoc={sel.epTruoc}
+            paEp={sel.paEp} epTruoc={sel.epTruoc} caHaiDot={sel.caHai}
             truocXacNhan={() => hoiLyDoNghen(rows.filter((x) => x.id === sel.id))}
             onClose={() => setSel(null)} onChanged={load} onToast={show}
             ungVienGn={ungVienGn(viewRows, { pinId: (r) => r.id, dotIds: (r) => r.dot_vai_ids })}

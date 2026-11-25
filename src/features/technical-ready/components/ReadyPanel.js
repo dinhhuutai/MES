@@ -59,7 +59,8 @@ function ReturnNote({ info, nguon }) {
 // `giaiDoan` / `luongSx` (14/11/2026 — READY theo công đoạn): panel của DÒNG công đoạn Ép/Logo ('EP_UI') ⇒ mọi lời gọi dùng bộ
 //   checklist của công đoạn đó. Không truyền = bộ gốc như cũ. (17/11/2026 dùng chung 1 bộ — BE bỏ qua `giaiDoan`.)
 // `paEp` / `epTruoc` (18/11/2026): đợt In + Logo mang cả 2 công đoạn ⇒ banner vẽ "In + Logo" (`paEp` = dòng `pa_cd_ep`).
-export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, giaiDoan, luongSx, paEp, epTruoc, onClose, onChanged, onToast, truocXacNhan, ungVienGn, nhanFile, onNhanFile }) {
+// `caHaiDot` (25/11/2026, mig 139): cờ `ca_hai_cong_doan` của dòng — đợt mang cả 2 công đoạn (kể cả kiếng ủi đánh dấu "Cả 2").
+export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, giaiDoan, luongSx, paEp, epTruoc, caHaiDot, onClose, onChanged, onToast, truocXacNhan, ungVienGn, nhanFile, onNhanFile }) {
   const { can } = usePermissions();
   const { toast, show } = useToast();
   const now = useNow(1000);
@@ -209,15 +210,15 @@ export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, giaiDoan, 
         <div className="space-y-4">
           {/* Phần in 2 công đoạn (READY dùng chung 1 bộ từ 17/11/2026): đợt In + Logo mang CẢ 2 công đoạn ⇒ xác nhận 1 lần;
               kiếng ủi mỗi đợt 1 công đoạn (4I In kiếng, đợt khác Ép) ⇒ công đoạn kia ở đợt vải khác. */}
-          {dotCaHaiCongDoan(luongSx) && giaiDoan !== 'EP_UI' ? (
+          {dotCaHaiCongDoan(luongSx, caHaiDot) && giaiDoan !== 'EP_UI' ? (
             <div className="flex flex-wrap items-center gap-2 rounded-control border border-line bg-surface-muted px-3 py-2 text-xs text-ink-soft">
               <CongDoanPhanInBadges luong={luongSx} paEp={paEp} epTruoc={epTruoc} />
               <span>Đợt này có 2 công đoạn — READY xác nhận 1 lần cho cả đợt; Release 1 tách 2 dòng, mỗi công đoạn 1 lệnh riêng.</span>
             </div>
-          ) : (giaiDoan === 'EP_UI' || luongSx === 'IN_KIENG') && (
+          ) : (giaiDoan === 'EP_UI' || luongSx === 'IN_KIENG' || (luongSx === 'IN_EP' && caHaiDot === false)) && (
             <div className="flex items-center gap-2 rounded-control border border-line bg-surface-muted px-3 py-2 text-xs text-ink-soft">
               <CongDoanBadge luong={luongSx || 'IN_EP'} gd={giaiDoan} />
-              <span>Đợt này chỉ là 1 công đoạn — công đoạn kia ở đợt vải khác (ERP gửi riêng).</span>
+              <span>Đợt này chỉ là 1 công đoạn — công đoạn kia ở đợt vải khác (ERP gửi riêng, hoặc thêm ở Quản trị phần in).</span>
             </div>
           )}
           {/* ⚠ Chỉ nhắc khi phần in đang chờ ≥2 ĐỢT VẢI — 1 đợt thì panel vẫn chạy theo đợt nhưng

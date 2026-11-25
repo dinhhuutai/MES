@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import MenuNut from '../../../components/common/MenuNut';
 import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
@@ -392,7 +392,15 @@ export default function XacNhanChayPage() {
   // Mở hộp xác nhận: kế thừa chuyền kế hoạch, cho đổi chuyền thực tế.
   const openConfirm = (lenh) => { setConfirmRun(lenh); setRunChuyenId(lenh.chuyen_id || ''); };
 
+  // ⚠ 25/11/2026: bấm / Enter 2 lần lọt qua trước khi `busy` kịp khóa nút (busy đặt SAU `hoiLyDoNghen`) ⇒ 2 yêu cầu song song ⇒
+  //   lệnh 2 phiếu DANG_CHAY. Khóa ngay đầu hàm bằng ref (BE `repo.createPhieu` vẫn chặn 409 `DA_CHAY`).
+  const dangGuiChay = useRef(false);
   const doStart = async () => {
+    if (dangGuiChay.current) return;
+    dangGuiChay.current = true;
+    try { await doStartMot(); } finally { dangGuiChay.current = false; }
+  };
+  const doStartMot = async () => {
     if (!(await hoiLyDoNghen([confirmRun]))) return; // quá SLA ⇒ lý do nghẽn (mig 106)
     setBusy(true);
     try {
@@ -417,6 +425,11 @@ export default function XacNhanChayPage() {
   };
   const dongChayNhieu = () => { setXnNhieu(null); setDatConTro((n) => n + 1); };
   const doStartNhieu = async () => {
+    if (dangGuiChay.current) return;
+    dangGuiChay.current = true;
+    try { await doStartNhieuMot(); } finally { dangGuiChay.current = false; }
+  };
+  const doStartNhieuMot = async () => {
     const ds = xnNhieu || [];
     if (ds.some((r) => !chuyenNhieu[r.id])) { show('Có lệnh chưa chọn chuyền thực tế', 'error'); return; }
     if (!(await hoiLyDoNghen(ds))) return; // lệnh quá SLA ⇒ lý do nghẽn (mig 106)

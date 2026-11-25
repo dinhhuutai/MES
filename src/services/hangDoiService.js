@@ -10,3 +10,6 @@ export const LOAI_HANG_DOI = {
 export const xepHangDoi = (loai, items, nguon = 'TICH_TEM') => client.post('/hang-doi', { loai, items, nguon });
 export const dsHangDoi = (params) => client.get('/hang-doi', { params });
 export const boHangDoi = (id, lyDo) => client.post(`/hang-doi/${id}/bo`, { lyDo });
+// 25/11/2026 — quét tem ở màn `loai` mà tem còn chờ BƯỚC TRƯỚC trong hàng đợi ⇒ { row (số dự kiến, `qua_hang_doi`) } | { loi } |
+//   { row: null } (không có bước trước đang chờ).
+export const duKienHangDoi = (loai, ma) => client.get('/hang-doi/du-kien', { params: { loai, ma } });

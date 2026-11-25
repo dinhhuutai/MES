@@ -3,7 +3,7 @@ import { useSelector } from 'react-redux';
 import { selectAuth } from '../store/authSlice';
 import { getSocket } from '../services/socket';
 import useSocketReload from './useSocketReload';
-import { dsHangDoi, xepHangDoi, HANG_DOI_SAU_MS } from '../services/hangDoiService';
+import { dsHangDoi, xepHangDoi, duKienHangDoi, HANG_DOI_SAU_MS } from '../services/hangDoiService';
 
 // ─── HÀNG ĐỢI TÍCH TEM cho 1 màn (19/11/2026) ───
 // `useHangDoi(loai, { show, bat, onXongLo })` ⇒ { cho, loi, tai, hangDoi(mapItem, nguon) }:
@@ -42,6 +42,8 @@ export default function useHangDoi(loai, { show, bat = true, onXongLo } = {}) {
     return () => s.off('hang-doi:xong-lo', nghe);
   }, [bat, loai, myId]);
 
+  // `duKien(code)` (25/11/2026): tem còn chờ BƯỚC TRƯỚC (KCS → Phân loại lỗi → Nhận sửa → Sửa) trong hàng đợi ⇒ dòng số dự kiến,
+  //   `TichTemNhapModal` cho dòng đó vào thẳng hàng đợi (BE tự xếp sau bước trước). KCS là bước đầu ⇒ không hỏi.
   const hangDoi = useCallback((mapItem, nguon = 'TICH_TEM') => ({
     sauMs: HANG_DOI_SAU_MS,
     xep: async (ds) => {
@@ -49,6 +51,7 @@ export default function useHangDoi(loai, { show, bat = true, onXongLo } = {}) {
       tai();
       return { so: res.data?.so || 0, bo_qua: (res.data?.bo_qua || []).map((b) => ({ khoa: b.tem_id, ly_do: b.ly_do })) };
     },
+    ...(loai !== 'KCS' ? { duKien: async (code) => (await duKienHangDoi(loai, code)).data || {} } : {}),
   }), [loai, tai]);
 
   return useMemo(() => ({ ...dem, tai, hangDoi }), [dem, tai, hangDoi]);

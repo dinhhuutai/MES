@@ -117,7 +117,7 @@ export default function KhoiLuongSanXuat({ pin, dangLuu, onLuu, show, onXong, ch
         <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">ERP thiếu đợt vải</span>
         <Button variant="secondary" icon="plus" onClick={() => setThemDot(true)}>Thêm đợt vải tay</Button>
         <span className="text-xs text-ink-soft">
-          Tạo đợt theo công đoạn ({pin.luong_sx === 'IN_KIENG' ? 'In kiếng 4I / Ép' : tenLuong(pin.luong_sx)}) và đặt vào READY · Release 1 · Test Run · Chờ chạy
+          Tạo đợt cho công đoạn chọn ({pin.luong_sx === 'IN_KIENG' ? 'In kiếng / Ép / Cả 2' : tenLuong(pin.luong_sx)}) và đặt vào READY · Release 1 · Test Run · Chờ chạy
         </span>
       </div>
       {coThem && (

@@ -60,7 +60,7 @@ function KhoiSua({ tieuDe, truong, ban_dau, onLuu, dangLuu }) {
           <Field key={t.key} label={t.label} hint={t.hint}>
             {t.options ? (
               <Select value={v[t.key] ?? ''} onChange={(e) => setV({ ...v, [t.key]: e.target.value })}>
-                <option value="">— Chọn —</option>
+                <option value="">{t.rong || '— Chọn —'}</option>
                 {t.options.map((o) => <option key={o.id} value={o.id}>{o.ten}</option>)}
               </Select>
             ) : t.type === 'bool' ? (
@@ -372,6 +372,12 @@ export default function QuanTriPhanInPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="font-medium text-ink">{d.ma_dot_vai}</span>
                         <Badge tone={TONE_GIAI_DOAN(d.giai_doan)}>{d.giai_doan_ten || d.giai_doan || 'Chưa vào dòng chảy'}</Badge>
+                        {(data.cong_doan_dot_chon || []).length > 0 && d.cong_doan_ten && (
+                          <Badge tone={d.cong_doan_dot ? 'info' : 'default'}
+                            title={d.cong_doan_dot ? 'Công đoạn đã đánh dấu cho đợt (mig 139)' : 'Công đoạn theo loại đợt (chưa đánh dấu)'}>
+                            Công đoạn: {d.cong_doan_ten}
+                          </Badge>
+                        )}
                         {d.trang_thai === 'DA_HUY' && <Badge tone="danger">Đã hủy</Badge>}
                         {d.ma_set && <Badge tone="info">Gom set {d.ma_set}</Badge>}
                         {d.can_lam_lai_ready && <Badge tone="warning">Phải làm lại READY</Badge>}
@@ -410,6 +416,8 @@ export default function QuanTriPhanInPage() {
                         loai_dot_vai_id: d.loai_dot_vai_id || '',
                         can_lam_lai_ready: !!d.can_lam_lai_ready,
                         ghi_chu: d.ghi_chu || '',
+                        // Mig 139 — chỉ phần in 2 công đoạn (đã chạy mig) mới có ô này.
+                        ...(data.co_cot_cong_doan ? { cong_doan_dot: d.cong_doan_dot || '' } : {}),
                       }}
                       truong={[
                         { key: 'so_luong_vai_ve', label: 'SL vải về', type: 'number', hint: 'Không hạ dưới SL đã in tem' },
@@ -420,6 +428,13 @@ export default function QuanTriPhanInPage() {
                         { key: 'loai_dot_vai_id', label: 'Loại đợt vải', options: (data.loai_dot_vai || []).map((x) => ({ id: x.id, ten: x.ten_loai })) },
                         { key: 'can_lam_lai_ready', label: 'Phải làm lại READY', type: 'bool' },
                         { key: 'ghi_chu', label: 'Ghi chú' },
+                        // Đánh dấu công đoạn của đợt (25/11/2026) — đợt ERP chỉ gửi 1 lần (1 tờ TDTHĐH) ⇒ "Cả 2" để có công đoạn
+                        //   còn lại. BE chặn bỏ công đoạn đang có lệnh / kế hoạch tạm (409 CONG_DOAN_DANG_DUNG).
+                        ...(data.co_cot_cong_doan ? [{
+                          key: 'cong_doan_dot', label: 'Công đoạn của đợt', rong: 'Theo loại đợt',
+                          options: data.cong_doan_dot_chon || [],
+                          hint: 'Cả 2 = đợt có cả 2 công đoạn (Release 1 ra 2 dòng)',
+                        }] : []),
                       ]}
                     />
                   </div>

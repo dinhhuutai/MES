@@ -90,7 +90,13 @@ export default function HangDoiTichTemPage() {
         </div>
       );
     } },
-    { key: 'tom_tat', header: 'Nội dung', render: (m) => <span className="text-sm">{m.tom_tat}</span> },
+    { key: 'tom_tat', header: 'Nội dung', render: (m) => (
+      <div className="leading-tight">
+        <span className="text-sm">{m.tom_tat}</span>
+        {/* Xích theo tem (25/11/2026): mục chỉ chạy sau khi bước trước của chính tem đó xong. */}
+        {m.sau_ten && <div className="text-xs text-ink-soft">Chạy sau: {m.sau_ten} của tem này</div>}
+      </div>
+    ) },
     { key: 'xep', header: 'Xếp lúc · người xếp', render: (m) => (
       <div className="leading-tight">
         <div className="whitespace-nowrap text-xs tabular-nums">{fmtDateTime(m.tg_xep)}</div>

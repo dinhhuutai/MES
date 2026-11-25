@@ -339,7 +339,7 @@ export default function ReadyQcPage() {
     { key: 'ma_phan', header: 'Code phần', className: 'font-medium text-ink', render: (r) => (
       <div>
         <CodePhanCongDoan ma={r.ma_phan} luong={r.luong_sx} gd={r.giai_doan} pa={r.phuong_an_in} hienLogo
-          caCongDoan paEp={r.pa_cd_ep} epTruoc={r.ep_truoc} />
+          caCongDoan caHaiDot={r.ca_hai_cong_doan} paEp={r.pa_cd_ep} epTruoc={r.ep_truoc} />
         {r.tra_ve_kh && <div className="mt-1"><TraVeBadge data={r.tra_ve_kh} label="Kế hoạch trả về" nguon="Kế hoạch (Release 1)" /></div>}
         {/* Test Run không đạt → QA trả về; modal hiện MỤC RỚT (Khuôn/Film/Mực) + lý do. */}
         {r.tra_ve_test && <div className="mt-1"><TraVeBadge data={r.tra_ve_test} label="Test Run trả về" nguon="Test Run (QA)" /></div>}

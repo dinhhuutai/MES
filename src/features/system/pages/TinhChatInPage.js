@@ -61,8 +61,15 @@ const ktYcCua = (r) => r.kt_yeu_cau || 'KHUON_MUC';
 // "Xác nhận HSKT" của công đoạn Ép/Logo (16/11/2026, mig 134 — BE `utils/tech.js ktHsktSql`): bật ⇒ dòng Ép/Logo ở READY phải
 //   xác nhận thêm mục HSKT (quyền READY_HSKT). Còn công tắc tổng ở Hệ thống › Cài đặt tính năng.
 const ktHsktCua = (r) => r.kt_hskt !== false;
+// "CHỈ 1 TỜ TDTHĐH" (25/11/2026, mig 139 — BE `tinhchatin.service chuanDong` + `erpsync.repository datCaHaiTheoTinhChat`): tính
+//   chất nhiều công đoạn mà ERP chỉ gửi lên MES 1 lần (1 tờ TDTHĐH) ⇒ đợt MỚI từ ERP mang CẢ 2 công đoạn (như In + Logo: Release 1
+//   ra 2 dòng / đợt). Chỉ tính chất có luồng sản xuất mà ERP gửi THEO TỪNG CÔNG ĐOẠN (kiếng ủi — `luong[].sx` IN_KIENG) mới bật
+//   được; In + Logo vốn đã 1 đợt mang 2 công đoạn ⇒ không cần. Đợt đã có giữ nguyên — đánh dấu từng đợt ở Quản trị phần in.
+const SX_HAI_CD = new Set(['IN_KIENG']);
+const motCua = (r) => r.mot_tdthdh === true;
 const doiGoc = (r, g) => !!g && (r.luong !== g.luong || r.bo_qua !== g.bo_qua || ghiChuCua(r) !== ghiChuCua(g)
-  || cheDoCua(r) !== cheDoCua(g) || ktYcCua(r) !== ktYcCua(g) || ktHsktCua(r) !== ktHsktCua(g) || dspCua(r) !== dspCua(g));
+  || cheDoCua(r) !== cheDoCua(g) || ktYcCua(r) !== ktYcCua(g) || ktHsktCua(r) !== ktHsktCua(g) || dspCua(r) !== dspCua(g)
+  || motCua(r) !== motCua(g));
 // READY của tính chất NHIỀU công đoạn (14/11/2026, mig 131 — BE `utils/readyCongDoan.js`): mặc định mỗi công đoạn Ready
 //   riêng (1 dòng / công đoạn từ READY). 2 công tắc loại trừ nhau: "Ready 1 lần" (MOT_LAN) · "Công đoạn sau không Ready"
 //   (SAU_THEO_DAU — công đoạn sau theo READY của công đoạn đầu).
@@ -134,6 +141,7 @@ export default function TinhChatInPage() {
   const [coKtYc, setCoKtYc] = useState(false);   // đã chạy mig 133 (lưu được yêu cầu KT Ép/Logo)
   const [coKtHskt, setCoKtHskt] = useState(false); // đã chạy mig 134 (lưu được "Xác nhận HSKT")
   const [coDsp, setCoDsp] = useState(false);       // đã chạy mig 137 (lưu được "DSP Logo")
+  const [coMot, setCoMot] = useState(false);       // đã chạy mig 139 (lưu được "1 tờ TDTHĐH")
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -155,6 +163,7 @@ export default function TinhChatInPage() {
     setCoKtYc(!!d.co_kt_yeu_cau);
     setCoKtHskt(!!d.co_kt_hskt);
     setCoDsp(!!d.co_dsp_logo);
+    setCoMot(!!d.co_mot_tdthdh);
   }, []);
 
   useEffect(() => {
@@ -206,6 +215,10 @@ export default function TinhChatInPage() {
   // Tổ hợp công đoạn ⇄ mã luồng (danh mục do BE trả).
   const luongTuCd = useCallback((cd) => (dsLuong.find((l) => khoaCd(l.cd) === khoaCd(cd)) || {}).ma || 'CHUA_PHAN_LOAI', [dsLuong]);
   const cdCua = (r) => r.cong_doan || (dsLuong.find((l) => l.ma === r.luong) || {}).cd || {};
+  // Luồng SẢN XUẤT của dòng là kiếng ủi (ERP gửi mỗi công đoạn 1 lần) ⇒ mới có công tắc "1 tờ TDTHĐH". Đổi công đoạn khác ⇒
+  //   công tắc ẩn và lưu false (BE cũng tự chuẩn hóa).
+  const haiCdSx = (r) => SX_HAI_CD.has((dsLuong.find((l) => l.ma === r.luong) || {}).sx);
+  const motHieuLuc = (r) => motCua(r) && haiCdSx(r);
   const doiCongDoan = (r, k, v) => {
     let cd = { ...cdCua(r), [k]: v };
     if (dspCua(r)) cd = epThanhLogo(cd); // DSP Logo: Ép tính là Logo
@@ -256,6 +269,7 @@ export default function TinhChatInPage() {
           { header: 'Kỹ thuật Ép/Logo', width: 16, value: (r) => (coEp(cdCua(r)) ? (KT_YC_CHON.find((k) => k.v === ktYcCua(r)) || {}).ten || '' : '') },
           { header: 'Xác nhận HSKT', width: 13, center: true, value: (r) => (coEp(cdCua(r)) && coKtHskt ? so(ktHsktCua(r)) : '') },
           { header: 'Số công đoạn', width: 12, center: true, value: (r) => CONG_DOAN.filter((c) => cdCua(r)[c.k]).length },
+          { header: '1 tờ TDTHĐH', width: 12, center: true, value: (r) => (haiCdSx(r) ? so(motHieuLuc(r)) : '') },
           { header: 'Luồng', width: 24, value: (r) => tenLuong(r.luong) },
           { header: 'Bỏ qua khi đồng bộ ERP', width: 14, center: true, value: (r) => (r.bo_qua ? 'Có' : '') },
           { header: 'Phần in trong MES', width: 12, num: true, value: (r) => Number(r.so_phan_in) || 0 },
@@ -277,7 +291,8 @@ export default function TinhChatInPage() {
     const coDoiBoQua = dsMo.length + dsBoQuaMoi.length > 0;
     try {
       const res = await saveTinhChatIn(dsDoi.map((r) => ({ ten: r.ten, cong_doan: cdCua(r), bo_qua: r.bo_qua, ghi_chu: ghiChuCua(r),
-        ready_che_do: cheDoCua(r), kt_yeu_cau: coEp(cdCua(r)) ? ktYcCua(r) : 'KHUON_MUC', kt_hskt: ktHsktCua(r), dsp_logo: dspCua(r) })));
+        ready_che_do: cheDoCua(r), kt_yeu_cau: coEp(cdCua(r)) ? ktYcCua(r) : 'KHUON_MUC', kt_hskt: ktHsktCua(r), dsp_logo: dspCua(r),
+        mot_tdthdh: motHieuLuc(r) })));
       nap(res.data);
       setChon(new Set());
       setHoiLuu(false);
@@ -301,7 +316,7 @@ export default function TinhChatInPage() {
     setRows((d.items || []).map((r) => {
       const s = dangSua.get(r.ma_chuan);
       return s ? { ...r, luong: s.luong, cong_doan: s.cong_doan, bo_qua: s.bo_qua, ghi_chu: s.ghi_chu, ready_che_do: s.ready_che_do,
-        kt_yeu_cau: s.kt_yeu_cau, kt_hskt: s.kt_hskt, dsp_logo: s.dsp_logo } : r;
+        kt_yeu_cau: s.kt_yeu_cau, kt_hskt: s.kt_hskt, dsp_logo: s.dsp_logo, mot_tdthdh: s.mot_tdthdh } : r;
     }));
   };
   const luuThem = async () => {
@@ -378,6 +393,22 @@ export default function TinhChatInPage() {
             <span className="text-ink">{tenLuong(r.luong)}</span>
             {n >= 2 && <Badge tone={l.tam ? 'warning' : 'info'}>{n} công đoạn</Badge>}
           </span>
+        );
+      },
+    },
+    {
+      key: 'mot_tdthdh', header: '1 tờ TDTHĐH', headerClassName: 'text-center', className: 'text-center',
+      render: (r) => {
+        if (!haiCdSx(r)) {
+          const sx = (dsLuong.find((l) => l.ma === r.luong) || {}).sx;
+          return <span className="text-ink-soft" title={sx === 'IN_EP' ? 'In + Logo: mỗi đợt vốn đã mang cả 2 công đoạn' : undefined}>—</span>;
+        }
+        return (
+          <Toggle on={motCua(r)} disabled={!suaDuoc || !coMot}
+            title={coMot
+              ? `Chỉ có 1 tờ TDTHĐH (ERP gửi lên MES 1 lần) — đợt mới từ ERP tự có cả 2 công đoạn — ${r.ten}`
+              : 'Chưa chạy migration 139'}
+            onChange={(v) => doiDong(r.ma_chuan, { mot_tdthdh: v })} />
         );
       },
     },

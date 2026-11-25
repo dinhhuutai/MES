@@ -56,11 +56,21 @@ export function nhanCongDoan(luong, gd, pa) {
 
 // ĐỢT THEO CÔNG ĐOẠN (16/11/2026 — gương BE `luongSanXuat.dotGd`): phần in kiếng ủi, đợt 4I (loại `IN_KIENG`) ⇒ công đoạn In
 //   kiếng, đợt khác ⇒ Ép; null = đợt có cả 2 công đoạn. BE trả sẵn `cong_doan_dot` ở Release 1.
-export const dotGd = (luong, maLoaiDot) => (luong === 'IN_KIENG' ? (maLoaiDot === 'IN_KIENG' ? GD_IN : GD_EP) : null);
+// ⚠ 25/11/2026 (mig 139): `cdDot` = `dot_vai_ve.cong_doan_dot` đánh dấu (IN · EP_UI · CA_HAI) THẮNG loại đợt — chỉ phần in
+//   2 công đoạn (Thêm đợt vải tay / Quản trị phần in / ERP với tính chất "1 tờ TDTHĐH").
+export const CD_CA_HAI = 'CA_HAI';
+export function dotGd(luong, maLoaiDot, cdDot = null) {
+  if (!laHaiCongDoan(luong)) return null;
+  if (cdDot === GD_IN || cdDot === GD_EP) return cdDot;
+  if (cdDot === CD_CA_HAI || luong !== 'IN_KIENG') return null;
+  return maLoaiDot === 'IN_KIENG' ? GD_IN : GD_EP;
+}
 
-// Đợt của phần in 2 công đoạn KHÔNG tách theo đợt (In + Logo — ERP gửi 1 lần; gương BE `theoDot`) mang CẢ 2 công đoạn ⇒ dòng
-//   mức đợt trước Release 1 (READY · QC READY) vẽ đủ 2 badge (18/11/2026). Kiếng ủi mỗi đợt 1 công đoạn (`dotGd`) ⇒ không.
-export const dotCaHaiCongDoan = (luong) => laHaiCongDoan(luong) && luong !== 'IN_KIENG';
+// Đợt của phần in 2 công đoạn mang CẢ 2 công đoạn ⇒ dòng mức đợt trước Release 1 (READY · QC READY) vẽ đủ 2 badge (18/11/2026).
+//   `caHaiDot` = cờ BE của DÒNG (`ca_hai_cong_doan` — tính theo đợt, gồm đánh dấu mig 139); không có ⇒ luật cũ theo luồng
+//   (In + Logo cả 2, kiếng ủi 1 công đoạn / đợt).
+export const dotCaHaiCongDoan = (luong, caHaiDot) => laHaiCongDoan(luong)
+  && (typeof caHaiDot === 'boolean' ? caHaiDot : luong !== 'IN_KIENG');
 
 // MỌI công đoạn của PHẦN IN theo luồng, công đoạn đầu trước (`epTruoc` ⇒ ép trước): [{ gd, ten }] — phần in thường ⇒ [].
 //   `pa` = PA của dòng (phần in 1 công đoạn LOGO: 4 ⇒ "Ép", còn lại "Logo" — như `CongDoanBadge hienLogo`);
