@@ -21,7 +21,9 @@ const TOAN_MAN_DT = new Set(['lg', 'xl', 'full']);
 //
 // ⚠ Chiều cao / lề trên đi qua BIẾN CSS (`--modal-cao`, `--modal-tren`) + lớp `sm:` — để trên điện thoại modal lớn
 //   bỏ được lề + chiều cao desktop (style inline không có media query).
-export default function Modal({ open, onClose, title, children, footer, size = 'md', canhTren = null, lapDay = false }) {
+// `gon` (26/11/2026 — Danh sách release SX: "cho cái bảng nhiều không gian hơn, màn hình nhỏ bảng ngắn quá") = lề đầu + lề
+//   thân HẸP hơn ⇒ bảng cao thêm. Mặc định `false` ⇒ mọi modal khác KHÔNG đổi.
+export default function Modal({ open, onClose, title, children, footer, size = 'md', canhTren = null, lapDay = false, gon = false }) {
   const neoTren = canhTren != null;
   const toanMan = TOAN_MAN_DT.has(size) || lapDay;
   // Neo trên: trừ luôn khoảng cách trên + lề dưới khỏi chiều cao để hộp không tràn đáy.
@@ -38,13 +40,13 @@ export default function Modal({ open, onClose, title, children, footer, size = '
         <Dialog.Panel
           className={`flex w-full flex-col ${SIZES[size]} ${toanMan ? 'rounded-none sm:rounded-card' : 'rounded-card'} bg-surface shadow-card-hover ${caoLop}`}
         >
-          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line px-3 py-3 sm:px-6 sm:py-4">
+          <div className={`flex shrink-0 items-center justify-between gap-3 border-b border-line ${gon ? 'px-3 py-2 sm:px-4' : 'px-3 py-3 sm:px-6 sm:py-4'}`}>
             <Dialog.Title className="min-w-0 text-base font-semibold text-ink">{title}</Dialog.Title>
             <button onClick={onClose} aria-label="Đóng" className="shrink-0 rounded p-1.5 text-ink-soft hover:bg-surface-muted">
               <Icon name="x" size={20} />
             </button>
           </div>
-          <div className={`min-h-0 flex-1 px-3 py-3 sm:px-6 sm:py-5 ${lapDay ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'}`}>
+          <div className={`min-h-0 flex-1 ${gon ? 'px-2 py-2 sm:px-4 sm:py-2.5' : 'px-3 py-3 sm:px-6 sm:py-5'} ${lapDay ? 'flex flex-col overflow-hidden' : 'overflow-y-auto'}`}>
             {children}
           </div>
           {footer && (

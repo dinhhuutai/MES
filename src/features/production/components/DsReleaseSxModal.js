@@ -100,6 +100,9 @@ export default function DsReleaseSxModal({ open, onClose }) {
   const [tim, setTim] = useState('');
   const [loc, setLoc] = useState({});
   const [moLoc, setMoLoc] = useState(false);
+  // Thu gọn phần lọc (26/11/2026) — nhớ theo máy (màn nhỏ bật 1 lần là lần sau mở vẫn gọn).
+  const [thuGon, setThuGon] = useState(() => docLs('dsrsx.thuGon', '') === '1');
+  const doiThuGon = () => setThuGon((v) => { ghiLs('dsrsx.thuGon', v ? '' : '1'); return !v; });
 
   // `beCu` (26/11/2026): backend trả về KHÔNG có `ca` ⇒ máy chủ chạy bản trước 25/11 — chưa lọc được ca, chưa có số bổ sung
   //   (FE hiện 0) ⇒ báo rõ thay vì để người dùng tưởng số 0 là thật.
@@ -207,72 +210,124 @@ export default function DsReleaseSxModal({ open, onClose }) {
     return c.num && typeof v === 'number' ? fmtNum(v) : v;
   };
 
+  // BỐ CỤC GỌN (26/11/2026, người dùng: "thiết kế lại cho cái bảng nhiều không gian hơn — màn hình nhỏ bảng ngắn quá, phải
+  //   lướt nhiều"): nút chế độ lên THANH TIÊU ĐỀ modal · lọc + Excel 1 hàng · chip khu 1 hàng cuộn ngang (+ chuyền thêm cuối
+  //   hàng) · tiêu đề bảng + số tổng 1 dòng · nút "Thu gọn" giấu cả phần lọc (nhớ theo máy) ⇒ còn 1 dòng số tổng + bảng.
+  const vang = 'rounded bg-amber-100 px-1.5 dark:bg-amber-900/40';
+  const dangLocAn = thuGon && (tim.trim() || soLoc > 0);
   return (
-    <Modal open={open} onClose={onClose} size="full" lapDay title="Danh sách release sản xuất">
-      <div className="shrink-0 space-y-2">
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Danh sách release ⇄ Nhật ký in (26/10/2026). */}
-          <div className="inline-flex rounded-full border border-line bg-surface-muted p-0.5" role="tablist" aria-label="Chế độ xem">
-            {CHE_DO.map((x) => (
-              <button key={x.v} type="button" role="tab" aria-selected={cheDo === x.v} onClick={() => doiCheDo(x.v)}
-                className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${cheDo === x.v ? 'bg-primary text-white shadow-sm' : 'text-ink-soft hover:text-ink'}`}>
-                {x.label}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center gap-2 text-sm">
-            <span className="text-ink-soft">Ngày ca</span>
-            <DateRangePicker value={khoang} placeholder="Ngày ca"
-              onChange={({ from, to }) => setKhoang({ from: from || ngayLocalISO(new Date()), to: to || '' })} />
-          </div>
-          {/* Ca của tem (2 ký tự cuối mã ngày ca) — bấm chọn / bỏ, chọn nhiều; không chọn = mọi ca. */}
-          <div className="flex items-center gap-1 text-sm" role="group" aria-label="Lọc theo ca">
-            <span className="mr-0.5 text-ink-soft">Ca</span>
-            {CA_TEM.map((c) => {
-              const bat = dsCa.includes(c);
-              return (
-                <button key={c} type="button" aria-pressed={bat} onClick={() => doiCa(c)}
-                  className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors ${bat ? 'border-primary bg-primary text-white' : 'border-line bg-surface text-ink-soft hover:text-ink'}`}>
-                  {c}
-                </button>
-              );
-            })}
-            {dsCa.length > 0 && (
-              <button type="button" onClick={() => setDsCa([])} className="ml-1 text-xs text-primary hover:underline">Mọi ca</button>
-            )}
-          </div>
-          <div className="w-64">
-            <Input value={tim} onChange={(e) => setTim(e.target.value)} placeholder="Tìm code phần / mã tem / lệnh / mã hàng..." />
-          </div>
-          <FilterToggle open={moLoc} count={soLoc} onClick={() => setMoLoc((v) => !v)} />
-          <div className="ml-auto flex items-center gap-2">
-            <Button chiXemOk variant="secondary" icon="download" loading={dangXuat} disabled={!rows.length} onClick={xuat}>
-              Xuất Excel ({fmtNum(rows.length)})
-            </Button>
-          </div>
-        </div>
-        <FieldFilters fields={LOC_DS_RELEASE} values={loc} open={moLoc}
-          onField={(k, v) => setLoc((s) => ({ ...s, [k]: v }))} onClear={() => setLoc({})} />
-        <ChipTabs tabs={LOAI_TABS} value={chip} counts={counts} onChange={doiChip} />
-        {/* Chuyền THÊM vào khu đang xem — lưu riêng từng người theo chip. */}
-        <div className="-mt-2 flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-ink-soft">Thêm chuyền vào danh sách:</span>
-          {them.map((m) => (
-            <span key={m} className="inline-flex items-center gap-1 rounded-full bg-primary-wash px-2.5 py-0.5 text-xs font-semibold text-primary">
-              {m}
-              <button type="button" aria-label={`Bỏ chuyền ${m}`} onClick={() => luuThem(them.filter((x) => x !== m))}
-                className="text-primary/70 hover:text-danger"><Icon name="x" size={12} /></button>
-            </span>
+    <Modal open={open} onClose={onClose} size="full" lapDay gon title={(
+      <span className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <span className="whitespace-nowrap">Danh sách release sản xuất</span>
+        {/* Danh sách release ⇄ Tổng theo chuyền ⇄ Nhật ký in. */}
+        <span className="inline-flex rounded-full border border-line bg-surface-muted p-0.5 text-sm font-medium" role="tablist" aria-label="Chế độ xem">
+          {CHE_DO.map((x) => (
+            <button key={x.v} type="button" role="tab" aria-selected={cheDo === x.v} onClick={() => doiCheDo(x.v)}
+              className={`whitespace-nowrap rounded-full px-3 py-1 transition-colors ${cheDo === x.v ? 'bg-primary text-white shadow-sm' : 'text-ink-soft hover:text-ink'}`}>
+              {x.label}
+            </button>
           ))}
-          <div className="w-60">
-            <SearchableSelect value="" options={chuyenChon} getValue={(x) => x.id} getLabel={(x) => x.label}
-              getSearch={(x) => x.label} placeholder="+ Chọn chuyền thêm…" emptyLabel="— Chọn chuyền —"
-              onChange={(ma) => { if (ma) luuThem([...them, ma]); }} />
+        </span>
+      </span>
+    )}>
+      <div className="shrink-0 space-y-1.5">
+        {!thuGon && (
+          <>
+            {/* Hàng lọc: Ngày ca · Ca · Tìm · Bộ lọc · Excel. */}
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+              <div className="flex items-center gap-1.5 text-sm">
+                <span className="hidden text-xs text-ink-soft sm:inline">Ngày ca</span>
+                <DateRangePicker value={khoang} placeholder="Ngày ca"
+                  onChange={({ from, to }) => setKhoang({ from: from || ngayLocalISO(new Date()), to: to || '' })} />
+              </div>
+              {/* Ca của tem (2 ký tự cuối mã ngày ca) — bấm chọn / bỏ, chọn nhiều; không chọn = mọi ca. */}
+              <div className="flex items-center gap-1" role="group" aria-label="Lọc theo ca">
+                <span className="mr-0.5 text-xs text-ink-soft">Ca</span>
+                {CA_TEM.map((c) => {
+                  const bat = dsCa.includes(c);
+                  return (
+                    <button key={c} type="button" aria-pressed={bat} onClick={() => doiCa(c)}
+                      className={`rounded-full border px-2 py-0.5 text-xs font-semibold transition-colors ${bat ? 'border-primary bg-primary text-white' : 'border-line bg-surface text-ink-soft hover:text-ink'}`}>
+                      {c}
+                    </button>
+                  );
+                })}
+                {dsCa.length > 0 && (
+                  <button type="button" onClick={() => setDsCa([])} className="ml-0.5 text-xs text-primary hover:underline">Mọi ca</button>
+                )}
+              </div>
+              <div className="min-w-[11rem] flex-1 sm:max-w-xs">
+                <Input value={tim} onChange={(e) => setTim(e.target.value)} placeholder="Tìm code phần / mã tem / lệnh / mã hàng..." />
+              </div>
+              <FilterToggle open={moLoc} count={soLoc} onClick={() => setMoLoc((v) => !v)} />
+              <Button chiXemOk variant="secondary" icon="download" loading={dangXuat} disabled={!rows.length} onClick={xuat}
+                className="ml-auto !px-3 !py-2">
+                Excel ({fmtNum(rows.length)})
+              </Button>
+            </div>
+            <FieldFilters fields={LOC_DS_RELEASE} values={loc} open={moLoc}
+              onField={(k, v) => setLoc((s) => ({ ...s, [k]: v }))} onClear={() => setLoc({})} />
+            {/* Chip khu 1 HÀNG (cuộn ngang) + chuyền THÊM vào khu đang xem (lưu riêng từng người theo chip) ở cuối hàng. */}
+            <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center">
+              <div className="min-w-0 sm:flex-1 [&>div]:!mb-0">
+                <ChipTabs gon tabs={LOAI_TABS} value={chip} counts={counts} onChange={doiChip} />
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                {them.map((m) => (
+                  <span key={m} className="inline-flex items-center gap-1 rounded-full bg-primary-wash px-2 py-0.5 text-xs font-semibold text-primary">
+                    + {m}
+                    <button type="button" aria-label={`Bỏ chuyền ${m}`} onClick={() => luuThem(them.filter((x) => x !== m))}
+                      className="text-primary/70 hover:text-danger"><Icon name="x" size={12} /></button>
+                  </span>
+                ))}
+                <div className="w-44" title="Thêm chuyền ngoài khu đang xem vào danh sách (lưu riêng cho bạn)">
+                  <SearchableSelect value="" options={chuyenChon} getValue={(x) => x.id} getLabel={(x) => x.label}
+                    getSearch={(x) => x.label} placeholder="+ Thêm chuyền…" emptyLabel="— Chọn chuyền —"
+                    onChange={(ma) => { if (ma) luuThem([...them, ma]); }} />
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+        {/* Tiêu đề bảng + số tổng — 1 DÒNG (xuống dòng khi hẹp) + nút Thu gọn / Mở bộ lọc. */}
+        <div className="flex items-start gap-2">
+          <div className="flex min-w-0 flex-1 flex-wrap items-baseline justify-center gap-x-4 gap-y-0.5 text-xs text-ink-soft">
+            <span className="text-sm font-bold text-ink">{theoChuyen ? `TỔNG THEO CHUYỀN — ${tieuDe}` : tieuDe}</span>
+            {nhatKy ? (
+              <>
+                <span>Từ <b className="text-ink">{ngayHien(ngay)}</b> đến <b className="text-ink">{ngayHien(denNgay)}</b></span>
+                <span>Số tem <b className="text-ink">{fmtNum(tongNk.so_tem)}</b></span>
+                <span>Code phần <b className="text-ink">{fmtNum(tongNk.so_phan)}</b></span>
+                <span className={vang}>SL in <b className="text-ink">{fmtNum(tongNk.sl_in)}</b></span>
+                <span>Vải hư <b className="text-ink">{fmtNum(tongNk.vai_hu)}</b></span>
+                <span>Vải thiếu <b className="text-ink">{fmtNum(tongNk.vai_thieu)}</b></span>
+              </>
+            ) : (
+              <>
+                <span>Đơn <b className="text-ink">{fmtNum(tong.tong_don)}</b> · Mã <b className="text-ink">{fmtNum(tong.tong_ma)}</b> · Phần <b className="text-ink">{fmtNum(tong.tong_phan)}</b></span>
+                <span title="Release SL = đợt thường · Release BS = đợt loại Bổ sung">
+                  SL release <b className="text-ink">{fmtNum(tong.sl_release)}</b>
+                  <span className="ml-1">(SL {fmtNum(tong.release_sl)} · BS {fmtNum(tong.release_bs)})</span>
+                </span>
+                {/* Ô vàng như mẫu Excel (25/11/2026): In BS = Σ SL bổ sung (công ty + khách) của tem in trong kỳ; In SL = phần còn lại. */}
+                <span className={vang}>Tổng SL in <b className="text-ink">{fmtNum(tong.sl_in)}</b></span>
+                <span className={vang}>In SL <b className="text-ink">{fmtNum(tong.in_sl)}</b></span>
+                <span className={vang}>In BS <b className="text-ink">{fmtNum(tong.in_bs)}</b></span>
+                <span className={vang}>Cty <b className="text-ink">{fmtNum(tong.bs_cty)}</b></span>
+                <span className={vang}>KH <b className="text-ink">{fmtNum(tong.bs_khach)}</b></span>
+              </>
+            )}
+            {dangLocAn && <span className="font-semibold text-warning">· đang tìm / lọc</span>}
           </div>
+          <button type="button" onClick={doiThuGon} aria-expanded={!thuGon}
+            title={thuGon ? 'Hiện lại phần lọc (ngày, ca, khu, tìm, Excel)' : 'Giấu phần lọc để bảng cao hơn'}
+            className="inline-flex shrink-0 items-center gap-1 rounded-full border border-line px-2 py-0.5 text-xs font-medium text-ink-soft hover:border-primary hover:text-primary">
+            <Icon name={thuGon ? 'chevron-down' : 'chevron-up'} size={14} />
+            <span className="hidden sm:inline">{thuGon ? 'Mở bộ lọc' : 'Thu gọn'}</span>
+          </button>
         </div>
-        <div className="text-center text-base font-bold text-ink">{theoChuyen ? `TỔNG THEO CHUYỀN — ${tieuDe}` : tieuDe}</div>
         {beCu && (
-          <div className="mx-auto flex max-w-3xl items-start gap-2 rounded-card border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+          <div className="mx-auto flex max-w-3xl items-start gap-2 rounded-card border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
             <Icon name="alert-triangle" size={14} className="mt-0.5 shrink-0" />
             <span>
               <b>Máy chủ (backend) đang chạy bản cũ</b> — chưa lọc được theo <b>Ca</b> (đang ra mọi ca) và chưa có số <b>bổ sung</b>
@@ -280,37 +335,11 @@ export default function DsReleaseSxModal({ open, onClose }) {
             </span>
           </div>
         )}
-        {nhatKy ? (
-          <div className="flex flex-wrap justify-center gap-x-5 gap-y-1 text-xs text-ink-soft">
-            <span>Từ ngày <b className="text-ink">{ngayHien(ngay)}</b> đến ngày <b className="text-ink">{ngayHien(denNgay)}</b></span>
-            <span>Số tem <b className="text-ink">{fmtNum(tongNk.so_tem)}</b></span>
-            <span>Số code phần <b className="text-ink">{fmtNum(tongNk.so_phan)}</b></span>
-            <span className="rounded bg-amber-100 px-1.5 dark:bg-amber-900/40">SL in <b className="text-ink">{fmtNum(tongNk.sl_in)}</b></span>
-            <span>Vải hư <b className="text-ink">{fmtNum(tongNk.vai_hu)}</b></span>
-            <span>Vải thiếu <b className="text-ink">{fmtNum(tongNk.vai_thieu)}</b></span>
-          </div>
-        ) : (
-          <div className="flex flex-wrap justify-center gap-x-5 gap-y-1 text-xs text-ink-soft">
-            <span>Tổng đơn release <b className="text-ink">{fmtNum(tong.tong_don)}</b></span>
-            <span>Tổng mã release <b className="text-ink">{fmtNum(tong.tong_ma)}</b></span>
-            <span>Tổng phần release <b className="text-ink">{fmtNum(tong.tong_phan)}</b></span>
-            <span title="Release SL = đợt thường · Release BS = đợt loại Bổ sung">
-              SL release <b className="text-ink">{fmtNum(tong.sl_release)}</b>
-              <span className="ml-1">(SL {fmtNum(tong.release_sl)} · BS {fmtNum(tong.release_bs)})</span>
-            </span>
-            <span className="rounded bg-amber-100 px-1.5 dark:bg-amber-900/40">Tổng SL in <b className="text-ink">{fmtNum(tong.sl_in)}</b></span>
-            {/* Ô vàng như mẫu Excel (25/11/2026): In BS = Σ SL bổ sung (công ty + khách) của tem in trong kỳ; In SL = phần còn lại. */}
-            <span className="rounded bg-amber-100 px-1.5 dark:bg-amber-900/40">In SL <b className="text-ink">{fmtNum(tong.in_sl)}</b></span>
-            <span className="rounded bg-amber-100 px-1.5 dark:bg-amber-900/40">In BS <b className="text-ink">{fmtNum(tong.in_bs)}</b></span>
-            <span className="rounded bg-amber-100 px-1.5 dark:bg-amber-900/40">Cty <b className="text-ink">{fmtNum(tong.bs_cty)}</b></span>
-            <span className="rounded bg-amber-100 px-1.5 dark:bg-amber-900/40">KH <b className="text-ink">{fmtNum(tong.bs_khach)}</b></span>
-          </div>
-        )}
       </div>
 
       {/* Lớp phủ "Đang tải…" khi tải lại lúc bảng đã có dữ liệu (đổi ngày / ca / chế độ — 26/11/2026: trước chỉ có spinner khi
           bảng trống ⇒ đổi ca không thấy gì). */}
-      <div className="relative mt-2 flex min-h-0 flex-1 flex-col">
+      <div className="relative mt-1.5 flex min-h-0 flex-1 flex-col">
       {dangTai && nguon.length > 0 && (
         <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-card bg-surface/60 dark:bg-black/30" aria-live="polite">
           <span className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5 text-sm font-medium text-ink shadow">
