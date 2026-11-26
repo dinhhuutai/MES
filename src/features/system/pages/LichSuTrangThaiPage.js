@@ -22,7 +22,9 @@ import taiHetTrang, { LIMIT_TAI_LON } from '../../../utils/taiHetTrang';
 import { listNgungChoHuy, huyNgungChuyen, listCancelableTem, cancelPrintTem, listReopenableTem, moLaiTem, listCloseCandidates, closeProduction, listReopenCandidates, reopenProduction, listUndoStartCandidates, undoStartProduction,
   dsGopCuaLenh, tachLenhGop } from '../../../services/productionService';
 import { listCancelKcs, cancelKcs, listCancelSua, cancelSua, listCancelOqc, cancelOqc,
-  listTemSuaCancelable, listTemSuaDeleted, huyTemSua, moTemSua } from '../../../services/qualityService';
+  listTemSuaCancelable, listTemSuaDeleted, huyTemSua, moTemSua,
+  listMoLaiKcs, moLaiKcs, listMoLaiSua, moLaiSua } from '../../../services/qualityService';
+import { listPhanLoaiLoi, huyPhanLoaiLoi, listMoLaiPhanLoai, moLaiPhanLoai } from '../../../services/phanLoaiLoiService';
 import { listPhieuGiaoCancelable, huyPhieuGiao, listTemChoTich, boTichTemGiao } from '../../../services/deliveryService';
 import { fmtNum, fmtDate, fmtDateTime, ngayLocalISO } from '../../../utils/format';
 import Spinner from '../../../components/common/Spinner';
@@ -1445,6 +1447,302 @@ function QcCancelSection({ show, kind }) {
   );
 }
 
+// ─── Tab: MỞ LẠI xác nhận KCS / Sửa đã hủy (25/11/2026, người dùng: "kcs, phân loại lỗi, sửa khi hủy vẫn cho mở lại") ───
+// Danh sách = lượt ĐANG bị hủy, theo NGÀY HỦY (hoặc ô tìm mã tem / code phần — mọi ngày, tìm ở server). Mở lại = trả đúng số
+//   của lượt vào tem (kể cả tem 17 của lượt), gửi lại ERP cùng IDMES — backend `quality.service moLaiKcs / moLaiSua`, lý do
+//   BẮT BUỘC. Bị chặn khi phần hàng đã được kiểm / sửa lại bằng lượt khác (thông báo nói rõ).
+const QC_MO_LAI_CFG = {
+  kcs: {
+    short: 'KCS', title: 'Mở lại xác nhận KCS',
+    subtitle: 'Lượt KCS đã bị hủy xác nhận — mở lại để trả đúng số của lượt vào tem (kể cả tem 17 giao trước)',
+    list: listMoLaiKcs, moLai: moLaiKcs, detail: QC_CANCEL_CFG.kcs.detail,
+    hint: 'Chỉ mở lại được khi phần hàng của lượt CHƯA được kiểm lại bằng lượt khác. Lượt tự hủy do OQC trả về KCS thì kiểm lại ở màn KCS.',
+  },
+  sua: {
+    short: 'Sửa', title: 'Mở lại xác nhận Sửa',
+    subtitle: 'Lượt Sửa đã bị hủy xác nhận — mở lại để trả đúng số sửa đạt / hủy vào tem (kể cả tem 17 sửa đạt)',
+    list: listMoLaiSua, moLai: moLaiSua, detail: QC_CANCEL_CFG.sua.detail,
+    hint: 'Chỉ mở lại được khi phần chờ sửa của tem còn đủ (chưa sửa lại bằng lượt khác / chưa hủy tem sửa).',
+  },
+};
+function QcReopenSection({ show, kind }) {
+  const cfg = QC_MO_LAI_CFG[kind];
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [date, setDate] = useState(todayStr);
+  const [search, setSearch] = useState('');
+  const [target, setTargetRow] = useState(null);
+  const [lyDo, setLyDo] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await cfg.list(date, search.trim());
+      setRows(res.data || []);
+    } catch (e) {
+      show(e.message || 'Lỗi tải', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [date, search, show, cfg]);
+  useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t); }, [load]);
+
+  const doMoLai = async () => {
+    if (!lyDo.trim()) { show('Phải nhập lý do mở lại', 'error'); return; }
+    setBusy(true);
+    try {
+      const res = await cfg.moLai(target.id, lyDo.trim());
+      const d = res.data || {};
+      show(`Đã mở lại lượt ${cfg.short} của tem ${target.ma_tem}${d.ma_tem_17 ? ` (tem 17 ${d.ma_tem_17} trở lại)` : ''}.`);
+      setTargetRow(null); setLyDo('');
+      load();
+    } catch (e) {
+      show(e.message || 'Mở lại thất bại', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const tuDong = (r) => r.nguon_huy === 'OQC_TRA_VE_KCS';
+  const columns = [
+    cotNgayXacNhan((r) => r.tg_huy, (r) => [r.nguoi_huy, r.ly_do_huy].filter(Boolean).join(' — ') || 'Hủy xác nhận'),
+    { key: 'ma_tem', header: 'Tem', render: (r) => <Badge tone="info">{r.ma_tem}</Badge> },
+    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
+    { key: 'ma_phan', header: 'Code phần', render: (r) => r.ma_phan || '—' },
+    { key: 'mau_vai', header: 'Màu · Kích', render: (r) => [r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—' },
+    { key: 'detail', header: 'Số lượng của lượt', render: (r) => <span className="text-xs text-ink-soft">{cfg.detail(r)}</span> },
+    { key: 'xac_nhan', header: 'Xác nhận lúc', render: (r) => <span className="whitespace-nowrap text-xs">{fmtTime(r.tg)} · {r.nguoi || '—'}</span> },
+    { key: 'actions', header: '', className: 'text-right whitespace-nowrap', render: (r) => (
+      tuDong(r)
+        ? <span className="text-xs text-ink-soft" title="Lượt tự hủy vì OQC trả về KCS — kiểm lại ở màn KCS">Tự hủy (OQC trả về)</span>
+        : <Button variant="secondary" className="px-2.5 py-1 text-xs" onClick={() => { setTargetRow(r); setLyDo(''); }}>Mở lại</Button>
+    ) },
+  ];
+
+  return (
+    <div>
+      <Toolbar title={cfg.title} subtitle={cfg.subtitle}
+        search={search} onSearch={setSearch} searchPlaceholder="Tìm mã tem / code phần (mọi ngày)...">
+        <NgayInput value={date} onChange={(e) => setDate(e.target.value)} disabled={!!search.trim()}
+          title={search.trim() ? 'Đang tìm mọi ngày theo ô tìm' : 'Ngày HỦY xác nhận'}
+          className="h-10 rounded-input border border-line px-3 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 disabled:opacity-50" />
+        <Badge tone="info">{rows.length} lượt</Badge>
+      </Toolbar>
+
+      <div className="mb-3 rounded-control border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700">
+        {cfg.hint} Ngày lọc = ngày HỦY. Mở lại ghi <b>audit</b> (người, giờ, lý do) và gửi lại ERP cùng phiếu cũ.
+      </div>
+
+      <DataTable columns={columns} rows={rows} loading={loading} rowKey="id" sttStart={0}
+        emptyText={search.trim() ? 'Không có lượt đã hủy nào khớp ô tìm' : 'Không có lượt nào bị hủy trong ngày'} />
+
+      <Modal
+        open={!!target}
+        onClose={() => setTargetRow(null)}
+        title={`Mở lại xác nhận ${cfg.short} — ${target?.ma_tem || ''}`}
+        footer={
+          <>
+            <Button chiXemOk variant="ghost" onClick={() => setTargetRow(null)}>Đóng</Button>
+            <Button onClick={doMoLai} loading={busy} disabled={!lyDo.trim()}>Xác nhận mở lại</Button>
+          </>
+        }
+      >
+        <div className="mb-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          Mở lại lượt {cfg.short} của tem <b>{target?.ma_tem}</b> ({target ? cfg.detail(target) : ''}), đã hủy lúc {fmtTime(target?.tg_huy)}
+          {target?.ly_do_huy ? ` — lý do hủy: ${target.ly_do_huy}` : ''}. Sổ cái của tem nhận lại <b>đúng số của lượt</b>. {cfg.hint}
+        </div>
+        <Field label="Lý do mở lại *">
+          <Textarea rows={2} value={lyDo} onChange={(e) => setLyDo(e.target.value)} placeholder="Vd: hủy nhầm lượt, xác nhận lại đúng số cũ..." />
+        </Field>
+      </Modal>
+    </div>
+  );
+}
+
+// ─── Tab: HỦY / MỞ LẠI PHÂN LOẠI LỖI (25/11/2026) — trước chỉ hủy được ở màn Phân loại lỗi, không lấy lại được ───────────
+// Hủy = CHÍNH `POST /quality/phan-loai-loi/:temId/huy` của màn Phân loại lỗi (tem về chưa phân loại, hư dồn về sửa, báo ERP
+//   hủy SU6). Mở lại = lưu lại ĐÚNG phiếu đã hủy (ảnh chụp ở lần hủy) — `phanloailoi.service moLai`.
+const tomTatPhieu = (anh) => {
+  const ds = (anh && Array.isArray(anh.dong)) ? anh.dong : [];
+  const sua = ds.reduce((a, d) => a + (Number(d.so_luong_sua) || 0), 0);
+  const huy = ds.reduce((a, d) => a + (Number(d.so_luong_huy) || 0), 0);
+  return { sua, huy, soDong: ds.length, maLoi: [...new Set(ds.map((d) => d.ma_loi).filter(Boolean))].join(', ') };
+};
+function PhanLoaiCancelSection({ show }) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [date, setDate] = useState(todayStr);
+  const [search, setSearch] = useState('');
+  const [target, setTargetRow] = useState(null);
+  const [lyDo, setLyDo] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listPhanLoaiLoi({ ngay: date, search: search.trim() || undefined, tinhTrang: 'DA', page: 1, limit: 200 });
+      setRows((res.data && res.data.rows) || []);
+    } catch (e) {
+      show(e.message || 'Lỗi tải', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [date, search, show]);
+  useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t); }, [load]);
+
+  const doHuy = async () => {
+    if (!lyDo.trim()) { show('Phải nhập lý do hủy', 'error'); return; }
+    setBusy(true);
+    try {
+      await huyPhanLoaiLoi(target.tem_id, lyDo.trim());
+      show(`Đã hủy phân loại lỗi tem ${target.ma_tem} — tem về chưa phân loại (mở lại ở tab "Mở lại phân loại lỗi").`);
+      setTargetRow(null); setLyDo('');
+      load();
+    } catch (e) {
+      show(e.message || 'Hủy phân loại thất bại', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const columns = [
+    cotNgayXacNhan((r) => r.created_date, (r) => (r.nguoi ? `Phân loại: ${r.nguoi}` : 'Phân loại lỗi')),
+    { key: 'ma_tem', header: 'Tem', render: (r) => <Badge tone="info">{r.ma_tem}</Badge> },
+    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
+    { key: 'ma_phan', header: 'Code phần', render: (r) => r.ma_phan || '—' },
+    { key: 'mau_vai', header: 'Màu · Kích', render: (r) => [r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—' },
+    { key: 'chia', header: 'Hư → Sửa / Hủy', render: (r) => <span className="text-xs text-ink-soft">Hư {fmtNum(r.sl_hu)} → Sửa {fmtNum(r.sl_kcs_sua)} · Hủy {fmtNum(r.sl_kcs_huy)}</span> },
+    { key: 'cac_loi', header: 'Lỗi', render: (r) => <span className="text-xs">{r.cac_loi || '—'}</span> },
+    { key: 'actions', header: '', className: 'text-right whitespace-nowrap', render: (r) => (
+      Number(r.sl_da_xac_nhan_sua) > 0
+        ? <span className="text-xs text-ink-soft" title="Hủy xác nhận Sửa của tem trước">Đã xác nhận sửa</span>
+        : <Button variant="danger" className="px-2.5 py-1 text-xs" onClick={() => { setTargetRow(r); setLyDo(''); }}>Hủy phân loại</Button>
+    ) },
+  ];
+
+  return (
+    <div>
+      <Toolbar title="Hủy phân loại lỗi" subtitle="Phân loại lỗi nhầm — hủy để tem về chưa phân loại (hư dồn về sửa), báo ERP hủy phiếu phân loại"
+        search={search} onSearch={setSearch} searchPlaceholder="Tìm mã tem, code phần, khách...">
+        <NgayInput value={date} onChange={(e) => setDate(e.target.value)} title="Ngày KCS của tem"
+          className="h-10 rounded-input border border-line px-3 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10" />
+        <Badge tone="info">{rows.length} tem</Badge>
+      </Toolbar>
+      <div className="mb-3 rounded-control border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700">
+        Ngày lọc = ngày KCS của tem (như màn Phân loại lỗi); ô tìm là mã tem thì tìm mọi ngày. Tem đã xác nhận sửa / đã nhận sửa phải
+        hủy phần đó trước. Hủy xong mở lại được ở tab <b>Mở lại phân loại lỗi</b>.
+      </div>
+      <DataTable columns={columns} rows={rows} loading={loading} rowKey="tem_id" sttStart={0}
+        emptyText="Không có tem đã phân loại lỗi nào" />
+      <Modal open={!!target} onClose={() => setTargetRow(null)} title={`Hủy phân loại lỗi — ${target?.ma_tem || ''}`}
+        footer={<>
+          <Button chiXemOk variant="ghost" onClick={() => setTargetRow(null)}>Đóng</Button>
+          <Button variant="danger" onClick={doHuy} loading={busy} disabled={!lyDo.trim()}>Xác nhận hủy</Button>
+        </>}>
+        <div className="mb-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          Tem <b>{target?.ma_tem}</b> về <b>chưa phân loại</b>: xóa phiếu ({target?.cac_loi || '—'}), phần hư dồn lại về sửa như trước lần
+          phân loại, báo ERP hủy phiếu phân loại đã gửi.
+        </div>
+        <Field label="Lý do hủy *">
+          <Textarea rows={2} value={lyDo} onChange={(e) => setLyDo(e.target.value)} placeholder="Vd: chọn nhầm mã lỗi, chia sai sửa / hủy..." />
+        </Field>
+      </Modal>
+    </div>
+  );
+}
+
+function PhanLoaiReopenSection({ show }) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [date, setDate] = useState(todayStr);
+  const [search, setSearch] = useState('');
+  const [target, setTargetRow] = useState(null);
+  const [lyDo, setLyDo] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await listMoLaiPhanLoai(date, search.trim());
+      setRows(res.data || []);
+    } catch (e) {
+      show(e.message || 'Lỗi tải', 'error');
+    } finally {
+      setLoading(false);
+    }
+  }, [date, search, show]);
+  useEffect(() => { const t = setTimeout(load, 300); return () => clearTimeout(t); }, [load]);
+
+  const doMoLai = async () => {
+    if (!lyDo.trim()) { show('Phải nhập lý do mở lại', 'error'); return; }
+    setBusy(true);
+    try {
+      await moLaiPhanLoai(target.huy_id, lyDo.trim());
+      show(`Đã mở lại phân loại lỗi tem ${target.ma_tem} — phiếu như trước lần hủy.`);
+      setTargetRow(null); setLyDo('');
+      load();
+    } catch (e) {
+      show(e.message || 'Mở lại thất bại', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const lechHu = (r) => { const t = tomTatPhieu(r.anh_chup); return t.sua + t.huy !== Number(r.sl_hu_nay); };
+  const columns = [
+    cotNgayXacNhan((r) => r.tg_huy, (r) => [r.nguoi_huy, r.ly_do_huy].filter(Boolean).join(' — ') || 'Hủy phân loại'),
+    { key: 'ma_tem', header: 'Tem', render: (r) => <Badge tone="info">{r.ma_tem}</Badge> },
+    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
+    { key: 'ma_phan', header: 'Code phần', render: (r) => r.ma_phan || '—' },
+    { key: 'mau_vai', header: 'Màu · Kích', render: (r) => [r.mau_vai, r.kich_vai, r.kich_phim].filter(Boolean).join(' · ') || '—' },
+    { key: 'phieu', header: 'Phiếu đã hủy', render: (r) => {
+      const t = tomTatPhieu(r.anh_chup);
+      return (
+        <span className="text-xs text-ink-soft">
+          Sửa {fmtNum(t.sua)} · Hủy {fmtNum(t.huy)} · {t.soDong} dòng{t.maLoi ? ` (${t.maLoi})` : ''}
+          {lechHu(r) && <span className="ml-1 text-danger" title="SL hư của tem đã đổi từ lần hủy — mở lại sẽ bị chặn">· hư nay {fmtNum(r.sl_hu_nay)}</span>}
+        </span>
+      );
+    } },
+    { key: 'actions', header: '', className: 'text-right whitespace-nowrap', render: (r) => (
+      r.mo_duoc
+        ? <Button variant="secondary" className="px-2.5 py-1 text-xs" onClick={() => { setTargetRow(r); setLyDo(''); }}>Mở lại</Button>
+        : <span className="text-xs text-ink-soft" title="Sau lần hủy này tem đã được phân loại lại / mở lại">{r.da_phan_loai_lai ? 'Đã phân loại lại' : 'Đã có thao tác sau'}</span>
+    ) },
+  ];
+
+  return (
+    <div>
+      <Toolbar title="Mở lại phân loại lỗi" subtitle="Phân loại lỗi đã bị hủy — mở lại để lưu lại đúng phiếu cũ (mã lỗi, biện pháp, chia sửa / hủy)"
+        search={search} onSearch={setSearch} searchPlaceholder="Tìm mã tem / code phần (mọi ngày)...">
+        <NgayInput value={date} onChange={(e) => setDate(e.target.value)} disabled={!!search.trim()} title="Ngày HỦY phân loại"
+          className="h-10 rounded-input border border-line px-3 text-sm outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 disabled:opacity-50" />
+        <Badge tone="info">{rows.length} lần hủy</Badge>
+      </Toolbar>
+      <div className="mb-3 rounded-control border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700">
+        Ngày lọc = ngày HỦY. Chỉ mở lại được lần hủy CUỐI của tem khi tem chưa được phân loại lại; SL hư của tem phải còn như lúc hủy.
+        Mở lại gửi lại phiếu phân loại sang ERP.
+      </div>
+      <DataTable columns={columns} rows={rows} loading={loading} rowKey="huy_id" sttStart={0}
+        emptyText={search.trim() ? 'Không có lần hủy nào khớp ô tìm' : 'Không có lần hủy phân loại nào trong ngày'} />
+      <Modal open={!!target} onClose={() => setTargetRow(null)} title={`Mở lại phân loại lỗi — ${target?.ma_tem || ''}`}
+        footer={<>
+          <Button chiXemOk variant="ghost" onClick={() => setTargetRow(null)}>Đóng</Button>
+          <Button onClick={doMoLai} loading={busy} disabled={!lyDo.trim()}>Xác nhận mở lại</Button>
+        </>}>
+        <div className="mb-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+          Lưu lại phiếu phân loại của tem <b>{target?.ma_tem}</b> như trước lần hủy lúc {fmtTime(target?.tg_huy)}
+          {target ? ` (Sửa ${fmtNum(tomTatPhieu(target.anh_chup).sua)} · Hủy ${fmtNum(tomTatPhieu(target.anh_chup).huy)})` : ''}.
+        </div>
+        <Field label="Lý do mở lại *">
+          <Textarea rows={2} value={lyDo} onChange={(e) => setLyDo(e.target.value)} placeholder="Vd: hủy nhầm phiếu..." />
+        </Field>
+      </Modal>
+    </div>
+  );
+}
+
 // ─── Trang gộp: Hủy lệnh xác nhận ───────────────────────────────────────────
 // ─── Tab: Mở READY — phần in đi tắt READY (đợt mới tự vào Release 1) → ép quay lại READY ───
 function ReopenReadySection({ show }) {
@@ -2642,7 +2940,7 @@ const NHOM_TAB_HUY = [
   { ten: 'Kỹ thuật', keys: ['ready', 'moready', 'huyphanin', 'mophanin', 'huydotvai', 'modotvai'] },
   { ten: 'Kế hoạch', keys: ['lenh', 'huykht', 'huytest', 'huytemgiacong'] },
   { ten: 'Sản xuất', keys: ['tem', 'motem', 'dong', 'huychay', 'huyngung'] },
-  { ten: 'Chất lượng', keys: ['huykcs', 'huysua', 'huytemsua', 'motemsua', 'huyoqc'] },
+  { ten: 'Chất lượng', keys: ['huykcs', 'molaikcs', 'huypll', 'molaipll', 'huysua', 'molaisua', 'huytemsua', 'motemsua', 'huyoqc'] },
   { ten: 'Giao hàng', keys: ['huyphieugiao', 'huytich'] },
 ];
 
@@ -2673,7 +2971,12 @@ export default function LichSuTrangThaiPage() {
     can('PROD_RUN') && { key: 'huychay', label: 'Hủy lệnh đang chạy' },
     can('PROD_RUN') && { key: 'huyngung', label: 'Hủy ngừng chuyền' },
     can('KCS') && { key: 'huykcs', label: 'Hủy xác nhận KCS' },
+    // Mở lại lượt đã hủy + hủy / mở lại phân loại lỗi (25/11/2026) — gương quyền route (`quality.routes`).
+    can('KCS') && { key: 'molaikcs', label: 'Mở lại xác nhận KCS' },
+    can('PHAN_LOAI_LOI') && { key: 'huypll', label: 'Hủy phân loại lỗi' },
+    can('PHAN_LOAI_LOI') && { key: 'molaipll', label: 'Mở lại phân loại lỗi' },
     can('SUA') && { key: 'huysua', label: 'Hủy xác nhận Sửa' },
+    can('SUA') && { key: 'molaisua', label: 'Mở lại xác nhận Sửa' },
     can('SUA') && { key: 'huytemsua', label: 'Hủy tem sửa' },
     can('SUA') && { key: 'motemsua', label: 'Mở lại tem sửa' },
     can('OQC') && { key: 'huyoqc', label: 'Hủy xác nhận OQC' },
@@ -2738,7 +3041,11 @@ export default function LichSuTrangThaiPage() {
       {tab === 'huychay' && <UndoStartSection show={show} />}
       {tab === 'huyngung' && <NgungChuyenCancelSection show={show} />}
       {tab === 'huykcs' && <QcCancelSection show={show} kind="kcs" />}
+      {tab === 'molaikcs' && <QcReopenSection show={show} kind="kcs" />}
+      {tab === 'huypll' && <PhanLoaiCancelSection show={show} />}
+      {tab === 'molaipll' && <PhanLoaiReopenSection show={show} />}
       {tab === 'huysua' && <QcCancelSection show={show} kind="sua" />}
+      {tab === 'molaisua' && <QcReopenSection show={show} kind="sua" />}
       {tab === 'huytemsua' && <TemSuaCancelSection show={show} />}
       {tab === 'motemsua' && <TemSuaReopenSection show={show} />}
       {tab === 'huyoqc' && <QcCancelSection show={show} kind="oqc" />}

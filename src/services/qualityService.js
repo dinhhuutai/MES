@@ -52,6 +52,11 @@ export const listCancelSua = (date) => client.get('/quality/sua/cancelable', { p
 export const cancelSua = (id, lyDo) => client.post(`/quality/sua/${id}/huy`, { lyDo });
 export const listCancelOqc = (date) => client.get('/quality/oqc/cancelable', { params: { date } });
 export const cancelOqc = (id, lyDo) => client.post(`/quality/oqc/${id}/huy`, { lyDo });
+// MỞ LẠI lượt đã hủy xác nhận KCS / Sửa (25/11/2026) — danh sách theo ngày HỦY hoặc ô tìm (mã tem / code phần, mọi ngày).
+export const listMoLaiKcs = (date, search) => client.get('/quality/kcs/da-huy', { params: { date, search: search || undefined } });
+export const moLaiKcs = (id, lyDo) => client.post(`/quality/kcs/${id}/mo-lai`, { lyDo });
+export const listMoLaiSua = (date, search) => client.get('/quality/sua/da-huy', { params: { date, search: search || undefined } });
+export const moLaiSua = (id, lyDo) => client.post(`/quality/sua/${id}/mo-lai`, { lyDo });
 
 // Xóa mềm TEM SỬA (nhãn 16-) — tab "Hủy tem sửa" / "Mở lại tem sửa"
 export const listTemSuaCancelable = (search) => client.get('/quality/sua/tem-sua/cancelable', { params: { search } });

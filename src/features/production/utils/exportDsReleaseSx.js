@@ -3,7 +3,12 @@
 //     IN · HẠN HOÀN THÀNH · SL IN) + dòng số tổng như tờ mẫu.
 //   · `cheDo: 'NHAT_KY'` (26/10/2026) — "DANH SÁCH NHẬT KÝ IN" + dòng "Từ ngày … đến ngày …" như mẫu ERP, bộ cột
 //     `COT_NHAT_KY_IN` (tiêu đề 2 tầng: Hàng hóa · Số lượng · Thông tin hàng in).
-import { COT_DS_RELEASE_SX, COT_NHAT_KY_IN, tieuDeNhom, tongDsRelease, dongTongNhatKy } from './dsReleaseSx';
+//   · 25/11/2026 (người dùng gửi mẫu): đầu tờ release thêm 4 ô VÀNG cạnh "TỔNG SL IN" — IN SL · IN BS · CTY · KH (trên các cột
+//     Vải hư · Vải thiếu · DM+TEST · TỔNG) + sheet thứ 2 "Tổng theo chuyền" (`tongTheoChuyen` — Tổng SL Release · Release SL ·
+//     Release BS · Tổng in · In SL · Tổng in BS · BS do cty · BS do KH, dòng Tổng cộng).
+import {
+  COT_DS_RELEASE_SX, COT_NHAT_KY_IN, COT_TONG_CHUYEN, tieuDeNhom, tongDsRelease, dongTongNhatKy, tongTheoChuyen,
+} from './dsReleaseSx';
 
 const XANH = 'FFE2EFDA';
 const VANG = 'FFFFE699';
@@ -40,14 +45,18 @@ export default async function exportDsReleaseSx(rows, { tieuDe, ngay, denNgay, c
     d.font = font({ size: 11 });
     d.alignment = { horizontal: 'center', vertical: 'middle' };
   } else {
-    // Dòng 2–3 — số tổng như tờ mẫu: Tổng đơn · Tổng mã · Tổng phần release · SL RELEASE · SL IN.
+    // Dòng 2–3 — số tổng như tờ mẫu: Tổng đơn · Tổng mã · Tổng phần release · SL RELEASE · TỔNG SL IN + 4 ô vàng bổ sung.
     const tong = tongDsRelease(rows);
     const o = [
       ['TỔNG ĐƠN RELEASE', tong.tong_don, iCot('po'), null],
       ['TỔNG MÃ RELEASE', tong.tong_ma, iCot('ma'), null],
       ['TỔNG PHẦN RELEASE', tong.tong_phan, iCot('kich_vai'), null],
       ['SL RELEASE', tong.sl_release, iCot('sl_release'), 'FFD9D9D9'],
-      ['SL IN', tong.sl_in, iCot('sl_in'), VANG],
+      ['TỔNG SL IN', tong.sl_in, iCot('sl_in'), VANG],
+      ['IN SL', tong.in_sl, iCot('vai_hu'), VANG],
+      ['IN BS', tong.in_bs, iCot('vai_thieu'), VANG],
+      ['CTY', tong.bs_cty, iCot('dm_test'), VANG],
+      ['KH', tong.bs_khach, iCot('tong'), VANG],
     ];
     o.forEach(([nhan, v, c, nen]) => {
       const a = ws.getCell(2, c); const b = ws.getCell(3, c);
@@ -108,6 +117,44 @@ export default async function exportDsReleaseSx(rows, { tieuDe, ngay, denNgay, c
       cell.alignment = { vertical: 'middle', horizontal: c.num || c.key === 'stt' ? 'center' : 'left' };
       if (typeof cell.value === 'number') cell.numFmt = '#,##0';
     });
+  }
+
+  // Sheet 2 — TỔNG THEO CHUYỀN (25/11/2026, mẫu người dùng): đúng các dòng đang xuất, 1 dòng / chuyền + Tổng cộng.
+  if (!nhatKy) {
+    const ws2 = wb.addWorksheet('Tổng theo chuyền');
+    const C2 = COT_TONG_CHUYEN;
+    ws2.columns = C2.map((c) => ({ width: c.width }));
+    ws2.mergeCells(1, 1, 1, C2.length);
+    const t2 = ws2.getCell(1, 1);
+    t2.value = `TỔNG THEO CHUYỀN — ${tieuDe}`;
+    t2.font = font({ bold: true, size: 14 });
+    t2.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    ws2.getRow(1).height = 24;
+    const hd = ws2.getRow(3);
+    C2.forEach((c, i) => {
+      const cell = hd.getCell(i + 1);
+      cell.value = c.header;
+      cell.font = font({ bold: true });
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: XANH } };
+      cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+      cell.border = border;
+    });
+    hd.height = 32;
+    const { dong, tong: tongC } = tongTheoChuyen(rows);
+    const ghiDong = (d, cuoi) => {
+      const row = ws2.addRow(C2.map((c) => d[c.key]));
+      row.eachCell({ includeEmpty: true }, (cell, ci) => {
+        const c = C2[ci - 1];
+        cell.border = cuoi ? { ...border, top: { style: 'medium', color: { argb: 'FF000000' } } } : border;
+        cell.font = font({ bold: !!cuoi });
+        cell.alignment = { vertical: 'middle', horizontal: c.num ? 'right' : 'center' };
+        if (c.num) cell.numFmt = '#,##0';
+        if (cuoi) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: VANG } };
+      });
+    };
+    dong.forEach((d) => ghiDong(d, false));
+    ghiDong(tongC, true);
+    ws2.views = [{ state: 'frozen', ySplit: 3 }];
   }
 
   const buf = await wb.xlsx.writeBuffer();

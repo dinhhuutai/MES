@@ -15,3 +15,6 @@ export const toggleBienPhap = (id, active) => client.patch(`/quality/bien-phap/$
 
 // Hủy phân loại lỗi (14/10/2026): tem về "chưa phân loại" + báo ERP hủy phiếu đã gửi. Lý do bắt buộc.
 export const huyPhanLoaiLoi = (temId, lyDo) => client.post(`/quality/phan-loai-loi/${temId}/huy`, { lyDo });
+// Mở lại phân loại lỗi đã hủy (25/11/2026, tab ở Hệ thống › Hủy lệnh xác nhận) — `huyId` = id dòng audit của lần hủy.
+export const listMoLaiPhanLoai = (date, search) => client.get('/quality/phan-loai-loi/da-huy', { params: { date, search: search || undefined } });
+export const moLaiPhanLoai = (huyId, lyDo) => client.post(`/quality/phan-loai-loi/mo-lai/${huyId}`, { lyDo });

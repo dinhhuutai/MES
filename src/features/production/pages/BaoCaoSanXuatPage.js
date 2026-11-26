@@ -103,7 +103,10 @@ function BangChiTiet({ rows, tong, cas }) {
         ))}
         {rows.length > 1 && (
           <tr>
-            <td colSpan={COT_CT.length} className="sticky left-0 z-10 border-t-2 border-line bg-surface-muted px-2 py-2 font-bold text-ink">Tổng cộng</td>
+            {/* 25/11/2026: ô nhãn chỉ DÍNH đúng 2 cột cố định (Chuyền + Khách) như các dòng thân — trước gộp cả 8 cột thông tin
+                rồi dính trái ⇒ kéo ngang thì 1 thanh rất dài che mất các cột số. Phần cột thông tin còn lại là ô trống cuộn theo bảng. */}
+            <td colSpan={2} className="sticky left-0 z-10 border-t-2 border-line bg-surface-muted px-2 py-2 font-bold text-ink">Tổng cộng</td>
+            <td colSpan={COT_CT.length - 2} className="border-t-2 border-line bg-surface-muted" />
             {ds.map((n) => <OSo key={n.k} m={tong[n.k]} nhom={n.k} dam />)}
           </tr>
         )}

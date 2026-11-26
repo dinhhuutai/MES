@@ -24,6 +24,18 @@ export const ngayLocalISO = (v) => {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 };
 
+// Giá trị cột DATE từ API ⇒ 'YYYY-MM-DD' theo GIỜ VN CỐ ĐỊNH (+7, không phụ thuộc múi giờ máy) — cho Ô NHẬP NGÀY sẽ được
+//   GỬI LẠI khi lưu. API trả cột DATE thành chuỗi UTC của 00:00 giờ VN ("2026-10-22T17:00:00.000Z" = ngày 23/10) ⇒
+//   `.slice(0, 10)` LÙI 1 NGÀY, mỗi lần lưu form lại lùi thêm (lỗi Quản trị phần in 26/08–25/11/2026). Chuỗi đã là
+//   'YYYY-MM-DD' ⇒ giữ nguyên.
+export const ngayVnISO = (v) => {
+  if (!v) return '';
+  const s = String(v);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const t = new Date(s).getTime();
+  return Number.isNaN(t) ? '' : new Date(t + 7 * 3600 * 1000).toISOString().slice(0, 10);
+};
+
 // Lọc theo KHOẢNG ngày. Đầu nào rỗng thì không chặn đầu đó (chọn mỗi ngày bắt đầu = "từ ngày đó
 // trở đi") ⇒ khớp cách `DateRangePicker` phát giá trị lúc mới chọn được 1 đầu.
 // So sánh CHUỖI 'YYYY-MM-DD' — định dạng này sắp xếp đúng thứ tự thời gian nên không cần parse lại.

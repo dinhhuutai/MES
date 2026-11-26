@@ -345,8 +345,13 @@ export function KiengFields({ kieng, meta, setMeta, soTem = 1 }) {
   );
 }
 // ─── SL BỔ SUNG DO CÔNG TY / KHÁCH CỦA TỪNG TEM (16/11/2026, mig 135 — người dùng chốt "theo từng 1 tem") ─────────────
-// Chỉ hiện khi lệnh có đợt vải BỔ SUNG. 2 ô của LƯỢT IN này: "Số tem" N ⇒ MỖI tem cùng số. Σ ≤ SL in 1 tem (BE 422
-//   BO_SUNG_VUOT_SL). Đi ERP SF0 `@pSLBSCty` / `@pSLBSKhachHang` của chính tem. Trống = không có. Sửa sau ở Danh sách tem in › Sửa tem.
+// Hiện khi lệnh (dòng in) CÓ SỐ LƯỢNG của đợt vải BỔ SUNG — luật DUY NHẤT `laDotCoSlBoSung` (25/11/2026, người dùng chốt
+//   "chỉ cần có số lượng của đợt vải bổ sung là hiện ô nhập"; gương BE `production.repository co_dot_bo_sung`): đợt mang MÃ
+//   loại `BO_SUNG` (không so tên) + SL của đợt trong lệnh (`sl_vao_sx`) > 0. Áp ở sidebar 1 lệnh · bảng gom set · bảng In tem
+//   nhiều phần in. ⚠ Đợt ERP gửi nhầm loại "Số lượng" ⇒ không hiện ô — sửa loại đợt ở Quản trị phần in rồi mở lại panel.
+// 2 ô của LƯỢT IN này: "Số tem" N ⇒ MỖI tem cùng số. Σ ≤ SL in 1 tem (BE 422 BO_SUNG_VUOT_SL). Đi ERP SF0 `@pSLBSCty` /
+//   `@pSLBSKhachHang` của chính tem. Trống = không có. Sửa sau ở Danh sách tem in › Sửa tem.
+export const laDotCoSlBoSung = (d) => !!d && d.ma_loai_dot_vai === 'BO_SUNG' && (Number(d.sl_vao_sx) || 0) > 0;
 export const tongBoSung = (m) => (Number(m?.slBsCty) || 0) + (Number(m?.slBsKhach) || 0);
 export function BoSungTemFields({ meta, setMeta, soTem = 1, soLuong = 0 }) {
   const dat = (key, v) => setMeta((m) => ({ ...m, [key]: chiSo(v) }));
@@ -636,8 +641,8 @@ function PrintSetModal({ open, onClose, rows, onPrintRow, busy, meta, setMeta, g
     return { loaiKiengId: f.lk || '', slKieng: f.slk || '', heSoKieng: f.hs || '' };
   };
   const KHOA_KIENG = { loaiKiengId: 'lk', heSoKieng: 'hs', slKieng: 'slk' };
-  // SL bổ sung công ty / khách RIÊNG từng tem (mig 135) — chỉ dòng đợt BỔ SUNG; "Số tem" N ⇒ mỗi tem cùng số.
-  const laBs = (r) => r.ma_loai_dot_vai === 'BO_SUNG';
+  // SL bổ sung công ty / khách RIÊNG từng tem (mig 135) — chỉ dòng đợt BỔ SUNG có SL trong lệnh; "Số tem" N ⇒ mỗi tem cùng số.
+  const laBs = laDotCoSlBoSung;
   const coBs = rows.some(laBs);
   const bsVuot = (r) => laBs(r) && num(r.dot_vai_ve_id, 'sl') > 0 && num(r.dot_vai_ve_id, 'bc') + num(r.dot_vai_ve_id, 'bk') > num(r.dot_vai_ve_id, 'sl');
 
@@ -834,6 +839,8 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
   const dotVaiList = data?.dot_vai || [];
   // Đợt vải loại BỔ SUNG (ERP `loaikd = 5I`) — nhận diện bằng MÃ danh mục, không so tên hiển thị.
   const dotVaiBoSung = dotVaiList.filter((d) => d.ma_loai_dot_vai === 'BO_SUNG');
+  // Lệnh có SL của đợt bổ sung ⇒ hiện 2 ô SL bổ sung của tem (luật chung `laDotCoSlBoSung`).
+  const coSlBoSung = dotVaiList.some(laDotCoSlBoSung);
   const vaiHuyList = data?.vai_huy || [];
   const goiYTem = data?.goi_y_tem || null;
   // GOM SET = lệnh có NHIỀU PHẦN IN in chung 1 chuyền ⇒ in tem & ghi vải hủy/thiếu làm theo BẢNG
@@ -1479,7 +1486,7 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
                 <div className="mb-2">
                   <TemMetaFields meta={temMeta} setMeta={setTemMeta} goiY={goiYTem} />
                   <KiengFields kieng={data?.kieng} meta={temMeta} setMeta={setTemMeta} soTem={soTemHopLe(soTem)} />
-                  {dotVaiBoSung.length > 0 && (
+                  {coSlBoSung && (
                     <BoSungTemFields meta={temMeta} setMeta={setTemMeta} soTem={soTemHopLe(soTem)} soLuong={Number(soLuong) || 0} />
                   )}
                 </div>
@@ -1506,7 +1513,7 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
                     {/* BTP trước → chỉ LƯU (không mở cửa sổ in nhãn), nút đổi hẳn nhãn cho khỏi hiểu nhầm. */}
                     <Button onClick={doPrint} loading={busy} icon={chiLuu ? 'save' : undefined}
                       disabled={!soLuong || Number(soLuong) <= 0 || overMax || remain === 0 || chuaThoIn || khoaInNgc
-                        || (dotVaiBoSung.length > 0 && tongBoSung(temMeta) > Number(soLuong))}>
+                        || (coSlBoSung && tongBoSung(temMeta) > Number(soLuong))}>
                       {chiLuu ? 'Lưu' : (nTem > 1 ? `In ${nTem} tem` : 'In tem')}{data.cong_doan ? ` · ${data.cong_doan}` : ''}
                     </Button>
                   </div>

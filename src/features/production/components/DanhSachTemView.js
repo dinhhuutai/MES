@@ -11,7 +11,7 @@ import { Input, Select, Field, Textarea } from '../../../components/common/contr
 import Modal from '../../../components/common/Modal';
 import TimeSelect from '../../../components/common/TimeSelect';
 import ChuyenPicker from '../../../components/common/ChuyenPicker';
-import { listChuyen, getVaiTem, suaVaiTem, suaTem, reprintTem, getTemLabel, listToIn, datKhoaTem } from '../../../services/productionService';
+import { listChuyen, getVaiTem, suaVaiTem, suaTem, reprintTem, getTemLabel, listToIn, datKhoaTem, huyLaiErpTem } from '../../../services/productionService';
 import { listUserOptions } from '../../../services/userService';
 import SearchableSelect from '../../../components/common/SearchableSelect';
 import NhieuNguoiSelect from '../../../components/common/NhieuNguoiSelect';
@@ -309,6 +309,25 @@ export default function DanhSachTemView({
       ghiChuErp: 'Mở xong hệ thống tự gửi lại phiếu in tem sang ERP (cùng IDMES của lượt in).',
     },
   });
+  // HỦY LẠI ERP (26/11/2026, người dùng: "admin cho thêm nút hủy lại ở danh sách tem in, để khỏi mở lại rồi hủy"): tem ĐÃ hủy
+  //   có IDMES SF0 (`huy_lai_erp_duoc`) ⇒ admin báo ERP hủy lại mọi IDMES đó; không đổi gì ở MES. Lý do tùy chọn (trống = lý do
+  //   lúc hủy tem). `erp_chua_huy` ⇒ dấu "ERP chưa hủy" cạnh trạng thái (chỉ admin thấy).
+  const huyLai = useHuyLichSu({
+    goiHuy: (t, ly) => huyLaiErpTem(t.id, ly),
+    show,
+    coQuyen: laAdmin,
+    tieuDe: 'Báo ERP hủy lại phiếu in tem',
+    moTa: (t) => <>Tem <b>{t.ma_tem}</b> · {fmtNum(t.so_luong)} pcs · {t.ma_lenh_san_xuat || ''}</>,
+    hauQua: 'Gửi lại lệnh hủy cho mọi IDMES phiếu in tem (SF0) của tem này sang ERP. Tem ở MES giữ nguyên trạng thái đã hủy.',
+    nhanNut: 'Gửi hủy sang ERP',
+    baoXong: (t, d) => (d.tong && d.thanh_cong < d.tong
+      ? `Tem ${t.ma_tem}: ERP mới nhận hủy ${d.thanh_cong}/${d.tong} IDMES — xem lỗi ở Cài đặt API › Lịch sử`
+      : `Đã báo ERP hủy phiếu in tem của tem ${t.ma_tem} (${(d.ket_qua || []).map((x) => x.id_mes).join(', ')})`),
+    sauKhiHuy: () => load(),
+    modalProps: {
+      nhanLyDo: 'Lý do gửi ERP (tùy chọn)', batBuoc: false, goiY: 'Để trống = lý do lúc hủy tem', ghiChuErp: '',
+    },
+  });
   const coNutHuy = !laGiaCong && !!huyTem && coQuyenHuy;
 
   // ─── HỦY NHIỀU TEM (21/10/2026) ─────────────────────────────────────────────
@@ -448,7 +467,13 @@ export default function DanhSachTemView({
     { key: 'ma_tem', header: 'Mã tem', render: (r) => (
       <span className="inline-flex items-center gap-1 font-medium text-ink">{chu(maHienThi(r, laGiaCong))}{!laGiaCong && <DauKhoa r={r} />}</span>
     ) },
-    { key: 'trang_thai', header: 'Trạng thái', render: (r) => ttBadge(r.trang_thai) },
+    { key: 'trang_thai', header: 'Trạng thái', render: (r) => (laAdmin && r.trang_thai === 'HUY' && r.erp_chua_huy ? (
+      <span className="inline-flex flex-col items-start gap-0.5">
+        {ttBadge(r.trang_thai)}
+        <span className="whitespace-nowrap text-[11px] font-medium text-warning"
+          title="Tem đã hủy ở MES nhưng còn IDMES phiếu in tem chưa được ERP xác nhận hủy — bấm “Hủy lại ERP”">ERP chưa hủy</span>
+      </span>
+    ) : ttBadge(r.trang_thai)) },
     { key: 'so_luong', header: 'SL in', className: 'text-right tabular-nums', headerClassName: 'text-right', render: (r) => fmtNum(r.so_luong) },
     // Vải hủy / thiếu CỦA TEM (21/10/2026 — hủy/thiếu theo tem). Không có ⇒ để trống.
     ...(laGiaCong ? [] : [{ key: 'sl_vai_huy_tem', header: 'Hủy / Thiếu', className: 'text-right tabular-nums whitespace-nowrap', headerClassName: 'text-right',
@@ -482,13 +507,19 @@ export default function DanhSachTemView({
           </span>
         );
         if (r.trang_thai === 'HUY') {
-          if (!r.mo_lai_duoc) return null;
+          const coHuyLai = laAdmin && r.huy_lai_erp_duoc;
+          if (!r.mo_lai_duoc && !coHuyLai) return null;
           return (
             <span className="inline-flex items-center gap-1.5">
-              {nutKhoa(r)}
-              {khoa ? chuKhoa : (
+              {r.mo_lai_duoc && nutKhoa(r)}
+              {r.mo_lai_duoc && (khoa ? chuKhoa : (
                 <Button className="px-2.5 py-1 text-xs" title="Mở lại tem đã hủy — gửi lại phiếu in tem sang ERP"
                   onClick={(e) => { e.stopPropagation(); moLai.moHuy(r); }}>Mở lại</Button>
+              ))}
+              {coHuyLai && (
+                <Button variant="danger" className="px-2.5 py-1 text-xs"
+                  title="Báo ERP hủy lại phiếu in tem (SF0) của tem đã hủy — khỏi phải Mở lại rồi Hủy"
+                  onClick={(e) => { e.stopPropagation(); huyLai.moHuy(r); }}>Hủy lại ERP</Button>
               )}
             </span>
           );
@@ -620,6 +651,7 @@ export default function DanhSachTemView({
         }} />
       {huy.modal}
       {moLai.modal}
+      {huyLai.modal}
       <SuaTemModal tem={suaTemDong} onClose={() => setSuaTemDong(null)} onDaLuu={() => { setTem(null); load(); }} show={show} />
       <InLaiTemModal tem={inLaiDong} onClose={() => setInLaiDong(null)} onDaIn={load} show={show} />
       <HuyLyDoModal muc={hopHuyNhieu} onClose={() => { if (!dangHuyNhieu) setHopHuyNhieu(null); }} onXacNhan={huyNhieu}

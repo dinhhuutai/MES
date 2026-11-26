@@ -10,7 +10,7 @@ import ConfirmDialog from '../../../components/common/ConfirmDialog';
 import { Field, Input, Select, Textarea } from '../../../components/common/controls';
 import useToast from '../../../hooks/useToast';
 import useChiXem, { NHAC_CHI_XEM } from '../../../hooks/useChiXem';
-import { fmtNum, fmtDate } from '../../../utils/format';
+import { fmtNum, fmtDate, ngayVnISO } from '../../../utils/format';
 import {
   traCuuPhanIn, getQuanTriPhanIn, suaPhanIn, suaDotVai,
   datGiaiDoan, huyDotVaiQt, moDotVaiQt, huyMucReady, datKhoaErp, datLuongSx, huyPhanInQt, moPhanInQt,
@@ -409,8 +409,10 @@ export default function QuanTriPhanInPage() {
                       onLuu={(v) => luuDotVai(d.id, v)}
                       ban_dau={{
                         so_luong_vai_ve: d.so_luong_vai_ve ?? '',
-                        han_giao_hang: (d.han_giao_hang || '').slice(0, 10),
-                        ngay_vai_ve: (d.ngay_vai_ve || '').slice(0, 10),
+                        // ⚠ `ngayVnISO`, KHÔNG `.slice(0, 10)`: chuỗi UTC của cột DATE cắt 10 ký tự là lùi 1 ngày, và form
+                        //   gửi cả 2 ô khi Lưu ⇒ mỗi lần lưu đợt (kể cả chỉ đổi loại) ngày lại lùi thêm 1 (lỗi tới 25/11/2026).
+                        han_giao_hang: ngayVnISO(d.han_giao_hang),
+                        ngay_vai_ve: ngayVnISO(d.ngay_vai_ve),
                         barcode: d.barcode || '',
                         nha_gia_cong: d.nha_gia_cong || '',
                         loai_dot_vai_id: d.loai_dot_vai_id || '',

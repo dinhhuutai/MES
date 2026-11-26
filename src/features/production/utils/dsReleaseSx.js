@@ -171,12 +171,56 @@ export function dongTongNhatKy(rows) {
   return out;
 }
 
-// Số tổng đầu trang (đếm như Danh sách release: đơn / mã / phần in khác nhau · Σ SL release · Σ SL IN).
+// ─── RELEASE / IN THEO BỔ SUNG (25/11/2026, người dùng gửi mẫu ô vàng "TỔNG SL IN · IN SL · IN BS · CTY · KH" + sheet tổng
+//   theo chuyền) — backend `production/dsReleaseSx` trả:
+//   · `sl_release_bs` (mỗi dòng) = phần SL release thuộc đợt loại Bổ sung ⇒ Release BS; Release SL = SL release − Release BS.
+//   · `sl_in_bs_cty` / `sl_in_bs_khach` (mức LỆNH, dòng đầu như `sl_in`) = Σ SL bổ sung do công ty / khách CỦA TEM in trong kỳ
+//     ⇒ In BS = cty + khách; In SL = SL IN − In BS.
+export const releaseBsDong = (r) => Math.min(so(r.sl_release_bs), slReleaseDong(r));
+export const releaseSlDong = (r) => slReleaseDong(r) - releaseBsDong(r);
+const congSo = (rows) => {
+  const ds = rows || [];
+  const t = {
+    sl_release: ds.reduce((a, r) => a + slReleaseDong(r), 0),
+    release_bs: ds.reduce((a, r) => a + releaseBsDong(r), 0),
+    sl_in: ds.reduce((a, r) => a + so(r.sl_in), 0),
+    bs_cty: ds.reduce((a, r) => a + so(r.sl_in_bs_cty), 0),
+    bs_khach: ds.reduce((a, r) => a + so(r.sl_in_bs_khach), 0),
+  };
+  t.release_sl = t.sl_release - t.release_bs;
+  t.in_bs = t.bs_cty + t.bs_khach;
+  t.in_sl = t.sl_in - t.in_bs;
+  return t;
+};
+
+// Số tổng đầu trang (đếm như Danh sách release: đơn / mã / phần in khác nhau · Σ SL release · Σ SL IN) + phần bổ sung.
 export function tongDsRelease(rows) {
   const dem = (k) => new Set((rows || []).map((r) => r[k]).filter(Boolean)).size;
-  return {
-    tong_don: dem('ma_don_hang'), tong_ma: dem('ma_hang'), tong_phan: dem('ma_phan'),
-    sl_release: (rows || []).reduce((a, r) => a + slReleaseDong(r), 0),
-    sl_in: (rows || []).reduce((a, r) => a + so(r.sl_in), 0),
-  };
+  return { tong_don: dem('ma_don_hang'), tong_ma: dem('ma_hang'), tong_phan: dem('ma_phan'), ...congSo(rows) };
+}
+
+// Bảng TỔNG THEO CHUYỀN (sheet thứ 2 của Excel — mẫu người dùng 25/11/2026): 1 dòng / chuyền (mã chuyền in như cột
+//   "Chuyền" — chuyền KẾ HOẠCH của lệnh), xếp mã tự nhiên; cột theo `COT_TONG_CHUYEN`; dòng cuối "Tổng cộng".
+export const COT_TONG_CHUYEN = [
+  { key: 'chuyen', header: 'Chuyền', width: 12 },
+  { key: 'sl_release', header: 'Tổng SL Release', width: 13, num: true },
+  { key: 'release_sl', header: 'Release SL', width: 12, num: true },
+  { key: 'release_bs', header: 'Release BS', width: 12, num: true },
+  { key: 'sl_in', header: 'Tổng in', width: 12, num: true },
+  { key: 'in_sl', header: 'In SL', width: 12, num: true },
+  { key: 'in_bs', header: 'Tổng in BS', width: 12, num: true },
+  { key: 'bs_cty', header: 'BS do cty', width: 12, num: true },
+  { key: 'bs_khach', header: 'BS do KH', width: 12, num: true },
+];
+export function tongTheoChuyen(rows) {
+  const nhom = new Map();
+  (rows || []).forEach((r) => {
+    const k = maChuyenIn(r) || '(Chưa có chuyền)';
+    if (!nhom.has(k)) nhom.set(k, []);
+    nhom.get(k).push(r);
+  });
+  const dong = [...nhom.entries()]
+    .sort(([a], [b]) => a.localeCompare(b, 'vi', { numeric: true }))
+    .map(([chuyen, ds]) => ({ chuyen, ...congSo(ds) }));
+  return { dong, tong: { chuyen: 'Tổng cộng', ...congSo(rows) } };
 }

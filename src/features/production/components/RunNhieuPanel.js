@@ -17,7 +17,7 @@ import {
 import { listUserOptions } from '../../../services/userService';
 import printTemLabel, { printTemLabelNhieu, moSanCuaSoIn, dongCuaSoIn } from '../utils/printTemLabel';
 import { fmtNum } from '../../../utils/format';
-import { TemMetaFields, PhanCongInline, META_MAC_DINH, metaGuiDi, lamMoiMeta, thieuNgayCaCt, CHUA_THO_IN, chuaPhanCongThoIn, useTaiNgamKhiLenhDoi, KiengDong, thieuKieng } from './RunPanel';
+import { TemMetaFields, PhanCongInline, META_MAC_DINH, metaGuiDi, lamMoiMeta, thieuNgayCaCt, CHUA_THO_IN, chuaPhanCongThoIn, useTaiNgamKhiLenhDoi, KiengDong, thieuKieng, laDotCoSlBoSung } from './RunPanel';
 import TraVeKeHoachModal from './TraVeKeHoachModal';
 import CongDoanBadge from '../../../components/common/CongDoanBadge';
 import {
@@ -95,9 +95,11 @@ const ChoVai = ({ v, k }) => (v && v[k] > 0 ? (
     Chờ: {fmtNum(v[k])}
   </div>
 ) : null);
-// Đợt BỔ SUNG của 1 dòng (đợt đầu thuộc loại BO_SUNG trong các lệnh của dòng) — có ⇒ dòng hiện 2 ô SL bổ sung CỦA TEM.
+// Đợt BỔ SUNG của 1 dòng — đợt đầu CÓ SỐ LƯỢNG bổ sung trong (các) lệnh của dòng (luật chung `laDotCoSlBoSung`,
+//   25/11/2026 người dùng chốt "chỉ cần có số lượng của đợt vải bổ sung là hiện ô nhập") ⇒ dòng hiện 2 ô SL bổ sung CỦA TEM.
+//   Dòng nhóm (nhiều lệnh cùng code phần gộp lúc in) xét mọi lệnh của nhóm; dòng gom set cũ chỉ xét đợt của chính dòng.
 const dotBoSungCuaDong = (d) => (d.nhom || [d.run]).flatMap((r) => r.dot_vai || [])
-  .filter((x) => (!d.dotVaiId || x.dot_vai_ve_id === d.dotVaiId) && x.ma_loai_dot_vai === 'BO_SUNG')[0] || null;
+  .filter((x) => (!d.dotVaiId || x.dot_vai_ve_id === d.dotVaiId) && laDotCoSlBoSung(x))[0] || null;
 
 function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn }) {
   // key dòng → { sl, huy, thieu, gc, btpTruoc, btpCuoi, bsCty, bsKhach, loaiKiengId, heSoKieng, slKieng } (chuỗi / bool)
@@ -259,7 +261,12 @@ function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn 
                           value={giaTri(d.key, 'bsKhach', '')}
                           onChange={(e) => datO(d.key, 'bsKhach', e.target.value)} className={`${numCls} !w-20 ${bsVuot(d) ? 'border-danger' : ''}`} />
                       </div>
-                    ) : <span className="text-xs text-ink-soft">—</span>}
+                    ) : (
+                      <span className="text-xs text-ink-soft"
+                        title="Lệnh không có số lượng của đợt vải loại Bổ sung — đợt bổ sung mà ERP gửi loại khác thì sửa loại đợt ở Quản trị phần in rồi mở lại">
+                        —
+                      </span>
+                    )}
                   </td>
                 </tr>
               );

@@ -150,10 +150,14 @@ export const moLaiTem = (temId, lyDo) => client.post(`/production/mo-lai-tem/${t
 export const moLaiTemTaiLichSu = (temId, lyDo) => client.post(`/production/mo-lai-tem/${temId}/lich-su`, { lyDo });
 // KHÓA / MỞ KHÓA TAY THEO TỪNG TEM (18/11/2026) — chỉ admin. `khoa` true = khóa, false = mở khóa.
 export const datKhoaTem = (temIds, khoa, lyDo) => client.post('/production/khoa-tem', { temIds, khoa, lyDo });
+// HỦY LẠI ERP (26/11/2026) — chỉ admin: báo ERP hủy lại phiếu in tem SF0 của tem ĐÃ hủy (không đổi gì ở MES). `lyDo` tùy chọn.
+export const huyLaiErpTem = (temId, lyDo) => client.post(`/production/huy-tem/${temId}/huy-lai-erp`, { lyDo });
 // Danh sách release CỦA SẢN XUẤT (26/10/2026, nút ở Xác nhận chạy).
 // Theo khoảng NGÀY IN TEM (26/10/2026).
-export const getDsReleaseSx = (tuNgay, denNgay) => client.get('/production/ds-release', { params: { tuNgay, denNgay } });
-export const getNhatKyIn = (tuNgay, denNgay) => client.get('/production/ds-release/nhat-ky-in', { params: { tuNgay, denNgay } });
+// `ca` (25/11/2026) = mảng mã ca của tem (HC · C1 · C2 · C3 · D1 · D2); rỗng = mọi ca.
+const thamSoCa = (ca) => (ca && ca.length ? { ca: ca.join(',') } : {});
+export const getDsReleaseSx = (tuNgay, denNgay, ca) => client.get('/production/ds-release', { params: { tuNgay, denNgay, ...thamSoCa(ca) } });
+export const getNhatKyIn = (tuNgay, denNgay, ca) => client.get('/production/ds-release/nhat-ky-in', { params: { tuNgay, denNgay, ...thamSoCa(ca) } });
 export const luuDongDsReleaseSx = (body) => client.put('/production/ds-release/dong', body);
 export const getChuyenThemDsRelease = (khu) => client.get('/production/ds-release/chuyen-them', { params: { khu } });
 export const luuChuyenThemDsRelease = (khu, maChuyen) => client.put('/production/ds-release/chuyen-them', { khu, maChuyen });

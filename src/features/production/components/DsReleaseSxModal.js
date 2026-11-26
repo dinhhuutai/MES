@@ -36,10 +36,14 @@ import exportDsReleaseSx from '../utils/exportDsReleaseSx';
 //     thêm LƯU RIÊNG từng người theo từng chip (`/production/ds-release/chuyen-them`), lần sau mở là có; bấm ✕ để bỏ.
 //   · DM + TEST và Ghi chú NHẬP TAY ngay trên bảng (lưu khi rời ô, theo lệnh × phần in). Tổng = SL IN + vải hư + vải
 //     thiếu + DM+TEST · CL = Tổng − SL release.
-//   · Excel = đúng các dòng đang hiện (kể cả chuyền thêm) — `exportDsReleaseSx`.
+//   · Excel = đúng các dòng đang hiện (kể cả chuyền thêm) — `exportDsReleaseSx` (+ ô vàng IN SL · IN BS · CTY · KH và sheet
+//     "Tổng theo chuyền", 25/11/2026). Lọc Ca (HC · C1 · C2 · C3 · D1 · D2) cạnh ô Ngày ca — áp cả 2 chế độ.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const ngayHien = (iso) => String(iso || '').split('-').reverse().join('/');
+// LỌC CA (25/11/2026, người dùng: "bộ lọc cho thêm theo ngày ca / ca"): mã ca của tem = 2 ký tự cuối mã ngày ca. Chọn nhiều,
+//   không chọn = mọi ca. Lọc ở backend (`production/dsReleaseSx` — SL IN / bổ sung / vải theo ngày + ca; CL vẫn của cả lệnh).
+const CA_TEM = ['HC', 'C1', 'C2', 'C3', 'D1', 'D2'];
 const CHE_DO = [
   { v: 'RELEASE', label: 'Danh sách release' },
   { v: 'NHAT_KY', label: 'Nhật ký in' },
@@ -76,6 +80,9 @@ export default function DsReleaseSxModal({ open, onClose }) {
   const [khoang, setKhoang] = useState(() => { const h = ngayLocalISO(new Date()); return { from: h, to: h }; });
   const ngay = khoang.from || ngayLocalISO(new Date());
   const denNgay = khoang.to || ngay;
+  const [dsCa, setDsCa] = useState([]);            // mã ca đang lọc (rỗng = mọi ca)
+  const khoaCa = dsCa.join(',');
+  const doiCa = (c) => setDsCa((ds) => (ds.includes(c) ? ds.filter((x) => x !== c) : CA_TEM.filter((x) => x === c || ds.includes(x))));
   const [cheDo, setCheDo] = useState(() => docLs('dsrsx.cheDo', 'RELEASE'));
   const nhatKy = cheDo === 'NHAT_KY';
   const [items, setItems] = useState([]);          // Danh sách release (lệnh × phần in)
@@ -94,16 +101,17 @@ export default function DsReleaseSxModal({ open, onClose }) {
     if (!open) return;
     if (!ngam) setDangTai(true);
     try {
+      const ca = khoaCa ? khoaCa.split(',') : [];
       if (nhatKy) {
-        const r = await getNhatKyIn(ngay, denNgay);
+        const r = await getNhatKyIn(ngay, denNgay, ca);
         setTems(((r.data && r.data.items) || []).map(ganTruongLoc));
       } else {
-        const r = await getDsReleaseSx(ngay, denNgay);
+        const r = await getDsReleaseSx(ngay, denNgay, ca);
         setItems(((r.data && r.data.items) || []).map(ganTruongLoc));
       }
     } catch (e) { if (!ngam) show(e.message || (nhatKy ? 'Không tải được nhật ký in' : 'Không tải được danh sách release'), 'error'); }
     finally { if (!ngam) setDangTai(false); }
-  }, [open, ngay, denNgay, nhatKy, show]);
+  }, [open, ngay, denNgay, khoaCa, nhatKy, show]);
   useEffect(() => { tai(); }, [tai]);
   useSocketReload(['production:updated'], () => { if (open) tai(true); }, 1500);
 
@@ -144,8 +152,8 @@ export default function DsReleaseSxModal({ open, onClose }) {
     .filter((c) => !them.includes(c.ma_chuyen) && !hopChipChuyen({ ma_chuyen: c.ma_chuyen, ma_loai_chuyen: c.ma_loai_chuyen }, chip))
     .map((c) => ({ id: c.ma_chuyen, label: `${c.ma_chuyen}${c.ten_chuyen && c.ten_chuyen !== c.ma_chuyen ? ` · ${c.ten_chuyen}` : ''}` })), [dsChuyen, them, chip]);
   const khu = `${(nhanChip(chip) || 'TẤT CẢ').toUpperCase()}${them.length ? ` + ${them.join(', ')}` : ''}`;
-  const ngayTieuDe = denNgay !== ngay ? `${ngayHien(ngay)} – ${ngayHien(denNgay)}` : ngayHien(ngay);
-  const tieuDe = nhatKy ? `DANH SÁCH NHẬT KÝ IN ${khu}` : `DANH SÁCH RELEASE ${khu} ${ngayTieuDe}`;
+  const ngayTieuDe = `${denNgay !== ngay ? `${ngayHien(ngay)} – ${ngayHien(denNgay)}` : ngayHien(ngay)}${dsCa.length ? ` · Ca ${dsCa.join(', ')}` : ''}`;
+  const tieuDe = nhatKy ? `DANH SÁCH NHẬT KÝ IN ${khu}${dsCa.length ? ` · Ca ${dsCa.join(', ')}` : ''}` : `DANH SÁCH RELEASE ${khu} ${ngayTieuDe}`;
 
   const luuDong = async (r, truong, v) => {
     const body = { lenhId: r.lenh_id, phanInId: r.phan_in_id, [truong]: v === '' ? null : (truong === 'dmTest' ? Number(v) : v) };
@@ -202,6 +210,22 @@ export default function DsReleaseSxModal({ open, onClose }) {
             <DateRangePicker value={khoang} placeholder="Ngày ca"
               onChange={({ from, to }) => setKhoang({ from: from || ngayLocalISO(new Date()), to: to || '' })} />
           </div>
+          {/* Ca của tem (2 ký tự cuối mã ngày ca) — bấm chọn / bỏ, chọn nhiều; không chọn = mọi ca. */}
+          <div className="flex items-center gap-1 text-sm" role="group" aria-label="Lọc theo ca">
+            <span className="mr-0.5 text-ink-soft">Ca</span>
+            {CA_TEM.map((c) => {
+              const bat = dsCa.includes(c);
+              return (
+                <button key={c} type="button" aria-pressed={bat} onClick={() => doiCa(c)}
+                  className={`rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors ${bat ? 'border-primary bg-primary text-white' : 'border-line bg-surface text-ink-soft hover:text-ink'}`}>
+                  {c}
+                </button>
+              );
+            })}
+            {dsCa.length > 0 && (
+              <button type="button" onClick={() => setDsCa([])} className="ml-1 text-xs text-primary hover:underline">Mọi ca</button>
+            )}
+          </div>
           <div className="w-64">
             <Input value={tim} onChange={(e) => setTim(e.target.value)} placeholder="Tìm code phần / mã tem / lệnh / mã hàng..." />
           </div>
@@ -246,8 +270,16 @@ export default function DsReleaseSxModal({ open, onClose }) {
             <span>Tổng đơn release <b className="text-ink">{fmtNum(tong.tong_don)}</b></span>
             <span>Tổng mã release <b className="text-ink">{fmtNum(tong.tong_ma)}</b></span>
             <span>Tổng phần release <b className="text-ink">{fmtNum(tong.tong_phan)}</b></span>
-            <span>SL release <b className="text-ink">{fmtNum(tong.sl_release)}</b></span>
-            <span className="rounded bg-amber-100 px-1.5 dark:bg-amber-900/40">SL in <b className="text-ink">{fmtNum(tong.sl_in)}</b></span>
+            <span title="Release SL = đợt thường · Release BS = đợt loại Bổ sung">
+              SL release <b className="text-ink">{fmtNum(tong.sl_release)}</b>
+              <span className="ml-1">(SL {fmtNum(tong.release_sl)} · BS {fmtNum(tong.release_bs)})</span>
+            </span>
+            <span className="rounded bg-amber-100 px-1.5 dark:bg-amber-900/40">Tổng SL in <b className="text-ink">{fmtNum(tong.sl_in)}</b></span>
+            {/* Ô vàng như mẫu Excel (25/11/2026): In BS = Σ SL bổ sung (công ty + khách) của tem in trong kỳ; In SL = phần còn lại. */}
+            <span className="rounded bg-amber-100 px-1.5 dark:bg-amber-900/40">In SL <b className="text-ink">{fmtNum(tong.in_sl)}</b></span>
+            <span className="rounded bg-amber-100 px-1.5 dark:bg-amber-900/40">In BS <b className="text-ink">{fmtNum(tong.in_bs)}</b></span>
+            <span className="rounded bg-amber-100 px-1.5 dark:bg-amber-900/40">Cty <b className="text-ink">{fmtNum(tong.bs_cty)}</b></span>
+            <span className="rounded bg-amber-100 px-1.5 dark:bg-amber-900/40">KH <b className="text-ink">{fmtNum(tong.bs_khach)}</b></span>
           </div>
         )}
       </div>

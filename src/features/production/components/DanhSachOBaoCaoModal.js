@@ -13,7 +13,8 @@ import { hienNgay } from './BangBaoCaoSanXuat';
 // cộng backend `utils/baoCaoSanXuat.js` ⇒ Σ cột SL = số trên ô). `o` = { loai: 'KH'|'TT', ca, nhan, rows }.
 //   · KH: mỗi dòng = phần SL kế hoạch của 1 lệnh × phần in. Ca của KH = ca chứa GIỜ BẮT ĐẦU KẾ HOẠCH (26/10/2026
 //     người dùng chốt); thiếu giờ KH ⇒ ca lúc bấm Xác nhận chạy đầu / hoạt động đầu ngày (lệnh chạy tiếp).
-//   · TT: mỗi dòng = 1 tem; ca = 2 ký tự cuối mã ngày ca người in nhập (HC · C1/D1 · C2/D2 · C3).
+//   · TT: mỗi dòng = 1 tem; ca = 2 ký tự cuối mã ngày ca người in nhập (HC · C1/D1 · C2/D2 · C3). Kèm SL bổ sung do
+//     công ty / khách CỦA TEM (`sl_bs_cty` / `sl_bs_khach`, mig 135) + chip Σ bổ sung của ô.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const TEN_CA = { TONG: 'mọi ca', HC: 'HC', CA1: 'CA1', CA2: 'CA2', CA3: 'CA3', D1: 'D1', D2: 'D2' };
@@ -51,12 +52,18 @@ const COT_KH = [
   { key: 'ngay_kh', header: 'Ngày SX KH', render: (r) => (r.ngay_kh ? hienNgay(r.ngay_kh) : '—') },
 ];
 
+// SL bổ sung do công ty / khách CỦA TEM (mig 135 — 25/11/2026 người dùng thêm cột). null = tem không nhập ⇒ "—" (Excel trống).
+const soBs = (v) => (v == null || v === '' ? null : Number(v) || 0);
+const hienBs = (v) => (soBs(v) == null ? <span className="text-ink-soft">—</span> : fmtNum(soBs(v)));
+
 const COT_TT = [
   { key: 'ma_tem', header: 'Mã tem', render: (r) => <span className="font-mono">{r.ma_tem || '—'}</span> },
   ...COT_CHUNG,
   { key: 'ca', header: 'Ca' },
   { key: 'ma_ngay_ca', header: 'Mã ngày ca', render: (r) => <span className="font-mono">{r.ma_ngay_ca || '—'}</span> },
   { key: 'so_luong', header: 'SL in', className: 'text-right tabular-nums', render: (r) => fmtNum(r.so_luong) },
+  { key: 'sl_bs_cty', header: 'SL bổ sung do Cty', className: 'text-right tabular-nums', render: (r) => hienBs(r.sl_bs_cty) },
+  { key: 'sl_bs_khach', header: 'SL bổ sung do khách', className: 'text-right tabular-nums', render: (r) => hienBs(r.sl_bs_khach) },
   { key: 'gio_sx', header: 'Giờ SX (ô In tem)', render: (r) => khoangGio(r.gio_sx_bd, r.gio_sx_kt) || '—' },
   { key: 'tg_in', header: 'Lúc in', render: (r) => <span className="whitespace-nowrap">{gioVN(r.tg_in) || '—'}</span> },
   { key: 'nguoi_in', header: 'Người in' },
@@ -89,6 +96,8 @@ const XUAT_TT = [
   ...XUAT_CHUNG,
   { header: 'Mã ngày ca', width: 12, value: (r) => txt(r.ma_ngay_ca) },
   { header: 'SL in', width: 10, num: true, value: (r) => Number(r.so_luong) || 0 },
+  { header: 'SL bổ sung do Cty', width: 12, num: true, value: (r) => soBs(r.sl_bs_cty) },
+  { header: 'SL bổ sung do khách', width: 12, num: true, value: (r) => soBs(r.sl_bs_khach) },
   { header: 'Từ giờ', width: 8, center: true, value: (r) => txt(r.gio_sx_bd) },
   { header: 'Đến giờ', width: 8, center: true, value: (r) => txt(r.gio_sx_kt) },
   { header: 'Lúc in', width: 18, value: (r) => gioVN(r.tg_in) },
@@ -99,6 +108,10 @@ export default function DanhSachOBaoCaoModal({ o, ngay, onClose }) {
   const laKh = o && o.loai === 'KH';
   const rows = useMemo(() => ((o && o.rows) || []).map((r, i) => ({ ...r, _k: i })), [o]);
   const tong = rows.reduce((a, r) => a + (Number(laKh ? r.sl : r.so_luong) || 0), 0);
+  // Σ SL bổ sung của các tem trong ô (chỉ hiện khi có tem nhập bổ sung).
+  const coBs = !laKh && rows.some((r) => soBs(r.sl_bs_cty) != null || soBs(r.sl_bs_khach) != null);
+  const tongBsCty = coBs ? rows.reduce((a, r) => a + (soBs(r.sl_bs_cty) || 0), 0) : 0;
+  const tongBsKhach = coBs ? rows.reduce((a, r) => a + (soBs(r.sl_bs_khach) || 0), 0) : 0;
   const tieuDe = o
     ? `${laKh ? 'Kế hoạch' : 'Tem in thực tế'} · ${o.nhan} · ${TEN_CA[o.ca] || o.ca} · ngày ${hienNgay(ngay)}`
     : '';
@@ -114,6 +127,11 @@ export default function DanhSachOBaoCaoModal({ o, ngay, onClose }) {
           <span className="rounded-full bg-primary-wash px-3 py-1 font-semibold text-primary">
             {laKh ? 'SL kế hoạch' : 'SL in thực tế'}: {fmtNum(tong)}
           </span>
+          {coBs && (
+            <span className="rounded-full bg-amber-50 px-3 py-1 font-semibold text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+              Bổ sung: Cty {fmtNum(tongBsCty)} · Khách {fmtNum(tongBsKhach)}
+            </span>
+          )}
           <span className="text-ink-soft">{fmtNum(rows.length)} {laKh ? 'dòng kế hoạch' : 'tem'}</span>
           <div className="ml-auto">
             <Button variant="secondary" chiXemOk onClick={xuat} disabled={!rows.length}>Xuất Excel</Button>
