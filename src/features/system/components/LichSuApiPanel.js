@@ -38,6 +38,7 @@ const NHAN_SO_LUONG = {
   ERP_GUI_TEM_GIA_CONG: 'SL đạt',
   ERP_GUI_KIEM_PHAM: 'SL đạt',
   ERP_GUI_SUA_DAT: 'SL sửa đạt',
+  ERP_GUI_NHAN_SUA: 'SL nhận sửa',
   ERP_GUI_OQC: 'SL qua giao',
 };
 const KET_QUA_LOC = [
@@ -49,7 +50,7 @@ const KET_QUA_LOC = [
 
 // 5 API ĐẨY dữ liệu có nút "Gửi lại ERP" từng dòng (gương backend `caidatapi/guiLai.js` MA_GUI_LAI).
 // API XIN SỐ (mã tem, ID phiếu giao) KHÔNG có — gọi lại là tiêu thêm 1 số của ERP.
-const CO_GUI_LAI = new Set(['ERP_GHI_IN_TEM', 'ERP_GUI_PHIEU_GIAO', 'ERP_GUI_PHAN_LOAI_LOI', 'ERP_GUI_SUA_DAT', 'ERP_GUI_KIEM_PHAM', 'ERP_GUI_TEM_GIA_CONG', 'ERP_GUI_DS_HUY_VAI', 'ERP_GUI_OQC', 'ERP_GUI_RELEASE_1', 'ERP_GUI_HUY_IDMES', 'ERP_GUI_HUY_RELEASE_1']);
+const CO_GUI_LAI = new Set(['ERP_GHI_IN_TEM', 'ERP_GUI_PHIEU_GIAO', 'ERP_GUI_PHAN_LOAI_LOI', 'ERP_GUI_SUA_DAT', 'ERP_GUI_KIEM_PHAM', 'ERP_GUI_TEM_GIA_CONG', 'ERP_GUI_DS_HUY_VAI', 'ERP_GUI_OQC', 'ERP_GUI_RELEASE_1', 'ERP_GUI_HUY_IDMES', 'ERP_GUI_HUY_RELEASE_1', 'ERP_GUI_NHAN_SUA']);
 // API mà cột "mã" chứa MÃ LỆNH (backend ghi danh sách mã lệnh vào `ma_tem` của dòng lịch sử).
 const MA_LA_LENH = new Set(['ERP_GUI_RELEASE_1', 'ERP_GUI_HUY_RELEASE_1']);
 
