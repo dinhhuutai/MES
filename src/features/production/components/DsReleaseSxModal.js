@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Modal from '../../../components/common/Modal';
 import Button from '../../../components/common/Button';
 import Icon from '../../../components/common/Icon';
@@ -101,21 +101,28 @@ export default function DsReleaseSxModal({ open, onClose }) {
   const [loc, setLoc] = useState({});
   const [moLoc, setMoLoc] = useState(false);
 
+  // `beCu` (26/11/2026): backend trả về KHÔNG có `ca` ⇒ máy chủ chạy bản trước 25/11 — chưa lọc được ca, chưa có số bổ sung
+  //   (FE hiện 0) ⇒ báo rõ thay vì để người dùng tưởng số 0 là thật.
+  const [beCu, setBeCu] = useState(false);
+  // Mỗi lượt tải 1 số thứ tự — bấm ca / ngày liên tục thì CHỈ lượt mới nhất được ghi dữ liệu + tắt "Đang tải" (lượt cũ về sau
+  //   không đè kết quả mới).
+  const luotTai = useRef(0);
+
   // Chỉ tải nguồn của chế độ đang xem (Nhật ký in tải khi bấm sang).
   const tai = useCallback(async (ngam = false) => {
     if (!open) return;
+    const luot = ++luotTai.current;
     if (!ngam) setDangTai(true);
     try {
       const ca = khoaCa ? khoaCa.split(',') : [];
-      if (nhatKy) {
-        const r = await getNhatKyIn(ngay, denNgay, ca);
-        setTems(((r.data && r.data.items) || []).map(ganTruongLoc));
-      } else {
-        const r = await getDsReleaseSx(ngay, denNgay, ca);
-        setItems(((r.data && r.data.items) || []).map(ganTruongLoc));
-      }
-    } catch (e) { if (!ngam) show(e.message || (nhatKy ? 'Không tải được nhật ký in' : 'Không tải được danh sách release'), 'error'); }
-    finally { if (!ngam) setDangTai(false); }
+      const r = nhatKy ? await getNhatKyIn(ngay, denNgay, ca) : await getDsReleaseSx(ngay, denNgay, ca);
+      if (luot !== luotTai.current) return;
+      const ds = ((r.data && r.data.items) || []).map(ganTruongLoc);
+      if (nhatKy) setTems(ds); else setItems(ds);
+      setBeCu(!Array.isArray(r.data && r.data.ca));
+    } catch (e) {
+      if (!ngam && luot === luotTai.current) show(e.message || (nhatKy ? 'Không tải được nhật ký in' : 'Không tải được danh sách release'), 'error');
+    } finally { if (luot === luotTai.current) setDangTai(false); }
   }, [open, ngay, denNgay, khoaCa, nhatKy, show]);
   useEffect(() => { tai(); }, [tai]);
   useSocketReload(['production:updated'], () => { if (open) tai(true); }, 1500);
@@ -264,6 +271,15 @@ export default function DsReleaseSxModal({ open, onClose }) {
           </div>
         </div>
         <div className="text-center text-base font-bold text-ink">{theoChuyen ? `TỔNG THEO CHUYỀN — ${tieuDe}` : tieuDe}</div>
+        {beCu && (
+          <div className="mx-auto flex max-w-3xl items-start gap-2 rounded-card border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+            <Icon name="alert-triangle" size={14} className="mt-0.5 shrink-0" />
+            <span>
+              <b>Máy chủ (backend) đang chạy bản cũ</b> — chưa lọc được theo <b>Ca</b> (đang ra mọi ca) và chưa có số <b>bổ sung</b>
+              (Release BS · In BS · Cty · KH đang hiện 0 không phải số thật). Cần cập nhật backend.
+            </span>
+          </div>
+        )}
         {nhatKy ? (
           <div className="flex flex-wrap justify-center gap-x-5 gap-y-1 text-xs text-ink-soft">
             <span>Từ ngày <b className="text-ink">{ngayHien(ngay)}</b> đến ngày <b className="text-ink">{ngayHien(denNgay)}</b></span>
@@ -292,7 +308,17 @@ export default function DsReleaseSxModal({ open, onClose }) {
         )}
       </div>
 
-      <div className="mt-2 min-h-0 flex-1 overflow-auto rounded-card border border-line">
+      {/* Lớp phủ "Đang tải…" khi tải lại lúc bảng đã có dữ liệu (đổi ngày / ca / chế độ — 26/11/2026: trước chỉ có spinner khi
+          bảng trống ⇒ đổi ca không thấy gì). */}
+      <div className="relative mt-2 flex min-h-0 flex-1 flex-col">
+      {dangTai && nguon.length > 0 && (
+        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-card bg-surface/60 dark:bg-black/30" aria-live="polite">
+          <span className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5 text-sm font-medium text-ink shadow">
+            <Spinner size={16} /> Đang tải…
+          </span>
+        </div>
+      )}
+      <div className={`min-h-0 flex-1 overflow-auto rounded-card border border-line transition-opacity ${dangTai && nguon.length ? 'opacity-60' : ''}`}>
         {dangTai && !nguon.length ? (
           <div className="flex justify-center py-16"><Spinner size={28} /></div>
         ) : !rows.length ? (
@@ -372,6 +398,7 @@ export default function DsReleaseSxModal({ open, onClose }) {
             )}
           </table>
         )}
+      </div>
       </div>
       <Toast toast={toast} />
     </Modal>

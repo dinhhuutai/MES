@@ -12,6 +12,7 @@ import HomePortal from './features/home/pages/HomePortal';
 import PlaceholderPage from './features/common/PlaceholderPage';
 import { MODULES } from './constants/modules';
 import taiLuoi from './utils/taiLuoi';
+import KhungTaiTrang from './components/common/KhungTaiTrang';
 
 // Mỗi trang 1 file JS riêng, chỉ tải khi mở (`utils/taiLuoi.js`). Đăng nhập + Trang chủ nằm trong file chính cho lần vào đầu nhanh.
 const ProfilePage = taiLuoi(() => import('./features/profile/pages/ProfilePage'));
@@ -93,6 +94,8 @@ const KpiReadyPage = taiLuoi(() => import('./features/dashboard/pages/KpiReadyPa
 const KpiDonHangPage = taiLuoi(() => import('./features/system/pages/KpiDonHangPage'));
 const MyReportsPage = taiLuoi(() => import('./features/reports/pages/MyReportsPage'));
 const ReportDesignerPage = taiLuoi(() => import('./features/reports/pages/ReportDesignerPage'));
+// Trang CÔNG KHAI — không cần đăng nhập (26/11/2026): Theo dõi chuyền in.
+const SanLuongPage = taiLuoi(() => import('./features/congkhai/SanLuongPage'));
 const ReportByDeptPage = taiLuoi(() => import('./features/reports/pages/ReportByDeptPage'));
 
 // Màn hình đã hiện thực. Route khác dùng PlaceholderPage.
@@ -212,6 +215,8 @@ export default function App() {
     <ScrollToTop />
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      {/* ⚠ CÔNG KHAI — NGOÀI ProtectedRoute: ai mở link cũng xem được (API riêng `/api/cong-khai`, chỉ đọc). */}
+      <Route path="/san-luong" element={<KhungTaiTrang><SanLuongPage /></KhungTaiTrang>} />
 
       <Route element={<ProtectedRoute />}>
         <Route element={<PortalLayout />}>

@@ -176,7 +176,9 @@ function SoDoGio({ l, i, daQua }) {
 // `khe` (08/11/2026, người dùng: "bộ lọc ngày với toggle theo tổ lên thẳng hàng với title header của modal để phần nội
 //   dung rộng ra"): phần tử ở tiêu đề modal *Theo dõi chuyền in* — ô Ngày SX + dải chip tổ đặt vào đó (portal). Không có
 //   ⇒ đặt đầu nội dung như cũ.
-export default function TheoDoiTo({ cheDo, onCheDo, khe = null }) {
+// `taiDuLieu(ngay)` (26/11/2026 — trang công khai `/san-luong`): mặc định API nội bộ `getTheoDoiTo`; trang công khai truyền
+//   `getSanLuongTo` (`services/congKhaiService`).
+export default function TheoDoiTo({ cheDo, onCheDo, khe = null, taiDuLieu = getTheoDoiTo }) {
   const [ngay, setNgay] = useState(() => ngayLocalISO(new Date()));
   const [data, setData] = useState(null);
   const [loi, setLoi] = useState('');
@@ -185,10 +187,10 @@ export default function TheoDoiTo({ cheDo, onCheDo, khe = null }) {
 
   const tai = useCallback(async () => {
     try {
-      const res = await getTheoDoiTo(ngay);
+      const res = await taiDuLieu(ngay);
       setData(res.data); setLoi('');
     } catch (e) { setLoi(e.message || 'Lỗi tải dữ liệu'); }
-  }, [ngay]);
+  }, [ngay, taiDuLieu]);
   useEffect(() => { setData(null); tai(); const t = setInterval(tai, 30000); return () => clearInterval(t); }, [tai]);
   useSocketReload(['production:updated'], tai, 1500);
 

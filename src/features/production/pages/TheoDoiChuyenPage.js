@@ -122,16 +122,18 @@ function TheChuyen({ c, nowMs }) {
   );
 }
 
-export default function TheoDoiChuyenPage({ khe = null }) {
+// `taiDuLieu` (26/11/2026 — trang công khai `/san-luong`): hàm tải trả {data: {running, queue}}; mặc định API nội bộ
+//   `getMonitor` (cần đăng nhập). Trang công khai truyền `getSanLuongChuyen` (`services/congKhaiService`).
+export default function TheoDoiChuyenPage({ khe = null, taiDuLieu = getMonitor }) {
   const { toast, show } = useToast();
   const nowMs = useNow(30000);
   const [data, setData] = useState(null);
   const [loai, setLoai] = useState(''); // chip loại chuyền / khu ('' = tất cả)
 
   const load = useCallback(async () => {
-    try { const res = await getMonitor(); setData(res.data); }
+    try { const res = await taiDuLieu(); setData(res.data); }
     catch (e) { show(e.message || 'Lỗi tải', 'error'); }
-  }, [show]);
+  }, [show, taiDuLieu]);
   useEffect(() => { load(); const t = setInterval(load, 10000); return () => clearInterval(t); }, [load]);
   useSocketReload(['production:updated'], load, 1500);
 
