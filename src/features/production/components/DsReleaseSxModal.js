@@ -20,7 +20,7 @@ import {
 } from '../../../services/productionService';
 import {
   COT_DS_RELEASE_SX, COT_NHAT_KY_IN, LOC_DS_RELEASE, tieuDeNhom, locDsRelease, tongDsRelease, tongNhatKy, dongTongNhatKy, tongDong, clDong,
-  ganTruongLoc, chuoiTim, COT_TONG_CHUYEN, tongTheoChuyen,
+  ganTruongLoc, chuoiTim, COT_TONG_CHUYEN, tongTheoChuyen, maChuyenKhDong,
 } from '../utils/dsReleaseSx';
 import { LOAI_TABS, demChip, hopChipChuyen, nhanChip } from '../../../utils/khuChuyen';
 import exportDsReleaseSx from '../utils/exportDsReleaseSx';
@@ -202,6 +202,10 @@ export default function DsReleaseSxModal({ open, onClose }) {
       return r.hai_cong_doan
         ? <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${r.giai_doan === 'EP_UI' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200' : 'bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-200'}`}>{v}</span>
         : <span className="text-ink-soft">{v}</span>;
+    }
+    // Lệnh in ở chuyền khác kế hoạch (đổi chuyền khi chạy) ⇒ chuyền kế hoạch nhỏ bên dưới.
+    if (c.key === 'chuyen' && r.ma_chuyen_kh) {
+      return <span>{v}<span className="block text-[10px] font-normal leading-tight text-ink-soft">KH {maChuyenKhDong(r)}</span></span>;
     }
     if (c.key === 'tong') return fmtNum(tongDong(r));
     // Số có phần do script "chạy đến giao" tạo (tem HT-, không phải tem in thật) ⇒ dấu * màu cam.

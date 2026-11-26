@@ -17,7 +17,12 @@ export const clDong = (r) => tongDong(r) + so(r.sl_in_truoc_lenh) - slReleaseDon
 // `nhom` = tiêu đề nhóm (dòng trên). `nhap` = ô nhập tay (DM+TEST / Ghi chú).
 export const COT_DS_RELEASE_SX = [
   { key: 'stt', header: 'STT', width: 5, num: true, value: (r) => r._stt },
-  { key: 'chuyen', header: 'Chuyền', width: 9, value: maChuyenIn },
+  // Chuyền IN THẬT của tem trong kỳ (backend `dsReleaseSx` — 26/11/2026); khác kế hoạch ⇒ rê chuột thấy chuyền kế hoạch.
+  {
+    key: 'chuyen', header: 'Chuyền', width: 9, value: maChuyenIn,
+    tip: (r) => (r.ma_chuyen_kh
+      ? `In ở ${maChuyenIn(r)} — kế hoạch ${maChuyenKhDong(r)} (đổi chuyền khi chạy)` : maChuyenIn(r)),
+  },
   { key: 'kh', header: 'KH', width: 12, value: (r) => r.ten_khach_hang || '' },
   { key: 'po', header: 'PO', width: 16, value: tuChecklist('po') },
   { key: 'ma', header: 'Mã', width: 28, value: tuChecklist('ten_hang') },
@@ -212,15 +217,35 @@ export const COT_TONG_CHUYEN = [
   { key: 'bs_cty', header: 'BS do cty', width: 12, num: true },
   { key: 'bs_khach', header: 'BS do KH', width: 12, num: true },
 ];
+// ⚠ Chuyền của dòng = chuyền IN THẬT của tem trong kỳ (backend, 26/11/2026 — ca bổ sung cộng vào lệnh M3 / M7 rồi đổi chuyền
+//   in ở 1A1B). Lệnh in ở NHIỀU chuyền trong kỳ ⇒ dòng đầu mang `in_theo_chuyen` ⇒ số IN / BS chia về đúng từng chuyền (phần
+//   lệch còn lại về chuyền của dòng); số RELEASE vẫn theo chuyền của dòng.
 export function tongTheoChuyen(rows) {
   const nhom = new Map();
+  const lay = (k) => {
+    if (!nhom.has(k)) nhom.set(k, { sl_release: 0, release_bs: 0, sl_in: 0, bs_cty: 0, bs_khach: 0 });
+    return nhom.get(k);
+  };
   (rows || []).forEach((r) => {
     const k = maChuyenIn(r) || '(Chưa có chuyền)';
-    if (!nhom.has(k)) nhom.set(k, []);
-    nhom.get(k).push(r);
+    const g = lay(k);
+    g.sl_release += slReleaseDong(r);
+    g.release_bs += releaseBsDong(r);
+    let sl = so(r.sl_in); let cty = so(r.sl_in_bs_cty); let kh = so(r.sl_in_bs_khach);
+    (Array.isArray(r.in_theo_chuyen) ? r.in_theo_chuyen : []).forEach((x) => {
+      const gx = lay(maChuyenIn(x) || k);
+      gx.sl_in += so(x.sl_in); gx.bs_cty += so(x.bs_cty); gx.bs_khach += so(x.bs_khach);
+      sl -= so(x.sl_in); cty -= so(x.bs_cty); kh -= so(x.bs_khach);
+    });
+    g.sl_in += sl; g.bs_cty += cty; g.bs_khach += kh;
   });
+  const xong = (t) => ({ ...t, release_sl: t.sl_release - t.release_bs, in_bs: t.bs_cty + t.bs_khach, in_sl: t.sl_in - t.bs_cty - t.bs_khach });
   const dong = [...nhom.entries()]
     .sort(([a], [b]) => a.localeCompare(b, 'vi', { numeric: true }))
-    .map(([chuyen, ds]) => ({ chuyen, ...congSo(ds) }));
+    .map(([chuyen, t]) => ({ chuyen, ...xong(t) }));
   return { dong, tong: { chuyen: 'Tổng cộng', ...congSo(rows) } };
 }
+
+// Mã chuyền KẾ HOẠCH của dòng khi lệnh in ở chuyền khác ('' nếu trùng) — hiện nhỏ dưới ô Chuyền.
+export const maChuyenKhDong = (r) => (r && r.ma_chuyen_kh
+  ? maChuyenIn({ ma_chuyen: r.ma_chuyen_kh, ten_chuyen: r.ten_chuyen_kh, ma_loai_chuyen: r.ma_loai_chuyen_kh }) : '');
