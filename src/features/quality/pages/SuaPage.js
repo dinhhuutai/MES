@@ -48,6 +48,7 @@ import useDsNguoi, { nhoTen, KHOA_NGUOI_SUA } from '../../../hooks/useDsNguoi';
 import CongDoanBadge from '../../../components/common/CongDoanBadge';
 import { laHaiCongDoan } from '../../../utils/luongSanXuat';
 import NhanSuaModal from '../components/NhanSuaModal';
+import LuotNhanSuaBang from '../components/LuotNhanSuaBang';
 
 // 14/11/2026: màn Sửa chỉ có phần ĐÃ NHẬN SỬA (phân loại lỗi → Chờ nhận sửa → nút "Nhận sửa"; BE `utils/choSua.js`)
 //   ⇒ báo rõ khi quét không thấy. Cột "SL cần sửa" = phần đang sửa (đã nhận, chưa sửa).
@@ -105,6 +106,7 @@ export default function SuaPage() {
   const [doneOpen, setDoneOpen] = useState(false);
   const [scanOpen, setScanOpen] = useState(false);
   const [nhanOpen, setNhanOpen] = useState(false); // hộp "Nhận sửa" (mig 132)
+  const [lsNhanOpen, setLsNhanOpen] = useState(false); // khung "Lịch sử nhận sửa" (hủy / mở lại lượt nhận)
   // TEM ĐÃ TÍCH (27/10/2026, như KCS): giữ bản dòng lúc tích ⇒ dòng tích ghim đầu bảng kể cả khi ô tìm / bộ lọc loại nó.
   const [chon, setChon] = useState([]);
   const daChon = useMemo(() => new Set(chon.map((r) => r.tem_id)), [chon]);
@@ -556,12 +558,14 @@ export default function SuaPage() {
           </Button>
           <Button chiXemOk variant="ghost" icon="check-circle" onClick={() => setDoneOpen(true)}>Đã hoàn thành</Button>
           <Button chiXemOk variant="ghost" icon="history" onClick={() => setHistOpen(true)}>Lịch sử</Button>
+          <Button chiXemOk variant="ghost" icon="package" onClick={() => setLsNhanOpen(true)}>Lịch sử nhận sửa</Button>
         </span>
         <MenuNut className="md:hidden" nhom={[
           { muc: [
             { ten: 'Danh sách trả về', icon: 'undo', chiXemOk: true, onClick: () => setTraVeOpen(true) },
             { ten: 'Đã hoàn thành', icon: 'check-circle', chiXemOk: true, onClick: () => setDoneOpen(true) },
             { ten: 'Lịch sử', icon: 'history', chiXemOk: true, onClick: () => setHistOpen(true) },
+            { ten: 'Lịch sử nhận sửa', icon: 'package', chiXemOk: true, onClick: () => setLsNhanOpen(true) },
           ] },
           { muc: [{ ten: 'Xuất Excel', icon: 'download', chiXemOk: true, ghi: rows.length, disabled: !rows.length, onClick: doExcel }] },
         ]} />
@@ -786,6 +790,10 @@ export default function SuaPage() {
         maTrang="SX_SUA" />
       {lyDoNghenModal}
       <NhanSuaModal open={nhanOpen} onClose={() => setNhanOpen(false)} show={show} onDone={() => taiNgam()} />
+      <SidePanel open={lsNhanOpen} onClose={() => setLsNhanOpen(false)} width="max-w-6xl"
+        title="Lịch sử nhận sửa" subtitle="Các lượt nhận sửa theo ngày nhận — hủy lượt nhận nhầm / mở lại lượt đã hủy">
+        {lsNhanOpen && <LuotNhanSuaBang show={show} cheDo="ls" onDoi={() => taiNgam()} />}
+      </SidePanel>
       <Toast toast={toast} />
     </div>
   );

@@ -55,8 +55,8 @@ export default async function exportDsReleaseSx(rows, { tieuDe, ngay, denNgay, c
       ['TỔNG SL IN', tong.sl_in, iCot('sl_in'), VANG],
       ['IN SL', tong.in_sl, iCot('vai_hu'), VANG],
       ['IN BS', tong.in_bs, iCot('vai_thieu'), VANG],
-      ['CTY', tong.bs_cty, iCot('dm_test'), VANG],
-      ['KH', tong.bs_khach, iCot('tong'), VANG],
+      ['KH', tong.bs_khach, iCot('dm_test'), VANG],
+      ['CTY', tong.bs_cty, iCot('tong'), VANG],
     ];
     o.forEach(([nhan, v, c, nen]) => {
       const a = ws.getCell(2, c); const b = ws.getCell(3, c);

@@ -317,8 +317,8 @@ export default function DsReleaseSxModal({ open, onClose }) {
                 <span className={vang}>Tổng SL in <b className="text-ink">{fmtNum(tong.sl_in)}</b></span>
                 <span className={vang}>In SL <b className="text-ink">{fmtNum(tong.in_sl)}</b></span>
                 <span className={vang}>In BS <b className="text-ink">{fmtNum(tong.in_bs)}</b></span>
-                <span className={vang}>Cty <b className="text-ink">{fmtNum(tong.bs_cty)}</b></span>
                 <span className={vang}>KH <b className="text-ink">{fmtNum(tong.bs_khach)}</b></span>
+                <span className={vang}>Cty <b className="text-ink">{fmtNum(tong.bs_cty)}</b></span>
               </>
             )}
             {dangLocAn && <span className="font-semibold text-warning">· đang tìm / lọc</span>}

@@ -25,6 +25,7 @@ import { listCancelKcs, cancelKcs, listCancelSua, cancelSua, listCancelOqc, canc
   listTemSuaCancelable, listTemSuaDeleted, huyTemSua, moTemSua,
   listMoLaiKcs, moLaiKcs, listMoLaiSua, moLaiSua } from '../../../services/qualityService';
 import { listPhanLoaiLoi, huyPhanLoaiLoi, listMoLaiPhanLoai, moLaiPhanLoai } from '../../../services/phanLoaiLoiService';
+import LuotNhanSuaBang from '../../quality/components/LuotNhanSuaBang';
 import { listPhieuGiaoCancelable, huyPhieuGiao, listTemChoTich, boTichTemGiao } from '../../../services/deliveryService';
 import { fmtNum, fmtDate, fmtDateTime, ngayLocalISO } from '../../../utils/format';
 import Spinner from '../../../components/common/Spinner';
@@ -2936,11 +2937,29 @@ function KeHoachTamCancelSection({ show }) {
 }
 
 // Nhóm tab theo CÔNG ĐOẠN (28/10/2026) — chỉ để hiển thị gọn; khóa tab + quyền vẫn ở danh sách `tabs` bên dưới.
+// ─── Tab: HỦY / MỞ LẠI NHẬN SỬA (26/11/2026) — bảng dùng chung `LuotNhanSuaBang` (trang Sửa / Chờ nhận sửa cũng dùng) ───
+function NhanSuaHuyMoSection({ show, cheDo }) {
+  const mo = cheDo === 'mo';
+  return (
+    <div>
+      <Toolbar title={mo ? 'Mở lại nhận sửa' : 'Hủy nhận sửa'}
+        subtitle={mo
+          ? 'Lượt nhận sửa đã hủy — mở lại để số đó lên lại màn Sửa (chỉ khi tem còn chờ nhận đủ số của lượt)'
+          : 'Lượt nhận sửa đang hiệu lực — hủy để số đó rời màn Sửa, về Chờ nhận sửa (chỉ khi phần đó chưa sửa)'} />
+      <div className="mb-3 rounded-control border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700">
+        {mo ? 'Ngày lọc = ngày HỦY.' : 'Ngày lọc = ngày NHẬN.'} Ô tìm tìm mọi ngày. Lý do bắt buộc, ghi vết người · giờ;
+        {mo ? ' lượt từng gửi ERP (JH0) được gửi lại cùng IDMES.' : ' lượt đã gửi ERP (JH0) được báo ERP hủy.'}
+      </div>
+      <LuotNhanSuaBang show={show} cheDo={cheDo} />
+    </div>
+  );
+}
+
 const NHOM_TAB_HUY = [
   { ten: 'Kỹ thuật', keys: ['ready', 'moready', 'huyphanin', 'mophanin', 'huydotvai', 'modotvai'] },
   { ten: 'Kế hoạch', keys: ['lenh', 'huykht', 'huytest', 'huytemgiacong'] },
   { ten: 'Sản xuất', keys: ['tem', 'motem', 'dong', 'huychay', 'huyngung'] },
-  { ten: 'Chất lượng', keys: ['huykcs', 'molaikcs', 'huypll', 'molaipll', 'huysua', 'molaisua', 'huytemsua', 'motemsua', 'huyoqc'] },
+  { ten: 'Chất lượng', keys: ['huykcs', 'molaikcs', 'huypll', 'molaipll', 'huynhansua', 'molainhansua', 'huysua', 'molaisua', 'huytemsua', 'motemsua', 'huyoqc'] },
   { ten: 'Giao hàng', keys: ['huyphieugiao', 'huytich'] },
 ];
 
@@ -2975,6 +2994,8 @@ export default function LichSuTrangThaiPage() {
     can('KCS') && { key: 'molaikcs', label: 'Mở lại xác nhận KCS' },
     can('PHAN_LOAI_LOI') && { key: 'huypll', label: 'Hủy phân loại lỗi' },
     can('PHAN_LOAI_LOI') && { key: 'molaipll', label: 'Mở lại phân loại lỗi' },
+    can('SUA') && { key: 'huynhansua', label: 'Hủy nhận sửa' },
+    can('SUA') && { key: 'molainhansua', label: 'Mở lại nhận sửa' },
     can('SUA') && { key: 'huysua', label: 'Hủy xác nhận Sửa' },
     can('SUA') && { key: 'molaisua', label: 'Mở lại xác nhận Sửa' },
     can('SUA') && { key: 'huytemsua', label: 'Hủy tem sửa' },
@@ -3044,6 +3065,8 @@ export default function LichSuTrangThaiPage() {
       {tab === 'molaikcs' && <QcReopenSection show={show} kind="kcs" />}
       {tab === 'huypll' && <PhanLoaiCancelSection show={show} />}
       {tab === 'molaipll' && <PhanLoaiReopenSection show={show} />}
+      {tab === 'huynhansua' && <NhanSuaHuyMoSection show={show} cheDo="huy" />}
+      {tab === 'molainhansua' && <NhanSuaHuyMoSection show={show} cheDo="mo" />}
       {tab === 'huysua' && <QcCancelSection show={show} kind="sua" />}
       {tab === 'molaisua' && <QcReopenSection show={show} kind="sua" />}
       {tab === 'huytemsua' && <TemSuaCancelSection show={show} />}

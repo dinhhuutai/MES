@@ -16,6 +16,7 @@ export const listChoNhanSua = (params) => client.get('/quality/sua/cho-nhan', { 
 export const nhanSua = (items, ghiChu) => client.post('/quality/sua/nhan', { items, ghiChu });
 export const lichSuNhanSua = (params) => client.get('/quality/sua/nhan-lich-su', { params });
 export const huyNhanSua = (id, lyDo) => client.post(`/quality/sua/nhan/${id}/huy`, { lyDo });
+export const moLaiNhanSua = (id, lyDo) => client.post(`/quality/sua/nhan/${id}/mo-lai`, { lyDo });
 export const suaHistory = (date, q) => client.get('/quality/sua/history', { params: { date, q } });
 export const suaDone = (date, q) => client.get('/quality/sua/done', { params: { date, q } });
 // Ghi NGƯỜI SỬA cho các lượt sửa được chọn, nhập ở modal In tem (mig 080).

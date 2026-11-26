@@ -214,8 +214,8 @@ export const COT_TONG_CHUYEN = [
   { key: 'sl_in', header: 'Tổng in', width: 12, num: true },
   { key: 'in_sl', header: 'In SL', width: 12, num: true },
   { key: 'in_bs', header: 'Tổng in BS', width: 12, num: true },
+  { key: 'bs_khach', header: 'BS do KH', width: 12, num: true }, // KH trước Cty (người dùng chốt)
   { key: 'bs_cty', header: 'BS do cty', width: 12, num: true },
-  { key: 'bs_khach', header: 'BS do KH', width: 12, num: true },
 ];
 // ⚠ Chuyền của dòng = chuyền IN THẬT của tem trong kỳ (backend, 26/11/2026 — ca bổ sung cộng vào lệnh M3 / M7 rồi đổi chuyền
 //   in ở 1A1B). Lệnh in ở NHIỀU chuyền trong kỳ ⇒ dòng đầu mang `in_theo_chuyen` ⇒ số IN / BS chia về đúng từng chuyền (phần
