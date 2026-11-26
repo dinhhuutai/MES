@@ -155,6 +155,8 @@ export default async function exportDsReleaseSx(rows, { tieuDe, ngay, denNgay, c
     dong.forEach((d) => ghiDong(d, false));
     ghiDong(tongC, true);
     ws2.views = [{ state: 'frozen', ySplit: 3 }];
+    // Xuất từ chế độ "Tổng theo chuyền" (26/11/2026) ⇒ mở file là thấy ngay sheet này.
+    if (cheDo === 'CHUYEN') wb.views = [{ x: 0, y: 0, width: 10000, height: 20000, firstSheet: 0, activeTab: 1, visibility: 'visible' }];
   }
 
   const buf = await wb.xlsx.writeBuffer();

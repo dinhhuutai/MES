@@ -20,7 +20,7 @@ import {
 } from '../../../services/productionService';
 import {
   COT_DS_RELEASE_SX, COT_NHAT_KY_IN, LOC_DS_RELEASE, tieuDeNhom, locDsRelease, tongDsRelease, tongNhatKy, dongTongNhatKy, tongDong, clDong,
-  ganTruongLoc, chuoiTim,
+  ganTruongLoc, chuoiTim, COT_TONG_CHUYEN, tongTheoChuyen,
 } from '../utils/dsReleaseSx';
 import { LOAI_TABS, demChip, hopChipChuyen, nhanChip } from '../../../utils/khuChuyen';
 import exportDsReleaseSx from '../utils/exportDsReleaseSx';
@@ -44,8 +44,12 @@ const ngayHien = (iso) => String(iso || '').split('-').reverse().join('/');
 // LỌC CA (25/11/2026, người dùng: "bộ lọc cho thêm theo ngày ca / ca"): mã ca của tem = 2 ký tự cuối mã ngày ca. Chọn nhiều,
 //   không chọn = mọi ca. Lọc ở backend (`production/dsReleaseSx` — SL IN / bổ sung / vải theo ngày + ca; CL vẫn của cả lệnh).
 const CA_TEM = ['HC', 'C1', 'C2', 'C3', 'D1', 'D2'];
+// TỔNG THEO CHUYỀN (26/11/2026, người dùng: "cho thêm nút chuyển đổi để qua được cái bảng trong sheet Tổng theo chuyền") =
+//   chính sheet 2 của Excel (`tongTheoChuyen` / `COT_TONG_CHUYEN`) trên ĐÚNG các dòng Danh sách release đang hiện (chip khu,
+//   chuyền thêm, ô tìm, bộ lọc, ca) — dùng chung dữ liệu với Danh sách release.
 const CHE_DO = [
   { v: 'RELEASE', label: 'Danh sách release' },
+  { v: 'CHUYEN', label: 'Tổng theo chuyền' },
   { v: 'NHAT_KY', label: 'Nhật ký in' },
 ];
 // Chú thích ô (rê chuột): `tip` của cột, hoặc phần do script hệ thống tạo, không thì chính giá trị.
@@ -85,6 +89,7 @@ export default function DsReleaseSxModal({ open, onClose }) {
   const doiCa = (c) => setDsCa((ds) => (ds.includes(c) ? ds.filter((x) => x !== c) : CA_TEM.filter((x) => x === c || ds.includes(x))));
   const [cheDo, setCheDo] = useState(() => docLs('dsrsx.cheDo', 'RELEASE'));
   const nhatKy = cheDo === 'NHAT_KY';
+  const theoChuyen = cheDo === 'CHUYEN';
   const [items, setItems] = useState([]);          // Danh sách release (lệnh × phần in)
   const [tems, setTems] = useState([]);            // Nhật ký in (tem)
   const [dangTai, setDangTai] = useState(false);
@@ -144,6 +149,8 @@ export default function DsReleaseSxModal({ open, onClose }) {
   const tongNk = useMemo(() => tongNhatKy(rows), [rows]);
   // Dòng TỔNG cuối bảng Nhật ký in (19/11/2026) — cùng hàm với Excel.
   const dongTong = useMemo(() => (nhatKy ? dongTongNhatKy(rows) : null), [nhatKy, rows]);
+  // Bảng Tổng theo chuyền — cùng hàm với sheet 2 của Excel.
+  const bangChuyen = useMemo(() => (theoChuyen ? tongTheoChuyen(rows) : null), [theoChuyen, rows]);
   const counts = useMemo(() => demChip(daLoc), [daLoc]);
   const soLoc = Object.values(loc).filter(Boolean).length;
   const cols = nhatKy ? COT_NHAT_KY_IN : COT_DS_RELEASE_SX;
@@ -153,7 +160,8 @@ export default function DsReleaseSxModal({ open, onClose }) {
     .map((c) => ({ id: c.ma_chuyen, label: `${c.ma_chuyen}${c.ten_chuyen && c.ten_chuyen !== c.ma_chuyen ? ` · ${c.ten_chuyen}` : ''}` })), [dsChuyen, them, chip]);
   const khu = `${(nhanChip(chip) || 'TẤT CẢ').toUpperCase()}${them.length ? ` + ${them.join(', ')}` : ''}`;
   const ngayTieuDe = `${denNgay !== ngay ? `${ngayHien(ngay)} – ${ngayHien(denNgay)}` : ngayHien(ngay)}${dsCa.length ? ` · Ca ${dsCa.join(', ')}` : ''}`;
-  const tieuDe = nhatKy ? `DANH SÁCH NHẬT KÝ IN ${khu}${dsCa.length ? ` · Ca ${dsCa.join(', ')}` : ''}` : `DANH SÁCH RELEASE ${khu} ${ngayTieuDe}`;
+  const tieuDeRelease = `DANH SÁCH RELEASE ${khu} ${ngayTieuDe}`;
+  const tieuDe = nhatKy ? `DANH SÁCH NHẬT KÝ IN ${khu}${dsCa.length ? ` · Ca ${dsCa.join(', ')}` : ''}` : tieuDeRelease;
 
   const luuDong = async (r, truong, v) => {
     const body = { lenhId: r.lenh_id, phanInId: r.phan_in_id, [truong]: v === '' ? null : (truong === 'dmTest' ? Number(v) : v) };
@@ -255,7 +263,7 @@ export default function DsReleaseSxModal({ open, onClose }) {
               onChange={(ma) => { if (ma) luuThem([...them, ma]); }} />
           </div>
         </div>
-        <div className="text-center text-base font-bold text-ink">{tieuDe}</div>
+        <div className="text-center text-base font-bold text-ink">{theoChuyen ? `TỔNG THEO CHUYỀN — ${tieuDe}` : tieuDe}</div>
         {nhatKy ? (
           <div className="flex flex-wrap justify-center gap-x-5 gap-y-1 text-xs text-ink-soft">
             <span>Từ ngày <b className="text-ink">{ngayHien(ngay)}</b> đến ngày <b className="text-ink">{ngayHien(denNgay)}</b></span>
@@ -292,6 +300,37 @@ export default function DsReleaseSxModal({ open, onClose }) {
             {tim.trim() || soLoc ? 'Không có dòng khớp ô tìm / bộ lọc.'
               : `Không có ${nhatKy ? 'tem nào' : 'lệnh nào có tem'} in ngày ${ngayTieuDe} ở khu này.`}
           </div>
+        ) : bangChuyen ? (
+          // TỔNG THEO CHUYỀN — 1 dòng / chuyền (chuyền như cột "Chuyền" của Danh sách release) + dòng Tổng cộng, như sheet 2 Excel.
+          <table className="mx-auto min-w-[48rem] border-separate border-spacing-0 text-sm">
+            <thead className="sticky top-0 z-10">
+              <tr>
+                {COT_TONG_CHUYEN.map((c) => <th key={c.key} className={`${th} px-3 py-2 text-center text-xs`}>{c.header}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {bangChuyen.dong.map((d) => (
+                <tr key={d.chuyen} className="hover:bg-surface-muted/40">
+                  {COT_TONG_CHUYEN.map((c) => (
+                    <td key={c.key}
+                      className={`whitespace-nowrap border-b border-r border-line/60 px-3 py-1.5 ${c.num ? 'text-right tabular-nums' : 'text-center font-medium text-ink'}`}>
+                      {c.num ? fmtNum(d[c.key]) : d[c.key]}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+            <tfoot className="sticky bottom-0 z-10">
+              <tr>
+                {COT_TONG_CHUYEN.map((c) => (
+                  <td key={c.key}
+                    className={`whitespace-nowrap border-r border-t-2 border-line border-t-ink/40 bg-amber-100 px-3 py-2 font-bold text-ink dark:bg-amber-900/50 ${c.num ? 'text-right tabular-nums' : 'text-center'}`}>
+                    {c.num ? fmtNum(bangChuyen.tong[c.key]) : bangChuyen.tong[c.key]}
+                  </td>
+                ))}
+              </tr>
+            </tfoot>
+          </table>
         ) : (
           <table className="w-full min-w-max border-separate border-spacing-0 text-xs">
             <thead className="sticky top-0 z-10">
