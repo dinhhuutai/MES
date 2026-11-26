@@ -124,6 +124,24 @@ export function dongConSlBs(r, kieu = 'CHO') {
     { __loaiSl: 'BS', __thu: 1, so_luong_release: bs, da_in_truoc: daBs },
   ];
 }
+// ĐANG CHẠY — LỆNH LẪN SỐ LƯỢNG + BỔ SUNG THÀNH 2 DÒNG THẬT (26/11/2026, người dùng chọn "1 lệnh, 2 dòng làm riêng": Kế hoạch
+//   vẫn gộp như cũ, chỉ ở Sản xuất mỗi phần 1 dòng có ô tích + nút Mở riêng; mở dòng BS ⇒ sidebar làm phần bổ sung — `RunPanel
+//   phan`). Mỗi dòng mang `_khoa` (khóa tích / React: phiếu, phần BS thêm "#BS") + `__phan`; số đã in / SL release / số tem của
+//   phần (như `dongConSlBs`). Dòng phần mang lại `sl_release_bs` / `printed_bs` khớp phần ⇒ `loaiSlBs` ra 'SL' / 'BS' ⇒ gom dòng
+//   cùng code phần đi đúng nhóm. Lệnh gom set (nhiều phần in) không tách.
+export function tachPhanSlBsChay(rows) {
+  const out = [];
+  (rows || []).forEach((r) => {
+    const sub = !(r.phan_in_list && r.phan_in_list.length > 1) ? dongConSlBs(r, 'CHAY') : null;
+    if (!sub) { out.push({ ...r, _khoa: r.phieu_id }); return; }
+    const [sl, bs] = sub;
+    out.push({ ...r, ...sl, __thu: undefined, _khoa: r.phieu_id, __phan: 'SL', sl_release_bs: 0, printed_bs: 0, so_tem_bs: 0 });
+    out.push({ ...r, ...bs, __thu: undefined, _khoa: `${r.phieu_id}#BS`, __phan: 'BS',
+      sl_release_bs: bs.target, printed_bs: bs.printed, so_tem_bs: bs.so_tem });
+  });
+  return out;
+}
+
 // Loại để vẽ badge của 1 dòng bảng (dòng con đã tách mang sẵn `__loaiSl`). ⚠ Máy chủ CHƯA có bản 26/11 (lệnh thiếu hẳn trường
 //   `sl_release_bs`) ⇒ null = KHÔNG vẽ badge — không thì mọi dòng hiện "SL", kể cả lệnh bổ sung (người dùng thấy 26/11 khi BE chưa
 //   chạy commit mới). Dòng gom đọc lệnh ĐẦU (`tongCot` của dòng gom luôn ra số).

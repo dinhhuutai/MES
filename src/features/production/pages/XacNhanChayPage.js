@@ -45,7 +45,7 @@ import FinishListModal from '../../quality/components/FinishListModal';
 import ChoChayModal, { LocLenhPanel } from '../components/ChoChayModal';
 import {
   locLenhChay, coLoc, LOC_TRONG, timLenhTheoMa, gomTheoCodePhan, lenhCuaDong, gomDangChayTheoCodePhan,
-  dongConSlBs, loaiBadgeSlBs, loaiSlBs,
+  dongConSlBs, loaiBadgeSlBs, tachPhanSlBsChay,
 } from '../utils/locLenhChay';
 import SlBsBadge from '../components/SlBsBadge';
 import useOTimKiem from '../../../hooks/useOTimKiem';
@@ -107,6 +107,9 @@ export default function XacNhanChayPage() {
   const [showFilter, setShowFilter] = useState(false);
   const [filters, setFilters] = useState(LOC_TRONG);
   const [sel, setSel] = useState(null);
+  // Phần đang mở của lệnh lẫn số lượng + bổ sung ('SL' | 'BS' | null — 26/11/2026, `RunPanel phan`). Mở lệnh luôn qua `moLenh`.
+  const [selPhan, setSelPhan] = useState(null);
+  const moLenh = (id, phan = null) => { setSel(id); setSelPhan(phan); };
   const [selNhieu, setSelNhieu] = useState(null);
   const [lichSuHtOpen, setLichSuHtOpen] = useState(false); // modal Lịch sử chạy hoàn tất (28/10/2026)
   const [temCuaToiOpen, setTemCuaToiOpen] = useState(false); // modal Tem của tôi (28/10/2026)
@@ -174,32 +177,37 @@ export default function XacNhanChayPage() {
   useSocketReload(['production:updated', 'dashboard:refresh'], () => load(true));
 
   const hasFilter = coLoc(filters);
-  const runFiltered = useMemo(() => locLenhChay(running, {
+  // ⚠ 26/11/2026: lệnh lẫn SỐ LƯỢNG + BỔ SUNG ⇒ 2 DÒNG THẬT (`tachPhanSlBsChay` — ô tích / Mở / sidebar theo phần). Khóa dòng +
+  //   khóa tích = `_khoa` (phiếu; phần BS "phiếu#BS"), KHÔNG còn `phieu_id`. Excel Đang chạy vẫn 1 dòng / phiếu (`runFilteredGoc`).
+  const runningTach = useMemo(() => tachPhanSlBsChay(running), [running]);
+  const locRun = useMemo(() => ({
     search, loc: filters, chuyen, loai, ngay: [{ cot: 'ngay_ke_hoach', ...ngayRun }, { cot: 'tg_bd', ...ngayXnRun }],
-  }), [running, search, filters, chuyen, ngayRun, ngayXnRun, loai]);
+  }), [search, filters, chuyen, ngayRun, ngayXnRun, loai]);
+  const runFiltered = useMemo(() => locLenhChay(runningTach, locRun), [runningTach, locRun]);
+  const runFilteredGoc = useMemo(() => locLenhChay(running, locRun), [running, locRun]);
   // Số trên chip = tập đã qua mọi bộ lọc TRỪ chính chip. Đếm theo DÒNG (đã gom code phần + chuyền — 21/10/2026).
-  const countChip = useMemo(() => demChip(gomDangChayTheoCodePhan(locLenhChay(running, {
+  const countChip = useMemo(() => demChip(gomDangChayTheoCodePhan(locLenhChay(runningTach, {
     search, loc: filters, chuyen, boChip: true, ngay: [{ cot: 'ngay_ke_hoach', ...ngayRun }, { cot: 'tg_bd', ...ngayXnRun }],
-  }))), [running, search, filters, chuyen, ngayRun, ngayXnRun]);
+  }))), [runningTach, search, filters, chuyen, ngayRun, ngayXnRun]);
   const soDongRun = useMemo(() => gomDangChayTheoCodePhan(runFiltered).length, [runFiltered]);
-  const soDongRunTatCa = useMemo(() => gomDangChayTheoCodePhan(running).length, [running]);
+  const soDongRunTatCa = useMemo(() => gomDangChayTheoCodePhan(runningTach).length, [runningTach]);
 
   // ── QUÉT / TÍCH lệnh đang chạy (08/10/2026) ──
   const chonRunSet = useMemo(() => new Set(chonRun), [chonRun]);
-  const runTheoPhieu = useMemo(() => new Map((running || []).map((r) => [r.phieu_id, r])), [running]);
+  const runTheoPhieu = useMemo(() => new Map((runningTach || []).map((r) => [r._khoa, r])), [runningTach]);
   // Lệnh đã tích còn đang chạy (lệnh vừa chạy hoàn tất / bị hủy tự rơi ra).
   const daChonRun = useMemo(() => chonRun.map((id) => runTheoPhieu.get(id)).filter(Boolean), [chonRun, runTheoPhieu]);
   // Bảng = [đã tích — mới nhất trên cùng, LUÔN hiện dù bộ lọc loại nó] + [phần còn lại theo bộ lọc], rồi GOM các
   //   lệnh cùng code phần + cùng chuyền thành 1 dòng (21/10/2026 — `gomDangChayTheoCodePhan`; dòng gom đứng ở vị trí
   //   lệnh đầu của nó nên nhóm có lệnh đã tích vẫn lên đầu).
   const bangRun = useMemo(
-    () => gomDangChayTheoCodePhan([...daChonRun, ...runFiltered.filter((r) => !chonRunSet.has(r.phieu_id))]),
+    () => gomDangChayTheoCodePhan([...daChonRun, ...runFiltered.filter((r) => !chonRunSet.has(r._khoa))]),
     [daChonRun, runFiltered, chonRunSet]
   );
   // Ô tích của DÒNG: dòng gom tích/bỏ MỌI lệnh của nó; "đã tích" = mọi lệnh đã tích.
-  const daTichDong = (r) => lenhCuaDong(r).every((l) => chonRunSet.has(l.phieu_id));
+  const daTichDong = (r) => lenhCuaDong(r).every((l) => chonRunSet.has(l._khoa));
   const doiTichRun = (r) => {
-    const ids = lenhCuaDong(r).map((l) => l.phieu_id);
+    const ids = lenhCuaDong(r).map((l) => l._khoa);
     const boHet = ids.every((id) => chonRunSet.has(id));
     if (!boHet && chonRunSet.size + ids.filter((id) => !chonRunSet.has(id)).length > TOI_DA_MO_CHUNG) {
       show(`Tối đa ${TOI_DA_MO_CHUNG} lệnh mỗi lần mở chung`, 'error');
@@ -222,7 +230,7 @@ export default function XacNhanChayPage() {
       const co = new Set(moi);
       let thieuCho = false;
       for (const r of bangRun) {
-        const them = lenhCuaDong(r).map((l) => l.phieu_id).filter((id) => !co.has(id));
+        const them = lenhCuaDong(r).map((l) => l._khoa).filter((id) => !co.has(id));
         if (!them.length) continue;
         if (moi.length + them.length > TOI_DA_MO_CHUNG) { thieuCho = true; break; }
         them.forEach((id) => { co.add(id); moi.push(id); });
@@ -240,18 +248,21 @@ export default function XacNhanChayPage() {
     && ds.every((l) => (Number(l.so_phan_in) || 1) === 1 && !(l.phan_in_list && l.phan_in_list.length > 1))
     && ds.every((l) => !khoaNgcLenh(l).includes('|'))
     && new Set(ds.map((l) => `${l.phan_in_id || l.ma_phan || ''}|${l.chuyen_id || ''}|${khoaNgcLenh(l)}|${l.giai_doan === 'EP_UI' ? 'EP' : 'IN'}`)).size === 1
-    // Số lượng / bổ sung là 2 phần riêng (26/11/2026) — chỉ gộp lệnh cùng loại; lệnh lẫn cả hai (MIX) không gộp thêm.
-    && new Set(ds.map((l) => loaiSlBs(l, 'target'))).size === 1 && loaiSlBs(ds[0], 'target') !== 'MIX'
     && !!(ds[0].phan_in_id || ds[0].ma_phan);
-  const moNhieu = async (ds) => {
+  // 26/11/2026: danh sách có thể chứa 2 PHẦN (SL + BS) của cùng 1 lệnh ⇒ khử trùng theo lệnh; còn 1 lệnh ⇒ mở thẳng (đúng phần
+  //   nếu mọi dòng cùng 1 phần). Gộp xong mở lệnh đích ở phần chung của các dòng.
+  const moNhieu = async (dsVao) => {
+    const phanChung = dsVao.every((l) => l.__phan === dsVao[0].__phan) ? (dsVao[0].__phan || null) : null;
+    const ds = dsVao.filter((l, i) => dsVao.findIndex((x) => x.lenh_id === l.lenh_id) === i);
+    if (ds.length === 1) { moLenh(ds[0].lenh_id, phanChung); return; }
     if (!cungMotPhan(ds)) { setSelNhieu(ds.map((l) => l.lenh_id)); return; }
     setBusy(true);
     try {
       const res = await gopLenh(ds.map((l) => l.lenh_id), 'Mở sản xuất chung — cùng code phần, cùng chuyền');
       const g = res.data || {};
       show(`Đã gộp ${fmtNum(ds.length)} lệnh cùng code phần thành 1 lệnh ${g.ma_lenh || ''}`);
-      setChonRun((c) => c.filter((id) => !ds.some((l) => l.phieu_id === id)));
-      setSel(g.lenh_id);
+      setChonRun((c) => c.filter((id) => !dsVao.some((l) => l._khoa === id)));
+      moLenh(g.lenh_id, phanChung);
       load(true);
     } catch (e) {
       show(`Chưa gộp được lệnh — mở chung từng lệnh (${e.message || 'lỗi'})`, 'error');
@@ -264,14 +275,14 @@ export default function XacNhanChayPage() {
   const moDong = (r) => {
     const ds = lenhCuaDong(r);
     if (ds.length > 1) moNhieu(ds);
-    else setSel(r.lenh_id);
+    else moLenh(r.lenh_id, r.__phan || null);
   };
   // ENTER ở ô tìm = 1 lần quét: khớp CHÍNH XÁC (mã lệnh · code phần · TDTHĐH → mã HSKT) ⇒ tích mọi lệnh khớp;
   // chỉ khớp GẦN ĐÚNG mà ra > 1 lệnh ⇒ không tích, giữ chữ trong ô để bảng lọc ra cho người dùng tích tay.
   const quetRun = (giaTri) => {
     const ma = String(giaTri || '').trim();
     if (!ma) return;
-    const { luot, ds } = timLenhTheoMa(running, ma);
+    const { luot, ds } = timLenhTheoMa(runningTach, ma);
     if (!ds.length) {
       show(`Không có lệnh đang chạy nào khớp «${ma}»`, 'error');
       setVuaQuet({ ma, tone: 'loi', chu: 'Không có lệnh đang chạy nào khớp mã này' });
@@ -284,7 +295,7 @@ export default function XacNhanChayPage() {
       setVuaQuet({ ma, tone: 'info', chu: `Khớp ${ds.length} lệnh — tích tay dòng cần mở` });
       return;
     }
-    const ids = ds.map((r) => r.phieu_id);
+    const ids = ds.map((r) => r._khoa);
     const moi = ids.filter((id) => !chonRunSet.has(id));
     if (chonRunSet.size + moi.length > TOI_DA_MO_CHUNG) {
       show(`Tối đa ${TOI_DA_MO_CHUNG} lệnh mỗi lần mở chung`, 'error');
@@ -303,7 +314,7 @@ export default function XacNhanChayPage() {
   };
   // "Mở (N)": 1 lệnh ⇒ RunPanel như cũ; nhiều lệnh cùng code phần + chuyền ⇒ gộp rồi RunPanel; còn lại sidebar chung.
   const moDaChon = () => {
-    if (daChonRun.length === 1) setSel(daChonRun[0].lenh_id);
+    if (daChonRun.length === 1) moLenh(daChonRun[0].lenh_id, daChonRun[0].__phan || null);
     else if (daChonRun.length > 1) moNhieu(daChonRun);
   };
 
@@ -379,7 +390,7 @@ export default function XacNhanChayPage() {
       { header: 'Xác nhận chạy', width: 17, center: true,
         value: (r) => (r.tg_bd ? new Date(r.tg_bd).toLocaleString('vi-VN') : '') },
     ],
-    rows: runFiltered, title: 'Đang sản xuất', fileName: 'dang-san-xuat',
+    rows: runFilteredGoc, title: 'Đang sản xuất', fileName: 'dang-san-xuat',
     moTaLoc: moTaBoLoc({
       'tìm kiếm': search, khách: filters.khach, đơn: filters.don, 'mã hàng': filters.maHang,
       'màu vải': filters.mauVai, 'kích vải': filters.kichVai, 'kích phim': filters.kichPhim,
@@ -413,7 +424,7 @@ export default function XacNhanChayPage() {
       const startedId = confirmRun.id;
       setConfirmRun(null);
       setChoChayOpen(false); // đóng modal Chờ chạy để thấy ngay sidebar Sản xuất của lệnh vừa chạy
-      setSel(startedId);
+      moLenh(startedId);
       load();
     } catch (e) {
       show(e.message || 'Thất bại', 'error');
@@ -456,7 +467,7 @@ export default function XacNhanChayPage() {
       if (!loi.length) {
         show(`Đã xác nhận chạy ${fmtNum(ok.length - soGop)} lệnh${ghiGop}`);
         setChoChayOpen(false); // về bảng Đang chạy để thấy ngay các lệnh vừa chạy
-        if (dichs.length === 1) setSel(dichs[0]);
+        if (dichs.length === 1) moLenh(dichs[0]);
       } else {
         show(`Đã chạy ${fmtNum(ok.length - soGop)} lệnh${ghiGop} · ${fmtNum(loi.length)} lệnh chưa chạy được (vẫn tích, có ghi lỗi)`, 'error');
         setDatConTro((n) => n + 1);
@@ -602,8 +613,8 @@ export default function XacNhanChayPage() {
             onClick={() => setShowFilter((v) => !v)}>
             Bộ lọc{hasFilter ? ' ●' : ''}
           </Button>
-          <Button chiXemOk variant="secondary" icon="download" className={NUT_GON} onClick={doExcelRunning} disabled={!runFiltered.length}>
-            Excel ({runFiltered.length})
+          <Button chiXemOk variant="secondary" icon="download" className={NUT_GON} onClick={doExcelRunning} disabled={!runFilteredGoc.length}>
+            Excel ({runFilteredGoc.length})
           </Button>
         </div>
       </div>
@@ -619,7 +630,7 @@ export default function XacNhanChayPage() {
           </div>
         </div>
       )}
-      <DataTable gon columns={runCols} rows={bangRun} loading={loading} rowKey="phieu_id" sttStart={0}
+      <DataTable gon columns={runCols} rows={bangRun} loading={loading} rowKey="_khoa" sttStart={0}
         subRows={subRows}
         rowClassName={(r) => lenhCuaDong(r).map((l) => slaRowClass(statusLenh(l.lenh_id))).find(Boolean)
           || (daTichDong(r) ? 'bg-primary/5' : '')}
@@ -743,9 +754,9 @@ export default function XacNhanChayPage() {
       {lichSuHtOpen && <LichSuHoanTatModal open onClose={() => setLichSuHtOpen(false)} show={show} onDaMoLai={() => load(true)} />}
       {temCuaToiOpen && <TemCuaToiModal open onClose={() => { setTemCuaToiOpen(false); oTim.datConTro(); }} show={show} />}
       {selNhieu && <RunNhieuPanel lenhIds={selNhieu} onClose={() => { setSelNhieu(null); oTim.datConTro(); }}
-        onChanged={() => load(true)} onMoLenh={(id) => { setSelNhieu(null); setSel(id); }}
+        onChanged={() => load(true)} onMoLenh={(id) => { setSelNhieu(null); moLenh(id); }}
         truocXacNhan={(ids) => hoiLyDoNghen(rowsNghen.filter((r) => ids.includes(r.lenh_id)))} />}
-      {sel && <RunPanel lenhId={sel} onClose={() => { setSel(null); oTim.datConTro(); }} onChanged={load}
+      {sel && <RunPanel lenhId={sel} phan={selPhan} onClose={() => { setSel(null); setSelPhan(null); oTim.datConTro(); }} onChanged={load}
         truocXacNhan={() => hoiLyDoNghen(rowsNghen.filter((r) => r.lenh_id === sel))} />}
       {/* Modal TOÀN MÀN HÌNH của 2 trang cũ — chỉ dựng component khi mở (2 trang có vòng tự làm mới 10–15s). */}
       {/* 21/10/2026: thêm "Tổng nhà máy" + "Theo tổ" NGANG HÀNG tiêu đề (người dùng chốt) — màn cũ giữ nguyên ở

@@ -353,13 +353,23 @@ export function KiengFields({ kieng, meta, setMeta, soTem = 1 }) {
 //   `@pSLBSKhachHang` của chính tem. Trống = không có. Sửa sau ở Danh sách tem in › Sửa tem.
 export const laDotCoSlBoSung = (d) => !!d && d.ma_loai_dot_vai === 'BO_SUNG' && (Number(d.sl_vao_sx) || 0) > 0;
 export const tongBoSung = (m) => (Number(m?.slBsCty) || 0) + (Number(m?.slBsKhach) || 0);
-export function BoSungTemFields({ meta, setMeta, soTem = 1, soLuong = 0 }) {
+// `du` (26/11/2026 — sidebar đang làm PHẦN BỔ SUNG của lệnh lẫn số lượng + bổ sung): cả tem là hàng bổ sung ⇒ Σ 2 ô PHẢI = SL in
+//   1 tem; có nút điền nhanh "Tất cả do công ty / khách".
+export function BoSungTemFields({ meta, setMeta, soTem = 1, soLuong = 0, du = false }) {
   const dat = (key, v) => setMeta((m) => ({ ...m, [key]: chiSo(v) }));
   const vuot = Number(soLuong) > 0 && tongBoSung(meta) > Number(soLuong);
+  const thieu = du && Number(soLuong) > 0 && tongBoSung(meta) < Number(soLuong);
+  const nhanh = (key) => setMeta((m) => ({ ...m, slBsCty: key === 'slBsCty' ? String(soLuong) : '', slBsKhach: key === 'slBsKhach' ? String(soLuong) : '' }));
   return (
     <div className="mt-2 rounded-control border border-amber-300/60 bg-amber-50/40 p-2.5 dark:bg-amber-950/10">
-      <div className="mb-1.5 text-xs font-semibold text-amber-800 dark:text-amber-300">
-        SL bổ sung của {soTem > 1 ? 'MỖI tem' : 'tem này'} — do đâu
+      <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2 text-xs font-semibold text-amber-800 dark:text-amber-300">
+        <span>SL bổ sung của {soTem > 1 ? 'MỖI tem' : 'tem này'} — do đâu{du ? ' (cả tem là hàng bổ sung)' : ''}</span>
+        {du && Number(soLuong) > 0 && (
+          <span className="flex gap-1.5 font-normal">
+            <button type="button" className="rounded border border-amber-400 px-1.5 py-0.5 hover:bg-amber-100 dark:hover:bg-amber-900/40" onClick={() => nhanh('slBsCty')}>Tất cả do công ty</button>
+            <button type="button" className="rounded border border-amber-400 px-1.5 py-0.5 hover:bg-amber-100 dark:hover:bg-amber-900/40" onClick={() => nhanh('slBsKhach')}>Tất cả do khách</button>
+          </span>
+        )}
       </div>
       <div className="grid grid-cols-2 gap-2">
         <label className="block">
@@ -374,6 +384,7 @@ export function BoSungTemFields({ meta, setMeta, soTem = 1, soLuong = 0 }) {
         </label>
       </div>
       {vuot && <p className="mt-1 text-xs text-danger">Tổng bổ sung ({fmtNum(tongBoSung(meta))}) lớn hơn SL in 1 tem ({fmtNum(soLuong)}).</p>}
+      {thieu && <p className="mt-1 text-xs text-danger">Đang in phần BỔ SUNG — công ty + khách phải bằng SL in 1 tem ({fmtNum(soLuong)}).</p>}
     </div>
   );
 }
@@ -784,7 +795,10 @@ function PrintSetModal({ open, onClose, rows, onPrintRow, busy, meta, setMeta, g
 const TEM_CHUA_KIEM = ['IN', 'DANG_PHOI', 'DA_KHO', 'CHO_CD_SAU'];
 const temHuyDuoc = (t) => TEM_CHUA_KIEM.includes(t.trang_thai) && !t.da_kiem;
 
-export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
+// `phan` (26/11/2026, người dùng: lệnh lẫn SỐ LƯỢNG + BỔ SUNG "1 lệnh, 2 dòng làm riêng" ở Xác nhận chạy): 'SL' | 'BS' = dòng
+//   được mở. Lệnh lẫn cả hai (`laMix`) ⇒ khối Đã in hiện số CỦA PHẦN đó (đổi phần ngay trên panel), In tem phần SL = tem thường
+//   (không 2 ô bổ sung), phần BS = cả tem là hàng bổ sung (công ty + khách = SL tem). Trần 110% / hoàn tất vẫn theo CẢ LỆNH.
+export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan, phan = null }) {
   const { can, permissions } = usePermissions();
   const { toast, show } = useToast();
   const canRun = can('PROD_RUN');
@@ -841,6 +855,13 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
   const dotVaiBoSung = dotVaiList.filter((d) => d.ma_loai_dot_vai === 'BO_SUNG');
   // Lệnh có SL của đợt bổ sung ⇒ hiện 2 ô SL bổ sung của tem (luật chung `laDotCoSlBoSung`).
   const coSlBoSung = dotVaiList.some(laDotCoSlBoSung);
+  // LỆNH LẪN SỐ LƯỢNG + BỔ SUNG (26/11/2026 — prop `phan`): SL release phần BS = Σ SL đợt bổ sung trong lệnh; đã in phần BS = Σ SL
+  //   bổ sung (cty + khách) CỦA TEM — cùng luật cột Đã in của Xác nhận chạy (BE `printed_bs`).
+  const [phanXem, setPhanXem] = useState(phan);
+  useEffect(() => { setPhanXem(phan); }, [lenhId, phan]);
+  const slReleaseBs = dotVaiList.filter(laDotCoSlBoSung).reduce((s, d) => s + (Number(d.sl_vao_sx) || 0), 0);
+  const printedBs = (data?.tems || []).filter((t) => t.trang_thai !== 'HUY' && !t.tem_goc_id)
+    .reduce((s, t) => s + (Number(t.sl_bo_sung_cty) || 0) + (Number(t.sl_bo_sung_khach) || 0), 0);
   const vaiHuyList = data?.vai_huy || [];
   const goiYTem = data?.goi_y_tem || null;
   // GOM SET = lệnh có NHIỀU PHẦN IN in chung 1 chuyền ⇒ in tem & ghi vải hủy/thiếu làm theo BẢNG
@@ -1035,12 +1056,12 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
       }
       let tems;
       if (n === 1) {
-        const res = await printTem(phieu.id, Number(soLuong), metaGuiDi(temMeta));
+        const res = await printTem(phieu.id, Number(soLuong), metaGuiDi(metaIn(temMeta)));
         tems = [{ tem_id: res.data?.new_tem_id }];
       } else {
         // N tem cùng SL — `printTemBatch` giữ trần 110% (tổng) và tạo N tem trong 1 transaction.
         const res = await printTemBatch(phieu.id,
-          Array.from({ length: n }, () => ({ soLuong: Number(soLuong) })), metaGuiDi(temMeta));
+          Array.from({ length: n }, () => ({ soLuong: Number(soLuong) })), metaGuiDi(metaIn(temMeta)));
         tems = res.data?.tems_in || [];
       }
       const tong = Number(soLuong) * n;
@@ -1384,6 +1405,16 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
   const remain = target && !khongTran ? Math.max(0, maxTotal - (printed - printedBtp)) : null;
   const nTem = soTemHopLe(soTem);
   const overMax = remain != null && Number(soLuong) * nTem > remain; // trần tính trên TỔNG N tem
+  // Lệnh lẫn số lượng + bổ sung (không gom set) ⇒ làm theo PHẦN; phần đang xem chưa chọn ⇒ số lượng.
+  const laMix = !coGomSet && slReleaseBs > 0 && slReleaseBs < target;
+  const phanDung = laMix ? (phanXem === 'BS' ? 'BS' : 'SL') : null;
+  const targetPhan = phanDung === 'BS' ? slReleaseBs : phanDung === 'SL' ? target - slReleaseBs : target;
+  const printedPhan = phanDung === 'BS' ? Math.min(printedBs, printed) : phanDung === 'SL' ? printed - Math.min(printedBs, printed) : printed;
+  const pctPhan = targetPhan ? Math.min(100, Math.round((printedPhan / targetPhan) * 100)) : 0;
+  // Phần SL ⇒ tem thường (bỏ 2 ô bổ sung); phần BS ⇒ cả tem là bổ sung (Σ phải = SL tem).
+  const hienBoSung = coSlBoSung && phanDung !== 'SL';
+  const thieuBoSung = phanDung === 'BS' && Number(soLuong) > 0 && tongBoSung(temMeta) !== Number(soLuong);
+  const metaIn = (m) => (phanDung === 'SL' ? { ...m, slBsCty: '', slBsKhach: '' } : m);
 
   return (
     <SidePanel
@@ -1431,13 +1462,33 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
         <div className="space-y-5 lg:min-h-0 lg:overflow-y-auto lg:pr-2">
           <KhungCongDoan data={data} />
           <section>
+            {/* Lệnh lẫn số lượng + bổ sung (26/11/2026): chọn PHẦN đang làm — số Đã in + cách In tem theo phần. */}
+            {laMix && (
+              <div className="mb-2 flex flex-wrap items-center gap-2">
+                <span className="text-xs text-ink-soft">Phần đang làm</span>
+                <span className="inline-flex rounded-full border border-line bg-surface-muted p-0.5 text-xs font-semibold" role="tablist">
+                  {[['SL', `Số lượng ${fmtNum(target - slReleaseBs)}`], ['BS', `Bổ sung ${fmtNum(slReleaseBs)}`]].map(([v, ten]) => (
+                    <button key={v} type="button" role="tab" aria-selected={phanDung === v} onClick={() => setPhanXem(v)}
+                      className={`rounded-full px-3 py-1 transition-colors ${phanDung === v
+                        ? (v === 'BS' ? 'bg-amber-500 text-white' : 'bg-sky-600 text-white') : 'text-ink-soft hover:text-ink'}`}>
+                      {ten}
+                    </button>
+                  ))}
+                </span>
+              </div>
+            )}
             <div className="mb-1 flex items-center justify-between text-sm">
-              <span className="text-ink-soft">Đã in</span>
-              <span className="font-semibold text-ink">{fmtNum(printed)} / {fmtNum(target)}</span>
+              <span className="text-ink-soft">Đã in{phanDung ? ` — phần ${phanDung === 'BS' ? 'bổ sung' : 'số lượng'}` : ''}</span>
+              <span className="font-semibold text-ink">{fmtNum(printedPhan)} / {fmtNum(targetPhan)}</span>
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-surface-muted">
-              <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+              <div className={`h-full rounded-full transition-all ${phanDung === 'BS' ? 'bg-amber-500' : 'bg-primary'}`} style={{ width: `${phanDung ? pctPhan : pct}%` }} />
             </div>
+            {phanDung && (
+              <p className="mt-1 text-xs text-ink-soft">
+                Cả lệnh: {fmtNum(printed)} / {fmtNum(target)} · đã in phần bổ sung tính theo SL bổ sung ghi trên tem
+              </p>
+            )}
             <div className="mt-1.5 flex items-center gap-2 text-xs text-ink-soft">
               <span>Phiếu {phieu?.ma_phieu_san_xuat}</span>
               <Badge tone={running ? 'info' : 'success'}>{running ? 'Đang chạy' : 'Hoàn tất'}</Badge>
@@ -1486,8 +1537,12 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
                 <div className="mb-2">
                   <TemMetaFields meta={temMeta} setMeta={setTemMeta} goiY={goiYTem} />
                   <KiengFields kieng={data?.kieng} meta={temMeta} setMeta={setTemMeta} soTem={soTemHopLe(soTem)} />
-                  {coSlBoSung && (
-                    <BoSungTemFields meta={temMeta} setMeta={setTemMeta} soTem={soTemHopLe(soTem)} soLuong={Number(soLuong) || 0} />
+                  {hienBoSung && (
+                    <BoSungTemFields meta={temMeta} setMeta={setTemMeta} soTem={soTemHopLe(soTem)} soLuong={Number(soLuong) || 0}
+                      du={phanDung === 'BS'} />
+                  )}
+                  {phanDung === 'SL' && (
+                    <p className="mt-2 text-xs text-ink-soft">Đang in <b>phần số lượng</b> — tem thường, không có SL bổ sung. Đổi sang "Bổ sung" ở trên để in tem bổ sung.</p>
                   )}
                 </div>
               )}
@@ -1513,7 +1568,7 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan }) {
                     {/* BTP trước → chỉ LƯU (không mở cửa sổ in nhãn), nút đổi hẳn nhãn cho khỏi hiểu nhầm. */}
                     <Button onClick={doPrint} loading={busy} icon={chiLuu ? 'save' : undefined}
                       disabled={!soLuong || Number(soLuong) <= 0 || overMax || remain === 0 || chuaThoIn || khoaInNgc
-                        || (coSlBoSung && tongBoSung(temMeta) > Number(soLuong))}>
+                        || (hienBoSung && tongBoSung(temMeta) > Number(soLuong)) || thieuBoSung}>
                       {chiLuu ? 'Lưu' : (nTem > 1 ? `In ${nTem} tem` : 'In tem')}{data.cong_doan ? ` · ${data.cong_doan}` : ''}
                     </Button>
                   </div>
