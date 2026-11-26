@@ -124,8 +124,16 @@ export function dongConSlBs(r, kieu = 'CHO') {
     { __loaiSl: 'BS', __thu: 1, so_luong_release: bs, da_in_truoc: daBs },
   ];
 }
-// Loại để vẽ badge của 1 dòng bảng (dòng con đã tách mang sẵn `__loaiSl`).
-export const loaiBadgeSlBs = (r, kieu = 'CHO') => (r && r.__loaiSl) || loaiSlBs(r, kieu === 'CHAY' ? 'target' : 'so_luong_release');
+// Loại để vẽ badge của 1 dòng bảng (dòng con đã tách mang sẵn `__loaiSl`). ⚠ Máy chủ CHƯA có bản 26/11 (lệnh thiếu hẳn trường
+//   `sl_release_bs`) ⇒ null = KHÔNG vẽ badge — không thì mọi dòng hiện "SL", kể cả lệnh bổ sung (người dùng thấy 26/11 khi BE chưa
+//   chạy commit mới). Dòng gom đọc lệnh ĐẦU (`tongCot` của dòng gom luôn ra số).
+export const loaiBadgeSlBs = (r, kieu = 'CHO') => {
+  if (!r) return null;
+  if (r.__loaiSl) return r.__loaiSl;
+  const goc = r._lenh && r._lenh.length ? r._lenh[0] : r;
+  if (goc.sl_release_bs === undefined) return null;
+  return loaiSlBs(r, kieu === 'CHAY' ? 'target' : 'so_luong_release');
+};
 const khacNhau = (ds, k) => [...new Set(ds.map((r) => r[k]).filter(Boolean))];
 const somNhat = (ds, k) => ds.map((r) => r[k]).filter(Boolean).sort((a, b) => new Date(a) - new Date(b))[0] || null;
 //   · 27/10/2026 (người dùng chốt): khóa thêm NHÀ GIA CÔNG của lệnh (`khoaNgcLenh`) — đợt khác NGC không cộng chung.

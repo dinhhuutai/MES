@@ -45,7 +45,7 @@ import FinishListModal from '../../quality/components/FinishListModal';
 import ChoChayModal, { LocLenhPanel } from '../components/ChoChayModal';
 import {
   locLenhChay, coLoc, LOC_TRONG, timLenhTheoMa, gomTheoCodePhan, lenhCuaDong, gomDangChayTheoCodePhan,
-  dongConSlBs, loaiBadgeSlBs,
+  dongConSlBs, loaiBadgeSlBs, loaiSlBs,
 } from '../utils/locLenhChay';
 import SlBsBadge from '../components/SlBsBadge';
 import useOTimKiem from '../../../hooks/useOTimKiem';
@@ -240,6 +240,8 @@ export default function XacNhanChayPage() {
     && ds.every((l) => (Number(l.so_phan_in) || 1) === 1 && !(l.phan_in_list && l.phan_in_list.length > 1))
     && ds.every((l) => !khoaNgcLenh(l).includes('|'))
     && new Set(ds.map((l) => `${l.phan_in_id || l.ma_phan || ''}|${l.chuyen_id || ''}|${khoaNgcLenh(l)}|${l.giai_doan === 'EP_UI' ? 'EP' : 'IN'}`)).size === 1
+    // Số lượng / bổ sung là 2 phần riêng (26/11/2026) — chỉ gộp lệnh cùng loại; lệnh lẫn cả hai (MIX) không gộp thêm.
+    && new Set(ds.map((l) => loaiSlBs(l, 'target'))).size === 1 && loaiSlBs(ds[0], 'target') !== 'MIX'
     && !!(ds[0].phan_in_id || ds[0].ma_phan);
   const moNhieu = async (ds) => {
     if (!cungMotPhan(ds)) { setSelNhieu(ds.map((l) => l.lenh_id)); return; }
