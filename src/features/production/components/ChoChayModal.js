@@ -15,7 +15,8 @@ import { LOAI_TABS, nhanChip, demChip } from '../../../utils/khuChuyen';
 import exportCheckpointExcel, {
   COT_LENH, moTaBoLoc, chenCot, cotKhoangGio, khoangGio,
 } from '../../../utils/exportCheckpointExcel';
-import { locLenhChay, coLoc, LOC_TRONG, timLenhTheoMa, chonLenhDeTich, khoaPinLenh, gomTheoCodePhan, lenhCuaDong } from '../utils/locLenhChay';
+import { locLenhChay, coLoc, LOC_TRONG, timLenhTheoMa, chonLenhDeTich, khoaPinLenh, gomTheoCodePhan, lenhCuaDong, dongConSlBs, loaiBadgeSlBs } from '../utils/locLenhChay';
+import SlBsBadge from './SlBsBadge';
 import CodePhanCongDoan from '../../../components/common/CodePhanCongDoan';
 
 // Trần số lệnh 1 lần xác nhận chạy — gương BE `production.service TOI_DA_CHAY_MOT_LUOT`.
@@ -61,8 +62,11 @@ export function LocLenhPanel({ loc, setLoc, chuyen }) {
   );
 }
 
-// Lệnh GOM SET → tách 1 dòng / phần in (cột mức lệnh `merge`).
-const subRows = (r) => (r.phan_in_list ? r.phan_in_list.map((p) => ({ ...p, __sub: true })) : null);
+// Lệnh GOM SET → tách 1 dòng / phần in (cột mức lệnh `merge`). Dòng lẫn SỐ LƯỢNG + BỔ SUNG (26/11/2026) ⇒ 2 dòng con SL / BS
+//   (`dongConSlBs` — cột SL release tách theo dòng con).
+const subRows = (r) => (r.phan_in_list && r.phan_in_list.length > 1
+  ? r.phan_in_list.map((p, i) => ({ ...p, __sub: true, __thu: i }))
+  : dongConSlBs(r, 'CHO'));
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MODAL "CHỜ CHẠY" (01/10/2026) — trước là bảng thứ hai ngay dưới *Đang chạy*; người dùng muốn trang gọn
@@ -261,15 +265,17 @@ export default function ChoChayModal({
         ref={(el) => { if (el) el.indeterminate = tichMotPhan(r); }}
         checked={daTichHet(r)} onChange={() => doiTich(r)} />
     ) }] : []),
-    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
+    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => (
+      <span>{r.ten_khach_hang || '—'}<SlBsBadge loai={loaiBadgeSlBs(r, 'CHO')} /></span>
+    ) },
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => (
       <div>
         <div className="text-ink">{r.ma_hang || '—'}</div>
-        {!r.__sub && lenhCuaDong(r).filter((l) => loiChay[l.id]).map((l) => (
+        {!r.__sub && !r.__thu && lenhCuaDong(r).filter((l) => loiChay[l.id]).map((l) => (
           <Badge key={l.id} tone="danger">Chưa chạy được{lenhCuaDong(r).length > 1 ? ` (${l.ma_lenh_san_xuat})` : ''}: {loiChay[l.id]}</Badge>
         ))}
-        {!r.__sub && r.giai_doan === 'EP_UI' && <Badge tone="info">Ép ủi (in kiếng)</Badge>}
+        {!r.__sub && !r.__thu && r.giai_doan === 'EP_UI' && <Badge tone="info">Ép ủi (in kiếng)</Badge>}
         {/* Dòng gom (cùng code phần + cùng chuyền kế hoạch) hiện như 1 phần — chỉ giữ badge GOM SET (lệnh nhiều phần in). */}
         {!r.__sub && Number(r.so_phan_in) > 1 && <GomBadge soDotVai={r.so_dot_vai} soPhanIn={r.so_phan_in} />}
         {!r.__sub && Number(r.da_in_truoc) > 0 && (
@@ -290,9 +296,10 @@ export default function ChoChayModal({
     { key: 'kich_phim', header: 'Kích phim', render: (r) => r.kich_phim || '—' },
     { key: 'ma_chuyen', header: 'Chuyền', merge: true, render: (r) => r.ten_chuyen || '—' },
     { key: 'nha_gia_cong', header: 'Nhà gia công', merge: true, render: (r) => r.nha_gia_cong || '—' },
-    // Dòng gom: SL release = TỔNG các lệnh, 1 con số.
-    { key: 'so_luong_release', header: 'SL release', className: 'text-right tabular-nums', merge: true,
-      render: (r) => fmtNum(r.so_luong_release) },
+    // Dòng gom: SL release = TỔNG các lệnh, 1 con số. KHÔNG `merge` (26/11/2026): dòng con SL / BS mỗi dòng 1 số; dòng con gom
+    //   set (cùng 1 lệnh) chỉ ghi ở dòng đầu.
+    { key: 'so_luong_release', header: 'SL release', className: 'text-right tabular-nums',
+      render: (r) => (r.__sub && r.__thu > 0 ? '' : fmtNum(r.so_luong_release)) },
     // ĐỢT VẢI (25/10/2026): dòng gom nhiều lệnh (mỗi đợt vải release ra 1 lệnh) ⇒ 1 ô tích / đợt để chọn đợt chạy.
     { key: 'dot_vai', header: 'Đợt vải', merge: true, render: (r) => {
       const ds = lenhCuaDong(r);

@@ -53,7 +53,7 @@ function ScanViz() {
  *   primaryLabel, secondaryLabel, renderHeader (node trên cùng, vd checkbox chọn mục ở READY), disabledScan,
  *   usbBarcode (chỉ READY — bật đầu đọc mã vạch USB trên máy tính),
  *   canSelect (dòng khớp nhưng chưa đủ điều kiện → nêu lý do), onNotFound (quét trượt hẳn → tra thêm để nêu lý do).
- *   size ('md' mặc định — chỉ READY dùng 'xl' vì hiện phiên quét dạng bảng).
+ *   size ('md' mặc định — READY Kỹ thuật + QC READY dùng 'full' gần trọn màn hình, 26/11/2026; danh sách phiên cao hơn theo).
  * COLLECT: isSelected, onToggle, onConfirm, confirmLabel, rowAction={label,icon,onClick(row)}.
  * IMMEDIATE: onScanAction(row)->Promise, onUndo(row)->Promise, actionLabel(row),
  *   sessionColumns (khai cột → phiên quét hiện dạng BẢNG thay cho danh sách 2 dòng chữ).
@@ -133,6 +133,15 @@ export default function ScanCollectModal({
   //   Mặc định TẮT ⇒ 9 màn kia giữ nguyên thứ tự theo bảng. Bật ở 2 modal tích tem: người quét cần
   //   THẤY tem vừa quét "lên"; xếp theo bảng thì nó chìm giữa danh sách dài, tưởng quét trượt.
   thuTuQuet = false,
+  // ⚠ IMMEDIATE + `sessionColumns` (bảng phiên quét) — 4 prop dưới MẶC ĐỊNH TẮT (26/11/2026, READY Kỹ thuật: "modal tích mã cho
+  //   thêm bấm chuột phải + ô checkbox từng dòng để bấm nút xác nhận Chờ ký tên, nút nằm kế bên Đã xác nhận phiên này"):
+  //   · `sessionChon`: thêm cột ô tích (+ ô tích tất cả) ở bảng phiên quét.
+  //   · `sessionNut({ chon, boChon })`: vẽ node cạnh tiêu đề "Đã xác nhận phiên này" — `chon` = các mục phiên đang tích
+  //     ([{ id, row, label }]); `boChon()` bỏ tích hết.
+  //   · `onSessionContextMenu(entries, event)`: chuột phải 1 dòng — dòng nằm trong các dòng đang tích (≥2) ⇒ `entries` = mọi
+  //     dòng đang tích, không thì chỉ dòng đó. Hàm tự `preventDefault()` nếu thay menu trình duyệt.
+  //   · `sessionPhu`: node vẽ BÊN TRONG modal (vd menu chuột phải — vẽ ngoài panel thì bấm vào là Headless UI đóng modal).
+  sessionChon = false, sessionNut, onSessionContextMenu, sessionPhu,
 }) {
   // ⚠⚠ 2 CHẾ ĐỘ TÁCH RIÊNG (chốt 2026-07-30) — 'qr' | 'barcode'. Trước đây camera quét CHUNG QR + 1D
   // trong cùng một vòng nên **QR rất khó "qua"** (thực tế iPhone quét mãi không ra QR, còn reader 1D
@@ -153,6 +162,7 @@ export default function ScanCollectModal({
   const camMode = !usbMode; // luôn có camera, trừ khi đang dùng đầu đọc USB
   const [log, setLog] = useState([]);       // feedback tạm (không tìm thấy / lỗi)
   const [session, setSession] = useState([]); // immediate: đã xác nhận phiên này (có nút Hủy)
+  const [chonPhien, setChonPhien] = useState(() => new Set()); // id mục phiên đang tích (`sessionChon`)
   const [manual, setManual] = useState('');  // ô nhập tay / đầu đọc USB (mọi màn)
   const [error, setError] = useState('');
   const [ready, setReady] = useState(false);
@@ -181,7 +191,7 @@ export default function ScanCollectModal({
 
   useEffect(() => {
     if (open) {
-      setLog([]); setSession([]); setManual('');
+      setLog([]); setSession([]); setManual(''); setChonPhien(new Set());
       recentRef.current = new Map();
       notFoundRef.current = new Map(); // mở lại modal = tra lại (danh sách đã tải mới)
       thuTuRef.current = new Map(); demQuetRef.current = 0; // phiên quét mới → xếp lại từ đầu
@@ -481,8 +491,18 @@ export default function ScanCollectModal({
     try {
       if (onUndo) await onUndo(entry.row);
       setSession((ss) => ss.filter((x) => x.id !== entry.id));
+      setChonPhien((s) => { if (!s.has(entry.id)) return s; const n = new Set(s); n.delete(entry.id); return n; });
     } catch (e) { pushLog(`✗ Hủy lỗi: ${e.message || ''}`, false); }
   };
+  // Ô tích bảng phiên quét (`sessionChon`).
+  const dsChonPhien = session.filter((e) => chonPhien.has(e.id));
+  const tichHetPhien = session.length > 0 && session.every((e) => chonPhien.has(e.id));
+  const doiChonPhien = (id) => setChonPhien((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const boChonPhien = () => setChonPhien(new Set());
+  const moMenuPhien = onSessionContextMenu ? (entry, ev) => {
+    const ds = chonPhien.size > 1 && chonPhien.has(entry.id) ? dsChonPhien : [entry];
+    onSessionContextMenu(ds, ev);
+  } : undefined;
 
   const handleClose = () => { stopCam(); onClose(); };
 
@@ -614,8 +634,9 @@ export default function ScanCollectModal({
         {/* IMMEDIATE: lịch sử đã xác nhận phiên này (+ Hủy) */}
         {immediate ? (
           <div className="rounded-control border border-line">
-            <div className="border-b border-line bg-surface-muted px-3 py-2">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-line bg-surface-muted px-3 py-2">
               <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Đã xác nhận phiên này ({session.length})</span>
+              {sessionNut && sessionNut({ chon: dsChonPhien, boChon: boChonPhien })}
             </div>
             {session.length === 0 ? (
               <p className="px-3 py-4 text-center text-xs text-ink-soft">Chưa xác nhận mã nào — quét/tích để xác nhận ngay.</p>
@@ -623,10 +644,16 @@ export default function ScanCollectModal({
               /* Dạng BẢNG (READY): nhiều cột thông tin + ô đổi phương án in ngay tại dòng.
                  ⚠ `e.row` là ẢNH CHỤP lúc quét — cell nào cần sống theo dữ liệu mới phải tự giữ state
                  (xem `PhuongAnInCell`), vì khối này không được cha làm mới. */
-              <div className="max-h-[22rem] overflow-auto">
+              <div className={`${size === 'full' ? 'max-h-[55vh]' : 'max-h-[22rem]'} overflow-auto`}>
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 z-10 bg-surface-muted">
                     <tr>
+                      {sessionChon && (
+                        <th className="w-8 px-2.5 py-2">
+                          <input type="checkbox" className="h-4 w-4 cursor-pointer accent-primary" aria-label="Tích tất cả dòng phiên quét"
+                            checked={tichHetPhien} onChange={() => setChonPhien(tichHetPhien ? new Set() : new Set(session.map((e) => e.id)))} />
+                        </th>
+                      )}
                       {sessionColumns.map((c) => (
                         <th key={c.key} className={`whitespace-nowrap px-2.5 py-2 text-left text-[11px] font-bold uppercase tracking-wide text-ink-soft ${c.headerClassName || ''}`}>
                           {c.header}
@@ -637,7 +664,14 @@ export default function ScanCollectModal({
                   </thead>
                   <tbody className="divide-y divide-line">
                     {session.map((e) => (
-                      <tr key={e.id}>
+                      <tr key={e.id} onContextMenu={moMenuPhien ? (ev) => moMenuPhien(e, ev) : undefined}
+                        className={chonPhien.has(e.id) ? 'bg-primary/5' : ''}>
+                        {sessionChon && (
+                          <td className="px-2.5 py-2">
+                            <input type="checkbox" className="h-4 w-4 cursor-pointer accent-primary" aria-label="Tích dòng"
+                              checked={chonPhien.has(e.id)} onChange={() => doiChonPhien(e.id)} />
+                          </td>
+                        )}
                         {sessionColumns.map((c) => (
                           <td key={c.key} className={`px-2.5 py-2 text-ink ${c.className || ''}`}>
                             {c.render ? c.render(e.row, e) : (e.row?.[c.key] ?? '—')}
@@ -680,7 +714,7 @@ export default function ScanCollectModal({
             {selectedRows.length === 0 ? (
               <p className="px-3 py-4 text-center text-xs text-ink-soft">Chưa có mã nào — quét/tích để thêm.</p>
             ) : (
-              <ul className="max-h-56 divide-y divide-line overflow-auto">
+              <ul className={`${size === 'full' ? 'max-h-[50vh]' : 'max-h-56'} divide-y divide-line overflow-auto`}>
                 {dsHienThi.map((r) => {
                   // Dòng VỪA QUÉT (số thứ tự lớn nhất) — tô nhẹ + gắn nhãn để người quét thấy ngay
                   // "tem đã lên", khỏi phải dò trong danh sách dài.
@@ -715,6 +749,7 @@ export default function ScanCollectModal({
             )}
           </div>
         )}
+        {sessionPhu}
       </div>
     </Modal>
   );

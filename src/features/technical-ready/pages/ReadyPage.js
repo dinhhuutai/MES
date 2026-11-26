@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import useChiXem from '../../../hooks/useChiXem';
 import { NhanFileMenu, NhanFileModal, SttNhanFile, daNhanFile, coDotNhanFile } from '../components/NhanFileBh';
+import { SttChoKyTen, ChoKyTenBadge, coChoKyTen, moTaChoKyTen } from '../components/ChoKyTen';
 import NghenListModal, { NghenButton } from '../../../components/common/NghenListModal';
 import TraVeListModal, { TraVeListButton, TRA_VE_THEO_MAN } from '../../../components/common/TraVeListModal';
 import useSiSoLoc from '../../../hooks/useSiSoLoc';
@@ -29,7 +30,7 @@ import TraVeFilter from '../../../components/common/TraVeFilter';
 import { locTraVe, demTraVe } from '../../../utils/traVeNgay';
 import {
   listReadyCandidates, confirmReadyBulk, readyHistory, readyDone, getReadyItemCounts,
-  confirmReadyItemsBatch, uncheckReadyItem, traCuuMaQuet, datNhanFileBh,
+  confirmReadyItemsBatch, uncheckReadyItem, traCuuMaQuet, datNhanFileBh, datChoKyTen,
 } from '../../../services/readyService';
 import ReadyPanel from '../components/ReadyPanel';
 import BatThuongModal from '../components/BatThuongModal';
@@ -168,6 +169,9 @@ export default function ReadyPage() {
   const [nfOpen, setNfOpen] = useState(false);
   const [nfSaving, setNfSaving] = useState(false);
   const dongMenuNhanFile = useCallback(() => setNfMenu(null), []);
+  // Menu chuột phải TRONG modal Quét / tích (vẽ bên trong modal — `ScanCollectModal sessionPhu`).
+  const [menuQuet, setMenuQuet] = useState(null);
+  const dongMenuQuet = useCallback(() => setMenuQuet(null), []);
   const soNhanFile = rows.filter(daNhanFile).length;
   // Mục sẽ xác nhận khi quét/tích (mặc định = tất cả mục mình có quyền). Người phụ trách 1 mục → tự khóa mục đó.
   const [scanSel, setScanSel] = useState(() => new Set());
@@ -260,7 +264,7 @@ export default function ReadyPage() {
     e.preventDefault();
     const chon = selected.size > 1 && selected.has(r._key) ? rows.filter((x) => selected.has(x._key)) : [r];
     const dong = chon.filter(coDotNhanFile);
-    if (!dong.length) { show('Dòng này không gắn đợt vải đang chờ — không đánh dấu nhận file được', 'error'); return; }
+    if (!dong.length) { show('Dòng này không gắn đợt vải đang chờ — không đánh dấu nhận file / chờ ký tên được', 'error'); return; }
     setNfMenu({ x: e.clientX, y: e.clientY, dong });
   };
   const datNhanFile = async (dong, nhan) => {
@@ -271,7 +275,22 @@ export default function ReadyPage() {
     try {
       const res = await datNhanFileBh(ids, nhan);
       show(`${res.message || (nhan ? 'Đã đưa vào danh sách đã nhận file' : 'Đã hủy khỏi danh sách đã nhận')}${ap.length > 1 ? ` (${ap.length} dòng)` : ''}`);
-      setNfMenu(null);
+      setNfMenu(null); setMenuQuet(null);
+      await refresh();
+    } catch (e) {
+      show(e.message || 'Không lưu được', 'error');
+    } finally { setNfSaving(false); }
+  };
+  // CHỜ KÝ TÊN (26/11/2026 — `components/ChoKyTen.js`): đánh dấu / bỏ theo đợt của các dòng. Cùng quyền với nhận file.
+  const datChoKyTenDong = async (dong, dang) => {
+    const ap = dong.filter((r) => coDotNhanFile(r) && (dang ? !(r.cho_ky_ten && r.cho_ky_ten.dang) : coChoKyTen(r)));
+    const ids = [...new Set(ap.flatMap((r) => r.dot_vai_ids))];
+    if (!ids.length) { setNfMenu(null); setMenuQuet(null); return; }
+    setNfSaving(true);
+    try {
+      const res = await datChoKyTen(ids, dang, 'KT');
+      show(`${res.message || (dang ? 'Đã đánh dấu chờ ký tên' : 'Đã bỏ chờ ký tên')}${ap.length > 1 ? ` (${ap.length} dòng)` : ''}`);
+      setNfMenu(null); setMenuQuet(null);
       await refresh();
     } catch (e) {
       show(e.message || 'Không lưu được', 'error');
@@ -283,6 +302,12 @@ export default function ReadyPage() {
   // `onScanAction` bên dưới.
   const scanDs = rows.filter((r) => laDongEp(r) === (scanGd === GD_EP));
   const scanRows = scanDs.filter((r, i) => scanDs.findIndex((x) => x.id === r.id) === i);
+  // Dòng HIỆN TẠI (đọc lại từ `rows` — mục phiên quét chỉ là ảnh chụp lúc quét) của các mục phiên quét: mọi dòng đợt của phần
+  //   in đó ở công đoạn đang quét ⇒ chờ ký tên / nhận file áp cho MỌI đợt đang chờ, như quét xác nhận.
+  const dongCuaMucQuet = (entries) => {
+    const ids = new Set(entries.map((e) => e.row && e.row.id).filter(Boolean));
+    return scanDs.filter((x) => ids.has(x.id) && coDotNhanFile(x));
+  };
 
   const openBulk = () => setBulk({ ma: permItems[0]?.ma || '' });
 
@@ -403,7 +428,14 @@ export default function ReadyPage() {
       render: (r) => (hsktRequired(r) ? DoneCell(r.hskt_done) : <span className="text-ink-soft">—</span>) }] : []),
     { key: 'trang_thai_ready', header: 'Trạng thái', render: (r) => {
       const s = STATUS[r.trang_thai_ready] || STATUS.CHUA;
-      return <Badge tone={s.tone}>{s.label}</Badge>;
+      // Chờ ký tên (26/11/2026) — kèm badge đỏ; đã xong KT ⇒ thay hẳn "Chờ QC" (QC chưa tính giờ tới khi bỏ chờ ký tên).
+      if (coChoKyTen(r) && r.tech_done) return <ChoKyTenBadge row={r} />;
+      return (
+        <div className="flex flex-col items-start gap-1">
+          <Badge tone={s.tone}>{s.label}</Badge>
+          <ChoKyTenBadge row={r} />
+        </div>
+      );
     } },
     { key: 'han_giao_hang', header: 'Hạn giao', copyText: (r) => (r.han_giao_hang ? fmtDate(r.han_giao_hang) : ''), render: (r) => <HanGiaoCell value={r.han_giao_hang} /> },
     { key: 'tg_qua_ready', header: 'Thời gian ERP lên MES', className: 'whitespace-nowrap', copyText: (r) => (r.tg_qua_ready ? fmtDateTime(r.tg_qua_ready) : ''), render: (r) => (
@@ -471,7 +503,8 @@ export default function ReadyPage() {
           ? `Đã chép${typeof col.header === 'string' ? ` ${col.header.replace(/\s*\(\d+\)$/, '')}` : ''}: ${text.length > 60 ? `${text.slice(0, 60)}…` : text}`
           : 'Trình duyệt không cho chép — bôi đen chữ rồi Ctrl+C', ok ? 'success' : 'error')}
         // Nhận file BH: STT khoanh tròn khi đợt của dòng đã nhận; chuột phải ⇒ menu đưa vào / hủy (11/11/2026).
-        renderStt={(r, stt) => <SttNhanFile row={r} stt={stt} />}
+        // Chờ ký tên (26/11/2026): ô vuông đỏ bao ngoài STT; menu chuột phải có thêm mục Chờ ký tên / Bỏ chờ ký tên.
+        renderStt={(r, stt) => <SttChoKyTen row={r}><SttNhanFile row={r} stt={stt} /></SttChoKyTen>}
         onRowContextMenu={moMenuNhanFile}
         onRowClick={(r) => setSel({
           key: r._key,
@@ -504,13 +537,20 @@ export default function ReadyPage() {
               moTa: daNhanFile(dongSel) ? [dongSel.nhan_file.nguoi, fmtDateTime(dongSel.nhan_file.tg)].filter(Boolean).join(' · ') : '',
               coQuyen: canNhanFile, dangLuu: nfSaving,
             } : null}
-            onNhanFile={(nhan) => dongSel && datNhanFile([dongSel], nhan)} />
+            onNhanFile={(nhan) => dongSel && datNhanFile([dongSel], nhan)}
+            choKyTen={dongSel && coDotNhanFile(dongSel) ? {
+              dang: coChoKyTen(dongSel),
+              moTa: coChoKyTen(dongSel) ? moTaChoKyTen(dongSel.cho_ky_ten).replace(/^Chờ ký tên( — )?/, '') : '',
+              coQuyen: canNhanFile, dangLuu: nfSaving,
+            } : null}
+            onChoKyTen={(dang) => dongSel && datChoKyTenDong([dongSel], dang)} />
         );
       })()}
 
       <BatThuongModal open={btOpen} onClose={() => setBtOpen(false)} rows={rows} onToast={show} onChanged={taiBatThuong} />
       <NhanFileMenu menu={nfMenu} dangLuu={nfSaving} onClose={dongMenuNhanFile}
-        onPick={(nhan) => nfMenu && datNhanFile(nfMenu.dong, nhan)} />
+        onPick={(nhan) => nfMenu && datNhanFile(nfMenu.dong, nhan)}
+        onChoKyTen={(dang) => nfMenu && datChoKyTenDong(nfMenu.dong, dang)} />
       <NhanFileModal open={nfOpen} onClose={() => setNfOpen(false)} rows={rows} coQuyen={canNhanFile} dangLuu={nfSaving}
         onHuy={(r) => datNhanFile([r], false)} />
 
@@ -545,11 +585,46 @@ export default function ReadyPage() {
         rows={scanRows}
         immediate
         usbBarcode
-        // Rộng ra để phiên quét hiện được dạng BẢNG (8 cột). Các màn khác giữ 'md' mặc định.
-        size="xl"
-        // Neo cách mép trên 100px thay vì canh giữa: danh sách "Đã xác nhận phiên này" dài dần ra
+        // Gần TRỌN màn hình (26/11/2026, người dùng: "modal quét tích mã ở Ready QA với Kỹ thuật cho rộng ra gần bằng toàn
+        //   màn hình") — phiên quét dạng BẢNG nhiều cột.
+        size="full"
+        // Neo cách mép trên thay vì canh giữa: danh sách "Đã xác nhận phiên này" dài dần ra
         // theo số mã quét, canh giữa thì mỗi lần quét cả hộp lại nhích lên.
-        canhTren={100}
+        canhTren={24}
+        // CHỜ KÝ TÊN trong phiên quét (26/11/2026): ô tích từng dòng + nút "Chờ ký tên" cạnh tiêu đề + chuột phải (menu vẽ
+        //   BÊN TRONG modal qua `sessionPhu`). Áp cho MỌI đợt đang chờ của phần in (dòng hiện tại — `dongCuaMucQuet`).
+        sessionChon={canNhanFile}
+        sessionNut={canNhanFile ? ({ chon, boChon }) => {
+          const dong = dongCuaMucQuet(chon);
+          const soCho = dong.filter(coChoKyTen).length;
+          return (
+            <div className="flex flex-wrap items-center gap-2">
+              <Button variant="secondary" className="!px-2.5 !py-1 !text-xs" disabled={!dong.length} loading={nfSaving}
+                onClick={async () => { await datChoKyTenDong(dong, true); boChon(); }}>
+                <span className="mr-1.5 inline-block h-3 w-3 rounded-[2px] ring-2 ring-red-500" aria-hidden="true" />
+                Chờ ký tên{chon.length ? ` (${chon.length})` : ''}
+              </Button>
+              {soCho > 0 && (
+                <Button variant="ghost" className="!px-2.5 !py-1 !text-xs text-danger" loading={nfSaving}
+                  onClick={async () => { await datChoKyTenDong(dong, false); boChon(); }}>
+                  Bỏ chờ ký tên ({soCho})
+                </Button>
+              )}
+              {!chon.length && <span className="text-[11px] normal-case text-ink-soft">tích dòng hoặc chuột phải để đánh dấu</span>}
+            </div>
+          );
+        } : undefined}
+        onSessionContextMenu={canNhanFile ? (entries, e) => {
+          e.preventDefault();
+          const dong = dongCuaMucQuet(entries);
+          if (!dong.length) { show('Phần in này không còn đợt vải đang chờ — không đánh dấu được', 'error'); return; }
+          setMenuQuet({ x: e.clientX, y: e.clientY, dong });
+        } : undefined}
+        sessionPhu={(
+          <NhanFileMenu menu={menuQuet} dangLuu={nfSaving} onClose={dongMenuQuet}
+            onPick={(nhan) => menuQuet && datNhanFile(menuQuet.dong, nhan)}
+            onChoKyTen={(dang) => menuQuet && datChoKyTenDong(menuQuet.dong, dang)} />
+        )}
         getId={(r) => r.id}
         getCodes={(r) => [r.ma_phan]}
         getBarcodes={(r) => String(r.barcode || '').split(',').map((s) => s.trim()).filter(Boolean)}
@@ -613,6 +688,11 @@ export default function ReadyPage() {
             <span className="text-ink-soft">{(scanItemsRef.current[r.id] || [])
               .map((x) => `${x.items.map(labelOf).join(' + ')}${x.loai ? ` (${x.loai})` : ''}`).join(' · ') || '—'}</span>
           ) },
+          // Trạng thái chờ ký tên HIỆN TẠI (đọc lại từ `rows`, không phải ảnh chụp lúc quét).
+          { key: 'cho_ky_ten', header: 'Ký tên', render: (r) => {
+            const d = scanDs.find((x) => x.id === r.id && coChoKyTen(x));
+            return d ? <ChoKyTenBadge row={d} /> : <span className="text-ink-soft">—</span>;
+          } },
         ]}
         onScanAction={async (r) => {
           const items = [...scanSel];

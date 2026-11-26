@@ -35,6 +35,10 @@ import exportReadyQcExcel from '../utils/exportReadyQcExcel';
 import slDongReady from '../../technical-ready/utils/slDongReady';
 import { khuonRequired, mucRequired, hsktRequired } from '../../technical-ready/constants';
 import CodePhanCongDoan from '../../../components/common/CodePhanCongDoan';
+import useChiXem from '../../../hooks/useChiXem';
+import { datChoKyTen } from '../../../services/readyService';
+import { NhanFileMenu } from '../../technical-ready/components/NhanFileBh';
+import { SttChoKyTen, ChoKyTenBadge, coChoKyTen, moTaChoKyTen } from '../../technical-ready/components/ChoKyTen';
 
 // Thứ tự hiển thị: FILM → KHUÔN → MỰC (HSKT đã bỏ khỏi checklist READY).
 // Khóa lý do nghẽn (mig 106): mỗi dòng = 1 đợt vải của phần in (`r.id` = phan_in_id).
@@ -110,9 +114,11 @@ export default function ReadyQcPage() {
   // (không có checkbox chọn) ⇒ trông như "mất cột checkbox". Giữ nguyên thứ tự cũ, chỉ kéo các
   // thành viên còn lại của set lên ngay sau thành viên ĐẦU TIÊN xuất hiện.
   // Hàng đợi QC thật: đợt KT đã xong (xem badge ở Toolbar).
+  // ⚠ Đợt đang CHỜ KÝ TÊN (26/11/2026) chưa phải việc của QC (SLA chưa đếm) ⇒ không đếm vào "chờ QC", đếm riêng.
   const choQc = useMemo(() => {
-    const xong = rows.filter((r) => r.tech_done === true);
-    return { dot: xong.length, pin: new Set(xong.map((r) => r.id)).size };
+    const xong = rows.filter((r) => r.tech_done === true && !coChoKyTen(r));
+    const ky = rows.filter((r) => r.tech_done === true && coChoKyTen(r));
+    return { dot: xong.length, pin: new Set(xong.map((r) => r.id)).size, kyTen: ky.length };
   }, [rows]);
   const viewRows = useMemo(() => {
     const bySet = new Map();
@@ -275,6 +281,38 @@ export default function ReadyQcPage() {
     return next;
   });
 
+  // CHỜ KÝ TÊN (26/11/2026 — `technical-ready/components/ChoKyTen.js`): QC cũng đánh dấu được (KT quên đánh dấu mà đã xác
+  //   nhận xong ⇒ đợt đã sang hàng đợi QC). Chuột phải dòng ⇒ menu; dòng nằm trong các dòng đang tích (≥2) ⇒ áp cho mọi dòng
+  //   đang tích. Đợt KT xong mà đang chờ ký tên ⇒ SLA QC chưa đếm (BE). Quyền = QC READY.
+  const chiXem = useChiXem();
+  const canKyTen = canQC && !chiXem;
+  const [ckMenu, setCkMenu] = useState(null); // { x, y, dong: [row] }
+  const [ckSaving, setCkSaving] = useState(false);
+  const dongCkMenu = useCallback(() => setCkMenu(null), []);
+  const coDot = (r) => Array.isArray(r && r.dot_vai_ids) && r.dot_vai_ids.length > 0;
+  const moMenuKyTen = (r, e) => {
+    if (!canKyTen) return;
+    e.preventDefault();
+    const chon = selected.size > 1 && selected.has(r._key) ? rows.filter((x) => selected.has(x._key)) : [r];
+    const dong = chon.filter(coDot);
+    if (!dong.length) { show('Dòng này không gắn đợt vải đang chờ — không đánh dấu chờ ký tên được', 'error'); return; }
+    setCkMenu({ x: e.clientX, y: e.clientY, dong });
+  };
+  const datKyTen = async (dong, dang) => {
+    const ap = dong.filter((r) => coDot(r) && (dang ? !(r.cho_ky_ten && r.cho_ky_ten.dang) : coChoKyTen(r)));
+    const ids = [...new Set(ap.flatMap((r) => r.dot_vai_ids))];
+    if (!ids.length) { setCkMenu(null); return; }
+    setCkSaving(true);
+    try {
+      const res = await datChoKyTen(ids, dang, 'QC');
+      show(`${res.message || (dang ? 'Đã đánh dấu chờ ký tên' : 'Đã bỏ chờ ký tên')}${ap.length > 1 ? ` (${ap.length} dòng)` : ''}`);
+      setCkMenu(null);
+      await refresh();
+    } catch (e) {
+      show(e.message || 'Không lưu được', 'error');
+    } finally { setCkSaving(false); }
+  };
+
   const [exporting, setExporting] = useState(false);
   const doExport = async () => {
     if (filtered.length === 0) { show('Không có dòng nào để xuất', 'error'); return; }
@@ -399,6 +437,7 @@ export default function ReadyQcPage() {
         {mucRequired(r) && <Badge tone={r.muc_done ? 'success' : 'default'}>Mực</Badge>}
         {hsktRequired(r) && <Badge tone={r.hskt_done ? 'success' : 'default'}>HSKT</Badge>}
         {r.kt_yc === 'KHONG' && !hsktRequired(r) && <Badge tone="info">Không qua KT</Badge>}
+        <ChoKyTenBadge row={r} />
       </div>
     ) },
   ];
@@ -438,6 +477,7 @@ export default function ReadyQcPage() {
             của dải Theo dõi (`siSoTram DV.READY_QC`). Bảng vẫn hiện CẢ đợt KT chưa xong (chốt 23/09) nên
             KHÔNG đếm `rows.length` (24/09/2026: badge ghi 68 trong khi hàng đợi QC thật nhỏ hơn nhiều). */}
         <Badge tone="warning">{choQc.dot} đợt · {choQc.pin} phần in chờ QC</Badge>
+        {choQc.kyTen > 0 && <Badge tone="danger">{choQc.kyTen} đợt chờ ký tên</Badge>}
       </Toolbar>
 
       <FieldFilters fields={FILTER_FIELDS} values={filters} onField={(k, v) => setFilters((f) => ({ ...f, [k]: v }))} onClear={() => setFilters({})} open={showFilters} />
@@ -445,6 +485,9 @@ export default function ReadyQcPage() {
       {/* ⚠⚠ `rowKey="_key"` BẮT BUỘC sau khi tách dòng theo đợt: 2 dòng của cùng phần in chung `id`,
           để mặc định là React trùng key và bảng vẽ sai/nhảy dòng. */}
       <DataTable columns={columns} rows={viewRows} rowKey="_key" loading={loading} onRowClick={(r) => open(r)} sttStart={0}
+        // Chờ ký tên (26/11/2026): ô vuông đỏ ở STT + chuột phải ⇒ Chờ ký tên / Bỏ chờ ký tên.
+        renderStt={(r, stt) => <SttChoKyTen row={r}>{stt}</SttChoKyTen>}
+        onRowContextMenu={canKyTen ? moMenuKyTen : undefined}
         rowClassName={(r) => `${slaRowClass(evalSla(r.tg_vao, r.sla_phut, r.canh_bao_truoc_phut, now).status)} ${r._set ? 'border-l-[3px] border-l-primary/60' : laDongEp(r) ? 'border-l-[3px] border-l-orange-300' : ''}`}
         emptyText="Không có phần in nào ở READY" />
 
@@ -480,6 +523,30 @@ export default function ReadyQcPage() {
           <div className="py-6 text-center text-ink-soft">Đang tải...</div>
         ) : (
           <div className="space-y-2">
+            {/* Chờ ký tên (26/11/2026) — trạng thái đọc lại từ `rows` (sau tải ngầm); máy không chuột phải vẫn đánh dấu được. */}
+            {(() => {
+              const d = editing && rows.find((x) => x._key === editing._key);
+              if (!d || !coDot(d)) return null;
+              const dang = coChoKyTen(d);
+              return (
+                <div className={`flex items-center justify-between gap-2 rounded-control border px-3 py-2 ${dang
+                  ? 'border-red-300 bg-red-50 dark:border-red-900/60 dark:bg-red-950/40' : 'border-line'}`}>
+                  <div className="min-w-0 text-sm">
+                    <span className="font-medium text-ink">Ký tên</span>
+                    <span className={`ml-2 text-xs ${dang ? 'text-red-700 dark:text-red-300' : 'text-ink-soft'}`}>
+                      {dang ? `${moTaChoKyTen(d.cho_ky_ten)} — SLA QC chưa tính` : 'Không chờ'}
+                    </span>
+                  </div>
+                  {canKyTen && (
+                    <Button variant={dang ? 'ghost' : 'secondary'} loading={ckSaving}
+                      className={`shrink-0 px-2 py-1 text-xs ${dang ? 'text-danger hover:bg-danger/10' : ''}`}
+                      onClick={() => datKyTen([d], !dang)}>
+                      {dang ? 'Bỏ chờ ký tên' : 'Chờ ký tên'}
+                    </Button>
+                  )}
+                </div>
+              );
+            })()}
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-bold uppercase tracking-wide text-ink-soft">Kết quả kỹ thuật</h3>
               {canQC && (
@@ -555,10 +622,16 @@ export default function ReadyQcPage() {
           ⚠⚠ DEDUPE THEO `id`: bảng nay tách dòng theo đợt vải nên 1 phần in có nhiều dòng cùng `id` —
           đưa cả vào modal thì `getId` trùng nhau (React key trùng, và `khongGomSet` của màn READY sẽ
           coi là "mã trỏ nhiều phần in"). QC xác nhận ở mức phần in nên 1 dòng/phần in là đúng. */}
+      <NhanFileMenu menu={ckMenu} dangLuu={ckSaving} onClose={dongCkMenu} coNhanFile={false}
+        onChoKyTen={(dang) => ckMenu && datKyTen(ckMenu.dong, dang)} />
+
       <ScanCollectModal
         open={scanOpen}
         onClose={() => setScanOpen(false)}
         title="Quét / tích phần in — QC READY"
+        // Gần TRỌN màn hình (26/11/2026, người dùng: "modal quét tích mã ở Ready QA với Kỹ thuật cho rộng ra gần bằng toàn màn hình").
+        size="full"
+        canhTren={24}
         rows={scanRows}
         getId={(r) => r.id}
         getCodes={(r) => [r.ma_phan]}

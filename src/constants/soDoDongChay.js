@@ -126,7 +126,7 @@ export function tinhTrangTem(t, tramCoHang) {
   if (!t) return '';
   if (t.trang_thai === 'HUY') return 'Tem đã bị hủy — không nằm ở trạm nào.';
   if (tramCoHang.length) return `Đang ở: ${tramCoHang.map((x) => x.ten).join(' · ')}`;
-  if (t.trang_thai === 'CHO_CD_SAU') return 'Tem công đoạn đầu (in kiếng / in trước khi ép) đã khô — chờ công đoạn sau, không vào KCS.';
+  if (t.trang_thai === 'CHO_CD_SAU') return 'Tem công đoạn đầu kẹt "Chờ công đoạn sau" (luật cũ, trước 26/11/2026) — chưa vào KCS, báo quản trị nhả tem.';
   if (t.da_giao_sl > 0) return 'Tem đã giao hết — không còn ở trạm nào.';
   return 'Tem không còn hàng ở trạm nào (đã xử lý hết).';
 }

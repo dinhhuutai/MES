@@ -71,7 +71,7 @@ const dongTrong = () => { demId += 1; return { id: `d${demId}`, ma: '', tt: 'TRO
 //   các ô đó. Kết quả kiểm tra (`dgOk` · `dgChu` · `dgVang`) do modal tính theo CẢ tem, truyền dạng giá trị đơn để `memo`
 //   không vẽ lại mọi dòng.
 const DongTichTem = memo(function DongTichTem({
-  d, i, truong, dangLuu, coNutBo, h, dau = true, soDong = 1, dgOk, dgChu, dgVang,
+  d, i, truong, dangLuu, coNutBo, h, dau = true, soDong = 1, dgOk, dgChu, dgVang, coSoDa = false,
 }) {
   const r = d.row || {};
   const ok = d.tt === 'OK';
@@ -112,6 +112,9 @@ const DongTichTem = memo(function DongTichTem({
           <td {...gop} className={`${CHI_MAN_RONG} break-words px-1.5 py-1 leading-tight ${nen} ${dem}`}>{r.mau_vai || ''}</td>
           <td {...gop} className={`${CHI_MAN_RONG} px-1.5 py-1 ${nen} ${dem}`}>{r.kich_vai || ''}</td>
           <td {...gop} className={`${CHI_MAN_RONG} px-1.5 py-1 ${nen} ${dem}`}>{r.kich_phim || ''}</td>
+          {coSoDa && (
+            <td {...gop} className={`px-1.5 py-1 text-right tabular-nums text-ink-soft ${nen} ${dem}`}>{ok ? fmtNum(H.soDa(r)) : ''}</td>
+          )}
           <td {...gop} className={`px-1.5 py-1 text-right font-semibold tabular-nums text-primary ${nen} ${dem}`}>{ok ? fmtNum(H.soCan(r)) : ''}</td>
         </>
       )}
@@ -170,7 +173,11 @@ export default function TichTemNhapModal({
   open, onClose, title, nhanXacNhan, show,
   traMa, khoaDong, maHien, soCan, nhanSoCan, truong, formMoi, danhGia, luu,
   truocXacNhan, onXong, phuTro, moTruoc, sauKhiLuu, iconXacNhan = 'check-circle', nhom, hangDoi, luuLo,
+  soDa, nhanSoDa,
 }) {
+  // `soDa` / `nhanSoDa` (tùy chọn, 26/11/2026 — KCS: "thêm cột Đã kiểm bên trái Còn kiểm"): cột số ĐÃ LÀM của tem, đứng ngay
+  //   trước cột `nhanSoCan`. Không truyền ⇒ không có cột (Phân loại lỗi / Nhận sửa / Sửa như cũ).
+  const coSoDa = typeof soDa === 'function';
   const [dong, setDong] = useState(() => [dongTrong()]);
   const [dangLuu, setDangLuu] = useState(false);
   const [tienDo, setTienDo] = useState('');
@@ -407,7 +414,7 @@ export default function TichTemNhapModal({
   // Hàm cho từng dòng (`DongTichTem`) — 1 ref ổn định, nội dung cập nhật mỗi lần vẽ (các hàm đọc `dongRef` nên không cũ).
   const h = useRef({});
   h.current = {
-    sua, setF, doiMa, phim, oKe, henSangKe, muiTenNguoi, boDong, soCan, maHien,
+    sua, setF, doiMa, phim, oKe, henSangKe, muiTenNguoi, boDong, soCan, soDa, maHien,
     datRef: (k, el) => { refs.current[k] = el; },
   };
 
@@ -605,6 +612,7 @@ export default function TichTemNhapModal({
                   <th className={`${CHI_MAN_RONG} px-1.5 py-2`}>Màu vải</th>
                   <th className={`${CHI_MAN_RONG} px-1.5 py-2`}>Kích vải</th>
                   <th className={`${CHI_MAN_RONG} px-1.5 py-2`}>Kích film</th>
+                  {coSoDa && <th className="px-1.5 py-2 text-right">{nhanSoDa || 'Đã làm'}</th>}
                   <th className="px-1.5 py-2 text-right">{nhanSoCan}</th>
                   {truong.map((t) => (
                     <th key={t.k} className="px-1.5 py-2" style={t.minW ? { minWidth: t.minW } : { width: 72 }}>{t.label}</th>
@@ -620,7 +628,7 @@ export default function TichTemNhapModal({
                     <DongTichTem key={d.id} d={d} i={i} truong={truong} dangLuu={dangLuu} h={h}
                       coNutBo={!!(d.tt === 'OK' || d.ma || dong.length > 1)}
                       dau={vt ? vt.dau : true} soDong={vt ? vt.so : 1}
-                      dgOk={!!vt?.dg?.ok} dgChu={vt?.dg?.chu || ''} dgVang={!!vt?.dg?.motPhan} />
+                      dgOk={!!vt?.dg?.ok} dgChu={vt?.dg?.chu || ''} dgVang={!!vt?.dg?.motPhan} coSoDa={coSoDa} />
                   );
                 })}
               </tbody>

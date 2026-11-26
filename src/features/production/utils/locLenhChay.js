@@ -88,6 +88,44 @@ export const khoaPinLenh = (r) => dsPin(r).map((p) => p.phan_in_id || p.ma_phan 
 //   · Số gộp: SL release · đã in trước đó · số đợt vải = tổng; ngày SX KH · hạn giao = SỚM nhất; mã lệnh · tên
 //     chuyền · nhà gia công = danh sách không trùng. `ma_chuyen` / `ma_loai_chuyen` / `id` giữ của lệnh đầu.
 const tongCot = (ds, k) => ds.reduce((a, r) => a + (Number(r[k]) || 0), 0);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SỐ LƯỢNG / BỔ SUNG (26/11/2026, người dùng: "Xác nhận chạy tách 2 dòng nếu là bổ sung và số lượng — đang gộp số lượng vào
+//   nhau; thêm badge cạnh khách hàng để biết là số lượng hay bổ sung"). BE trả `sl_release_bs` (phần SL release thuộc đợt mã
+//   loại `BO_SUNG`) + `da_in_truoc_bs` (Chờ chạy) / `printed_bs` · `so_tem_bs` (Đang chạy) = SL bổ sung CỦA TEM đã in.
+//   · `loaiSlBs(r, cotSl)` = 'SL' (không phần bổ sung) · 'BS' (toàn bổ sung) · 'MIX' (lệnh lẫn cả hai — vd đợt bổ sung "cộng
+//     thẳng vào lệnh đang chạy"). Hai hàm gom dưới KHÓA THÊM loại ⇒ lệnh bổ sung và lệnh số lượng cùng code phần là 2 dòng.
+//   · `dongConSlBs(r, kieu)` = 2 dòng con (dòng SL + dòng BS) cho dòng 'MIX' (bảng `subRows` — chỉ là cách HIỆN, tích / chạy /
+//     mở vẫn theo cả lệnh). Thiếu trường (BE cũ) ⇒ mọi dòng 'SL', không tách.
+const soN = (v) => Number(v) || 0;
+export const loaiSlBs = (r, cotSl = 'so_luong_release') => {
+  const t = soN(r && r[cotSl]);
+  const bs = Math.min(soN(r && r.sl_release_bs), t);
+  if (bs <= 0) return 'SL';
+  return bs >= t ? 'BS' : 'MIX';
+};
+// `kieu` 'CHO' (Chờ chạy — cột SL release) · 'CHAY' (Đang chạy — đã in / SL release / số tem). Trả null nếu không tách.
+export function dongConSlBs(r, kieu = 'CHO') {
+  const cotSl = kieu === 'CHAY' ? 'target' : 'so_luong_release';
+  if (loaiSlBs(r, cotSl) !== 'MIX') return null;
+  const t = soN(r[cotSl]);
+  const bs = Math.min(soN(r.sl_release_bs), t);
+  if (kieu === 'CHAY') {
+    const inBs = Math.min(soN(r.printed_bs), soN(r.printed));
+    const temBs = Math.min(soN(r.so_tem_bs), soN(r.so_tem));
+    return [
+      { __loaiSl: 'SL', __thu: 0, target: t - bs, printed: soN(r.printed) - inBs, so_tem: soN(r.so_tem) - temBs },
+      { __loaiSl: 'BS', __thu: 1, target: bs, printed: inBs, so_tem: temBs },
+    ];
+  }
+  const daBs = Math.min(soN(r.da_in_truoc_bs), soN(r.da_in_truoc));
+  return [
+    { __loaiSl: 'SL', __thu: 0, so_luong_release: t - bs, da_in_truoc: soN(r.da_in_truoc) - daBs },
+    { __loaiSl: 'BS', __thu: 1, so_luong_release: bs, da_in_truoc: daBs },
+  ];
+}
+// Loại để vẽ badge của 1 dòng bảng (dòng con đã tách mang sẵn `__loaiSl`).
+export const loaiBadgeSlBs = (r, kieu = 'CHO') => (r && r.__loaiSl) || loaiSlBs(r, kieu === 'CHAY' ? 'target' : 'so_luong_release');
 const khacNhau = (ds, k) => [...new Set(ds.map((r) => r[k]).filter(Boolean))];
 const somNhat = (ds, k) => ds.map((r) => r[k]).filter(Boolean).sort((a, b) => new Date(a) - new Date(b))[0] || null;
 //   · 27/10/2026 (người dùng chốt): khóa thêm NHÀ GIA CÔNG của lệnh (`khoaNgcLenh`) — đợt khác NGC không cộng chung.
@@ -97,7 +135,7 @@ export function gomTheoCodePhan(rows) {
   for (const r of rows || []) {
     const motPin = !(r.phan_in_list && r.phan_in_list.length > 1);
     const pin = r.phan_in_id || r.ma_phan || '';
-    const k = motPin && pin ? `${pin}|${r.chuyen_id || r.ma_chuyen || ''}|${khoaNgcLenh(r)}|${khoaCongDoan(r)}` : '';
+    const k = motPin && pin ? `${pin}|${r.chuyen_id || r.ma_chuyen || ''}|${khoaNgcLenh(r)}|${khoaCongDoan(r)}|${loaiSlBs(r)}` : '';
     const g = k ? nhom.get(k) : null;
     if (g) { g._lenh.push(r); continue; }
     const moi = { ...r, _lenh: [r] };
@@ -110,7 +148,9 @@ export function gomTheoCodePhan(rows) {
     return {
       ...g,
       so_luong_release: tongCot(ds, 'so_luong_release'),
+      sl_release_bs: tongCot(ds, 'sl_release_bs'),
       da_in_truoc: tongCot(ds, 'da_in_truoc'),
+      da_in_truoc_bs: tongCot(ds, 'da_in_truoc_bs'),
       sl_nhan_vai: tongCot(ds, 'sl_nhan_vai'),
       so_dot_vai: tongCot(ds, 'so_dot_vai') || g.so_dot_vai,
       ma_lenh_san_xuat: khacNhau(ds, 'ma_lenh_san_xuat').join(', '),
@@ -139,7 +179,7 @@ export function gomDangChayTheoCodePhan(rows) {
   for (const r of rows || []) {
     const motPin = !(r.phan_in_list && r.phan_in_list.length > 1);
     const pin = r.phan_in_id || r.ma_phan || '';
-    const k = motPin && pin ? `${pin}|${r.chuyen_id || r.ma_chuyen || ''}|${khoaNgcLenh(r)}|${khoaCongDoan(r)}` : '';
+    const k = motPin && pin ? `${pin}|${r.chuyen_id || r.ma_chuyen || ''}|${khoaNgcLenh(r)}|${khoaCongDoan(r)}|${loaiSlBs(r, 'target')}` : '';
     const g = k ? nhom.get(k) : null;
     if (g) { g._lenh.push(r); continue; }
     const moi = { ...r, _lenh: [r] };
@@ -152,9 +192,12 @@ export function gomDangChayTheoCodePhan(rows) {
     return {
       ...g,
       printed: tongCot(ds, 'printed'),
+      printed_bs: tongCot(ds, 'printed_bs'),
       target: tongCot(ds, 'target'),
+      sl_release_bs: tongCot(ds, 'sl_release_bs'),
       sl_nhan_vai: tongCot(ds, 'sl_nhan_vai'),
       so_tem: tongCot(ds, 'so_tem'),
+      so_tem_bs: tongCot(ds, 'so_tem_bs'),
       sl_vai_huy: tongCot(ds, 'sl_vai_huy'),
       so_dot_vai: tongCot(ds, 'so_dot_vai') || g.so_dot_vai,
       dang_ngung: ds.some((r) => r.dang_ngung),

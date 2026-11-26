@@ -45,7 +45,9 @@ import FinishListModal from '../../quality/components/FinishListModal';
 import ChoChayModal, { LocLenhPanel } from '../components/ChoChayModal';
 import {
   locLenhChay, coLoc, LOC_TRONG, timLenhTheoMa, gomTheoCodePhan, lenhCuaDong, gomDangChayTheoCodePhan,
+  dongConSlBs, loaiBadgeSlBs,
 } from '../utils/locLenhChay';
+import SlBsBadge from '../components/SlBsBadge';
 import useOTimKiem from '../../../hooks/useOTimKiem';
 import TheoDoiChuyenPage from './TheoDoiChuyenPage';
 import TheoDoiTo from '../components/TheoDoiTo';
@@ -489,8 +491,11 @@ export default function XacNhanChayPage() {
     }
   };
 
-  // LỆNH GOM SET → tách 1 dòng / PHẦN IN; cột mức lệnh `merge`.
-  const subRows = (r) => (r.phan_in_list ? r.phan_in_list.map((p) => ({ ...p, __sub: true })) : null);
+  // LỆNH GOM SET → tách 1 dòng / PHẦN IN; cột mức lệnh `merge`. Lệnh lẫn SỐ LƯỢNG + BỔ SUNG (26/11/2026 — vd đợt bổ sung
+  //   cộng thẳng vào lệnh đang chạy) ⇒ 2 dòng con SL / BS, cột Đã in · Tem theo từng dòng con (`dongConSlBs`).
+  const subRows = (r) => (r.phan_in_list && r.phan_in_list.length > 1
+    ? r.phan_in_list.map((p, i) => ({ ...p, __sub: true, __thu: i }))
+    : dongConSlBs(r, 'CHAY'));
 
   const runCols = [
     // Ô tích (selection — DataTable vẽ ở dòng đầu bản ghi, chặn click mở panel): gom lệnh để "Mở (N)" chung.
@@ -504,7 +509,9 @@ export default function XacNhanChayPage() {
       <input type="checkbox" className="h-4 w-4 cursor-pointer accent-primary" aria-label="Chọn để mở chung"
         checked={daTichDong(r)} onChange={() => doiTichRun(r)} />
     ) },
-    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
+    { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => (
+      <span>{r.ten_khach_hang || '—'}<SlBsBadge loai={loaiBadgeSlBs(r, 'CHAY')} /></span>
+    ) },
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
     // Dòng gom (cùng code phần + cùng máy) hiện y như 1 phần in — KHÔNG badge "Gom N lệnh" / "Gộp đợt" (21/10/2026,
     //   người dùng chốt). Chỉ giữ badge GOM SET (lệnh nhiều phần in khác nhau).
@@ -526,10 +533,11 @@ export default function XacNhanChayPage() {
     { key: 'ngay_ke_hoach', header: 'Ngày SX KH', merge: true, render: (r) => fmtDate(r.ngay_ke_hoach) },
     { key: 'tg_bd', header: 'Xác nhận chạy', merge: true,
       render: (r) => (r.tg_bd ? new Date(r.tg_bd).toLocaleString('vi-VN') : '—') },
-    // Dòng gom: đã in / SL release = TỔNG các lệnh, 1 con số (không tách "a + b").
-    { key: 'printed', header: 'Đã in', className: 'text-right tabular-nums', merge: true,
-      render: (r) => `${fmtNum(r.printed)} / ${fmtNum(r.target)}` },
-    { key: 'so_tem', header: 'Tem', className: 'text-right', merge: true },
+    // Dòng gom: đã in / SL release = TỔNG các lệnh, 1 con số (không tách "a + b"). KHÔNG `merge` (26/11/2026): dòng con SL /
+    //   BS mỗi dòng 1 số (đã in phần BS = SL bổ sung của tem); dòng con gom set (cùng 1 lệnh) chỉ ghi ở dòng đầu.
+    { key: 'printed', header: 'Đã in', className: 'text-right tabular-nums',
+      render: (r) => (r.__sub && r.__thu > 0 ? '' : `${fmtNum(r.printed)} / ${fmtNum(r.target)}`) },
+    { key: 'so_tem', header: 'Tem', className: 'text-right', render: (r) => (r.__sub && r.__thu > 0 ? '' : r.so_tem) },
     { key: 'tt', header: 'Trạng thái', merge: true, render: (r) =>
       r.dang_ngung ? <Badge tone="danger">Đang ngừng</Badge> : <Badge tone="success">Đang chạy</Badge> },
     { key: 'actions', header: '', className: 'text-right whitespace-nowrap', merge: true, render: (r) =>

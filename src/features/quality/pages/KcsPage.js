@@ -65,6 +65,9 @@ const TRUONG_SO_KCS = O_SO_KCS.map(([k, label]) => ({ k, label }));
 //   nữa và gửi dữ liệu Sh6 phải là của tên người này") — BE `recordKcs` chặn 422 `NO_NGUOI_KIEM`, Sh6 gửi người này ở
 //   `dsthoin`. Điền sẵn tên vừa dùng trên máy này (`nhoTen`) để quét liên tục không phải gõ lại.
 const thieuNguoiKiem = (f) => !String((f && f.nguoiKiem) || '').trim();
+// Cột "Đã kiểm" ở bảng Tích tem (26/11/2026) = SL KCS đã xác nhận của tem (đạt + hư: sửa + hủy — sổ cái tem, lượt đã hủy
+//   xác nhận đã đảo khỏi sổ) ⇒ Đã kiểm + Còn kiểm = SL cần kiểm (SL in ± dư/thiếu).
+const slDaKiemKcs = (r) => (Number(r.sl_kcs_dat) || 0) + (Number(r.sl_kcs_sua) || 0) + (Number(r.sl_kcs_huy) || 0);
 
 const FILTER_FIELDS = [
   { key: 'khach', label: 'Khách hàng' },
@@ -831,6 +834,7 @@ export default function KcsPage() {
         title="Tích tem — xác nhận KCS nhiều tem" nhanXacNhan="Xác nhận KCS" show={show}
         traMa={traTemKcs} khoaDong={(r) => r.tem_id} maHien={(r) => r.ma_tem}
         soCan={(r) => r.con_kcs} nhanSoCan="Còn kiểm" truong={truongTichTem} formMoi={formKcsMoi}
+        soDa={slDaKiemKcs} nhanSoDa="Đã kiểm"
         danhGia={(r, f) => {
           const dg = danhGiaKcs(Number(r.con_kcs ?? r.so_luong ?? 0) || 0, f, coGiaoTruoc(r));
           return dg.ok && thieuNguoiKiem(f) ? { ok: false, chu: 'Nhập người kiểm' } : dg;

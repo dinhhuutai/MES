@@ -60,7 +60,8 @@ function ReturnNote({ info, nguon }) {
 //   checklist của công đoạn đó. Không truyền = bộ gốc như cũ. (17/11/2026 dùng chung 1 bộ — BE bỏ qua `giaiDoan`.)
 // `paEp` / `epTruoc` (18/11/2026): đợt In + Logo mang cả 2 công đoạn ⇒ banner vẽ "In + Logo" (`paEp` = dòng `pa_cd_ep`).
 // `caHaiDot` (25/11/2026, mig 139): cờ `ca_hai_cong_doan` của dòng — đợt mang cả 2 công đoạn (kể cả kiếng ủi đánh dấu "Cả 2").
-export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, giaiDoan, luongSx, paEp, epTruoc, caHaiDot, onClose, onChanged, onToast, truocXacNhan, ungVienGn, nhanFile, onNhanFile }) {
+// `choKyTen` (26/11/2026) = { dang, moTa, coQuyen, dangLuu } + `onChoKyTen(dang)` — khối "Ký tên" (chờ ký tên hồ sơ), cùng khuôn File BH.
+export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, giaiDoan, luongSx, paEp, epTruoc, caHaiDot, onClose, onChanged, onToast, truocXacNhan, ungVienGn, nhanFile, onNhanFile, choKyTen, onChoKyTen }) {
   const { can } = usePermissions();
   const { toast, show } = useToast();
   const now = useNow(1000);
@@ -287,6 +288,26 @@ export default function ReadyPanel({ phanInId, dotVaiIds, loaiDotVai, giaiDoan, 
                   className={`shrink-0 px-2 py-1 text-xs ${nhanFile.daNhan ? 'text-danger hover:bg-danger/10' : ''}`}
                   onClick={() => onNhanFile && onNhanFile(!nhanFile.daNhan)}>
                   {nhanFile.daNhan ? 'Hủy khỏi danh sách' : 'Đã nhận file'}
+                </Button>
+              )}
+            </div>
+          )}
+
+          {/* Chờ ký tên (26/11/2026) — theo đợt vải của dòng; cùng việc với menu chuột phải ở bảng. */}
+          {choKyTen && (
+            <div className={`flex items-center justify-between gap-2 rounded-control border px-3 py-2 ${choKyTen.dang
+              ? 'border-red-300 bg-red-50 dark:border-red-900/60 dark:bg-red-950/40' : 'border-line'}`}>
+              <div className="min-w-0 text-sm">
+                <span className="font-medium text-ink">Ký tên</span>
+                <span className={`ml-2 text-xs ${choKyTen.dang ? 'text-red-700 dark:text-red-300' : 'text-ink-soft'}`}>
+                  {choKyTen.dang ? `Đang chờ ký tên${choKyTen.moTa ? ` — ${choKyTen.moTa}` : ''}` : 'Không chờ'}
+                </span>
+              </div>
+              {choKyTen.coQuyen && (
+                <Button variant={choKyTen.dang ? 'ghost' : 'secondary'} loading={choKyTen.dangLuu}
+                  className={`shrink-0 px-2 py-1 text-xs ${choKyTen.dang ? 'text-danger hover:bg-danger/10' : ''}`}
+                  onClick={() => onChoKyTen && onChoKyTen(!choKyTen.dang)}>
+                  {choKyTen.dang ? 'Bỏ chờ ký tên' : 'Chờ ký tên'}
                 </Button>
               )}
             </div>

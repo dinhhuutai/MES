@@ -14,6 +14,7 @@ import DataTable from '../../../components/common/DataTable';
 import { Input } from '../../../components/common/controls';
 import { fmtDateTime } from '../../../utils/format';
 import { khopTungTu } from '../../../utils/timKiem';
+import { coChoKyTen, daChoKyTenHet, moTaChoKyTen } from './ChoKyTen';
 
 // Dòng ĐÃ nhận file = MỌI đợt của dòng đã nhận (dòng thường chỉ 1 đợt).
 export const daNhanFile = (r) => !!(r && r.nhan_file && r.nhan_file.da_nhan);
@@ -33,7 +34,10 @@ export function SttNhanFile({ row, stt }) {
 
 // Menu chuột phải nhỏ tại vị trí chuột. `menu` = { x, y, dong: [row…] } (đã lọc dòng có đợt vải).
 // Đóng khi bấm ra ngoài / Esc / cuộn / đổi cỡ cửa sổ.
-export function NhanFileMenu({ menu, dangLuu, onPick, onClose }) {
+// CHỜ KÝ TÊN (26/11/2026): `onChoKyTen(dang)` có ⇒ thêm mục "Chờ ký tên" / "Bỏ chờ ký tên" (`ChoKyTen.js`). `coNhanFile={false}`
+//   (màn QC READY) ⇒ chỉ còn mục chờ ký tên. ⚠ Mở menu TRONG một Modal thì phải vẽ menu BÊN TRONG panel của modal (bấm ra ngoài
+//   panel là Headless UI đóng modal) — ScanCollectModal có `sessionPhu` cho việc này.
+export function NhanFileMenu({ menu, dangLuu, onPick, onClose, coNhanFile = true, onChoKyTen }) {
   const ref = useRef(null);
   const [vt, setVt] = useState(null);
   useEffect(() => {
@@ -69,6 +73,9 @@ export function NhanFileMenu({ menu, dangLuu, onPick, onClose }) {
   // Số dòng THẬT SỰ đổi của mỗi mục (dòng đã đúng trạng thái bị bỏ qua).
   const soChua = n - soNhan;
   const motDong = n === 1 ? menu.dong[0] : null;
+  // Chờ ký tên: số dòng chưa đánh dấu hết / đang có đợt chờ.
+  const soCk = menu.dong.filter(coChoKyTen).length;
+  const soCkHet = menu.dong.filter(daChoKyTenHet).length;
   const muc = 'flex w-full items-center gap-2 rounded-control px-3 py-2 text-left text-sm hover:bg-surface-muted disabled:opacity-50';
   return (
     <div ref={ref} role="menu" style={{ left: (vt || menu).x, top: (vt || menu).y }}
@@ -76,17 +83,31 @@ export function NhanFileMenu({ menu, dangLuu, onPick, onClose }) {
       onContextMenu={(e) => e.preventDefault()}>
       <div className="truncate border-b border-line px-3 py-1.5 text-xs text-ink-soft">
         {motDong ? `${motDong.ma_phan || ''}${motDong.loai_dot_vai ? ` · ${motDong.loai_dot_vai}` : ''}` : `${n} dòng đang chọn`}
-        {motDong && daNhanFile(motDong) && <div className="mt-0.5 text-emerald-700 dark:text-emerald-300">{moTaNhan(motDong.nhan_file)}</div>}
-        {!motDong && soNhan > 0 && <div className="mt-0.5">{soNhan}/{n} dòng đã nhận file</div>}
+        {coNhanFile && motDong && daNhanFile(motDong) && <div className="mt-0.5 text-emerald-700 dark:text-emerald-300">{moTaNhan(motDong.nhan_file)}</div>}
+        {coNhanFile && !motDong && soNhan > 0 && <div className="mt-0.5">{soNhan}/{n} dòng đã nhận file</div>}
+        {onChoKyTen && motDong && coChoKyTen(motDong) && <div className="mt-0.5 text-red-700 dark:text-red-300">{moTaChoKyTen(motDong.cho_ky_ten)}</div>}
+        {onChoKyTen && !motDong && soCk > 0 && <div className="mt-0.5">{soCk}/{n} dòng đang chờ ký tên</div>}
       </div>
-      {soNhan < n && (
+      {coNhanFile && soNhan < n && (
         <button type="button" role="menuitem" className={`${muc} text-ink`} disabled={dangLuu} onClick={() => onPick(true)}>
           <Icon name="check-circle" size={16} className="text-emerald-600" />Đưa vào danh sách đã nhận file{n > 1 ? ` (${soChua} dòng)` : ''}
         </button>
       )}
-      {soNhan > 0 && (
+      {coNhanFile && soNhan > 0 && (
         <button type="button" role="menuitem" className={`${muc} text-danger`} disabled={dangLuu} onClick={() => onPick(false)}>
           <Icon name="undo" size={16} />Hủy khỏi danh sách đã nhận{n > 1 ? ` (${soNhan} dòng)` : ''}
+        </button>
+      )}
+      {onChoKyTen && coNhanFile && <div className="my-1 border-t border-line" />}
+      {onChoKyTen && soCkHet < n && (
+        <button type="button" role="menuitem" className={`${muc} text-ink`} disabled={dangLuu} onClick={() => onChoKyTen(true)}>
+          <span className="inline-block h-3.5 w-3.5 shrink-0 rounded-[2px] ring-2 ring-red-500" aria-hidden="true" />
+          Chờ ký tên{n > 1 ? ` (${n - soCkHet} dòng)` : ''}
+        </button>
+      )}
+      {onChoKyTen && soCk > 0 && (
+        <button type="button" role="menuitem" className={`${muc} text-danger`} disabled={dangLuu} onClick={() => onChoKyTen(false)}>
+          <Icon name="undo" size={16} />Bỏ chờ ký tên (đã ký){n > 1 ? ` (${soCk} dòng)` : ''}
         </button>
       )}
     </div>

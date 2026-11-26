@@ -297,7 +297,7 @@ export function KhungCongDoan({ data }) {
       <p className="mt-0.5 text-xs">
         Phần in 2 công đoạn — lệnh này là công đoạn <b>{data.cong_doan.toUpperCase()}</b>
         {kieng ? ': tem in phải nhập loại · SL · hệ số kiếng.' : ': tem in KHÔNG nhập kiếng.'}
-        {dau ? ' Tem chưa vào KCS (chờ công đoạn sau).' : ''}
+        {' Tem khô xong vào KCS luôn, không chờ công đoạn sau.'}
       </p>
       <p className="mt-1 text-xs">
         Lệnh công đoạn {tenKhac}:{' '}
