@@ -1397,7 +1397,11 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan, pha
   const printed = Number(data?.printed) || 0;
   const pct = target ? Math.min(100, Math.round((printed / target) * 100)) : 0;
   const maxTotal = target ? Math.floor(target * 1.1) : 0;       // trần 110% SL release
-  const minFinish = target ? Math.ceil(target * 0.9) : 0;       // tối thiểu 90% SL release (cho -10%) mới hoàn tất được
+  // Tối thiểu 50% SL release mới hoàn tất được, tính ĐÃ IN + VẢI HỦY đã ghi sổ (28/11/2026, người dùng: trước 90% chỉ
+  //   tính đã in ⇒ in + hủy đủ mà vẫn không bấm được). BE cũ không trả `printed_huy` ⇒ 0.
+  const minFinish = target ? Math.ceil(target * 0.5) : 0;
+  const printedHuy = Number(data?.printed_huy) || 0;
+  const daXuLy = printed + printedHuy;
   // Còn được in (29/10/2026, gương BE `kiemTranIn`): tem BTP trước KHÔNG bị chặn số lượng và không tính vào trần của tem
   //   thường ⇒ in bao nhiêu BTP trước thì mức tối đa cộng thêm bấy nhiêu. Không có tem BTP trước ⇒ đúng luật 110% cũ.
   const printedBtp = Number(data?.printed_btp) || 0;
@@ -1448,7 +1452,7 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan, pha
             <Button variant="secondary" icon="undo" disabled={busy} onClick={() => setTraVeKhOpen(true)}>
               Trả về Kế hoạch
             </Button>
-            <Button variant="success" icon="check" onClick={doFinish} loading={busy} disabled={printed < minFinish}>
+            <Button variant="success" icon="check" onClick={doFinish} loading={busy} disabled={daXuLy < minFinish}>
               Chạy hoàn tất
             </Button>
           </>
@@ -1493,9 +1497,10 @@ export default function RunPanel({ lenhId, onClose, onChanged, truocXacNhan, pha
               <span>Phiếu {phieu?.ma_phieu_san_xuat}</span>
               <Badge tone={running ? 'info' : 'success'}>{running ? 'Đang chạy' : 'Hoàn tất'}</Badge>
             </div>
-            {running && canRun && printed < minFinish && (
+            {running && canRun && daXuLy < minFinish && (
               <p className="mt-2 text-xs text-amber-600">
-                Cần in tối thiểu 90% SL release ({fmtNum(minFinish)}) mới hoàn tất được — còn thiếu <b>{fmtNum(minFinish - printed)}</b>.
+                Cần đã in + vải hủy tối thiểu 50% SL release ({fmtNum(minFinish)}) mới hoàn tất được
+                {printedHuy > 0 ? ` (đã in ${fmtNum(printed)} + hủy ${fmtNum(printedHuy)})` : ''} — còn thiếu <b>{fmtNum(minFinish - daXuLy)}</b>.
               </p>
             )}
           </section>

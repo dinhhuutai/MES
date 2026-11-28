@@ -21,7 +21,7 @@ import { TemMetaFields, PhanCongInline, META_MAC_DINH, metaGuiDi, lamMoiMeta, th
 import TraVeKeHoachModal from './TraVeKeHoachModal';
 import CongDoanBadge from '../../../components/common/CongDoanBadge';
 import {
-  gomPhan, thuTuIn, conDuocIn, conDuocInNhom, tongNhom, daIn, daInTheoTran, slRelease, duHoanTatNhom, toiThieuHoanTatNhom,
+  gomPhan, thuTuIn, conDuocIn, conDuocInNhom, tongNhom, daIn, daInTheoTran, slRelease, duHoanTatNhom, toiThieuHoanTatNhom, daXuLyHoanTat,
 } from '../utils/gomPhanSanXuat';
 
 // In kiếng (mig 126/127): MỖI DÒNG (= mỗi tem) 1 bộ Loại kiếng · SL kiếng · Hệ số (người in tự nhập) — `kieng` của chính lệnh của dòng
@@ -39,7 +39,7 @@ const kiengDong = (d) => (d && d.run && d.run.kieng && d.run.kieng.can ? d.run.k
 //     19/10/2026: thêm cột SL HỦY / SL THIẾU mỗi dòng (= 2 ô Vải hủy / Vải thiếu của RunPanel) — đi kèm
 //     `printTemBatch` (BE ghi sổ vải + báo ERP cùng đúng tem của dòng); lệnh chỉ nhập hủy/thiếu ⇒ `addVaiHuy`
 //     (21/10/2026: = LƯU SỐ CHỜ gắn vào tem in kế tiếp của lệnh). Số nhập ở bảng được ƯU TIÊN hơn số chờ của lệnh.
-//   · CHẠY HOÀN TẤT (21/10/2026): nút xanh lá ở chân sidebar ⇒ hộp chọn lệnh đã in ≥ 90% ⇒ `finishRun` từng phiếu.
+//   · CHẠY HOÀN TẤT (21/10/2026): nút xanh lá ở chân sidebar ⇒ hộp chọn lệnh đã in + vải hủy ≥ 50% (28/11/2026; trước 90% chỉ đã in) ⇒ `finishRun` từng phiếu.
 //   · PHÂN CÔNG: lưu 1 lần ⇒ `savePhanCong` mọi phiếu.
 //   · NGỪNG CHUYỀN: ghi 1 lần ⇒ `stopLine` mọi phiếu chưa ngừng; "Hoạt động lại" ⇒ `resumeLine` mọi phiếu đang ngừng.
 //   · ĐỔI CHUYỀN (03/11/2026, người dùng yêu cầu): chọn 1 chuyền ⇒ `doiChuyen` MỌI phiếu đang chạy đã chọn (lệnh đã ở
@@ -278,9 +278,9 @@ function InTemNhieuModal({ open, onClose, runs, meta, setMeta, goiY, busy, onIn 
   );
 }
 
-// HỘP "CHẠY HOÀN TẤT" NHIỀU LỆNH (21/10/2026, người dùng yêu cầu) — tích sẵn lệnh đã in ≥ 90%; lệnh chưa đủ thì khóa
+// HỘP "CHẠY HOÀN TẤT" NHIỀU LỆNH (21/10/2026, người dùng yêu cầu) — tích sẵn lệnh đã in + vải hủy ≥ 50%; lệnh chưa đủ thì khóa
 //   (nêu còn thiếu bao nhiêu). Mức module (luật §9).
-// 22/10/2026: 1 dòng / NHÓM (lệnh cùng code phần + cùng chuyền gom như 1 phần) — đủ 90% tính trên TỔNG cả nhóm (số in
+// 22/10/2026: 1 dòng / NHÓM (lệnh cùng code phần + cùng chuyền gom như 1 phần) — đủ mức tối thiểu tính trên TỔNG cả nhóm (số in
 //   được rót lần lượt vào từng lệnh nên lệnh cuối nhóm luôn thiếu); chọn dòng = chạy hoàn tất mọi lệnh của nhóm.
 function HoanTatNhieuModal({ open, onClose, runs, busy, onXacNhan }) {
   const [chon, setChon] = useState(() => new Set());
@@ -311,7 +311,8 @@ function HoanTatNhieuModal({ open, onClose, runs, busy, onXacNhan }) {
             {nhom.map((g) => {
               const r = g.runs[0];
               const du = duHoanTatNhom(g.runs);
-              const thieu = toiThieuHoanTatNhom(g.runs) - tongNhom(g.runs, daIn);
+              const thieu = toiThieuHoanTatNhom(g.runs) - tongNhom(g.runs, daXuLyHoanTat);
+              const huy = tongNhom(g.runs, (x) => Number(x?.printed_huy) || 0);
               return (
                 <tr key={g.key} className={du ? '' : 'opacity-60'}>
                   <td className={TD}>
@@ -325,10 +326,13 @@ function HoanTatNhieuModal({ open, onClose, runs, busy, onXacNhan }) {
                       {[g.runs.map((x) => x.lenh.ma_lenh_san_xuat).join(', '), r.lenh.ma_chuyen].filter(Boolean).join(' · ')}
                     </div>
                   </td>
-                  <td className={`${TD} text-right tabular-nums`}>{fmtNum(tongNhom(g.runs, daIn))} / {fmtNum(tongNhom(g.runs, slRelease))}</td>
+                  <td className={`${TD} text-right tabular-nums`}>
+                    {fmtNum(tongNhom(g.runs, daIn))} / {fmtNum(tongNhom(g.runs, slRelease))}
+                    {huy > 0 && <div className="text-xs text-danger">+ hủy {fmtNum(huy)}</div>}
+                  </td>
                   <td className={TD}>
-                    {du ? <Badge tone="success">Đủ 90%</Badge>
-                      : <span className="text-xs text-danger">Chưa đủ 90% — còn thiếu {fmtNum(thieu)}</span>}
+                    {du ? <Badge tone="success">Đủ 50%</Badge>
+                      : <span className="text-xs text-danger">Chưa đủ 50% (in + hủy) — còn thiếu {fmtNum(thieu)}</span>}
                   </td>
                 </tr>
               );
@@ -660,7 +664,7 @@ export default function RunNhieuPanel({ lenhIds, onClose, onChanged, onMoLenh, t
             Trả về Kế hoạch
           </Button>
           <Button variant="success" icon="check" onClick={() => setHoanTatOpen(true)} disabled={busy || !soDuHoanTat}
-            title={soDuHoanTat ? undefined : 'Chưa phần nào in đủ 90% SL release'}>
+            title={soDuHoanTat ? undefined : 'Chưa phần nào đã in + vải hủy đủ 50% SL release'}>
             Chạy hoàn tất ({fmtNum(soDuHoanTat)}/{fmtNum(nhomChay.length)})
           </Button>
         </div>

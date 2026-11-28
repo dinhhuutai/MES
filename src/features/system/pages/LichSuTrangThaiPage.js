@@ -1180,7 +1180,7 @@ function CloseProductionSection({ show }) {
       </Toolbar>
 
       <div className="mb-3 rounded-control border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
-        Đóng lệnh = <b>Chạy hoàn tất</b> cho phiếu đang chạy (không cần đủ 90% SL release). Sau khi đóng, tem đã in đi tiếp
+        Đóng lệnh = <b>Chạy hoàn tất</b> cho phiếu đang chạy (không cần đủ 50% SL release — đã in + vải hủy). Sau khi đóng, tem đã in đi tiếp
         <b> Chờ khô → KCS</b> bình thường. Thao tác được ghi <b>audit</b> (người, giờ, SL đã in, lý do).
       </div>
 
@@ -1229,7 +1229,7 @@ function CloseProductionSection({ show }) {
         </div>
         <Field label="Lý do (khuyến nghị)">
           <Textarea rows={2} value={lyDo} onChange={(e) => setLyDo(e.target.value)}
-            placeholder="Vd: lệch số lượng do vải hủy, không đủ 90% nhưng đã chạy xong..." />
+            placeholder="Vd: lệch số lượng do vải hủy, không đủ 50% nhưng đã chạy xong..." />
         </Field>
       </Modal>
     </div>

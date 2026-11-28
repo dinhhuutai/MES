@@ -91,6 +91,8 @@ export function phanBoTraVe(runs, T) {
   });
 }
 
-// "Chạy hoàn tất" của 1 nhóm: tổng đã in ≥ 90% tổng SL release (gương `RunPanel minFinish` cho 1 lệnh).
-export const toiThieuHoanTatNhom = (runs) => { const t = tongNhom(runs, slRelease); return t ? Math.ceil(t * 0.9) : 0; };
-export const duHoanTatNhom = (runs) => tongNhom(runs, daIn) >= toiThieuHoanTatNhom(runs);
+// "Chạy hoàn tất" của 1 nhóm: tổng ĐÃ IN + VẢI HỦY ≥ 50% tổng SL release (28/11/2026 — trước 90% chỉ tính đã in;
+//   gương `RunPanel minFinish` cho 1 lệnh). BE cũ không trả `printed_huy` ⇒ 0.
+export const daXuLyHoanTat = (run) => daIn(run) + n(run?.printed_huy);
+export const toiThieuHoanTatNhom = (runs) => { const t = tongNhom(runs, slRelease); return t ? Math.ceil(t * 0.5) : 0; };
+export const duHoanTatNhom = (runs) => tongNhom(runs, daXuLyHoanTat) >= toiThieuHoanTatNhom(runs);
