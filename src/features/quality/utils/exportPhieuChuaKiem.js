@@ -17,6 +17,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { chuanMaChuyen } from '../../../utils/maChuyen';
 import { ngayLocalISO } from '../../../utils/format';
+import themSheetTongHop from './sheetTongHopTon';
 
 const so = (v) => (v == null || v === '' ? null : Number(v));
 const soKhac0 = (v) => { const n = so(v); return n ? n : null; };
@@ -221,6 +222,23 @@ export default async function exportPhieuChuaKiem(rows, { tuNgay, denNgay, tuGio
     ws.getCell(r, 1).alignment = { horizontal: 'right', vertical: 'middle' };
     ws.getRow(r).height = 20;
   }
+
+  // 3 SHEET TỔNG HỢP như tờ ERP "FIE HANG TÔN ERP" (28/11/2026): Hang Ton · CLSP · NVK — công thức về sheet này.
+  const cot = (khoa) => COT.findIndex((c) => c.t === khoa) + 1;
+  const giaTriCot = (khoa) => { const c = COT[cot(khoa) - 1]; return (r) => c.v(r, gdk); };
+  themSheetTongHop(wb, ds, {
+    sheet: ws.name, dongDau: DONG_DAU,
+    cot: {
+      slIn: cot('SL IN'), con: cot('SlCLai'), dat: cot('SLD'), kd: cot('SLKD'), thieu: cot('SLThieu'), du: cot('SLDu'),
+      vh: cot('SLVH'), mau: cot('SLMau'), nvk: cot('Nhân viên kiểm'), to: cot('Tổ in'), may: cot('Máy/bàn'), ca: cot('Ca'),
+      ngay: cot('Ngày'), kh: cot('Khách hàng'),
+    },
+    khoa: {
+      to: giaTriCot('Tổ in'), kh: giaTriCot('Khách hàng'), may: giaTriCot('Máy/bàn'), ca: giaTriCot('Ca'),
+      nvk: () => '', ngay: (r) => (ngayExcel(r.ngay_ca) ? String(r.ngay_ca).slice(0, 10) : ''),
+    },
+  });
+  wb.calcProperties = { ...(wb.calcProperties || {}), fullCalcOnLoad: true };
 
   const buf = await wb.xlsx.writeBuffer();
   const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
