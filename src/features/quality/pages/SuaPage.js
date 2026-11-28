@@ -76,6 +76,9 @@ const FIELD_LABEL = { ...Object.fromEntries(FILTER_FIELDS.map((f) => [f.key, f.l
 //   KHÔNG còn chung 10 số đuôi với tem gốc. Liên kết về tem 15 nằm ở `tem.tem_goc_id` (mig 091).
 // ⚠ Lùi về cách suy cũ cho dữ liệu CŨ (lượt sửa trước mig 091 chưa có tem con ⇒ `ma_tem_17` NULL).
 const ma17 = (r) => r.ma_tem_17 || temCode(r.ma, 17);
+// Màn Sửa làm trên NHÃN 16 (nhãn hàng lỗi dán lên hàng vào sửa) ⇒ mọi chỗ HIỆN mã tem gốc đổi đầu 16 (27/11/2026, người
+//   dùng chốt). Chỉ hiển thị — dữ liệu / tìm / quét vẫn theo `ma_tem` 15 (backend `timTem` khớp cả nhãn 16).
+const ma16 = (ma) => (ma ? temCode(ma, 16) : '');
 
 export default function SuaPage() {
   const { can } = usePermissions();
@@ -185,7 +188,7 @@ export default function SuaPage() {
         oTim.datConTro();
         return;
       }
-      setVuaQuet({ ma: code, tone: 'ok', chu: `Mở Sửa ${row.ma_tem} · ${row.ma_phan || row.ma_hang || ''} · cần sửa ${fmtNum(row.con_sua)}` });
+      setVuaQuet({ ma: code, tone: 'ok', chu: `Mở Sửa ${ma16(row.ma_tem)} · ${row.ma_phan || row.ma_hang || ''} · cần sửa ${fmtNum(row.con_sua)}` });
       openRow(row);
     } catch (e) {
       setVuaQuet({ ma: code, tone: 'loi', chu: e.message || 'Không tra được tem' });
@@ -373,7 +376,9 @@ export default function SuaPage() {
   };
 
   const doneColumns = [
-    { key: 'ma', header: 'Tem', className: 'whitespace-nowrap', render: (r) => <Badge tone="info">{r.ma || '—'}</Badge> },
+    { key: 'ma', header: 'Tem (16)', className: 'whitespace-nowrap', render: (r) => <Badge tone="info">{ma16(r.ma) || '—'}</Badge> },
+    { key: 'ma_tem_17', header: 'Tem 17', className: 'whitespace-nowrap tabular-nums',
+      render: (r) => (Number(r.so_luong) > 0 ? ma17(r) : '—') },
     { key: 'ten_khach_hang', header: 'Khách hàng', className: 'font-medium text-ink', render: (r) => r.ten_khach_hang || '—' },
     { key: 'ma_don_hang', header: 'Đơn hàng', render: (r) => r.ma_don_hang || '—' },
     { key: 'ma_hang', header: 'Mã hàng', render: (r) => r.ma_hang || '—' },
@@ -438,7 +443,7 @@ export default function SuaPage() {
     try {
       const r = await recordSua(editing.tem_id, form);
       const conLai = Number(r.data.con_sua) || 0;
-      show(`Sửa ${editing.ma_tem}: đạt ${fmtNum(r.data.so_luong_sua_dat)} → OQC`
+      show(`Sửa ${ma16(editing.ma_tem)}: đạt ${fmtNum(r.data.so_luong_sua_dat)} → OQC`
         + (conLai > 0 ? ` · còn ${fmtNum(conLai)} chờ sửa` : ' · đã sửa hết'));
       setEditing(null);
       // Ô tìm đang rỗng thì `load` không đổi ⇒ phải tự tải; có mã thì xóa ô cũng kéo `load` chạy lại.
@@ -461,7 +466,7 @@ export default function SuaPage() {
       ) }] : []),
     { key: 'ma_tem', header: 'Tem', render: (r) => (
       <div>
-        <Badge tone="info">{r.ma_tem}</Badge>
+        <Badge tone="info">{ma16(r.ma_tem)}</Badge>
         {laHaiCongDoan(r.luong_sx) && <div className="mt-1"><CongDoanBadge luong={r.luong_sx} gd={r.giai_doan} pa={r.phuong_an_in} /></div>}
         {(r.tra_ve || r.tra_ve_ly_do) && <div className="mt-1"><TraVeBadge data={r.tra_ve || r.tra_ve_ly_do} label="Bị OQC trả về" nguon="OQC" /></div>}
       </div>
@@ -617,7 +622,7 @@ export default function SuaPage() {
         onXong={sauSuaNhieu} truocXacNhan={(rs) => hoiLyDoNghen(rs)} show={show} />
       <TichTemNhapModal open={tichTemOpen} onClose={() => { setTichTemOpen(false); oTim.datConTro(); }}
         title="Tích tem — xác nhận sửa nhiều tem" nhanXacNhan="Xác nhận và in tem" iconXacNhan="printer" show={show}
-        traMa={traTemSua} khoaDong={(r) => r.tem_id} maHien={(r) => r.ma_tem}
+        traMa={traTemSua} khoaDong={(r) => r.tem_id} maHien={(r) => ma16(r.ma_tem)}
         soCan={(r) => r.con_sua} nhanSoCan="Cần sửa" truong={truongTichTem} formMoi={formSuaMoi}
         danhGia={(r, f) => {
           const dg = danhGiaSua(Number(r.con_sua) || 0, f);
@@ -643,7 +648,7 @@ export default function SuaPage() {
       <SidePanel
         open={!!editing}
         onClose={() => { setEditing(null); oTim.datConTro(); }}
-        title={`Sửa — ${editing?.ma_tem || ''}`}
+        title={`Sửa — ${ma16(editing?.ma_tem)}`}
         footer={
           <>
             <Button chiXemOk variant="ghost" onClick={() => setEditing(null)}>Hủy</Button>

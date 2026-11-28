@@ -76,6 +76,7 @@ export default function HistoryPanel({ open, onClose, title = 'Lịch sử', fet
 
   const dsHanhDong = useMemo(() => [...new Set(rows.map((r) => r.hanh_dong).filter(Boolean))].sort(), [rows]);
   const coPin = useMemo(() => rows.some(coThongTinPin), [rows]);
+  const coTem17 = useMemo(() => rows.some((r) => r.tem_17), [rows]);
   const truongLoc = useMemo(() => (coPin ? [...COT_PHAN_IN, ...TRUONG_LOC] : TRUONG_LOC), [coPin]);
   const viewRows = useMemo(() => rows.filter((r) => {
     if (hanhDong && r.hanh_dong !== hanhDong) return false;
@@ -134,6 +135,9 @@ export default function HistoryPanel({ open, onClose, title = 'Lịch sử', fet
     { key: 'nguoi', header: 'Người', className: 'font-medium text-ink' },
     { key: 'hanh_dong', header: 'Hành động' },
     { key: 'doi_tuong', header: 'Đối tượng' },
+    // Cột TEM 17 (27/11/2026): fetcher trả `tem_17` (Sửa: tem 17 sửa đạt của lượt · KCS: tem 17 giao trước) ⇒ thấy nhãn
+    //   16 / tem 15 thành tem 17 nào. Không dòng nào có ⇒ ẩn cột.
+    ...(coTem17 ? [{ key: 'tem_17', header: 'Tem 17', className: 'whitespace-nowrap tabular-nums', render: (r) => r.tem_17 || '—' }] : []),
     { key: 'chi_tiet', header: 'Chi tiết', render: (r) => r.chi_tiet || '—' },
     ...them,
   ];
@@ -150,6 +154,7 @@ export default function HistoryPanel({ open, onClose, title = 'Lịch sử', fet
           { header: 'Người', value: (r) => r.nguoi || '' },
           { header: 'Hành động', value: (r) => r.hanh_dong || '' },
           { header: 'Đối tượng', value: (r) => r.doi_tuong || '' },
+          ...(coTem17 ? [{ header: 'Tem 17', value: (r) => r.tem_17 || '' }] : []),
           { header: 'Chi tiết', value: (r) => r.chi_tiet || '' },
         ],
         rows: viewRows,
